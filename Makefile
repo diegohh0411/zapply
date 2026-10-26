@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE ?= $(shell command -v podman >/dev/null && echo "podman compose" || echo "docker compose")
 ENV := set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: build run relay migrate token db-up db-down test test-integration vet image generate
+.PHONY: build run relay migrate token db-up db-down test test-integration vet image generate web web-dev
 
 build:
 	go build -o bin/zapply ./cmd/zapply
@@ -25,9 +25,18 @@ db-up:
 db-down:
 	$(COMPOSE) -f deploy/compose.yaml down
 
-generate: ## Regenerate sqlc queries and the OpenAPI server
+generate: ## Regenerate sqlc queries, the OpenAPI server and the web client types
 	go tool sqlc generate
 	go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+	cd web && npm run --silent gen:api
+
+web: ## Build the web app into internal/webui/dist (embedded by the next go build)
+	cd web && npm ci --no-audit --no-fund && npm run build
+	find internal/webui/dist -mindepth 1 ! -name .gitkeep -delete
+	cp -R web/dist/web/browser/. internal/webui/dist/
+
+web-dev: ## Angular dev server on :4200, proxying /v1 to `make run`
+	cd web && npm start
 
 vet:
 	gofmt -l . | (! grep .) && go vet ./...

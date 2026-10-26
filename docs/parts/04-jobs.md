@@ -96,4 +96,29 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 
 ## Delivered
 
-See the bottom of this file after the build.
+- **Migration `00004_jobs.sql`:** `job_status`, `job`, `job_activity`, `job_view`, their enums, forced RLS with the `tenant` policy (scoped to `zapply_app`), composite tenant FKs, and a partial unique index on `(user_id, normalized_url)`.
+- **`internal/jobs`:** the service. It reuses the library's error types, so `writeError` maps both domains the same way, plus `DuplicateError`, which the API turns into a `409` with `existing_id`.
+  - Statuses are seeded inside the first transaction that needs them, behind a per-user advisory lock.
+  - Job positions are allocated under a `FOR UPDATE` lock on the destination status row. The lock order is always status rows, then job rows, so moves, `PUT`s and status deletes can't deadlock each other.
+  - `content_hash` covers title, company and description.
+- **API:** `/v1/job-statuses`, `/v1/jobs` (plus `move`, `archive`, `unarchive`, `activities`), and `/v1/job-views`. OpenAPI is now 0.4.0. Lists load ids in the requested order first, then the summaries by id, so every sort shares one row type and the description and notes columns stay out of lists.
+- **Events:** the topics listed above, added to `EventTopic`. `EventData` gains `job_id` for activity events.
+- **Web UI:** the board, table, saved views, job sheet and column manager. See `docs/parts/09-web.md`.
+
+### Tests
+
+- **Unit:** URL normalization, covering the scheme and host case, default ports, tracking parameters, trailing slashes and rejected schemes.
+- **HTTP (Postgres):**
+  - `TestJobStatusesSeedOnce`: 8 concurrent first reads seed one set. Covers create, rename, reorder, duplicate names (`409`), validation, and tenant isolation.
+  - `TestJobLifecycle`: duplicate URLs through another link return `409` with `existing_id`, and another user may save the same URL. Covers validation, `applied_on` set on entering an active stage, the activity timeline, `PUT` with `428`/`412`, a status change through `PUT`, notes (create, edit, delete, generated entries read-only), archive filtering and cross-tenant `404`s.
+  - `TestJobBoardOrdering`: newest first, reorder within a column, invalid anchors, no activity for moves within a column, closing a saved posting without setting `applied_on`, deleting a status with `move_to`, and keeping the last status.
+  - `TestJobConcurrentInsertsKeepDistinctPositions`: 10 concurrent creates in one column get distinct keys.
+  - `TestJobListFiltersAndPages`: cursor pages, stage and status filters, `q` treating `%` and `_` literally, invalid filters and cursors, and a cursor from one sort rejected by another.
+  - `TestJobViews`: create, list order, validation, update, tenant isolation and delete.
+
+### Notes
+
+- Seeding emits no events. Anyone who reads the statuses next seeds the same set or sees it.
+- A `PUT` that also changes status bumps the version twice and emits `job.updated` then `job.moved`. Clients only rely on the latest `ETag`.
+- `JobViewFilters` is closed in OpenAPI (`additionalProperties: false`), but the generated decoder ignores unknown keys rather than rejecting them.
+- **Deploying:** apply migration 00004 with `zapply migrate` against the production database before (or right after) rolling out this API. Until then, the job endpoints fail with `500`.

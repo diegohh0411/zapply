@@ -1,4 +1,8 @@
 .git
 bin
 docs
-web
+web/node_modules
+web/dist
+web/.angular
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep

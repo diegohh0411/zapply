@@ -9,7 +9,7 @@ A hosted service that tailors your CV to each job. It ranks your real experience
 
 ## Development
 
-Prerequisites: Go 1.27 and Podman (or Docker).
+Prerequisites: Go 1.27, Node 24.15+ (pinned with Volta in `web/package.json`) and Podman (or Docker).
 
 ```bash
 cp .env.example .env
@@ -21,7 +21,18 @@ curl -N -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/
 curl -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/me
 ```
 
-The HTTP API is defined in [`api/openapi.yaml`](api/openapi.yaml). Edit it, or the SQL in `internal/store/queries`, then run `make generate` (oapi-codegen and sqlc, pinned with `go tool`).
+### Web app
+
+The Angular + ZardUI app in [`web/`](web) is embedded into the binary and served by `zapply api` (same origin, no CORS). Notes: [`docs/parts/09-web.md`](docs/parts/09-web.md).
+
+```bash
+make web        # build web/ into internal/webui/dist; the next `make run` serves it at localhost:8080
+make web-dev    # or: Angular dev server with live reload on localhost:4200, proxying /v1 to `make run`
+```
+
+In development the login page offers "Development sign-in" (tokens minted with `AUTH_DEV_SECRET`). In production it uses Supabase Auth: set `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the API.
+
+The HTTP API is defined in [`api/openapi.yaml`](api/openapi.yaml). Edit it, or the SQL in `internal/store/queries`, then run `make generate` (oapi-codegen and sqlc, pinned with `go tool`, plus the web client's types via openapi-typescript).
 
 ```bash
 make test              # unit tests (database tests are skipped)
