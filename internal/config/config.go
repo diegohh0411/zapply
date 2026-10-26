@@ -39,6 +39,13 @@ type Config struct {
 
 	Auth  Auth
 	Relay Relay
+	Web   Web
+}
+
+// Web is public configuration for the browser app (served as /config.json).
+type Web struct {
+	SupabaseURL     string
+	SupabaseAnonKey string
 }
 
 type Relay struct {
@@ -74,6 +81,10 @@ func Load() (Config, error) {
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),
 			AdminAddr:   get("RELAY_ADMIN_ADDR", ":8081"),
+		},
+		Web: Web{
+			SupabaseURL:     os.Getenv("SUPABASE_URL"),
+			SupabaseAnonKey: os.Getenv("SUPABASE_ANON_KEY"),
 		},
 		Auth: Auth{
 			JWKSURL:   os.Getenv("AUTH_JWKS_URL"),

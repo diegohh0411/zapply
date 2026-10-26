@@ -1,9 +1,10 @@
 openapi: 3.0.3
 info:
   title: zapply API
-  version: 0.3.0
+  version: 0.4.0
   description: |
-    Library of a person's career evidence. Design: docs/parts/02-library.md.
+    Library of a person's career evidence (docs/parts/02-library.md) and the
+    jobs they apply to (docs/parts/04-jobs.md).
     Live changes stream from /v1/events (docs/parts/03-events.md).
     Every /v1 operation requires `Authorization: Bearer <jwt>`. Errors are
     RFC 9457 problem+json; validation errors (422) list failing fields.
@@ -347,6 +348,340 @@ paths:
               schema: { $ref: "#/components/schemas/Evidence" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/job-statuses:
+    get:
+      operationId: listJobStatuses
+      tags: [jobs]
+      description: The board's columns in order. The defaults are created on first use.
+      responses:
+        "200":
+          description: All statuses, in board order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JobStatus" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createJobStatus
+      tags: [jobs]
+      description: Adds a status as the last column.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobStatusInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobStatus" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/job-statuses/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateJobStatus
+      tags: [jobs]
+      description: Replaces the status's name, color and stage. Activity history keeps the old names.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobStatusInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobStatus" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteJobStatus
+      tags: [jobs]
+      description: |
+        Fails with 409 while jobs have this status, unless `move_to` names
+        another status to move them to first, or if it is the last status.
+      parameters:
+        - { name: move_to, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted. }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/job-statuses/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: moveJobStatus
+      tags: [jobs]
+      description: Places the status after `after_id` or before `before_id`, or last.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Reorder" }
+      responses:
+        "200":
+          description: Moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobStatus" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      parameters:
+        - name: status_id
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string, format: uuid } }
+        - name: stage
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, items: { $ref: "#/components/schemas/JobStage" } }
+        - { name: q, in: query, description: "Case-insensitive match on title or company.", schema: { type: string } }
+        - { name: include_archived, in: query, schema: { type: boolean, default: false } }
+        - { name: sort, in: query, schema: { $ref: "#/components/schemas/JobSort" } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: A page of job summaries (without description and notes).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createJob
+      tags: [jobs]
+      description: |
+        Saves a job first in its status's column (default: the first status).
+        A posting URL already saved returns 409 with `existing_id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getJob
+      tags: [jobs]
+      responses:
+        "200":
+          description: The job, with description and notes.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putJob
+      tags: [jobs]
+      description: |
+        Replaces the job. A new `status_id` moves it to the top of that
+        column; omit it to keep the status.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobInput" }
+      responses:
+        "200":
+          description: The saved job.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      responses:
+        "204": { description: Deleted, with its activity. }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: moveJob
+      tags: [jobs]
+      description: |
+        Drag and drop on the board: into `status_id` (omit to stay in the
+        column), after `after_id` or before `before_id`, or first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobMove" }
+      responses:
+        "200":
+          description: The moved job.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: archiveJob
+      tags: [jobs]
+      responses:
+        "200":
+          description: Archived.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/unarchive:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: unarchiveJob
+      tags: [jobs]
+      responses:
+        "200":
+          description: Restored.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/activities:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: listJobActivities
+      tags: [jobs]
+      responses:
+        "200":
+          description: The job's timeline, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JobActivity" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createJobNote
+      tags: [jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobNoteInput" }
+      responses:
+        "201":
+          description: The note.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobActivity" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/activities/{activity_id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+      - { name: activity_id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateJobNote
+      tags: [jobs]
+      description: Only notes can be edited (409 otherwise).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobNoteInput" }
+      responses:
+        "200":
+          description: The note.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobActivity" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteJobNote
+      tags: [jobs]
+      description: Only notes can be deleted (409 otherwise).
+      responses:
+        "204": { description: Deleted. }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/job-views:
+    get:
+      operationId: listJobViews
+      tags: [jobs]
+      responses:
+        "200":
+          description: Saved views, in order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JobView" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createJobView
+      tags: [jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobViewInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/job-views/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      operationId: putJobView
+      tags: [jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobViewInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobView" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteJobView
+      tags: [jobs]
+      responses:
+        "204": { description: Deleted. }
+        default: { $ref: "#/components/responses/Problem" }
+
   /v1/events:
     get:
       operationId: streamEvents
@@ -441,6 +776,10 @@ components:
         status: { type: integer }
         detail: { type: string }
         request_id: { type: string }
+        existing_id:
+          type: string
+          format: uuid
+          description: "On 409 for a duplicate job URL: the job already saved."
         errors:
           type: array
           items: { $ref: "#/components/schemas/FieldError" }
@@ -682,15 +1021,187 @@ components:
         parent_id: { type: string, format: uuid }
         after_id: { type: string, format: uuid }
         before_id: { type: string, format: uuid }
+    Reorder:
+      type: object
+      properties:
+        after_id: { type: string, format: uuid }
+        before_id: { type: string, format: uuid }
+
+    JobStage:
+      type: string
+      description: "What a status means: saved (not applied), active (in process), offer, closed (any outcome)."
+      enum: [saved, active, offer, closed]
+    JobStatusColor:
+      type: string
+      enum: [gray, blue, yellow, orange, green, purple, pink, red, brown]
+    JobStatusInput:
+      type: object
+      required: [name, stage]
+      properties:
+        name: { type: string, maxLength: 100 }
+        color: { $ref: "#/components/schemas/JobStatusColor" }
+        stage: { $ref: "#/components/schemas/JobStage" }
+    JobStatus:
+      type: object
+      required: [id, name, color, stage, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { $ref: "#/components/schemas/JobStatusColor" }
+        stage: { $ref: "#/components/schemas/JobStage" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    WorkMode:
+      type: string
+      enum: [onsite, remote, hybrid]
+    EmploymentType:
+      type: string
+      enum: [full_time, part_time, contract, temporary, internship, freelance]
+    SalaryPeriod:
+      type: string
+      enum: [year, month, hour]
+    JobSort:
+      type: string
+      enum: [-updated_at, -created_at, position]
+      default: -updated_at
+    JobInput:
+      type: object
+      required: [title]
+      properties:
+        status_id: { type: string, format: uuid }
+        title: { type: string }
+        company: { type: string }
+        url: { type: string, description: "The posting. Unique per user once normalized." }
+        location: { type: string }
+        work_mode: { $ref: "#/components/schemas/WorkMode" }
+        employment_type: { $ref: "#/components/schemas/EmploymentType" }
+        salary_min: { type: integer, format: int64, minimum: 0 }
+        salary_max: { type: integer, format: int64, minimum: 0 }
+        salary_currency: { type: string, description: "ISO 4217, required with a salary." }
+        salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
+        source: { type: string, description: "Where the posting was found, e.g. LinkedIn." }
+        description: { type: string, description: "The posting text, read by matching." }
+        notes: { type: string }
+        applied_on:
+          type: string
+          format: date
+          description: Set automatically the first time the job enters an active or offer stage.
+    JobSummary:
+      type: object
+      required: [id, status_id, title, company, url, location, salary_currency, source,
+                 position, version, archived, status_changed_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        status_id: { type: string, format: uuid }
+        title: { type: string }
+        company: { type: string }
+        url: { type: string }
+        location: { type: string }
+        work_mode: { $ref: "#/components/schemas/WorkMode" }
+        employment_type: { $ref: "#/components/schemas/EmploymentType" }
+        salary_min: { type: integer, format: int64 }
+        salary_max: { type: integer, format: int64 }
+        salary_currency: { type: string }
+        salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
+        source: { type: string }
+        applied_on: { type: string, format: date }
+        position: { type: string, description: "Sort key within the status column." }
+        version: { type: integer }
+        archived: { type: boolean }
+        status_changed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Job:
+      allOf:
+        - $ref: "#/components/schemas/JobSummary"
+        - type: object
+          required: [description, notes]
+          properties:
+            description: { type: string }
+            notes: { type: string }
+    JobPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/JobSummary" }
+        next_cursor: { type: string }
+    JobMove:
+      type: object
+      properties:
+        status_id: { type: string, format: uuid }
+        after_id: { type: string, format: uuid }
+        before_id: { type: string, format: uuid }
+    JobActivityType:
+      type: string
+      enum: [created, status_changed, note]
+    JobActivity:
+      type: object
+      required: [id, job_id, type, from_status, to_status, body, occurred_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/JobActivityType" }
+        from_status: { type: string, description: "Status name when it happened." }
+        to_status: { type: string }
+        body: { type: string }
+        occurred_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    JobNoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+        occurred_at: { type: string, format: date-time, description: "When it happened; default now." }
+    JobViewLayout:
+      type: string
+      enum: [board, table]
+    JobViewFilters:
+      type: object
+      additionalProperties: false
+      properties:
+        status_ids:
+          type: array
+          items: { type: string, format: uuid }
+        stages:
+          type: array
+          items: { $ref: "#/components/schemas/JobStage" }
+        q: { type: string }
+        include_archived: { type: boolean }
+    JobViewInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        layout: { $ref: "#/components/schemas/JobViewLayout" }
+        filters: { $ref: "#/components/schemas/JobViewFilters" }
+        sort: { $ref: "#/components/schemas/JobSort" }
+    JobView:
+      type: object
+      required: [id, name, layout, filters, sort, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        layout: { $ref: "#/components/schemas/JobViewLayout" }
+        filters: { $ref: "#/components/schemas/JobViewFilters" }
+        sort: { $ref: "#/components/schemas/JobSort" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
     EventData:
       type: object
       description: |
         The `data` of a change event: the resource it concerns. `version` is
-        set for versioned resources (profile, evidence).
+        set for versioned resources (profile, evidence, job); `job_id` for
+        job activity.
       required: [id]
       properties:
         id: { type: string, format: uuid }
         version: { type: integer }
+        job_id: { type: string, format: uuid }
     EventTopic:
       type: string
       description: The SSE `event` name of a change event.
@@ -709,3 +1220,19 @@ components:
         - skill.updated
         - skill.merged
         - skill.deleted
+        - job_status.created
+        - job_status.updated
+        - job_status.moved
+        - job_status.deleted
+        - job.created
+        - job.updated
+        - job.moved
+        - job.archived
+        - job.unarchived
+        - job.deleted
+        - job_activity.created
+        - job_activity.updated
+        - job_activity.deleted
+        - job_view.created
+        - job_view.updated
+        - job_view.deleted

@@ -1,0 +1,126 @@
+<z-sheet [(zVisible)]="visible" zSide="right" zWidth="min(680px, 100vw)">
+  <z-sheet-header class="border-b pb-4 pr-12">
+    <z-sheet-title>{{ existing() ? 'Edit ' + humanize(kind()) : parent() ? 'Add to ' + parent()!.title : 'New ' + humanize(category()) + ' entry' }}</z-sheet-title>
+    <z-sheet-description>Only what's true. Matching picks from this; it never writes here.</z-sheet-description>
+  </z-sheet-header>
+
+  <form id="evidence-form" class="flex-1 overflow-y-auto px-4 py-4" (ngSubmit)="save()">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
+      <div class="field sm:col-span-3">
+        <span>Kind</span>
+        <z-select name="kind" [zValue]="kind()" (zSelectionChange)="setKind($any($event))" [zDisabled]="!!existing()">
+          @for (k of allowedKinds(); track k.kind) {
+            <z-select-item [zValue]="k.kind">{{ humanize(k.kind) }}</z-select-item>
+          }
+        </z-select>
+      </div>
+      <div class="field sm:col-span-3">
+        <span>Organization</span>
+        <z-select name="organization_id" [(ngModel)]="form.organization_id" zPlaceholder="None">
+          <z-select-item zValue="">None</z-select-item>
+          @for (o of organizations(); track o.id) {
+            <z-select-item [zValue]="o.id">{{ o.name }}</z-select-item>
+          }
+        </z-select>
+        @if (errors()['organization_id']; as e) { <small class="err">{{ e }}</small> }
+      </div>
+
+      <label class="field sm:col-span-6">
+        <span>Title <span class="text-destructive">*</span></span>
+        <input z-input name="title" [(ngModel)]="form.title" placeholder="Role, degree, credential, project or award name" />
+        @if (errors()['title']; as e) { <small class="err">{{ e }}</small> }
+      </label>
+
+      <label class="field sm:col-span-2">
+        <span>{{ dateLabels()[0] }}</span>
+        <input z-input name="start" [(ngModel)]="form.start" placeholder="2021 or 2021-03" />
+        @if (errors()['start']; as e) { <small class="err">{{ e }}</small> }
+      </label>
+      @if (dateLabels()[1]; as endLabel) {
+        <label class="field sm:col-span-2">
+          <span>{{ endLabel }}</span>
+          <input z-input name="end" [(ngModel)]="form.end" placeholder="2023-06" [disabled]="form.is_current" />
+          @if (errors()['end']; as e) { <small class="err">{{ e }}</small> }
+        </label>
+      }
+      @if (kindInfo()?.form === 'engagement') {
+        <label class="flex items-center gap-2 self-end pb-2 text-sm sm:col-span-2">
+          <z-switch name="is_current" [(ngModel)]="form.is_current" /> Current
+        </label>
+      }
+
+      <label class="field sm:col-span-3">
+        <span>Location</span>
+        <input z-input name="location" [(ngModel)]="form.location" />
+      </label>
+      <label class="field sm:col-span-3">
+        <span>Link</span>
+        <input z-input name="url" [(ngModel)]="form.url" placeholder="https://" />
+        @if (errors()['url']; as e) { <small class="err">{{ e }}</small> }
+      </label>
+
+      @for (f of fields(); track f.name) {
+        <div class="field sm:col-span-3">
+          <span>{{ f.label }} @if (f.required) { <span class="text-destructive">*</span> }</span>
+          @switch (f.type) {
+            @case ('enum') {
+              <z-select [name]="'d_' + f.name" [(ngModel)]="form.details[f.name]" zPlaceholder="—">
+                <z-select-item zValue="">—</z-select-item>
+                @for (o of f.options; track o) { <z-select-item [zValue]="o">{{ humanize(o) }}</z-select-item> }
+              </z-select>
+            }
+            @case ('number') {
+              <input z-input type="number" min="0" [name]="'d_' + f.name" [(ngModel)]="form.details[f.name]" />
+            }
+            @case ('list') {
+              <input z-input [name]="'d_' + f.name" [(ngModel)]="form.details[f.name]" placeholder="Comma-separated" />
+            }
+            @default {
+              <input z-input [name]="'d_' + f.name" [(ngModel)]="form.details[f.name]" />
+            }
+          }
+          @if (errors()['details.' + f.name]; as e) { <small class="err">{{ e }}</small> }
+        </div>
+      }
+
+      <label class="field sm:col-span-6">
+        <span>Summary</span>
+        <textarea z-textarea name="summary" rows="3" [(ngModel)]="form.summary"></textarea>
+      </label>
+
+      <fieldset class="flex flex-col gap-2 sm:col-span-6">
+        <legend class="mb-1.5 text-sm font-medium">Highlights</legend>
+        @for (h of form.highlights; track $index; let i = $index) {
+          <div class="flex flex-col gap-2 rounded-lg border p-2 sm:flex-row">
+            <textarea z-textarea class="flex-1" rows="2" [name]="'h_text' + i" [(ngModel)]="h.text" placeholder="Cut deploy time by 40%" aria-label="Highlight"></textarea>
+            <div class="flex gap-2 sm:w-44 sm:flex-col">
+              <input z-input type="number" [name]="'h_val' + i" [(ngModel)]="h.metric_value" placeholder="Metric" aria-label="Metric value" />
+              <input z-input [name]="'h_unit' + i" [(ngModel)]="h.metric_unit" placeholder="Unit (%, users)" aria-label="Metric unit" />
+            </div>
+            <button z-button zType="ghost" zSize="icon" type="button" (click)="removeHighlight(i)" aria-label="Remove highlight"><ng-icon name="lucideTrash2" /></button>
+          </div>
+          @if (errors()['highlights[' + i + '].text']; as e) { <small class="err">{{ e }}</small> }
+        }
+        <button z-button zType="outline" zSize="sm" type="button" class="self-start" (click)="addHighlight()"><ng-icon name="lucidePlus" /> Add highlight</button>
+      </fieldset>
+
+      <label class="field sm:col-span-6">
+        <span>Skills</span>
+        <input z-input name="skills" [(ngModel)]="form.skills" placeholder="Go, PostgreSQL, Leadership" />
+        <small class="text-xs text-muted-foreground">Comma-separated. New skills are created.</small>
+      </label>
+
+      <label class="flex items-center gap-2 text-sm sm:col-span-6">
+        <z-switch name="auto_include" [(ngModel)]="form.auto_include" />
+        Matching may include this automatically
+      </label>
+
+      @if (errors()['']; as e) { <p class="err sm:col-span-6" role="alert">{{ e }}</p> }
+    </div>
+  </form>
+
+  <z-sheet-footer class="flex-row justify-end gap-2 border-t">
+    <button z-button zType="outline" type="button" z-sheet-close>Cancel</button>
+    <button z-button type="submit" form="evidence-form" [zLoading]="saving()" [zDisabled]="!form.title.trim() || !kind()">Save</button>
+  </z-sheet-footer>
+</z-sheet>

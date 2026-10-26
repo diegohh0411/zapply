@@ -31,6 +31,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/relay"
 	"github.com/diegohh0411/zapply/internal/store"
+	"github.com/diegohh0411/zapply/internal/webui"
 )
 
 const usage = "usage: zapply <api|relay|migrate|devtoken> [flags]"
@@ -104,6 +105,18 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	defer hub.Close()
 
+	webCfg := webui.Config{SupabaseURL: cfg.Web.SupabaseURL, SupabaseAnonKey: cfg.Web.SupabaseAnonKey}
+	var devToken func(string) (string, error)
+	if cfg.Env == config.Development && cfg.Auth.DevSecret != "" {
+		webCfg.DevLogin = true
+		devToken = func(sub string) (string, error) {
+			return auth.MintDev(cfg.Auth.DevSecret, cfg.Auth.Audience, sub, 12*time.Hour)
+		}
+	}
+	if !webui.Built() {
+		log.Warn("web app not built into this binary; run make web")
+	}
+
 	srv := &httpx.Server{Addr: cfg.HTTPAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	srv.Handler = api.Handler(api.Deps{
 		Store:    st,
@@ -112,6 +125,8 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		Draining: srv.Draining,
 		Events:   hub,
 		Drain:    srv.DrainC(),
+		Web:      webui.Handler(webCfg),
+		DevToken: devToken,
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }

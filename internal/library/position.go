@@ -116,3 +116,6 @@ func digitAt(s string, i int) byte {
 	}
 	return digits[0]
 }
+
+// ValidPosition reports whether k is a well-formed, non-empty position key.
+func ValidPosition(k string) bool { return k != "" && validKey(k) }

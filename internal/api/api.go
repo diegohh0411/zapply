@@ -1,6 +1,7 @@
 // Package api wires HTTP routes to the domain. /v1 is generated from
 // api/openapi.yaml (internal/api/gen); handlers live in library.go, and the
 // SSE feed in events.go.
+// Job tracking handlers live in jobs.go.
 package api
 
 import (
@@ -13,10 +14,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
+	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -36,13 +40,18 @@ type Deps struct {
 	Heartbeat time.Duration
 	// WriteTimeout bounds each SSE write (default 10 s).
 	WriteTimeout time.Duration
+	// Web serves the single-page app for every other path; nil answers 404.
+	Web http.Handler
+	// DevToken mints a token for a subject (POST /dev/token, development
+	// only); nil disables the route.
+	DevToken func(subject string) (string, error)
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
 const maxBody = 1 << 20
 
 func Handler(d Deps) http.Handler {
-	srv := &server{deps: d, lib: library.NewService(d.Store)}
+	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store)}
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
 		gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
@@ -64,9 +73,16 @@ func Handler(d Deps) http.Handler {
 	})
 	root.HandleFunc("GET /readyz", d.ready)
 	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), limitBody))
-	root.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		httpx.WriteProblem(w, r, http.StatusNotFound, "")
-	})
+	if d.DevToken != nil {
+		root.Handle("POST /dev/token", httpx.Chain(http.HandlerFunc(d.devToken), limitBody))
+	}
+	if d.Web != nil {
+		root.Handle("/", d.Web)
+	} else {
+		root.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			httpx.WriteProblem(w, r, http.StatusNotFound, "")
+		})
+	}
 
 	return httpx.Chain(root, httpx.RequestLog(d.Logger), httpx.Recover)
 }
@@ -104,6 +120,23 @@ func limitBody(next http.Handler) http.Handler {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
 		next.ServeHTTP(w, r)
 	})
+}
+
+// devToken lets the web app sign in as any subject in development.
+func (d Deps) devToken(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Sub string `json:"sub"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Sub == "" || len(body.Sub) > 100 {
+		httpx.WriteProblem(w, r, http.StatusBadRequest, "send {\"sub\": \"<name>\"}")
+		return
+	}
+	tok, err := d.DevToken(body.Sub)
+	if err != nil {
+		httpx.WriteProblem(w, r, http.StatusInternalServerError, "")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"token": tok})
 }
 
 func (d Deps) ready(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +181,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var invalid *library.ValidationError
 	var conflict *library.ConflictError
 	var bad errBadRequest
+	var dup *jobs.DuplicateError
 	switch {
+	case errors.As(err, &dup):
+		writeDuplicate(w, r, dup.ExistingID)
 	case errors.As(err, &invalid):
 		writeValidation(w, r, invalid.Fields)
 	case errors.As(err, &conflict):
@@ -182,5 +218,24 @@ func writeValidation(w http.ResponseWriter, r *http.Request, fields []library.Fi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusUnprocessableEntity)
+	_ = json.NewEncoder(w).Encode(p)
+}
+
+// writeDuplicate is a 409 naming the job the user already saved.
+func writeDuplicate(w http.ResponseWriter, r *http.Request, existing uuid.UUID) {
+	p := struct {
+		httpx.Problem
+		ExistingID uuid.UUID `json:"existing_id"`
+	}{
+		Problem: httpx.Problem{
+			Title:     http.StatusText(http.StatusConflict),
+			Status:    http.StatusConflict,
+			Detail:    "a job with this URL already exists",
+			RequestID: httpx.RequestID(r.Context()),
+		},
+		ExistingID: existing,
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusConflict)
 	_ = json.NewEncoder(w).Encode(p)
 }
