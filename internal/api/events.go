@@ -53,6 +53,29 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := auth.UserID(ctx)
+
+	// One context ends the stream at token expiry or on drain, including
+	// while replay waits on the relay lock: an expired token must not
+	// receive replayed data.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	if exp := auth.ExpiresAt(ctx); !exp.IsZero() {
+		var cancelExp context.CancelFunc
+		ctx, cancelExp = context.WithDeadlineCause(ctx, exp, errTokenExpired)
+		defer cancelExp()
+	}
+	if s.deps.Drain != nil {
+		stop := make(chan struct{})
+		defer close(stop)
+		go func() {
+			select {
+			case <-s.deps.Drain:
+				cancel(errDraining)
+			case <-stop:
+			}
+		}()
+	}
+
 	stream, err := hub.Subscribe(uid)
 	switch {
 	case errors.Is(err, events.ErrTooManyStreams):
@@ -66,7 +89,15 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	defer stream.Close()
 
 	rep, err := s.replay(ctx, uid, last, hasLast)
-	if err != nil {
+	switch cause := context.Cause(ctx); {
+	case errors.Is(cause, errTokenExpired):
+		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+		httpx.WriteProblem(w, r, http.StatusUnauthorized, "token expired")
+		return
+	case errors.Is(cause, errDraining):
+		unavailable(w, r)
+		return
+	case err != nil:
 		writeError(w, r, err)
 		return
 	}
@@ -76,7 +107,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Accel-Buffering", "no") // nginx: don't buffer the stream
 	w.WriteHeader(http.StatusOK)
-	sse := sseWriter{w: w, rc: http.NewResponseController(w)}
+	sse := sseWriter{ctx: ctx, w: w, rc: http.NewResponseController(w), timeout: s.deps.WriteTimeout}
 
 	if rep.reset {
 		if sse.event(0, "reset", []byte("{}")) != nil {
@@ -100,12 +131,6 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	heartbeat := time.NewTicker(beat)
 	defer heartbeat.Stop()
-	var expired <-chan time.Time
-	if exp := auth.ExpiresAt(ctx); !exp.IsZero() {
-		t := time.NewTimer(time.Until(exp))
-		defer t.Stop()
-		expired = t.C
-	}
 
 	for {
 		select {
@@ -124,17 +149,21 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 			if sse.raw(": ping\n\n") != nil {
 				return
 			}
-		case <-s.deps.Drain:
-			// Reconnect soon, to a replica that isn't shutting down.
-			_ = sse.raw("retry: 1000\n\n")
-			return
-		case <-expired:
-			return
 		case <-ctx.Done():
-			return
+			if errors.Is(context.Cause(ctx), errDraining) {
+				// Reconnect soon, to a replica that isn't shutting down.
+				sse.ctx = context.WithoutCancel(ctx)
+				_ = sse.raw("retry: 1000\n\n")
+			}
+			return // token expired, draining, or client gone
 		}
 	}
 }
+
+var (
+	errTokenExpired = errors.New("token expired")
+	errDraining     = errors.New("server draining")
+)
 
 func unavailable(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Retry-After", "5")
@@ -210,8 +239,10 @@ func (s *server) replay(ctx context.Context, uid uuid.UUID, last int64, hasLast 
 }
 
 type sseWriter struct {
-	w  http.ResponseWriter
-	rc *http.ResponseController
+	ctx     context.Context // writes stop once it ends
+	w       http.ResponseWriter
+	rc      *http.ResponseController
+	timeout time.Duration
 }
 
 // event writes one SSE event. id 0 is left out. data must be JSON, which is
@@ -230,15 +261,33 @@ func (s sseWriter) event(id int64, name string, data []byte) error {
 }
 
 // raw writes and flushes, with a deadline so a stalled client can't pin the
-// handler.
+// handler. The deadline is cleared afterwards: left armed, it would end an
+// idle stream (HTTP/2 resets it) before the next heartbeat.
 func (s sseWriter) raw(text string) error {
-	if err := s.rc.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
+	timeout := s.timeout
+	if timeout <= 0 {
+		timeout = writeTimeout
+	}
+	if err := s.deadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
 	if _, err := s.w.Write([]byte(text)); err != nil {
 		return err
 	}
-	return s.flush()
+	if err := s.flush(); err != nil {
+		return err
+	}
+	return s.deadline(time.Time{})
+}
+
+func (s sseWriter) deadline(t time.Time) error {
+	if err := s.rc.SetWriteDeadline(t); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	return nil
 }
 
 func (s sseWriter) flush() error { return s.rc.Flush() }

@@ -34,6 +34,8 @@ type Deps struct {
 	Drain <-chan struct{}
 	// Heartbeat is the SSE keep-alive interval (default 20 s).
 	Heartbeat time.Duration
+	// WriteTimeout bounds each SSE write (default 10 s).
+	WriteTimeout time.Duration
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.

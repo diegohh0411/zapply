@@ -23,6 +23,10 @@ var (
 type HubConfig struct {
 	Buffer            int // events buffered per stream before it is closed
 	MaxStreamsPerUser int // per replica
+	// PendingMsgs caps messages queued in NATS for one user's subscription
+	// (default 65536). Past it NATS drops messages, and the hub closes that
+	// user's streams so they replay.
+	PendingMsgs int
 }
 
 // Hub owns an API replica's NATS connection and fans each user's events out
@@ -67,6 +71,9 @@ func Connect(url string, cfg HubConfig, log *slog.Logger) (*Hub, error) {
 	if cfg.MaxStreamsPerUser <= 0 {
 		cfg.MaxStreamsPerUser = 8
 	}
+	if cfg.PendingMsgs <= 0 {
+		cfg.PendingMsgs = 65536
+	}
 	h := &Hub{cfg: cfg, log: log, users: map[uuid.UUID]*userStreams{}}
 	nc, err := nats.Connect(url,
 		nats.Name("zapply-api"),
@@ -81,6 +88,14 @@ func Connect(url string, cfg HubConfig, log *slog.Logger) (*Hub, error) {
 			h.closeAll()
 		}),
 		nats.ReconnectHandler(func(*nats.Conn) { log.Info("nats reconnected") }),
+		// NATS drops messages for a slow subscription without
+		// disconnecting. Those events are lost to its streams, so end them.
+		nats.ErrorHandler(func(_ *nats.Conn, sub *nats.Subscription, err error) {
+			if sub != nil && errors.Is(err, nats.ErrSlowConsumer) {
+				log.Warn("nats dropped events; closing the user's streams", "subject", sub.Subject)
+				h.closeSub(sub)
+			}
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("connect nats: %w", err)
@@ -112,6 +127,7 @@ func (h *Hub) Subscribe(userID uuid.UUID) (*Stream, error) {
 			h.mu.Unlock()
 			return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 		}
+		_ = sub.SetPendingLimits(h.cfg.PendingMsgs, -1)
 		u = &userStreams{sub: sub, streams: map[*Stream]struct{}{}}
 		h.users[userID] = u
 	} else if len(u.streams) >= h.cfg.MaxStreamsPerUser {
@@ -174,6 +190,20 @@ func (h *Hub) closeLocked(s *Stream) {
 	if len(u.streams) == 0 {
 		_ = u.sub.Unsubscribe()
 		delete(h.users, s.userID)
+	}
+}
+
+// closeSub ends every stream fed by sub.
+func (h *Hub) closeSub(sub *nats.Subscription) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, u := range h.users {
+		if u.sub == sub {
+			for s := range u.streams {
+				h.closeLocked(s)
+			}
+			return
+		}
 	}
 }
 

@@ -462,3 +462,114 @@ func TestNATSDownLeavesRowsPending(t *testing.T) {
 		t.Fatalf("pending = %d (%v), want 1", pending, err)
 	}
 }
+
+// Pruning holds the relay lock, so it can't run between a replay's cursor
+// check and its read (which hold it shared).
+func TestPruneWaitsForReplay(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	uid := e.newUser(t)
+	old := insertEvent(t, e.admin, uid, "evidence.created")
+	r := e.newRelay(&recorder{}, 10)
+	step(t, r)
+	if _, err := e.admin.Exec(ctx, `UPDATE outbox SET published_at = now() - interval '25 hours' WHERE id = $1`, old); err != nil {
+		t.Fatal(err)
+	}
+
+	replay, err := e.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := replay.Exec(ctx, `SELECT pg_advisory_xact_lock_shared($1)`, events.RelayLockKey); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan int64, 1)
+	go func() {
+		n, err := r.Prune(ctx)
+		if err != nil {
+			t.Error(err)
+		}
+		done <- n
+	}()
+	select {
+	case <-done:
+		t.Fatal("prune ran while a replay held the lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := replay.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := <-done; n != 1 {
+		t.Fatalf("pruned %d, want 1", n)
+	}
+}
+
+// Pruning removes a prefix of seqs, so a surviving cursor always has every
+// later event. A row published long ago but with a higher seq than a recent
+// one is kept.
+func TestPruneDeletesOnlyASeqPrefix(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	uid := e.newUser(t)
+	ids := []uuid.UUID{
+		insertEvent(t, e.admin, uid, "a"),
+		insertEvent(t, e.admin, uid, "b"),
+		insertEvent(t, e.admin, uid, "c"),
+	}
+	r := e.newRelay(&recorder{}, 1)
+	for range ids {
+		step(t, r)
+	}
+	// seq order a < b < c; make a and c look old, b recent.
+	if _, err := e.admin.Exec(ctx, `UPDATE outbox SET published_at = now() - interval '25 hours' WHERE id = ANY($1)`,
+		[]uuid.UUID{ids[0], ids[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := r.Prune(ctx); err != nil || n != 1 {
+		t.Fatalf("pruned %d (%v), want only a", n, err)
+	}
+	var left int
+	if err := e.admin.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE id = ANY($1)`, ids[1:]).Scan(&left); err != nil || left != 2 {
+		t.Fatalf("b and c: %d left (%v), want 2", left, err)
+	}
+}
+
+// published_at is taken after the lock, so it follows seq even when a batch
+// waited for the lock.
+func TestPublishedAtIsAfterTheLock(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	uid := e.newUser(t)
+	id := insertEvent(t, e.admin, uid, "evidence.created")
+
+	holder, err := e.admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, events.RelayLockKey); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := e.newRelay(&recorder{}, 10).Step(ctx); err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(300 * time.Millisecond)
+	var released time.Time
+	if err := holder.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&released); err != nil {
+		t.Fatal(err)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	var at time.Time
+	if err := e.admin.QueryRow(ctx, `SELECT published_at FROM outbox WHERE id = $1`, id).Scan(&at); err != nil {
+		t.Fatal(err)
+	}
+	if at.Before(released) {
+		t.Fatalf("published_at %v is before the lock was released at %v", at, released)
+	}
+}

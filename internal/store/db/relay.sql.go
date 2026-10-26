@@ -84,7 +84,11 @@ func (q *Queries) NextOutboxSeqs(ctx context.Context, n int32) ([]int64, error) 
 const pruneOutbox = `-- name: PruneOutbox :execrows
 DELETE FROM outbox WHERE id IN (
     SELECT p.id FROM outbox p
-    WHERE p.published_at < $1::timestamptz
+    WHERE p.seq IS NOT NULL
+      AND p.seq < coalesce(
+          (SELECT min(r.seq) FROM outbox r WHERE r.seq IS NOT NULL AND r.published_at >= $1::timestamptz),
+          9223372036854775807)
+    ORDER BY p.seq
     LIMIT $2
 )
 `
@@ -94,6 +98,9 @@ type PruneOutboxParams struct {
 	N      int32
 }
 
+// PruneOutbox deletes a prefix of published seqs: everything below the first
+// event published at or after `before`. Runs under the exclusive relay lock,
+// so a replay never sees a cursor survive while events after it are gone.
 func (q *Queries) PruneOutbox(ctx context.Context, arg PruneOutboxParams) (int64, error) {
 	result, err := q.db.Exec(ctx, pruneOutbox, arg.Before, arg.N)
 	if err != nil {
@@ -103,7 +110,7 @@ func (q *Queries) PruneOutbox(ctx context.Context, arg PruneOutboxParams) (int64
 }
 
 const publishOutbox = `-- name: PublishOutbox :exec
-UPDATE outbox o SET seq = b.seq, published_at = now()
+UPDATE outbox o SET seq = b.seq, published_at = statement_timestamp()
 FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::bigint[]) AS seq) AS b
 WHERE o.id = b.id
 `
@@ -113,6 +120,8 @@ type PublishOutboxParams struct {
 	Seqs []int64
 }
 
+// statement_timestamp(), not now(): now() is the transaction start, before
+// the lock was acquired, so it would not follow seq order.
 func (q *Queries) PublishOutbox(ctx context.Context, arg PublishOutboxParams) error {
 	_, err := q.db.Exec(ctx, publishOutbox, arg.Ids, arg.Seqs)
 	return err

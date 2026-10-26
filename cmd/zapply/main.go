@@ -166,9 +166,14 @@ func runRelay(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	})
 	srv.Handler = mux
 
+	// If the admin listener fails (e.g. its port is taken), stop relaying
+	// too rather than run without health checks.
+	rctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- r.Run(ctx) }()
+	go func() { done <- r.Run(rctx) }()
 	err = srv.Run(ctx, func(addr net.Addr) { log.Info("relay admin listening", "addr", addr.String()) })
+	cancel()
 	return errors.Join(err, <-done)
 }
 

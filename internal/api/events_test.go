@@ -30,6 +30,7 @@ type eventEnv struct {
 	db    *testdb.DB
 	nats  *testnats.Server
 	url   string
+	http  *http.Client
 	drain chan struct{}
 }
 
@@ -38,6 +39,8 @@ type eventOpts struct {
 	maxStreams int
 	noHub      bool
 	noRelay    bool
+	http2      bool // serve TLS with HTTP/2
+	writeTO    time.Duration
 }
 
 func newEventEnv(t *testing.T, o eventOpts) *eventEnv {
@@ -48,11 +51,12 @@ func newEventEnv(t *testing.T, o eventOpts) *eventEnv {
 	e := &eventEnv{t: t, db: d, nats: ns, drain: make(chan struct{})}
 
 	deps := api.Deps{
-		Store:     d.Store,
-		Verifier:  auth.NewDev(secret, "authenticated"),
-		Logger:    log,
-		Drain:     e.drain,
-		Heartbeat: o.heartbeat,
+		Store:        d.Store,
+		Verifier:     auth.NewDev(secret, "authenticated"),
+		Logger:       log,
+		Drain:        e.drain,
+		Heartbeat:    o.heartbeat,
+		WriteTimeout: o.writeTO,
 	}
 	if !o.noHub {
 		hub, err := events.Connect(ns.ClientURL(), events.HubConfig{MaxStreamsPerUser: o.maxStreams}, log)
@@ -62,9 +66,15 @@ func newEventEnv(t *testing.T, o eventOpts) *eventEnv {
 		t.Cleanup(hub.Close)
 		deps.Events = hub
 	}
-	srv := httptest.NewServer(api.Handler(deps))
+	srv := httptest.NewUnstartedServer(api.Handler(deps))
+	if o.http2 {
+		srv.EnableHTTP2 = true
+		srv.StartTLS()
+	} else {
+		srv.Start()
+	}
 	t.Cleanup(srv.Close)
-	e.url = srv.URL
+	e.url, e.http = srv.URL, srv.Client()
 
 	if !o.noRelay {
 		pool, err := store.Connect(context.Background(), d.RelayURL)
@@ -107,7 +117,7 @@ func (e *eventEnv) client(sub string, ttl time.Duration) *client {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return &client{t: e.t, base: e.url, token: tok}
+	return &client{t: e.t, base: e.url, token: tok, http: e.http}
 }
 
 type sseEvent struct {
@@ -128,7 +138,11 @@ func open(t *testing.T, c *client, lastID string) *sseStream {
 	if lastID != "" {
 		req.Header.Set("Last-Event-ID", lastID)
 	}
-	res, err := http.DefaultClient.Do(req)
+	hc := c.http
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	res, err := hc.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,4 +519,88 @@ func TestEventsEndWhenNATSDisconnects(t *testing.T) {
 	s.expect("ready")
 	e.nats.Shutdown()
 	s.ended(3 * time.Second)
+}
+
+// holdRelayLock takes the relay lock as if a batch were in flight, until the
+// returned function commits.
+func (e *eventEnv) holdRelayLock() func() {
+	e.t.Helper()
+	ctx := context.Background()
+	tx, err := e.db.Admin(e.t).Begin(ctx)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, events.RelayLockKey); err != nil {
+		e.t.Fatal(err)
+	}
+	return func() { _ = tx.Commit(ctx) }
+}
+
+func (e *eventEnv) cursor(c *client) string {
+	e.t.Helper()
+	newEvidence(c, "Cursor")
+	e.published()
+	var seq int64
+	if err := e.db.Admin(e.t).QueryRow(context.Background(), `SELECT max(seq) FROM outbox`).Scan(&seq); err != nil {
+		e.t.Fatal(err)
+	}
+	return strconv.FormatInt(seq, 10)
+}
+
+// A token that expires while replay waits for the relay lock gets no data.
+func TestEventsTokenExpiresDuringReplay(t *testing.T) {
+	e := newEventEnv(t, eventOpts{})
+	alice := e.client("alice", 2*time.Second)
+	cursor := e.cursor(alice)
+	newEvidence(alice, "Missed") // would be replayed
+	e.published()
+
+	release := e.holdRelayLock()
+	defer release()
+	start := time.Now()
+	s := open(t, alice, cursor)
+	if s.res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401 once the token expired during replay", s.res.StatusCode)
+	}
+	if d := time.Since(start); d > 4*time.Second {
+		t.Fatalf("took %v; should end at expiry", d)
+	}
+}
+
+func TestEventsDrainDuringReplay(t *testing.T) {
+	e := newEventEnv(t, eventOpts{})
+	alice := e.client("alice", time.Hour)
+	cursor := e.cursor(alice)
+	release := e.holdRelayLock()
+	defer release()
+
+	go func() { time.Sleep(200 * time.Millisecond); close(e.drain) }()
+	s := open(t, alice, cursor)
+	if s.res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status %d, want 503 when draining during replay", s.res.StatusCode)
+	}
+}
+
+// The write deadline is cleared after each write. Left armed, HTTP/2 resets
+// an idle stream when it passes, before the next heartbeat.
+func TestEventsIdleHTTP2StreamOutlivesWriteTimeout(t *testing.T) {
+	e := newEventEnv(t, eventOpts{http2: true, writeTO: 100 * time.Millisecond, heartbeat: 400 * time.Millisecond, noRelay: true})
+	s := open(t, e.client("alice", time.Hour), "")
+	if s.res.ProtoMajor != 2 {
+		t.Fatalf("proto %s, want HTTP/2", s.res.Proto)
+	}
+	s.expect("ready")
+	for range 2 {
+		select {
+		case ev, ok := <-s.ch:
+			if !ok {
+				t.Fatal("stream ended while idle")
+			}
+			if ev.Comment != "ping" {
+				t.Fatalf("got %+v, want a ping", ev)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("no heartbeat")
+		}
+	}
 }

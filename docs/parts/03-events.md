@@ -53,13 +53,13 @@ Each iteration is one transaction:
 
 1. `pg_advisory_xact_lock(events.RelayLockKey)` with a 10 s `lock_timeout`. It waits rather than skipping: a waiting exclusive request queues ahead of new shared ones, so SSE replays (below) can't starve it. A transaction-scoped lock works behind transaction-mode poolers, unlike a session lock.
 2. Claim up to `RELAY_BATCH` unpublished rows, ordered by `(created_at, id)`, `FOR UPDATE`.
-3. Take that many values from `outbox_seq` in one statement, sort them, assign them in claim order, and set `published_at`.
+3. Take that many values from `outbox_seq` in one statement, sort them, assign them in claim order, and set `published_at = statement_timestamp()`, which is after the lock was taken, so it follows `seq`.
 4. Publish each row to `user.<user_id>.<topic>` and flush the NATS connection.
 5. Commit.
 
 - **At-least-once:** publishing happens before the commit. A crash in between leaves the rows unpublished. They are sent again with new `seq` values. Payloads are `{id, version}`, so a duplicate only costs the client a refetch.
 - **Wake-up:** poll every `RELAY_INTERVAL` (default 200 ms). A full batch triggers another poll immediately.
-- **Pruning:** in the same loop, delete published rows older than `EVENT_RETENTION` (default 24 h), in bounded batches. Part 5's worker can take this over.
+- **Pruning:** in the same loop, delete published rows older than `EVENT_RETENTION` (default 24 h), in bounded batches. Each batch holds the relay lock exclusively and deletes only a **prefix of `seq`**: everything below the first event published inside the window. Part 5's worker can take this over.
 - Any number of relay replicas is safe. The lock serializes batches, which keeps the order global.
 - `/healthz` and `/readyz` on a small admin listener (`RELAY_ADMIN_ADDR`): ready while both Postgres and NATS are connected.
 - The NATS reconnect buffer is off. While disconnected, `Publish` fails and the batch rolls back, instead of being buffered and sent a second time on reconnect.
@@ -88,14 +88,14 @@ The stream starts in this order, so an event can't fall between replay and live:
 
 Rules:
 
-- **Valid cursor:** a `Last-Event-ID` is valid while that user's event with that `seq` is still in the outbox. Pruning goes by publish time, which follows `seq`, so if that row survives, everything after it does too.
+- **Valid cursor:** a `Last-Event-ID` is valid while that user's event with that `seq` is still in the outbox. Pruning removes a prefix of `seq` and holds the relay lock, which replay holds shared, so if that row survives, everything after it does too, for the whole replay.
 - **Expired or foreign cursor:** `event: reset`, then `ready` with the user's latest `seq`. Also used when more than 1,000 events were missed.
 - **No `Last-Event-ID`:** no replay; `ready` carries the user's latest `seq`.
 - **Heartbeat:** a `: ping` comment every 20 s, so proxies keep the connection open.
-- **Token expiry:** the stream closes at the JWT's `exp`. The client reconnects with a fresh token and its `Last-Event-ID`.
+- **Token expiry:** the stream closes at the JWT's `exp`, including while replay is still waiting (then `401`, with no data sent). The client reconnects with a fresh token and its `Last-Event-ID`.
 - **Drain:** when the server starts draining, every stream closes with `retry: 1000`, so clients reconnect to another replica. Without this, open streams would hold graceful shutdown until its timeout.
-- **Slow clients:** each connection has a bounded buffer (`SSE_BUFFER`, default 256 events). On overflow the stream closes, and the client replays on reconnect. Every write also has a 10 s deadline.
-- **NATS disconnect:** every open stream on the replica closes, since events published meanwhile never reach it. Clients reconnect and replay.
+- **Slow clients:** each connection has a bounded buffer (`SSE_BUFFER`, default 256 events). On overflow the stream closes, and the client replays on reconnect. Every write has a 10 s deadline, cleared once the write completes.
+- **NATS disconnect or slow consumer:** NATS drops events for a disconnected replica, and also for a subscription whose queue overflows (without disconnecting). Either way the affected streams close, and their clients reconnect and replay.
 - **Limits:** at most `SSE_MAX_STREAMS_PER_USER` (default 8) per replica. Past that, `429`.
 - **NATS down:** `/v1/events` returns `503` with `Retry-After`. The API starts without NATS, and `/readyz` doesn't depend on it, so REST keeps working.
 - **Auth:** the usual `Authorization: Bearer` header. The browser's `EventSource` can't send headers, so the Angular client uses a fetch-based SSE client. A short-lived `?ticket=` endpoint can be added if a client ever needs `EventSource`.
@@ -170,3 +170,16 @@ Hash partitioning of the relay, CDC, JetStream, `?ticket=` auth, and a global (c
   - Replay waits for an in-flight relay batch. This test fails without the shared lock.
   - Heartbeats, drain (`retry: 1000`), token expiry, NATS disconnect.
   - `400`, `401`, `429` (and the slot frees on disconnect), and `503` with REST unaffected.
+
+### Review fixes (independent review, round 1)
+
+| Finding | Fix | Regression test |
+|---|---|---|
+| NATS drops messages for a slow subscription without disconnecting. The stream continued with a gap, and the client's cursor moved past it for good | A slow-consumer error closes that user's streams, so they replay. Each subscription's NATS queue is capped (`PendingMsgs`) | `TestNATSSlowConsumerClosesStreams` |
+| Pruning could run between replay's cursor check and its read. The client got `ready` with neither the missed events nor `reset` | Each prune batch holds the relay lock exclusively, so it waits for replays | `TestPruneWaitsForReplay` |
+| `published_at = now()` is the transaction start, before the lock wait, so a higher `seq` could carry an older timestamp. Pruning by time then removed events after a surviving cursor | `statement_timestamp()` after the lock, and pruning deletes only a prefix of `seq` | `TestPublishedAtIsAfterTheLock`, `TestPruneDeletesOnlyASeqPrefix` |
+| Token expiry and drain were only watched after replay, so a token that expired while replay waited still received data | One context, ending at token expiry or drain, covers subscribe, replay and every write. Expiry during replay returns `401`, drain returns `503` | `TestEventsTokenExpiresDuringReplay`, `TestEventsDrainDuringReplay` |
+| If the relay's admin listener failed (port taken), the relay kept running without health checks | The relay loop runs on a child context, cancelled when the admin server exits | Checked by hand: exits at once with the bind error |
+| The write deadline stayed armed after each write; under HTTP/2 that resets an idle stream before its heartbeat | The deadline is cleared after every write | `TestEventsIdleHTTP2StreamOutlivesWriteTimeout` |
+
+Every regression test fails on the previous code.

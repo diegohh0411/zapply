@@ -21,6 +21,7 @@ type client struct {
 	t     *testing.T
 	base  string
 	token string
+	http  *http.Client // nil: http.DefaultClient
 }
 
 type response struct {
@@ -66,7 +67,11 @@ func (c *client) do(method, path string, body any, headers ...string) response {
 	for i := 0; i+1 < len(headers); i += 2 {
 		req.Header.Set(headers[i], headers[i+1])
 	}
-	res, err := http.DefaultClient.Do(req)
+	hc := c.http
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	res, err := hc.Do(req)
 	if err != nil {
 		c.t.Fatal(err)
 	}

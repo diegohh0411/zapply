@@ -122,11 +122,8 @@ func (r *Relay) Step(ctx context.Context) (int, error) {
 
 	var n int
 	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
+		if err := lock(ctx, tx); err != nil {
 			return err
-		}
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, events.RelayLockKey); err != nil {
-			return fmt.Errorf("relay lock: %w", err)
 		}
 		q := db.New(tx)
 		rows, err := q.ClaimOutbox(ctx, int32(r.cfg.Batch))
@@ -175,16 +172,36 @@ func (r *Relay) Step(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// Prune deletes published rows past the retention window, in bounded batches.
-// It needs no lock: it never touches unpublished rows.
+// Prune deletes published rows past the retention window, oldest seq first,
+// in bounded batches. Each batch holds the relay lock exclusively, so it
+// can't run between a replay's cursor check and its read.
 func (r *Relay) Prune(ctx context.Context) (int64, error) {
 	before := time.Now().Add(-r.cfg.Retention)
 	var total int64
 	for {
-		n, err := db.New(r.pool).PruneOutbox(ctx, db.PruneOutboxParams{Before: before, N: pruneBatch})
+		var n int64
+		err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+			if err := lock(ctx, tx); err != nil {
+				return err
+			}
+			var err error
+			n, err = db.New(tx).PruneOutbox(ctx, db.PruneOutboxParams{Before: before, N: pruneBatch})
+			return err
+		})
 		total += n
 		if err != nil || n < pruneBatch {
 			return total, err
 		}
 	}
+}
+
+// lock takes the relay lock exclusively for the rest of tx.
+func lock(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, events.RelayLockKey); err != nil {
+		return fmt.Errorf("relay lock: %w", err)
+	}
+	return nil
 }
