@@ -64,6 +64,7 @@ export class JobsStore {
   readonly statusById = computed(() => new Map(this.statuses().map((s) => [s.id, s])));
 
   private loaded = false;
+  private requested = false;
   private identity: string | null | undefined;
   private sessionGeneration = 0;
   private jobsRequest = 0;
@@ -109,7 +110,10 @@ export class JobsStore {
     this.syncSession();
     effect(() => {
       this.auth.identity();
-      untracked(() => this.syncSession());
+      untracked(() => {
+        this.syncSession();
+        if (this.identity && this.requested && !this.loaded) void this.load();
+      });
     });
     const destroy = inject(DestroyRef);
     this.events.resync.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
@@ -134,6 +138,7 @@ export class JobsStore {
 
   /** Loads everything the first time; later calls reload. */
   async ensureLoaded(): Promise<void> {
+    this.requested = true;
     this.syncSession();
     if (!this.loaded) await this.load();
   }

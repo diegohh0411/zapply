@@ -42,7 +42,8 @@ func migrate(ctx context.Context, db *sql.DB, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, dir)
+	p, err := goose.NewProvider(goose.DialectPostgres, db, dir,
+		goose.WithGoMigrations(goose.NewGoMigration(6, &goose.GoFunc{RunTx: backfillJobURLs}, nil)))
 	if err != nil {
 		return err
 	}

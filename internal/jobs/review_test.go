@@ -15,6 +15,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/api"
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/jobs"
+	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/testdb"
 	"github.com/google/uuid"
 )
@@ -162,4 +163,48 @@ func TestRegressionUnicodeURLIndexLimit(t *testing.T) {
 		t.Fatalf("distinct long URL: %v", err)
 	}
 
+}
+
+func TestUpgradeRepairsEscapedURLKeys(t *testing.T) {
+	d := testdb.New(t)
+	ctx := context.Background()
+	uid, err := d.Store.ResolveUser(ctx, auth.Principal{Issuer: "review", Subject: "upgrade"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := jobs.NewService(d.Store)
+	encoded := "https://jobs.example/a%2Fb"
+	literal := "https://jobs.example/a/b"
+	created, err := s.CreateJob(ctx, uid, jobs.JobInput{Title: "encoded posting", URL: encoded})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce a database at version 5 with a key written by the old normalizer.
+	admin := d.Admin(t)
+	if _, err := admin.Exec(ctx, "UPDATE job SET normalized_url=$2 WHERE id=$1", created.ID, literal); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, "DELETE FROM goose_db_version WHERE version_id=6"); err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := store.Migrate(ctx, d.AdminURL, log); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.CreateJob(ctx, uid, jobs.JobInput{Title: "same posting", URL: encoded})
+	var duplicate *jobs.DuplicateError
+	if !errors.As(err, &duplicate) || duplicate.ExistingID != created.ID {
+		t.Fatalf("encoded URL duplicate after upgrade: %v", err)
+	}
+	if _, err := s.CreateJob(ctx, uid, jobs.JobInput{Title: "different posting", URL: literal}); err != nil {
+		t.Fatalf("literal path after upgrade: %v", err)
+	}
+	// Idempotent migration must not reinterpret or damage the repaired keys.
+	if err := store.Migrate(ctx, d.AdminURL, log); err != nil {
+		t.Fatal(err)
+	}
+	var forced bool
+	if err := admin.QueryRow(ctx, "SELECT relforcerowsecurity FROM pg_class WHERE oid='job'::regclass").Scan(&forced); err != nil || !forced {
+		t.Fatalf("forced RLS after backfill: %v, %v", forced, err)
+	}
 }

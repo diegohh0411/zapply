@@ -36,6 +36,7 @@ import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
+import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, STATUS_DOT, WORK_MODES } from './format';
@@ -113,6 +114,7 @@ const emptyForm = (statusId = ''): Form => ({
   templateUrl: './job-sheet.html',
 })
 export class JobSheet {
+  private readonly auth = inject(AuthService);
   protected readonly store = inject(JobsStore);
   private readonly toast = inject(ZardSonnerService);
   private readonly confirm = inject(ConfirmService);
@@ -142,6 +144,29 @@ export class JobSheet {
   private activitiesRequest = 0;
 
   constructor() {
+    let identity = this.auth.identity();
+    effect(() => {
+      const next = this.auth.identity();
+      if (identity === next) return;
+      identity = next;
+      untracked(() => {
+        this.generation++;
+        this.activitiesRequest++;
+        this.job.set(null);
+        this.form = emptyForm();
+        this.activities.set([]);
+        this.errors.set({});
+        this.dirty.set(false);
+        this.saving.set(false);
+        this.loading.set(false);
+        this.isNew.set(false);
+        this.editingNote.set(null);
+        this.note = '';
+        this.noteEdit = '';
+        this.etag = '';
+        this.visible.set(false);
+      });
+    });
     effect(() => {
       const t = this.target();
       untracked(() => void this.load(t));
@@ -372,6 +397,7 @@ export class JobSheet {
         return;
       }
       if (e.status === 412) {
+        this.saving.set(false);
         this.toast.warning('This job changed elsewhere', {
           description: 'Latest version loaded; your unsaved edits are kept for review.',
         });

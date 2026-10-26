@@ -143,10 +143,12 @@ responses. The following fixes include regression coverage:
 
 Frontend regressions run with `cd web && npm test` and are included in CI. They
 execute the production class methods using controlled DI/signals and deferred
-responses; they do not render Angular templates or schedule Angular effects.
+responses; the original harness does not render Angular templates or schedule Angular effects.
+A second harness uses real Angular DI, signals and a controlled root-effect
+scheduler to cover mounted account changes and conflict recovery.
 Type checking and the production build separately validate templates.
 
-Existing databases must apply **migration 00005 as well as 00004** before the
+Existing databases must apply **migrations 00004–00006** before the
 updated API is deployed. The digest function fixes its encoding to UTF-8 and
 uses PostgreSQL's built-in SHA-256, requiring no extension. Rolling back 00005
 recreates the original text index and can fail if long URLs have since been
@@ -158,3 +160,19 @@ Angular build passed. The updated local app also passed browser checks for
 account switching, draft notes surviving status and archive changes, saving with
 the refreshed ETag, and the Zard delete dialog (Cancel kept the fixture; Delete
 returned `404`). The disposable browser fixture was removed afterward.
+
+A second independent pass identified four follow-ups, also fixed:
+
+| Finding | Fix and regression |
+|---|---|
+| A mounted sheet retained the previous principal's private document and drafts | Observe identity, close and clear the sheet, invalidate pending loads; tested with real Angular effects |
+| A mounted board stayed empty after a cross-tab principal change | Reload automatically when an authenticated principal changes after the board was requested; tested without remounting or SSE |
+| `412` recovery left Save loading | Release saving state before the quiet conflict reload; test preserves the draft and new ETag |
+| Existing normalized URLs retained the old escaped-path bug | Registered Go migration **00006** backfills from original URLs using the exact normalizer used for new writes; an upgrade regression verifies encoded-URL duplicate detection and distinct literal paths |
+
+Migration 00006 takes a table lock and repairs keys atomically. It runs through
+`zapply migrate` together with the SQL migrations, using the schema-owner
+connection. It restores forced RLS before committing and never merges or deletes
+user documents. If corrected keys conflict, it rolls back with the affected job
+ID. Shared URL normalization lives in `internal/joburl` to keep writes and the
+backfill consistent.
