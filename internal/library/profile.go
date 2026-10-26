@@ -110,6 +110,7 @@ func cleanProfile(p *Profile) error {
 	}
 	if len(p.Links) > maxLinks {
 		add("links", "at most 20 links")
+		p.Links = nil // don't validate an oversized list item by item
 	}
 	for i := range p.Links {
 		l := &p.Links[i]
@@ -120,7 +121,7 @@ func cleanProfile(p *Profile) error {
 		}
 	}
 	if len(errs) > 0 {
-		return &ValidationError{Fields: errs}
+		return &ValidationError{Fields: capErrors(errs)}
 	}
 	return nil
 }

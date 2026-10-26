@@ -192,7 +192,9 @@ func validate(in EvidenceInput) (validated, []FieldError) {
 	v.in.Skills = normalizeSkillList(add, "skills", in.Skills)
 
 	if len(in.Highlights) > maxHighlights {
+		// Don't validate (or allocate for) an oversized list item by item.
 		add("highlights", fmt.Sprintf("at most %d", maxHighlights))
+		return v, capErrors(errs)
 	}
 	seen := map[uuid.UUID]bool{}
 	v.in.Highlights = make([]HighlightInput, len(in.Highlights))
@@ -200,6 +202,7 @@ func validate(in EvidenceInput) (validated, []FieldError) {
 		p := fmt.Sprintf("highlights[%d]", i)
 		h.Text = strings.TrimSpace(h.Text)
 		checkText(add, p+".text", h.Text, maxHighlight, true)
+		h.MetricValue = canonicalZero(h.MetricValue)
 		h.MetricUnit = strings.TrimSpace(h.MetricUnit)
 		if h.MetricUnit != "" && h.MetricValue == nil {
 			add(p+".metric_unit", "requires metric_value")
@@ -218,7 +221,27 @@ func validate(in EvidenceInput) (validated, []FieldError) {
 		h.Skills = normalizeSkillList(add, p+".skills", h.Skills)
 		v.in.Highlights[i] = h
 	}
-	return v, errs
+	return v, capErrors(errs)
+}
+
+// maxFieldErrors bounds a validation response, however broken the request.
+const maxFieldErrors = 50
+
+func capErrors(errs []FieldError) []FieldError {
+	if len(errs) <= maxFieldErrors {
+		return errs
+	}
+	return append(errs[:maxFieldErrors:maxFieldErrors], FieldError{"", fmt.Sprintf("%d more errors not shown", len(errs)-maxFieldErrors)})
+}
+
+// canonicalZero turns -0 into 0: Postgres numeric has no negative zero, so
+// hashing -0 would disagree with the value read back.
+func canonicalZero(f *float64) *float64 {
+	if f != nil && *f == 0 {
+		z := 0.0
+		return &z
+	}
+	return f
 }
 
 func checkText(add func(string, string), field, s string, max int, required bool) {

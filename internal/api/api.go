@@ -3,9 +3,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -56,9 +58,37 @@ func Handler(d Deps) http.Handler {
 	return httpx.Chain(root, httpx.RequestLog(d.Logger), httpx.Recover)
 }
 
+// limitBody reads the whole body (at most maxBody) before the handler runs,
+// and rejects anything after the first JSON value. The generated decoder
+// stops at the first value, so without this, trailing bytes would be
+// ignored and could exceed the limit unnoticed.
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+		if r.Body == nil || r.Body == http.NoBody {
+			next.ServeHTTP(w, r)
+			return
+		}
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+		var tooLarge *http.MaxBytesError
+		switch {
+		case errors.As(err, &tooLarge):
+			httpx.WriteProblem(w, r, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		case err != nil:
+			httpx.WriteProblem(w, r, http.StatusBadRequest, "could not read request body")
+			return
+		}
+		if len(bytes.TrimSpace(raw)) > 0 {
+			dec := json.NewDecoder(bytes.NewReader(raw))
+			var first json.RawMessage
+			if dec.Decode(&first) == nil {
+				if _, err := dec.Token(); err != io.EOF {
+					httpx.WriteProblem(w, r, http.StatusBadRequest, "request body must be a single JSON value")
+					return
+				}
+			} // malformed JSON is reported by the handler's decoder
+		}
+		r.Body = io.NopCloser(bytes.NewReader(raw))
 		next.ServeHTTP(w, r)
 	})
 }

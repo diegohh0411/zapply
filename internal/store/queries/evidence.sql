@@ -12,7 +12,7 @@ UPDATE evidence SET
     organization_id = $4, category = $5, form = $6, kind = $7, title = $8, summary = $9,
     location = $10, url = $11, start_date = $12, start_precision = $13, end_date = $14,
     end_precision = $15, is_current = $16, details = $17, auto_include = $18, content_hash = $19,
-    version = version + 1, updated_at = now()
+    position = $20, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND id = $2 AND version = $3
 RETURNING version;
 
@@ -22,8 +22,11 @@ SELECT * FROM evidence WHERE user_id = $1 AND id = $2;
 -- name: GetEvidenceForUpdate :one
 SELECT * FROM evidence WHERE user_id = $1 AND id = $2 FOR UPDATE;
 
--- name: GetEvidences :many
-SELECT * FROM evidence WHERE user_id = $1 AND id = ANY (@ids::uuid[]);
+-- name: GetEvidencesForUpdate :many
+-- Locks in id order so concurrent rehashes cannot deadlock each other.
+SELECT * FROM evidence WHERE user_id = $1 AND id = ANY (@ids::uuid[])
+ORDER BY id
+FOR UPDATE;
 
 -- name: ListEvidences :many
 SELECT * FROM evidence
@@ -49,7 +52,7 @@ SELECT count(*) FROM evidence WHERE user_id = $1 AND parent_id = $2;
 -- name: SetChildrenCategory :many
 UPDATE evidence SET category = $3, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND parent_id = $2 AND category <> $3
-RETURNING id;
+RETURNING id, version;
 
 -- name: LastTopLevelPosition :one
 SELECT coalesce(max(position), '')::text FROM evidence
@@ -71,6 +74,21 @@ UPDATE evidence SET archived_at = CASE WHEN @archived::boolean THEN coalesce(arc
     version = version + 1, updated_at = now()
 WHERE user_id = $1 AND id = $2
 RETURNING version;
+
+-- name: TouchEvidence :one
+-- Bumps the version when the representation changed from outside the
+-- document (e.g. a linked skill was renamed).
+UPDATE evidence SET version = version + 1, updated_at = now()
+WHERE user_id = $1 AND id = $2
+RETURNING version;
+
+-- name: SetEvidencePosition :exec
+UPDATE evidence SET position = $3 WHERE user_id = $1 AND id = $2;
+
+-- name: LockPositionScope :exec
+-- Serializes position allocation among top-level evidence of one category
+-- (children are serialized by locking their parent row).
+SELECT pg_advisory_xact_lock(hashtextextended(@scope::text, 0));
 
 -- name: SetEvidenceHash :exec
 UPDATE evidence SET content_hash = $3 WHERE user_id = $1 AND id = $2;

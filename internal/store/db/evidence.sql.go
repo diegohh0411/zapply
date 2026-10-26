@@ -172,17 +172,20 @@ func (q *Queries) GetEvidenceForUpdate(ctx context.Context, arg GetEvidenceForUp
 	return i, err
 }
 
-const getEvidences = `-- name: GetEvidences :many
+const getEvidencesForUpdate = `-- name: GetEvidencesForUpdate :many
 SELECT id, user_id, parent_id, organization_id, category, form, kind, title, summary, location, url, start_date, start_precision, end_date, end_precision, is_current, details, auto_include, position, version, content_hash, archived_at, created_at, updated_at FROM evidence WHERE user_id = $1 AND id = ANY ($2::uuid[])
+ORDER BY id
+FOR UPDATE
 `
 
-type GetEvidencesParams struct {
+type GetEvidencesForUpdateParams struct {
 	UserID uuid.UUID
 	Ids    []uuid.UUID
 }
 
-func (q *Queries) GetEvidences(ctx context.Context, arg GetEvidencesParams) ([]Evidence, error) {
-	rows, err := q.db.Query(ctx, getEvidences, arg.UserID, arg.Ids)
+// Locks in id order so concurrent rehashes cannot deadlock each other.
+func (q *Queries) GetEvidencesForUpdate(ctx context.Context, arg GetEvidencesForUpdateParams) ([]Evidence, error) {
+	rows, err := q.db.Query(ctx, getEvidencesForUpdate, arg.UserID, arg.Ids)
 	if err != nil {
 		return nil, err
 	}
@@ -650,6 +653,17 @@ func (q *Queries) ListSiblings(ctx context.Context, arg ListSiblingsParams) ([]L
 	return items, nil
 }
 
+const lockPositionScope = `-- name: LockPositionScope :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+// Serializes position allocation among top-level evidence of one category
+// (children are serialized by locking their parent row).
+func (q *Queries) LockPositionScope(ctx context.Context, scope string) error {
+	_, err := q.db.Exec(ctx, lockPositionScope, scope)
+	return err
+}
+
 const moveEvidence = `-- name: MoveEvidence :one
 UPDATE evidence SET parent_id = $3, position = $4, category = $5, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND id = $2
@@ -682,7 +696,7 @@ func (q *Queries) MoveEvidence(ctx context.Context, arg MoveEvidenceParams) (int
 const setChildrenCategory = `-- name: SetChildrenCategory :many
 UPDATE evidence SET category = $3, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND parent_id = $2 AND category <> $3
-RETURNING id
+RETURNING id, version
 `
 
 type SetChildrenCategoryParams struct {
@@ -691,19 +705,24 @@ type SetChildrenCategoryParams struct {
 	Category EvidenceCategory
 }
 
-func (q *Queries) SetChildrenCategory(ctx context.Context, arg SetChildrenCategoryParams) ([]uuid.UUID, error) {
+type SetChildrenCategoryRow struct {
+	ID      uuid.UUID
+	Version int32
+}
+
+func (q *Queries) SetChildrenCategory(ctx context.Context, arg SetChildrenCategoryParams) ([]SetChildrenCategoryRow, error) {
 	rows, err := q.db.Query(ctx, setChildrenCategory, arg.UserID, arg.ParentID, arg.Category)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []SetChildrenCategoryRow
 	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
+		var i SetChildrenCategoryRow
+		if err := rows.Scan(&i.ID, &i.Version); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -746,6 +765,21 @@ func (q *Queries) SetEvidenceHash(ctx context.Context, arg SetEvidenceHashParams
 	return err
 }
 
+const setEvidencePosition = `-- name: SetEvidencePosition :exec
+UPDATE evidence SET position = $3 WHERE user_id = $1 AND id = $2
+`
+
+type SetEvidencePositionParams struct {
+	UserID   uuid.UUID
+	ID       uuid.UUID
+	Position string
+}
+
+func (q *Queries) SetEvidencePosition(ctx context.Context, arg SetEvidencePositionParams) error {
+	_, err := q.db.Exec(ctx, setEvidencePosition, arg.UserID, arg.ID, arg.Position)
+	return err
+}
+
 const setHighlightHash = `-- name: SetHighlightHash :exec
 UPDATE highlight SET content_hash = $3 WHERE user_id = $1 AND id = $2
 `
@@ -761,12 +795,32 @@ func (q *Queries) SetHighlightHash(ctx context.Context, arg SetHighlightHashPara
 	return err
 }
 
+const touchEvidence = `-- name: TouchEvidence :one
+UPDATE evidence SET version = version + 1, updated_at = now()
+WHERE user_id = $1 AND id = $2
+RETURNING version
+`
+
+type TouchEvidenceParams struct {
+	UserID uuid.UUID
+	ID     uuid.UUID
+}
+
+// Bumps the version when the representation changed from outside the
+// document (e.g. a linked skill was renamed).
+func (q *Queries) TouchEvidence(ctx context.Context, arg TouchEvidenceParams) (int32, error) {
+	row := q.db.QueryRow(ctx, touchEvidence, arg.UserID, arg.ID)
+	var version int32
+	err := row.Scan(&version)
+	return version, err
+}
+
 const updateEvidence = `-- name: UpdateEvidence :one
 UPDATE evidence SET
     organization_id = $4, category = $5, form = $6, kind = $7, title = $8, summary = $9,
     location = $10, url = $11, start_date = $12, start_precision = $13, end_date = $14,
     end_precision = $15, is_current = $16, details = $17, auto_include = $18, content_hash = $19,
-    version = version + 1, updated_at = now()
+    position = $20, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND id = $2 AND version = $3
 RETURNING version
 `
@@ -791,6 +845,7 @@ type UpdateEvidenceParams struct {
 	Details        json.RawMessage
 	AutoInclude    bool
 	ContentHash    []byte
+	Position       string
 }
 
 func (q *Queries) UpdateEvidence(ctx context.Context, arg UpdateEvidenceParams) (int32, error) {
@@ -814,6 +869,7 @@ func (q *Queries) UpdateEvidence(ctx context.Context, arg UpdateEvidenceParams) 
 		arg.Details,
 		arg.AutoInclude,
 		arg.ContentHash,
+		arg.Position,
 	)
 	var version int32
 	err := row.Scan(&version)

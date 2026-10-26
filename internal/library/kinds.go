@@ -222,6 +222,7 @@ func (f Field) check(v any, present bool) (any, string) {
 		if n < 0 {
 			return nil, "must not be negative"
 		}
+		n = *canonicalZero(&n)
 		if f.Type == Integer {
 			if n != math.Trunc(n) || n > math.MaxInt32 {
 				return nil, "must be a whole number"

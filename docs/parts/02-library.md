@@ -210,3 +210,18 @@ Custom kinds, attachments and files (part 7, object storage), cvd import, public
   - Children, highlight IDs kept across `PUT`, cross-tenant `404`/`422`, archive filtering, and cascade.
   - Cursor pagination, and moves before or after a sibling.
   - Request errors.
+
+### Review fixes (independent review, round 1)
+
+| Finding | Fix | Regression test |
+|---|---|---|
+| A rehash (organization or skill rename) could overwrite a concurrent `PUT`'s hash with one computed from stale content | `rehash` locks the rows (`FOR UPDATE`, in id order) before reading them | `TestRehashWaitsForConcurrentWrite` |
+| Oversized lists were validated item by item: 20k highlights produced a 1 MB error response | Oversized lists fail at once, and responses carry at most 50 field errors | `TestOversizedListsFailFast`, `TestBodyLimits` |
+| Equal positions made a move silently land in the wrong place. They came from a `PUT` that changed category, or from concurrent appends | A category change appends in the new category. Top-level allocation is serialized with an advisory lock for each category, and children by locking their parent. Moves repair legacy ties | `TestCategoryChangeGetsAFreshPosition`, `TestMoveRepairsTiedPositions` |
+| An idempotent retry returned the current document, not the original result | The created document is stored with the key and replayed verbatim, even after edits or deletion | `TestIdempotentReplayReturnsOriginal` |
+| Implicit changes emitted no events: auto-created skills, and children recategorized with their parent | `skill.created` and `evidence.updated` are emitted for them. Renaming, merging or deleting a skill also bumps the version of linked documents and emits `evidence.updated`, since their `skills` list changed | `TestImplicitChangesEmitEvents` |
+| `-0` hashed differently from the `0` Postgres stores | Numbers are canonicalized before hashing and storage | `TestNegativeZeroHashesStably` |
+| Bytes after the first JSON value were ignored, including 2 MiB of whitespace | The body is read in full (≤ 1 MiB) and must be a single JSON value | `TestBodyLimits` |
+| An invalid `category` or `form` filter, or cursor category, caused a `500` | They are validated and return `422` with a field error | `TestListRejectsBadFilters` |
+
+Idempotency keys are kept forever for now. A cleanup job (24 h retention) arrives with the worker in part 5.

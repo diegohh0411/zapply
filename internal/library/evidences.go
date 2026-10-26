@@ -56,10 +56,16 @@ func (s *Service) ListEvidences(ctx context.Context, uid uuid.UUID, f ListFilter
 	}
 	if f.Category != "" {
 		c := db.EvidenceCategory(f.Category)
+		if !c.Valid() {
+			return nil, "", invalid("category", "must be one of education, paid, unpaid")
+		}
 		p.Category = &c
 	}
 	if f.Form != "" {
 		fm := db.EvidenceForm(f.Form)
+		if !fm.Valid() {
+			return nil, "", invalid("form", "must be one of engagement, credential, output, recognition")
+		}
 		p.Form = &fm
 	}
 	if f.Kind != "" {
@@ -68,10 +74,13 @@ func (s *Service) ListEvidences(ctx context.Context, uid uuid.UUID, f ListFilter
 	if f.Cursor != "" {
 		var c cursor
 		raw, err := base64.RawURLEncoding.DecodeString(f.Cursor)
-		if err != nil || json.Unmarshal(raw, &c) != nil || c.Category == "" {
+		if err != nil || json.Unmarshal(raw, &c) != nil {
 			return nil, "", invalid("cursor", "is invalid")
 		}
 		cat := db.EvidenceCategory(c.Category)
+		if !cat.Valid() || c.Position == "" || !validKey(c.Position) {
+			return nil, "", invalid("cursor", "is invalid")
+		}
 		p.AfterCategory, p.AfterPosition, p.AfterID = &cat, &c.Position, &c.ID
 	}
 
@@ -139,8 +148,9 @@ func RequestHash(body []byte) []byte {
 }
 
 // CreateEvidence creates a document. With idem set, a retry of the same
-// request returns the evidence it created (replayed = true) instead of a
-// duplicate; the same key with a different body is rejected.
+// request replays the original result (replayed = true), even if the
+// evidence changed or was deleted since; the same key with a different body
+// is rejected.
 func (s *Service) CreateEvidence(ctx context.Context, uid uuid.UUID, in EvidenceInput, idem *Idempotency) (doc Evidence, replayed bool, err error) {
 	v, errs := validate(in)
 	if len(errs) > 0 {
@@ -148,17 +158,13 @@ func (s *Service) CreateEvidence(ctx context.Context, uid uuid.UUID, in Evidence
 	}
 	err = s.tx(ctx, uid, func(q *db.Queries) error {
 		if idem != nil {
-			id, done, err := claimKey(ctx, q, uid, *idem)
+			stored, done, err := claimKey(ctx, q, uid, *idem)
 			if err != nil {
 				return err
 			}
 			if done {
 				replayed = true
-				doc, err = getDocument(ctx, q, uid, id)
-				if errors.Is(err, ErrNotFound) {
-					return &ConflictError{Message: "the evidence created with this Idempotency-Key no longer exists"}
-				}
-				return err
+				return json.Unmarshal(stored, &doc)
 			}
 		}
 
@@ -185,6 +191,9 @@ func (s *Service) CreateEvidence(ctx context.Context, uid uuid.UUID, in Evidence
 		if parent != nil {
 			last, err = q.LastChildPosition(ctx, db.LastChildPositionParams{UserID: uid, ParentID: in.ParentID})
 		} else {
+			if err = lockScope(ctx, q, uid, v.in.Category); err != nil {
+				return err
+			}
 			last, err = q.LastTopLevelPosition(ctx, db.LastTopLevelPositionParams{UserID: uid, Category: db.EvidenceCategory(v.in.Category)})
 		}
 		if err != nil {
@@ -199,45 +208,53 @@ func (s *Service) CreateEvidence(ctx context.Context, uid uuid.UUID, in Evidence
 		if err := writeDocument(ctx, q, uid, &doc, v, false); err != nil {
 			return err
 		}
-		if idem != nil {
-			if err := q.CompleteIdempotencyKey(ctx, db.CompleteIdempotencyKeyParams{
-				UserID: uid, Key: idem.Key, Status: 201, Body: doc.ID[:],
-			}); err != nil {
-				return err
-			}
-		}
 		if err := emit(ctx, q, uid, "evidence.created", doc.ID, doc.Version); err != nil {
 			return err
 		}
-		doc, err = getDocument(ctx, q, uid, doc.ID)
-		return err
+		if doc, err = getDocument(ctx, q, uid, doc.ID); err != nil {
+			return err
+		}
+		if idem != nil {
+			body, err := json.Marshal(doc)
+			if err != nil {
+				return err
+			}
+			return q.CompleteIdempotencyKey(ctx, db.CompleteIdempotencyKeyParams{
+				UserID: uid, Key: idem.Key, Status: 201, Body: body,
+			})
+		}
+		return nil
 	})
 	return doc, replayed, err
 }
 
-// claimKey records an Idempotency-Key, or reports the evidence a previous
-// request with that key created. A concurrent request with the same key
-// waits on the unique index until the first one commits.
-func claimKey(ctx context.Context, q *db.Queries, uid uuid.UUID, idem Idempotency) (uuid.UUID, bool, error) {
+// claimKey records an Idempotency-Key, or returns the document stored by the
+// request that first used it. A concurrent request with the same key waits
+// on the unique index until the first one commits (or rolls back, freeing
+// the key).
+func claimKey(ctx context.Context, q *db.Queries, uid uuid.UUID, idem Idempotency) ([]byte, bool, error) {
 	n, err := q.ClaimIdempotencyKey(ctx, db.ClaimIdempotencyKeyParams{UserID: uid, Key: idem.Key, RequestHash: idem.RequestHash})
 	if err != nil {
-		return uuid.Nil, false, err
+		return nil, false, err
 	}
 	if n == 1 {
-		return uuid.Nil, false, nil
+		return nil, false, nil
 	}
 	prev, err := q.GetIdempotencyKey(ctx, db.GetIdempotencyKeyParams{UserID: uid, Key: idem.Key})
 	if err != nil {
-		return uuid.Nil, false, err
+		return nil, false, err
 	}
 	if !bytes.Equal(prev.RequestHash, idem.RequestHash) {
-		return uuid.Nil, false, invalid("Idempotency-Key", "was already used with a different request")
+		return nil, false, invalid("Idempotency-Key", "was already used with a different request")
 	}
-	id, err := uuid.FromBytes(prev.Body)
-	if err != nil {
-		return uuid.Nil, false, fmt.Errorf("stored idempotent response: %w", err)
-	}
-	return id, true, nil
+	return prev.Body, true, nil
+}
+
+// lockScope serializes position allocation among top-level evidence of one
+// category, so concurrent appends never share a key. Children are
+// serialized by locking their parent row instead.
+func lockScope(ctx context.Context, q *db.Queries, uid uuid.UUID, c Category) error {
+	return q.LockPositionScope(ctx, uid.String()+"/"+string(c))
 }
 
 // UpdateEvidence replaces a document if its version is still ifVersion.
@@ -295,17 +312,38 @@ func (s *Service) UpdateEvidence(ctx context.Context, uid, id uuid.UUID, ifVersi
 		}
 
 		cur.ParentID, cur.Position, cur.Version = row.ParentID, row.Position, ifVersion
+		recategorized := Category(row.Category) != v.in.Category
+		if recategorized && row.ParentID == nil {
+			// Top-level positions are per category: append in the new one.
+			if err := lockScope(ctx, q, uid, v.in.Category); err != nil {
+				return err
+			}
+			last, err := q.LastTopLevelPosition(ctx, db.LastTopLevelPositionParams{UserID: uid, Category: db.EvidenceCategory(v.in.Category)})
+			if err != nil {
+				return err
+			}
+			if cur.Position, err = PositionBetween(last, ""); err != nil {
+				return err
+			}
+		}
 		if err := writeDocument(ctx, q, uid, &cur, v, true); err != nil {
 			return err
 		}
-		if Category(row.Category) != v.in.Category && children > 0 {
+		if recategorized && children > 0 {
 			moved, err := q.SetChildrenCategory(ctx, db.SetChildrenCategoryParams{
 				UserID: uid, ParentID: &id, Category: db.EvidenceCategory(v.in.Category),
 			})
 			if err != nil {
 				return err
 			}
-			if err := rehash(ctx, q, uid, moved); err != nil {
+			ids := make([]uuid.UUID, len(moved))
+			for i, m := range moved {
+				ids[i] = m.ID
+				if err := emit(ctx, q, uid, "evidence.updated", m.ID, int(m.Version)); err != nil {
+					return err
+				}
+			}
+			if err := rehash(ctx, q, uid, ids, false); err != nil {
 				return err
 			}
 		}
@@ -405,7 +443,7 @@ func writeDocument(ctx context.Context, q *db.Queries, uid uuid.UUID, doc *Evide
 			Category: db.EvidenceCategory(doc.Category), Form: db.EvidenceForm(doc.Form), Kind: doc.Kind,
 			Title: doc.Title, Summary: doc.Summary, Location: doc.Location, Url: doc.URL,
 			StartDate: sd, StartPrecision: sp, EndDate: ed, EndPrecision: ep, IsCurrent: doc.IsCurrent,
-			Details: details, AutoInclude: doc.AutoInclude, ContentHash: doc.ContentHash,
+			Details: details, AutoInclude: doc.AutoInclude, ContentHash: doc.ContentHash, Position: doc.Position,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrVersionMismatch
@@ -507,11 +545,19 @@ func (s *Service) MoveEvidence(ctx context.Context, uid, id uuid.UUID, m MoveInp
 			return invalid("parent_id", fmt.Sprintf("kind %s must be nested under an engagement", k.Name))
 		}
 
+		if m.ParentID == nil {
+			if err := lockScope(ctx, q, uid, category); err != nil {
+				return err
+			}
+		}
 		siblings, err := q.ListSiblings(ctx, db.ListSiblingsParams{UserID: uid, ParentID: m.ParentID, Category: db.EvidenceCategory(category)})
 		if err != nil {
 			return err
 		}
 		siblings = slices.DeleteFunc(siblings, func(r db.ListSiblingsRow) bool { return r.ID == id })
+		if err := repairTies(ctx, q, uid, siblings); err != nil {
+			return err
+		}
 		pos, err := placeAmong(siblings, m)
 		if err != nil {
 			return err
@@ -527,7 +573,7 @@ func (s *Service) MoveEvidence(ctx context.Context, uid, id uuid.UUID, m MoveInp
 			return err
 		}
 		if category != Category(row.Category) {
-			if err := rehash(ctx, q, uid, []uuid.UUID{id}); err != nil {
+			if err := rehash(ctx, q, uid, []uuid.UUID{id}, false); err != nil {
 				return err
 			}
 		}
@@ -569,11 +615,32 @@ func placeAmong(siblings []db.ListSiblingsRow, m MoveInput) (string, error) {
 			a = siblings[n-1].Position
 		}
 	}
-	if a == b && a != "" {
-		// Equal keys can only come from legacy ties; append after both.
-		b = ""
-	}
 	return PositionBetween(a, b)
+}
+
+// repairTies rewrites a scope's positions in their current order if any two
+// are equal (rows written before allocation was serialized), so a key can
+// always be placed between neighbours. Positions are not part of the
+// representation, so versions stay.
+func repairTies(ctx context.Context, q *db.Queries, uid uuid.UUID, siblings []db.ListSiblingsRow) error {
+	tied := false
+	for i := 1; i < len(siblings); i++ {
+		if siblings[i].Position == siblings[i-1].Position {
+			tied = true
+			break
+		}
+	}
+	if !tied {
+		return nil
+	}
+	keys := PositionsAfter("", len(siblings))
+	for i := range siblings {
+		siblings[i].Position = keys[i]
+		if err := q.SetEvidencePosition(ctx, db.SetEvidencePositionParams{UserID: uid, ID: siblings[i].ID, Position: keys[i]}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetArchived archives or restores evidence. Archived evidence is hidden
@@ -684,12 +751,16 @@ func loadDocuments(ctx context.Context, q *db.Queries, uid uuid.UUID, rows []db.
 }
 
 // rehash recomputes content hashes after something they cover changed
-// outside the document (an organization or skill rename, a merge).
-func rehash(ctx context.Context, q *db.Queries, uid uuid.UUID, ids []uuid.UUID) error {
+// outside the document (an organization or skill rename, a merge). It locks
+// the rows before reading them, so a concurrent document write either
+// finishes first (and is rehashed here) or waits and writes its own hash.
+// With touch, each document also gets a new version and an
+// evidence.updated event, because its representation changed.
+func rehash(ctx context.Context, q *db.Queries, uid uuid.UUID, ids []uuid.UUID, touch bool) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	rows, err := q.GetEvidences(ctx, db.GetEvidencesParams{UserID: uid, Ids: ids})
+	rows, err := q.GetEvidencesForUpdate(ctx, db.GetEvidencesForUpdateParams{UserID: uid, Ids: ids})
 	if err != nil {
 		return err
 	}
@@ -727,6 +798,15 @@ func rehash(ctx context.Context, q *db.Queries, uid uuid.UUID, ids []uuid.UUID) 
 		}
 		if sum := evidenceHash(d, name); !bytes.Equal(sum, d.ContentHash) {
 			if err := q.SetEvidenceHash(ctx, db.SetEvidenceHashParams{UserID: uid, ID: d.ID, ContentHash: sum}); err != nil {
+				return err
+			}
+		}
+		if touch {
+			ver, err := q.TouchEvidence(ctx, db.TouchEvidenceParams{UserID: uid, ID: d.ID})
+			if err != nil {
+				return err
+			}
+			if err := emit(ctx, q, uid, "evidence.updated", d.ID, int(ver)); err != nil {
 				return err
 			}
 		}

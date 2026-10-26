@@ -274,3 +274,16 @@ func TestRequestErrors(t *testing.T) {
 	alice.must(413, "POST", "/v1/evidences", `{"kind":"job","title":"`+strings.Repeat("x", 2<<20)+`"}`)
 	alice.must(404, "GET", "/v1/nope", nil)
 }
+
+func TestBodyLimits(t *testing.T) {
+	alice, _ := newServer(t)
+	valid := `{"kind":"project","category":"paid","title":"x"}`
+	alice.must(413, "POST", "/v1/evidences", valid+strings.Repeat(" ", 2<<20))
+	alice.must(400, "POST", "/v1/evidences", valid+valid)
+	alice.must(201, "POST", "/v1/evidences", valid+"\n")
+	r := alice.must(422, "POST", "/v1/evidences", `{"kind":"project","category":"paid","title":"x","highlights":[`+strings.Repeat(`{"text":""},`, 20000)+`{"text":""}]}`)
+	if n := len(r.Body["errors"].([]any)); n > 51 {
+		t.Fatalf("%d errors in response", n)
+	}
+	alice.must(422, "GET", "/v1/evidences?category=bogus", nil)
+}

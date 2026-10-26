@@ -12,7 +12,7 @@ INSERT INTO skill (id, user_id, name, normalized_name, type, proficiency)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
--- name: CreateSkillIfMissing :exec
+-- name: CreateSkillIfMissing :execrows
 INSERT INTO skill (id, user_id, name, normalized_name)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, normalized_name) DO NOTHING;

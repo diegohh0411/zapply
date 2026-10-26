@@ -127,7 +127,8 @@ func (s *Service) UpdateOrganization(ctx context.Context, uid, id uuid.UUID, in 
 			if err != nil {
 				return err
 			}
-			if err := rehash(ctx, q, uid, ids); err != nil {
+			// The representation shows only organization_id, so no version bump.
+			if err := rehash(ctx, q, uid, ids, false); err != nil {
 				return err
 			}
 		}
@@ -262,7 +263,8 @@ func (s *Service) UpdateSkill(ctx context.Context, uid, id uuid.UUID, in SkillIn
 			return skillConflict(err, in.Name)
 		}
 		out = skillFromRow(r)
-		if before.NormalizedName != r.NormalizedName {
+		if before.Name != r.Name {
+			// Linked documents list skills by name: new hashes and versions.
 			if err := rehashSkill(ctx, q, uid, id); err != nil {
 				return err
 			}
@@ -285,7 +287,7 @@ func (s *Service) DeleteSkill(ctx context.Context, uid, id uuid.UUID) error {
 		if n == 0 {
 			return ErrNotFound
 		}
-		if err := rehash(ctx, q, uid, ids); err != nil {
+		if err := rehash(ctx, q, uid, ids, true); err != nil {
 			return err
 		}
 		return emit(ctx, q, uid, "skill.deleted", id, 0)
@@ -322,7 +324,7 @@ func (s *Service) MergeSkill(ctx context.Context, uid, from, into uuid.UUID) (Sk
 		if _, err := q.DeleteSkill(ctx, db.DeleteSkillParams{UserID: uid, ID: from}); err != nil {
 			return err
 		}
-		if err := rehash(ctx, q, uid, ids); err != nil {
+		if err := rehash(ctx, q, uid, ids, true); err != nil {
 			return err
 		}
 		out = skillFromRow(target)
@@ -336,7 +338,7 @@ func rehashSkill(ctx context.Context, q *db.Queries, uid, skillID uuid.UUID) err
 	if err != nil {
 		return err
 	}
-	return rehash(ctx, q, uid, ids)
+	return rehash(ctx, q, uid, ids, true)
 }
 
 func skillConflict(err error, name string) error {
@@ -355,8 +357,8 @@ func skillFromRow(r db.Skill) Skill {
 	return Skill{ID: r.ID, Name: r.Name, Type: string(r.Type), Proficiency: r.Proficiency}
 }
 
-// ensureSkills returns the user's skills for the given names, creating any
-// that are missing. Keys are normalized names.
+// ensureSkills returns the user's skills for the given names, creating (and
+// announcing) any that are missing. Keys are normalized names.
 func ensureSkills(ctx context.Context, q *db.Queries, uid uuid.UUID, names []string) (map[string]db.Skill, error) {
 	if len(names) == 0 {
 		return map[string]db.Skill{}, nil
@@ -364,10 +366,17 @@ func ensureSkills(ctx context.Context, q *db.Queries, uid uuid.UUID, names []str
 	norm := make([]string, len(names))
 	for i, n := range names {
 		norm[i] = NormalizeName(n)
-		if err := q.CreateSkillIfMissing(ctx, db.CreateSkillIfMissingParams{
-			ID: newID(), UserID: uid, Name: n, NormalizedName: norm[i],
-		}); err != nil {
+		id := newID()
+		created, err := q.CreateSkillIfMissing(ctx, db.CreateSkillIfMissingParams{
+			ID: id, UserID: uid, Name: n, NormalizedName: norm[i],
+		})
+		if err != nil {
 			return nil, err
+		}
+		if created == 1 {
+			if err := emit(ctx, q, uid, "skill.created", id, 0); err != nil {
+				return nil, err
+			}
 		}
 	}
 	rows, err := q.GetSkillsByNormalizedName(ctx, db.GetSkillsByNormalizedNameParams{UserID: uid, Names: norm})

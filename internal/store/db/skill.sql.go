@@ -48,7 +48,7 @@ func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill
 	return i, err
 }
 
-const createSkillIfMissing = `-- name: CreateSkillIfMissing :exec
+const createSkillIfMissing = `-- name: CreateSkillIfMissing :execrows
 INSERT INTO skill (id, user_id, name, normalized_name)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, normalized_name) DO NOTHING
@@ -61,14 +61,17 @@ type CreateSkillIfMissingParams struct {
 	NormalizedName string
 }
 
-func (q *Queries) CreateSkillIfMissing(ctx context.Context, arg CreateSkillIfMissingParams) error {
-	_, err := q.db.Exec(ctx, createSkillIfMissing,
+func (q *Queries) CreateSkillIfMissing(ctx context.Context, arg CreateSkillIfMissingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createSkillIfMissing,
 		arg.ID,
 		arg.UserID,
 		arg.Name,
 		arg.NormalizedName,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteSkill = `-- name: DeleteSkill :execrows
