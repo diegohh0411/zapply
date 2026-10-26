@@ -1,6 +1,7 @@
 // Package api wires HTTP routes to the domain. /v1 is generated from
 // api/openapi.yaml (internal/api/gen); handlers live in library.go, and the
 // SSE feed in events.go.
+// Job tracking handlers live in jobs.go.
 package api
 
 import (
@@ -13,10 +14,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
+	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -42,7 +46,7 @@ type Deps struct {
 const maxBody = 1 << 20
 
 func Handler(d Deps) http.Handler {
-	srv := &server{deps: d, lib: library.NewService(d.Store)}
+	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store)}
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
 		gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
@@ -148,7 +152,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var invalid *library.ValidationError
 	var conflict *library.ConflictError
 	var bad errBadRequest
+	var dup *jobs.DuplicateError
 	switch {
+	case errors.As(err, &dup):
+		writeDuplicate(w, r, dup.ExistingID)
 	case errors.As(err, &invalid):
 		writeValidation(w, r, invalid.Fields)
 	case errors.As(err, &conflict):
@@ -182,5 +189,24 @@ func writeValidation(w http.ResponseWriter, r *http.Request, fields []library.Fi
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusUnprocessableEntity)
+	_ = json.NewEncoder(w).Encode(p)
+}
+
+// writeDuplicate is a 409 naming the job the user already saved.
+func writeDuplicate(w http.ResponseWriter, r *http.Request, existing uuid.UUID) {
+	p := struct {
+		httpx.Problem
+		ExistingID uuid.UUID `json:"existing_id"`
+	}{
+		Problem: httpx.Problem{
+			Title:     http.StatusText(http.StatusConflict),
+			Status:    http.StatusConflict,
+			Detail:    "a job with this URL already exists",
+			RequestID: httpx.RequestID(r.Context()),
+		},
+		ExistingID: existing,
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusConflict)
 	_ = json.NewEncoder(w).Encode(p)
 }

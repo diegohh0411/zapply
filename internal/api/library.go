@@ -10,6 +10,7 @@ import (
 
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/auth"
+	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 )
 
@@ -19,6 +20,7 @@ import (
 type server struct {
 	deps Deps
 	lib  *library.Service
+	jobs *jobs.Service
 }
 
 var _ gen.StrictServerInterface = (*server)(nil)

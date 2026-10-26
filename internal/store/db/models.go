@@ -66,6 +66,65 @@ func (e DatePrecision) Valid() bool {
 	return false
 }
 
+type EmploymentType string
+
+const (
+	EmploymentTypeFullTime   EmploymentType = "full_time"
+	EmploymentTypePartTime   EmploymentType = "part_time"
+	EmploymentTypeContract   EmploymentType = "contract"
+	EmploymentTypeTemporary  EmploymentType = "temporary"
+	EmploymentTypeInternship EmploymentType = "internship"
+	EmploymentTypeFreelance  EmploymentType = "freelance"
+)
+
+func (e *EmploymentType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EmploymentType(s)
+	case string:
+		*e = EmploymentType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EmploymentType: %T", src)
+	}
+	return nil
+}
+
+type NullEmploymentType struct {
+	EmploymentType EmploymentType
+	Valid          bool // Valid is true if EmploymentType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEmploymentType) Scan(value interface{}) error {
+	if value == nil {
+		ns.EmploymentType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EmploymentType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEmploymentType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EmploymentType), nil
+}
+
+func (e EmploymentType) Valid() bool {
+	switch e {
+	case EmploymentTypeFullTime,
+		EmploymentTypePartTime,
+		EmploymentTypeContract,
+		EmploymentTypeTemporary,
+		EmploymentTypeInternship,
+		EmploymentTypeFreelance:
+		return true
+	}
+	return false
+}
+
 type EvidenceCategory string
 
 const (
@@ -174,6 +233,230 @@ func (e EvidenceForm) Valid() bool {
 	return false
 }
 
+type JobActivityType string
+
+const (
+	JobActivityTypeCreated       JobActivityType = "created"
+	JobActivityTypeStatusChanged JobActivityType = "status_changed"
+	JobActivityTypeNote          JobActivityType = "note"
+)
+
+func (e *JobActivityType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JobActivityType(s)
+	case string:
+		*e = JobActivityType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JobActivityType: %T", src)
+	}
+	return nil
+}
+
+type NullJobActivityType struct {
+	JobActivityType JobActivityType
+	Valid           bool // Valid is true if JobActivityType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJobActivityType) Scan(value interface{}) error {
+	if value == nil {
+		ns.JobActivityType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JobActivityType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJobActivityType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JobActivityType), nil
+}
+
+func (e JobActivityType) Valid() bool {
+	switch e {
+	case JobActivityTypeCreated,
+		JobActivityTypeStatusChanged,
+		JobActivityTypeNote:
+		return true
+	}
+	return false
+}
+
+type JobStage string
+
+const (
+	JobStageSaved  JobStage = "saved"
+	JobStageActive JobStage = "active"
+	JobStageOffer  JobStage = "offer"
+	JobStageClosed JobStage = "closed"
+)
+
+func (e *JobStage) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JobStage(s)
+	case string:
+		*e = JobStage(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JobStage: %T", src)
+	}
+	return nil
+}
+
+type NullJobStage struct {
+	JobStage JobStage
+	Valid    bool // Valid is true if JobStage is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJobStage) Scan(value interface{}) error {
+	if value == nil {
+		ns.JobStage, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JobStage.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJobStage) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JobStage), nil
+}
+
+func (e JobStage) Valid() bool {
+	switch e {
+	case JobStageSaved,
+		JobStageActive,
+		JobStageOffer,
+		JobStageClosed:
+		return true
+	}
+	return false
+}
+
+type JobStatusColor string
+
+const (
+	JobStatusColorGray   JobStatusColor = "gray"
+	JobStatusColorBlue   JobStatusColor = "blue"
+	JobStatusColorYellow JobStatusColor = "yellow"
+	JobStatusColorOrange JobStatusColor = "orange"
+	JobStatusColorGreen  JobStatusColor = "green"
+	JobStatusColorPurple JobStatusColor = "purple"
+	JobStatusColorPink   JobStatusColor = "pink"
+	JobStatusColorRed    JobStatusColor = "red"
+	JobStatusColorBrown  JobStatusColor = "brown"
+)
+
+func (e *JobStatusColor) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JobStatusColor(s)
+	case string:
+		*e = JobStatusColor(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JobStatusColor: %T", src)
+	}
+	return nil
+}
+
+type NullJobStatusColor struct {
+	JobStatusColor JobStatusColor
+	Valid          bool // Valid is true if JobStatusColor is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJobStatusColor) Scan(value interface{}) error {
+	if value == nil {
+		ns.JobStatusColor, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JobStatusColor.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJobStatusColor) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JobStatusColor), nil
+}
+
+func (e JobStatusColor) Valid() bool {
+	switch e {
+	case JobStatusColorGray,
+		JobStatusColorBlue,
+		JobStatusColorYellow,
+		JobStatusColorOrange,
+		JobStatusColorGreen,
+		JobStatusColorPurple,
+		JobStatusColorPink,
+		JobStatusColorRed,
+		JobStatusColorBrown:
+		return true
+	}
+	return false
+}
+
+type JobViewLayout string
+
+const (
+	JobViewLayoutBoard JobViewLayout = "board"
+	JobViewLayoutTable JobViewLayout = "table"
+)
+
+func (e *JobViewLayout) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JobViewLayout(s)
+	case string:
+		*e = JobViewLayout(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JobViewLayout: %T", src)
+	}
+	return nil
+}
+
+type NullJobViewLayout struct {
+	JobViewLayout JobViewLayout
+	Valid         bool // Valid is true if JobViewLayout is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJobViewLayout) Scan(value interface{}) error {
+	if value == nil {
+		ns.JobViewLayout, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JobViewLayout.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJobViewLayout) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JobViewLayout), nil
+}
+
+func (e JobViewLayout) Valid() bool {
+	switch e {
+	case JobViewLayoutBoard,
+		JobViewLayoutTable:
+		return true
+	}
+	return false
+}
+
 type OrganizationType string
 
 const (
@@ -233,6 +516,59 @@ func (e OrganizationType) Valid() bool {
 	return false
 }
 
+type SalaryPeriod string
+
+const (
+	SalaryPeriodYear  SalaryPeriod = "year"
+	SalaryPeriodMonth SalaryPeriod = "month"
+	SalaryPeriodHour  SalaryPeriod = "hour"
+)
+
+func (e *SalaryPeriod) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SalaryPeriod(s)
+	case string:
+		*e = SalaryPeriod(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SalaryPeriod: %T", src)
+	}
+	return nil
+}
+
+type NullSalaryPeriod struct {
+	SalaryPeriod SalaryPeriod
+	Valid        bool // Valid is true if SalaryPeriod is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSalaryPeriod) Scan(value interface{}) error {
+	if value == nil {
+		ns.SalaryPeriod, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SalaryPeriod.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSalaryPeriod) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SalaryPeriod), nil
+}
+
+func (e SalaryPeriod) Valid() bool {
+	switch e {
+	case SalaryPeriodYear,
+		SalaryPeriodMonth,
+		SalaryPeriodHour:
+		return true
+	}
+	return false
+}
+
 type SkillType string
 
 const (
@@ -283,6 +619,59 @@ func (e SkillType) Valid() bool {
 		SkillTypeTool,
 		SkillTypeSoft,
 		SkillTypeLanguage:
+		return true
+	}
+	return false
+}
+
+type WorkMode string
+
+const (
+	WorkModeOnsite WorkMode = "onsite"
+	WorkModeRemote WorkMode = "remote"
+	WorkModeHybrid WorkMode = "hybrid"
+)
+
+func (e *WorkMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WorkMode(s)
+	case string:
+		*e = WorkMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WorkMode: %T", src)
+	}
+	return nil
+}
+
+type NullWorkMode struct {
+	WorkMode WorkMode
+	Valid    bool // Valid is true if WorkMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWorkMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.WorkMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WorkMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWorkMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WorkMode), nil
+}
+
+func (e WorkMode) Valid() bool {
+	switch e {
+	case WorkModeOnsite,
+		WorkModeRemote,
+		WorkModeHybrid:
 		return true
 	}
 	return false
@@ -365,6 +754,71 @@ type Identity struct {
 	Subject   string
 	UserID    uuid.UUID
 	CreatedAt time.Time
+}
+
+type Job struct {
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	StatusID        uuid.UUID
+	Title           string
+	Company         string
+	Url             string
+	NormalizedUrl   string
+	Location        string
+	WorkMode        *WorkMode
+	EmploymentType  *EmploymentType
+	SalaryMin       *int64
+	SalaryMax       *int64
+	SalaryCurrency  string
+	SalaryPeriod    *SalaryPeriod
+	Source          string
+	Description     string
+	Notes           string
+	AppliedOn       *time.Time
+	Position        string
+	Version         int32
+	ContentHash     []byte
+	StatusChangedAt time.Time
+	ArchivedAt      *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type JobActivity struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	JobID      uuid.UUID
+	Type       JobActivityType
+	FromStatus string
+	ToStatus   string
+	Body       string
+	OccurredAt time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type JobStatus struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Name           string
+	NormalizedName string
+	Color          JobStatusColor
+	Stage          JobStage
+	Position       string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type JobView struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Name      string
+	Layout    JobViewLayout
+	Filters   json.RawMessage
+	Sort      string
+	Position  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Organization struct {
