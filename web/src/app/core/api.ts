@@ -33,13 +33,20 @@ export class Api {
   readonly client = createClient<paths>({ baseUrl: '' });
 
   constructor() {
+    const identities = new WeakMap<Request, string | null>();
     const auth: Middleware = {
       onRequest: async ({ request }) => {
+        const identity = this.auth.identity();
         const token = await this.auth.token();
+        if (identity !== this.auth.identity())
+          throw new Error('Sign-in changed; request discarded');
+        identities.set(request, identity);
         if (token) request.headers.set('Authorization', 'Bearer ' + token);
         return request;
       },
-      onResponse: async ({ response }) => {
+      onResponse: async ({ request, response }) => {
+        if (identities.get(request) !== this.auth.identity())
+          throw new Error('Sign-in changed; response discarded');
         if (response.status === 401) void this.auth.signOut();
         return response;
       },

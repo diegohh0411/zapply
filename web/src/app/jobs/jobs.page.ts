@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -24,7 +33,15 @@ import { ConfirmService } from '../core/confirm.service';
 import { type BoardMove, JobBoard } from './job-board';
 import { JobSheet, type SheetTarget } from './job-sheet';
 import { JobTable } from './job-table';
-import { type JobFilters, type JobStage, type JobSummary, type JobView, type JobViewInput, JobsStore, STAGES } from './jobs.store';
+import {
+  type JobFilters,
+  type JobStage,
+  type JobSummary,
+  type JobView,
+  type JobViewInput,
+  JobsStore,
+  STAGES,
+} from './jobs.store';
 import { StatusesDialog } from './statuses-dialog';
 
 type Layout = 'board' | 'table';
@@ -52,7 +69,17 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
     JobSheet,
     StatusesDialog,
   ],
-  providers: [provideIcons({ lucidePlus, lucideSearch, lucideSettings2, lucideSquareKanban, lucideTable, lucideX, lucideEllipsis })],
+  providers: [
+    provideIcons({
+      lucidePlus,
+      lucideSearch,
+      lucideSettings2,
+      lucideSquareKanban,
+      lucideTable,
+      lucideX,
+      lucideEllipsis,
+    }),
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './jobs.page.html',
 })
@@ -75,7 +102,9 @@ export class JobsPage {
   protected viewName = '';
   private newInStatus: string | undefined;
 
-  protected readonly activeView = computed(() => this.store.views().find((v) => v.id === this.view()) ?? null);
+  protected readonly activeView = computed(
+    () => this.store.views().find((v) => v.id === this.view()) ?? null,
+  );
 
   /** Whether the current filters differ from the selected view (or from "All jobs"). */
   protected readonly modified = computed(() => {
@@ -84,17 +113,28 @@ export class JobsPage {
     return JSON.stringify(normalize(base)) !== JSON.stringify(normalize(this.state()));
   });
 
+  protected readonly effectiveFilters = computed(() => {
+    const f = this.state().filters;
+    return { ...f, status_ids: f.status_ids?.filter((id) => this.store.statusById().has(id)) };
+  });
+
   /** Columns shown on the board: those matching the stage and status filters. */
   protected readonly columns = computed(() => {
-    const f = this.state().filters;
+    const f = this.effectiveFilters();
     return this.store
       .statuses()
-      .filter((s) => (!f.stages?.length || f.stages.includes(s.stage)) && (!f.status_ids?.length || f.status_ids.includes(s.id)));
+      .filter(
+        (s) =>
+          (!f.stages?.length || f.stages.includes(s.stage)) &&
+          (!f.status_ids?.length || f.status_ids.includes(s.id)),
+      );
   });
 
   protected readonly filtered = computed(() => {
     const shown = new Set(this.columns().map((s) => s.id));
-    return filterJobs(this.store.jobs(), this.state().filters).filter((j) => shown.has(j.status_id));
+    return filterJobs(this.store.jobs(), this.effectiveFilters()).filter((j) =>
+      shown.has(j.status_id),
+    );
   });
 
   protected readonly counts = computed(() => {
@@ -173,7 +213,10 @@ export class JobsPage {
   // Views
 
   protected selectView(v: JobView | null): void {
-    void this.router.navigate([], { queryParams: { view: v?.id ?? null }, queryParamsHandling: 'merge' });
+    void this.router.navigate([], {
+      queryParams: { view: v?.id ?? null },
+      queryParamsHandling: 'merge',
+    });
   }
 
   protected openSave(): void {
@@ -209,7 +252,13 @@ export class JobsPage {
   protected async deleteView(): Promise<void> {
     const v = this.activeView();
     if (!v) return;
-    if (!(await this.confirm.ask({ title: `Delete the view “${v.name}”?`, description: 'Only the saved view goes; your jobs stay.' }))) return;
+    if (
+      !(await this.confirm.ask({
+        title: `Delete the view “${v.name}”?`,
+        description: 'Only the saved view goes; your jobs stay.',
+      }))
+    )
+      return;
     try {
       await this.store.deleteView(v.id);
       this.selectView(null);
@@ -237,7 +286,8 @@ export class JobsPage {
 
   protected sheetVisible(v: boolean): void {
     this.sheetOpen.set(v);
-    if (!v) void this.router.navigate([], { queryParams: { job: null }, queryParamsHandling: 'merge' });
+    if (!v)
+      void this.router.navigate([], { queryParams: { job: null }, queryParamsHandling: 'merge' });
   }
 
   protected async move(m: BoardMove): Promise<void> {

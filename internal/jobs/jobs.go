@@ -167,8 +167,13 @@ func NormalizeURL(raw string) (string, error) {
 		}
 	}
 	u.RawQuery = q.Encode()
-	u.Path = strings.TrimRight(u.Path, "/")
-	u.RawPath = ""
+	// Trim literal separators without decoding escaped separators such as %2F.
+	escaped := strings.TrimRight(u.EscapedPath(), "/")
+	u.Path, err = url.PathUnescape(escaped)
+	if err != nil {
+		return "", err
+	}
+	u.RawPath = escaped
 	return u.String(), nil
 }
 

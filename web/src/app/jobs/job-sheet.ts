@@ -1,5 +1,16 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input, model, output, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  model,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -127,6 +138,8 @@ export class JobSheet {
   protected readonly editingNote = signal<string | null>(null);
   protected noteEdit = '';
   private etag = '';
+  private generation = 0;
+  private activitiesRequest = 0;
 
   constructor() {
     effect(() => {
@@ -141,19 +154,26 @@ export class JobSheet {
       const cur = this.job();
       if (!cur) return;
       const live = this.store.jobs().find((j) => j.id === cur.id);
-      if (live && live.version > cur.version && !untracked(this.dirty)) untracked(() => void this.load({ id: cur.id }, true));
+      if (live && live.version > cur.version && !untracked(this.dirty))
+        untracked(() => void this.load({ id: cur.id }, true));
     });
   }
 
   private async load(t: SheetTarget | null, quiet = false): Promise<void> {
-    this.errors.set({});
-    this.dirty.set(false);
-    this.editingNote.set(null);
+    const generation = ++this.generation;
+    this.activitiesRequest++;
+    if (!quiet) {
+      this.errors.set({});
+      this.dirty.set(false);
+      this.editingNote.set(null);
+      this.saving.set(false);
+      this.job.set(null);
+      this.activities.set([]);
+      this.loading.set(false);
+    }
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
-      this.job.set(null);
-      this.activities.set([]);
       this.form = emptyForm(t.statusId ?? this.store.statuses()[0]?.id ?? '');
       return;
     }
@@ -161,20 +181,42 @@ export class JobSheet {
     if (!quiet) this.loading.set(true);
     try {
       const { job, etag } = await this.store.get(t.id);
-      this.job.set(job);
-      this.etag = etag;
-      this.form = toForm(job);
+      if (generation !== this.generation) return;
+      this.applyJob(job, etag, quiet);
       await this.loadActivities(t.id);
     } catch (e) {
+      if (generation !== this.generation) return;
       this.toast.error('Could not load the job', { description: (e as Error).message });
       this.visible.set(false);
     } finally {
-      this.loading.set(false);
+      if (generation === this.generation) this.loading.set(false);
     }
   }
 
+  /** Merge server metadata while keeping fields edited against our baseline. */
+  private applyJob(job: Job, etag: string, preserveDraft: boolean): void {
+    const cur = this.job();
+    if (cur && cur.id === job.id && cur.version > job.version) return;
+    const next = toForm(job);
+    if (preserveDraft && this.dirty() && cur) {
+      const baseline = toForm(cur);
+      for (const key of Object.keys(next) as (keyof Form)[]) {
+        if (this.form[key] !== baseline[key]) Object.assign(next, { [key]: this.form[key] });
+      }
+    } else {
+      this.dirty.set(false);
+    }
+    this.job.set(job);
+    this.etag = etag;
+    this.form = next;
+  }
+
   private async loadActivities(id: string): Promise<void> {
-    this.activities.set(await this.store.activities(id));
+    const generation = this.generation;
+    const seq = ++this.activitiesRequest;
+    const rows = await this.store.activities(id);
+    if (generation === this.generation && seq === this.activitiesRequest && this.job()?.id === id)
+      this.activities.set(rows);
   }
 
   protected touch(): void {
@@ -182,17 +224,20 @@ export class JobSheet {
   }
 
   protected async save(): Promise<void> {
+    const generation = this.generation;
     this.saving.set(true);
     this.errors.set({});
     try {
       const input = toInput(this.form);
       if (this.isNew()) {
         const job = await this.store.create(input);
+        if (generation !== this.generation) return;
         this.toast.success('Job saved');
         this.opened.emit(job.id);
       } else {
         const cur = this.job()!;
         const { job, etag } = await this.store.save(cur.id, this.etag, input);
+        if (generation !== this.generation) return;
         this.job.set(job);
         this.etag = etag;
         this.form = toForm(job);
@@ -200,14 +245,15 @@ export class JobSheet {
         this.toast.success('Saved');
       }
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     } finally {
-      this.saving.set(false);
+      if (generation === this.generation) this.saving.set(false);
     }
   }
 
   /** Status changes from the header apply at once, like a drag on the board. */
   protected async changeStatus(statusId: string): Promise<void> {
+    const generation = this.generation;
     if (this.isNew()) {
       this.form.status_id = statusId;
       return;
@@ -215,53 +261,60 @@ export class JobSheet {
     const cur = this.job();
     if (!cur || statusId === cur.status_id) return;
     try {
-      await this.store.move(cur.id, statusId);
-      await this.load({ id: cur.id }, true);
+      const job = await this.store.move(cur.id, statusId);
+      if (generation !== this.generation) return;
+      this.applyJob(job, `"${job.version}"`, true);
+      await this.loadActivities(cur.id);
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
   protected async archive(archived: boolean): Promise<void> {
+    const generation = this.generation;
     const cur = this.job();
     if (!cur) return;
     try {
       const job = await this.store.setArchived(cur.id, archived);
-      this.job.set(job);
+      if (generation !== this.generation) return;
+      this.applyJob(job, `"${job.version}"`, true);
       this.toast.success(archived ? 'Archived' : 'Restored');
-      await this.load({ id: cur.id }, true);
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
   protected async remove(): Promise<void> {
+    const generation = this.generation;
     const cur = this.job();
     if (!cur) return;
     const ok = await this.confirm.ask({
       title: `Delete “${cur.title}”?`,
       description: 'Its activity goes too. Archive it instead to keep the history.',
     });
-    if (!ok) return;
+    if (!ok || generation !== this.generation) return;
     try {
       await this.store.delete(cur.id);
+      if (generation !== this.generation) return;
       this.visible.set(false);
       this.toast.success('Job deleted');
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
   protected async addNote(): Promise<void> {
+    const generation = this.generation;
     const cur = this.job();
     const body = this.note.trim();
     if (!cur || !body) return;
     try {
       await this.store.addNote(cur.id, body);
+      if (generation !== this.generation) return;
       this.note = '';
       await this.loadActivities(cur.id);
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
@@ -271,26 +324,36 @@ export class JobSheet {
   }
 
   protected async saveNote(a: JobActivity): Promise<void> {
+    const generation = this.generation;
     const cur = this.job();
     if (!cur) return;
     try {
       await this.store.updateNote(cur.id, a.id, this.noteEdit.trim());
+      if (generation !== this.generation) return;
       this.editingNote.set(null);
       await this.loadActivities(cur.id);
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
   protected async deleteNote(a: JobActivity): Promise<void> {
+    const generation = this.generation;
     const cur = this.job();
     if (!cur) return;
-    if (!(await this.confirm.ask({ title: 'Delete this note?', description: a.body.length > 120 ? a.body.slice(0, 120) + '…' : a.body }))) return;
+    if (
+      !(await this.confirm.ask({
+        title: 'Delete this note?',
+        description: a.body.length > 120 ? a.body.slice(0, 120) + '…' : a.body,
+      }))
+    )
+      return;
+    if (generation !== this.generation) return;
     try {
       await this.store.deleteNote(cur.id, a.id);
       await this.loadActivities(cur.id);
     } catch (e) {
-      this.handleError(e);
+      if (generation === this.generation) this.handleError(e);
     }
   }
 
@@ -309,7 +372,9 @@ export class JobSheet {
         return;
       }
       if (e.status === 412) {
-        this.toast.warning('This job changed elsewhere', { description: 'Reloaded the latest version; re-apply your edits.' });
+        this.toast.warning('This job changed elsewhere', {
+          description: 'Latest version loaded; your unsaved edits are kept for review.',
+        });
         const cur = this.job();
         if (cur) void this.load({ id: cur.id }, true);
         return;
@@ -345,7 +410,8 @@ function toForm(j: Job): Form {
 }
 
 function toInput(f: Form): JobInput {
-  const num = (v: number | null) => (v === null || (v as unknown) === '' || Number.isNaN(+v) ? undefined : Math.round(+v));
+  const num = (v: number | null) =>
+    v === null || (v as unknown) === '' || Number.isNaN(+v) ? undefined : Math.round(+v);
   return {
     status_id: f.status_id || undefined,
     title: f.title,

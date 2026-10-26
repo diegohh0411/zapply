@@ -23,6 +23,17 @@ export class AuthService {
   private supabase: SupabaseClient | null = null;
 
   readonly session = signal<Session | null>(null);
+  /** Stable across token refreshes, distinct for each authenticated principal. */
+  readonly identity = computed(() => {
+    const s = this.session();
+    if (!s) return null;
+    try {
+      const claims = JSON.parse(atob(s.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return JSON.stringify([claims.iss, claims.sub]);
+    } catch {
+      return s.token;
+    }
+  });
   readonly signedIn = computed(() => this.session() !== null);
   readonly supabaseEnabled = computed(() => !!this.config.config().supabase_url);
   readonly devEnabled = computed(() => this.config.config().dev_login);
@@ -47,7 +58,11 @@ export class AuthService {
       const { data } = await this.supabase.auth.getSession();
       if (data.session) {
         const s = data.session;
-        this.session.set({ token: s.access_token, label: s.user.email ?? s.user.id, expiresAt: (s.expires_at ?? 0) * 1000 });
+        this.session.set({
+          token: s.access_token,
+          label: s.user.email ?? s.user.id,
+          expiresAt: (s.expires_at ?? 0) * 1000,
+        });
         return;
       }
     }

@@ -122,3 +122,39 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 - A `PUT` that also changes status bumps the version twice and emits `job.updated` then `job.moved`. Clients only rely on the latest `ETag`.
 - `JobViewFilters` is closed in OpenAPI (`additionalProperties: false`), but the generated decoder ignores unknown keys rather than rejecting them.
 - **Deploying:** apply migration 00004 with `zapply migrate` against the production database before (or right after) rolling out this API. Until then, the job endpoints fail with `500`.
+
+### Independent review fixes (GPT 6.1 Sol)
+
+The first review covered the jobs API and Angular UI through `245ac47`. It
+confirmed nine issues with Postgres reproductions and controlled frontend
+responses. The following fixes include regression coverage:
+
+| Finding | Fix | Regression coverage |
+|---|---|---|
+| Account changes retained another account's board | Clear jobs, statuses, views and load flags on principal changes; discard responses from an earlier session, including stale 401s | Frontend account switch with an outstanding list |
+| Column deletion could pull back a job concurrently moved elsewhere | Recheck source membership after locking each job; skip moved or deleted rows | Postgres destination-lock barrier and concurrent move |
+| Late list/move/archive responses replaced newer data | Reconcile changes during pagination, compare versions before removing archived jobs, and keep delete tombstones | Deferred lists/moves, archive versions, deletion during paging, missed-event resync |
+| A late sheet response could replace the newly selected job | Guard job loads, activity loads and mutation completions by selection generation | Reverse-order loads, delayed activity, delayed status action |
+| Status/archive actions discarded draft edits | Merge server metadata and ETag while preserving locally changed form fields | Draft notes survive status and archive changes |
+| Valid Unicode URLs exceeded the unique index's entry limit | Migration `00005_job_url_digest.sql` indexes a fixed-size SHA-256 digest; retain the full normalized URL for exact lookup | Long Unicode URLs, duplicate detection and distinct URLs |
+| Escaped and literal path separators shared a duplicate key | Trim trailing literal separators while preserving escaped-path semantics | Encoded slash versus literal slash, including trailing encoded separators |
+| Views filtered by deleted statuses became empty | Drop absent IDs before applying column and job filters; an empty selection is unrestricted | Removed-only and mixed status filters |
+| NUL text reached Postgres and returned 500 | Reject NUL in the shared jobs text validator with field errors | HTTP `422` for a NUL in the job title |
+
+Frontend regressions run with `cd web && npm test` and are included in CI. They
+execute the production class methods using controlled DI/signals and deferred
+responses; they do not render Angular templates or schedule Angular effects.
+Type checking and the production build separately validate templates.
+
+Existing databases must apply **migration 00005 as well as 00004** before the
+updated API is deployed. The digest function fixes its encoding to UTF-8 and
+uses PostgreSQL's built-in SHA-256, requiring no extension. Rolling back 00005
+recreates the original text index and can fail if long URLs have since been
+saved.
+
+Validation after the fixes: full Go integration suite with `-race`, `go vet`,
+unchanged sqlc output, frontend regressions, TypeScript checks and the production
+Angular build passed. The updated local app also passed browser checks for
+account switching, draft notes surviving status and archive changes, saving with
+the refreshed ETag, and the Zard delete dialog (Cancel kept the fixture; Delete
+returned `404`). The disposable browser fixture was removed afterward.

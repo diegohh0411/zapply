@@ -94,6 +94,8 @@ func (f fieldErrors) err() error {
 func (f *fieldErrors) text(field string, s *string, max int, required bool) {
 	*s = strings.TrimSpace(*s)
 	switch {
+	case strings.ContainsRune(*s, '\x00'):
+		f.add(field, "must not contain NUL characters")
 	case required && *s == "":
 		f.add(field, "is required")
 	case utf8.RuneCountInString(*s) > max:

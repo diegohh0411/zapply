@@ -267,8 +267,16 @@ func (s *Service) DeleteStatus(ctx context.Context, uid, id uuid.UUID, moveTo *u
 			keys := library.PositionsAfter(last, len(col))
 			for i, c := range col {
 				job, err := q.GetJobForUpdate(ctx, db.GetJobForUpdateParams{UserID: uid, ID: c.ID})
+				// Membership may change while we wait for the destination lock.
+				// A move out only locks its destination, not this source status.
+				if errors.Is(err, pgx.ErrNoRows) {
+					continue
+				}
 				if err != nil {
 					return err
+				}
+				if job.StatusID != id {
+					continue
 				}
 				if _, err := changeStatus(ctx, q, uid, job, from, to, keys[i]); err != nil {
 					return err

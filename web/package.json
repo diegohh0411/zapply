@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
+    "test": "node --test tests/*.cjs",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/app/api/schema.d.ts",
     "typecheck": "tsc -p tsconfig.app.json --noEmit"
   },
