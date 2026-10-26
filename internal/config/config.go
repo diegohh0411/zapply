@@ -47,7 +47,7 @@ func Load() (Config, error) {
 	c := Config{
 		Env:                Env(get("ZAPPLY_ENV", string(Development))),
 		LogFormat:          get("LOG_FORMAT", ""),
-		HTTPAddr:           get("HTTP_ADDR", ":8080"),
+		HTTPAddr:           get("HTTP_ADDR", ":"+get("PORT", "8080")), // PORT: set by Heroku
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		MigrateDatabaseURL: os.Getenv("MIGRATE_DATABASE_URL"),
 		Auth: Auth{
