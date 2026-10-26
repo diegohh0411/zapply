@@ -1,0 +1,20 @@
+# Local development dependencies. Run the binary on the host (see Makefile).
+name: zapply
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_USER: zapply
+      POSTGRES_PASSWORD: zapply
+      POSTGRES_DB: zapply
+    ports:
+      - "127.0.0.1:${ZAPPLY_PG_PORT:-54329}:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-roles.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zapply"]
+      interval: 2s
+      retries: 30
+volumes:
+  pgdata:
