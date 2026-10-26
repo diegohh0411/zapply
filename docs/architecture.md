@@ -11,7 +11,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 3. **Postgres is the source of truth**, and it is also the first job queue and the event outbox. A new piece of infrastructure is added only when Postgres stops being enough, and NATS (part 3) is the only one planned.
 4. **Tenant isolation is enforced twice:** queries filter on `user_id` explicitly, and forced RLS rejects anything they miss.
 5. **Shared facts are shared.** Data that is not personal, such as company profiles and model catalogs, is stored once for everyone instead of once per user.
-6. **Contract first.** The HTTP API is described in OpenAPI. The Go server interfaces and the Angular client are generated from it.
+6. **Contract first.** The HTTP API is described in OpenAPI 3.0.3, the version oapi-codegen fully supports. The Go server interfaces and the Angular client are generated from it.
 
 ## Topology
 
@@ -80,7 +80,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | Part | Scope |
 |---|---|
 | 1 | Foundation: module, config, logging, HTTP server with stdlib `ServeMux`, health and drain, Postgres pool, embedded migrations, roles + RLS, JWT auth, tenant transaction, `GET /v1/me`, compose, CI |
-| 2 | Library: profile, entries, bullets, skills. OpenAPI + generated server, sqlc, outbox writes |
+| 2 | Library: evidence model (education, paid and unpaid × engagement, credential, output, recognition), organizations, highlights, skills. OpenAPI + generated server, sqlc, outbox writes. See `docs/parts/02-library.md` |
 | 3 | Events: outbox relay → NATS → SSE gateway |
 | 4 | Jobs and application tracking: postings, statuses, views |
 | 5 | Worker runtime + LLM gateway: River, provider registry, encrypted secrets, budgets |

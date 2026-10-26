@@ -19,6 +19,8 @@ make run              # API on 127.0.0.1:8080
 curl -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/me
 ```
 
+The HTTP API is defined in [`api/openapi.yaml`](api/openapi.yaml). Edit it, or the SQL in `internal/store/queries`, then run `make generate` (oapi-codegen and sqlc, pinned with `go tool`).
+
 ```bash
 make test              # unit tests (database tests are skipped)
 make test-integration  # full suite against a throwaway Postgres container
