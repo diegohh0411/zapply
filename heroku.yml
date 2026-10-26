@@ -1,0 +1,5 @@
+build:
+  docker:
+    web: Dockerfile
+# No run section: Heroku would wrap a command in /bin/sh -c, which the
+# distroless image lacks; the Dockerfile CMD ["api"] is used instead.
