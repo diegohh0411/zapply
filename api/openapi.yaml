@@ -1,0 +1,634 @@
+openapi: 3.0.3
+info:
+  title: zapply API
+  version: 0.2.0
+  description: |
+    Library of a person's career evidence. Design: docs/parts/02-library.md.
+    Every /v1 operation requires `Authorization: Bearer <jwt>`. Errors are
+    RFC 9457 problem+json; validation errors (422) list failing fields.
+security:
+  - bearer: []
+paths:
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [account]
+      responses:
+        "200":
+          description: The authenticated user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/kinds:
+    get:
+      operationId: listKinds
+      tags: [library]
+      description: The fixed catalog of evidence kinds and the schema of each kind's `details`.
+      responses:
+        "200":
+          description: All kinds, in display order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Kind" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/profile:
+    get:
+      operationId: getProfile
+      tags: [library]
+      responses:
+        "200":
+          description: The profile. Version 0 means it was never saved.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putProfile
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileInput" }
+      responses:
+        "200":
+          description: The saved profile.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/organizations:
+    get:
+      operationId: listOrganizations
+      tags: [library]
+      responses:
+        "200":
+          description: All organizations, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createOrganization
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/organizations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getOrganization
+      tags: [library]
+      responses:
+        "200":
+          description: The organization.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateOrganization
+      tags: [library]
+      description: Replaces the organization's fields. Renaming updates linked evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organization" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteOrganization
+      tags: [library]
+      description: Fails with 409 while evidence references the organization.
+      responses:
+        "204": { description: Deleted. }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/skills:
+    get:
+      operationId: listSkills
+      tags: [library]
+      responses:
+        "200":
+          description: All skills, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Skill" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createSkill
+      tags: [library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/skills/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateSkill
+      tags: [library]
+      description: Replaces the skill's fields. Renaming updates linked evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSkill
+      tags: [library]
+      responses:
+        "204": { description: Deleted, and unlinked everywhere. }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/skills/{id}/merge:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: mergeSkill
+      tags: [library]
+      description: Moves every link to `into`, then deletes this skill.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillMerge" }
+      responses:
+        "200":
+          description: The surviving skill.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Skill" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/evidences:
+    get:
+      operationId: listEvidences
+      tags: [library]
+      parameters:
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/Category" } }
+        - { name: form, in: query, schema: { $ref: "#/components/schemas/Form" } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: parent_id, in: query, schema: { type: string, format: uuid } }
+        - { name: top_level, in: query, schema: { type: boolean, default: false } }
+        - { name: include_archived, in: query, schema: { type: boolean, default: false } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: A page of evidence documents, by category then position.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidencePage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createEvidence
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvidenceCreate" }
+      responses:
+        "201":
+          description: Created (or replayed for a repeated Idempotency-Key).
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/evidences/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getEvidence
+      tags: [library]
+      responses:
+        "200":
+          description: The document, with summaries of its children.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putEvidence
+      tags: [library]
+      description: |
+        Replaces the whole document. Highlights sent with an `id` keep it;
+        omitted highlights are deleted. Re-parent with the move operation.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvidenceUpdate" }
+      responses:
+        "200":
+          description: The saved document.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteEvidence
+      tags: [library]
+      parameters:
+        - { name: cascade, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "204": { description: Deleted. }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/evidences/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: moveEvidence
+      tags: [library]
+      description: |
+        Places the evidence under `parent_id` (omit for top level), after
+        `after_id` or before `before_id` among its new siblings, or last.
+        Moving under a parent adopts the parent's category.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvidenceMove" }
+      responses:
+        "200":
+          description: The moved document.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/evidences/{id}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: archiveEvidence
+      tags: [library]
+      responses:
+        "200":
+          description: Archived.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/evidences/{id}/unarchive:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: unarchiveEvidence
+      tags: [library]
+      responses:
+        "200":
+          description: Restored.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evidence" }
+        default: { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The ETag from the last read. A stale value fails with 412.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Retrying with the same key and body returns the original result.
+      schema: { type: string, minLength: 1, maxLength: 255 }
+
+  headers:
+    ETag:
+      description: The resource version, for If-Match.
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: An error.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        request_id: { type: string }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/FieldError" }
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field: { type: string, description: "JSON path, e.g. highlights[0].text; empty for the whole request." }
+        message: { type: string }
+
+    Me:
+      type: object
+      required: [id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+
+    Category:
+      type: string
+      enum: [education, paid, unpaid]
+    Form:
+      type: string
+      enum: [engagement, credential, output, recognition]
+    PartialDate:
+      type: string
+      description: A date known to year, month or day precision.
+      pattern: '^\d{4}(-\d{2}(-\d{2})?)?$'
+      example: "2021-03"
+
+    Kind:
+      type: object
+      required: [kind, form, categories, child_only, details_schema]
+      properties:
+        kind: { type: string }
+        form: { $ref: "#/components/schemas/Form" }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+        child_only: { type: boolean, description: "Must be nested under an engagement." }
+        details_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema for this kind's `details`.
+
+    Link:
+      type: object
+      required: [label, url]
+      properties:
+        label: { type: string, maxLength: 100 }
+        url: { type: string, format: uri }
+    ProfileInput:
+      type: object
+      properties:
+        full_name: { type: string }
+        headline: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        location: { type: string }
+        links:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/Link" }
+        summary: { type: string }
+    Profile:
+      allOf:
+        - $ref: "#/components/schemas/ProfileInput"
+        - type: object
+          required: [full_name, headline, email, phone, location, links, summary, version]
+          properties:
+            version: { type: integer }
+            updated_at: { type: string, format: date-time }
+
+    OrganizationType:
+      type: string
+      enum: [company, education, nonprofit, government, client, other]
+    OrganizationInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/OrganizationType" }
+        website: { type: string }
+        location: { type: string }
+    Organization:
+      type: object
+      required: [id, name, type, website, location, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/OrganizationType" }
+        website: { type: string }
+        location: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SkillType:
+      type: string
+      enum: [hard, tool, soft, language]
+    SkillInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/SkillType" }
+        proficiency:
+          type: string
+          description: "beginner, intermediate, advanced, expert; for languages A1–C2 or native."
+    Skill:
+      type: object
+      required: [id, name, type, proficiency]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/SkillType" }
+        proficiency: { type: string }
+    SkillMerge:
+      type: object
+      required: [into]
+      properties:
+        into: { type: string, format: uuid }
+
+    HighlightInput:
+      type: object
+      required: [text]
+      properties:
+        id: { type: string, format: uuid, description: "Keep an existing highlight (update only)." }
+        text: { type: string }
+        metric_value: { type: number, format: double }
+        metric_unit: { type: string }
+        auto_include: { type: boolean, default: true }
+        skills:
+          type: array
+          items: { type: string }
+    Highlight:
+      type: object
+      required: [id, text, metric_unit, auto_include, skills]
+      properties:
+        id: { type: string, format: uuid }
+        text: { type: string }
+        metric_value: { type: number, format: double }
+        metric_unit: { type: string }
+        auto_include: { type: boolean }
+        skills:
+          type: array
+          items: { type: string }
+
+    EvidenceUpdate:
+      type: object
+      required: [kind, title]
+      properties:
+        kind: { type: string, description: "One of GET /v1/kinds." }
+        category:
+          $ref: "#/components/schemas/Category"
+        organization_id: { type: string, format: uuid }
+        title: { type: string }
+        summary: { type: string }
+        location: { type: string }
+        url: { type: string }
+        start: { $ref: "#/components/schemas/PartialDate" }
+        end: { $ref: "#/components/schemas/PartialDate" }
+        is_current: { type: boolean, default: false }
+        details:
+          type: object
+          additionalProperties: true
+        auto_include:
+          type: boolean
+          description: "Whether matching may pick this automatically. Default true (false for career_break)."
+        skills:
+          type: array
+          items: { type: string }
+        highlights:
+          type: array
+          items: { $ref: "#/components/schemas/HighlightInput" }
+    EvidenceCreate:
+      allOf:
+        - $ref: "#/components/schemas/EvidenceUpdate"
+        - type: object
+          properties:
+            parent_id:
+              type: string
+              format: uuid
+              description: "Nest under an engagement. The category then defaults to the parent's."
+    ChildSummary:
+      type: object
+      required: [id, kind, form, title, archived]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        form: { $ref: "#/components/schemas/Form" }
+        title: { type: string }
+        archived: { type: boolean }
+    Evidence:
+      type: object
+      required: [id, category, form, kind, title, summary, location, url, is_current, details,
+                 auto_include, version, archived, created_at, updated_at, skills, highlights]
+      properties:
+        id: { type: string, format: uuid }
+        parent_id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        category: { $ref: "#/components/schemas/Category" }
+        form: { $ref: "#/components/schemas/Form" }
+        kind: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        location: { type: string }
+        url: { type: string }
+        start: { $ref: "#/components/schemas/PartialDate" }
+        end: { $ref: "#/components/schemas/PartialDate" }
+        is_current: { type: boolean }
+        details:
+          type: object
+          additionalProperties: true
+        auto_include: { type: boolean }
+        version: { type: integer }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        skills:
+          type: array
+          items: { type: string }
+        highlights:
+          type: array
+          items: { $ref: "#/components/schemas/Highlight" }
+        children:
+          type: array
+          description: Only on single reads.
+          items: { $ref: "#/components/schemas/ChildSummary" }
+    EvidencePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Evidence" }
+        next_cursor: { type: string }
+    EvidenceMove:
+      type: object
+      properties:
+        parent_id: { type: string, format: uuid }
+        after_id: { type: string, format: uuid }
+        before_id: { type: string, format: uuid }

@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -71,6 +72,12 @@ func Open(ctx context.Context, url string) (*Store, error) {
 	}
 	if !strings.Contains(url, "default_query_exec_mode") {
 		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	}
+	// Exec mode infers parameter types from Go types, so map ours.
+	cfg.AfterConnect = func(_ context.Context, c *pgx.Conn) error {
+		c.TypeMap().RegisterDefaultPgType(uuid.UUID{}, "uuid")
+		c.TypeMap().RegisterDefaultPgType([]uuid.UUID{}, "_uuid")
+		return nil
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -136,4 +143,18 @@ func (s *Store) ResolveUser(ctx context.Context, p auth.Principal) (uuid.UUID, e
 	}
 	s.users.Add(p, id)
 	return id, nil
+}
+
+type User struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+}
+
+// GetUser returns the tenant's own user row.
+func (s *Store) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
+	var u User
+	err := s.InTenant(ctx, id, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id, created_at FROM app_user WHERE id = $1`, id).Scan(&u.ID, &u.CreatedAt)
+	})
+	return u, err
 }
