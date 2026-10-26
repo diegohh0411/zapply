@@ -81,7 +81,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 |---|---|
 | 1 | Foundation: module, config, logging, HTTP server with stdlib `ServeMux`, health and drain, Postgres pool, embedded migrations, roles + RLS, JWT auth, tenant transaction, `GET /v1/me`, compose, CI |
 | 2 | Library: evidence model (education, paid and unpaid × engagement, credential, output, recognition), organizations, highlights, skills. OpenAPI + generated server, sqlc, outbox writes. See `docs/parts/02-library.md` |
-| 3 | Events: outbox relay → NATS → SSE gateway |
+| 3 | Events: outbox relay → NATS → SSE gateway. See `docs/parts/03-events.md` |
 | 4 | Jobs and application tracking: postings, statuses, views |
 | 5 | Worker runtime + LLM gateway: River, provider registry, encrypted secrets, budgets |
 | 6 | Matching pipeline: staged jobs, score cache keyed by content hash, explainability |
