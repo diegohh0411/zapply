@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -58,8 +59,20 @@ type Store struct {
 }
 
 // Open connects with the runtime role and refuses roles that would bypass RLS.
+//
+// Queries use pgx's exec mode (no named prepared statements) unless the URL
+// sets default_query_exec_mode, so the pool works behind transaction-mode
+// poolers such as Supavisor that cannot carry prepared statements between
+// backends.
 func Open(ctx context.Context, url string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(url, "default_query_exec_mode") {
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

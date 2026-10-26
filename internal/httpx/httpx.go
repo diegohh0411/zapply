@@ -150,13 +150,17 @@ func (s *Server) Run(ctx context.Context, ready func(addr net.Addr)) error {
 	if err != nil {
 		return err
 	}
+	// Requests outlive ctx so they can finish during drain, but are cancelled
+	// if graceful shutdown times out.
+	base, cancelBase := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelBase()
 	srv := &http.Server{
 		Handler:           s.Handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		// No WriteTimeout: SSE streams are long-lived. Handlers set their own
 		// deadlines through http.ResponseController where needed.
-		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(ctx) },
+		BaseContext: func(net.Listener) context.Context { return base },
 	}
 	if ready != nil {
 		ready(ln.Addr())
@@ -182,6 +186,12 @@ func (s *Server) Run(ctx context.Context, ready func(addr net.Addr)) error {
 	sctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := srv.Shutdown(sctx); err != nil {
+		// Cancel stragglers so they release resources (e.g. pooled
+		// connections) before the caller closes them.
+		s.Logger.Warn("graceful shutdown timed out; cancelling requests", "err", err)
+		cancelBase()
+		_ = srv.Close()
+		<-errc
 		return err
 	}
 	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -213,3 +214,89 @@ func isCode(err error, code string) bool {
 }
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+func TestFunctionsAndIdentityNotPublic(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	if _, err := db.Store.ResolveUser(ctx, principal()); err != nil {
+		t.Fatal(err)
+	}
+	admin := db.Admin(t)
+	role := "probe_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" NOLOGIN"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		c, err := pgx.Connect(context.Background(), db.AdminURL)
+		if err == nil {
+			_, _ = c.Exec(context.Background(), "DROP OWNED BY "+role+"; DROP ROLE "+role)
+			c.Close(context.Background())
+		}
+	})
+
+	for _, fn := range []string{"resolve_identity(text,text,uuid)", "app_user_id()"} {
+		var ok bool
+		if err := admin.QueryRow(ctx, `SELECT has_function_privilege($1, $2, 'EXECUTE')`, role, fn).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			t.Errorf("unrelated role can execute %s", fn)
+		}
+	}
+
+	// Simulate a platform that grants every new table to its own roles
+	// (Supabase's anon): RLS on identity must still hide every row.
+	if _, err := admin.Exec(ctx, "GRANT SELECT ON identity TO "+role); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	err := pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+role); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*) FROM identity`).Scan(&n)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("granted role reads %d identity rows", n)
+	}
+}
+
+// Transaction-mode poolers (Supavisor) can't carry named prepared statements
+// between backends, so the pool must not create any.
+func TestNoNamedPreparedStatements(t *testing.T) {
+	db := testdb.New(t)
+	ctx := context.Background()
+	sep := "?"
+	if strings.Contains(db.AppURL, "?") {
+		sep = "&"
+	}
+	s, err := store.Open(ctx, db.AppURL+sep+"pool_max_conns=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	uid, err := s.ResolveUser(ctx, principal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		err := s.InTenant(ctx, uid, func(tx pgx.Tx) error {
+			var id uuid.UUID
+			return tx.QueryRow(ctx, `SELECT id FROM app_user WHERE id = $1`, uid).Scan(&id)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n int
+	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM pg_prepared_statements`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("%d named prepared statements on the connection", n)
+	}
+}

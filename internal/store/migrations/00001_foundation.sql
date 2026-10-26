@@ -18,8 +18,9 @@ $$;
 GRANT USAGE ON SCHEMA public TO zapply_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO zapply_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+-- Functions are executable by PUBLIC by default, and a schema-scoped
+-- ALTER DEFAULT PRIVILEGES cannot revoke that. Every function below revokes
+-- PUBLIC explicitly and grants only the runtime role.
 
 -- The tenant for the current transaction, set by store.InTenant with
 -- set_config('app.user_id', …, true). NULL outside a tenant transaction, so
@@ -30,6 +31,7 @@ LANGUAGE sql STABLE AS $$
     SELECT nullif(current_setting('app.user_id', true), '')::uuid
 $$;
 -- +goose StatementEnd
+REVOKE EXECUTE ON FUNCTION app_user_id() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_user_id() TO zapply_app;
 
 CREATE TABLE app_user (
@@ -52,7 +54,11 @@ CREATE TABLE identity (
     PRIMARY KEY (issuer, subject)
 );
 CREATE INDEX identity_user_id ON identity (user_id);
-REVOKE ALL ON identity FROM zapply_app;
+REVOKE ALL ON identity FROM PUBLIC, zapply_app;
+-- RLS with no policies denies every role except the owner (which
+-- resolve_identity runs as). This guards against platforms that grant new
+-- tables to their own roles by default, such as Supabase's anon role.
+ALTER TABLE identity ENABLE ROW LEVEL SECURITY;
 
 -- Returns the user for (issuer, subject), creating it with p_new_id if this is
 -- the first time the principal is seen. Safe under concurrent first requests:
@@ -90,6 +96,7 @@ BEGIN
 END
 $$;
 -- +goose StatementEnd
+REVOKE EXECUTE ON FUNCTION resolve_identity(text, text, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION resolve_identity(text, text, uuid) TO zapply_app;
 
 -- +goose Down
@@ -97,8 +104,6 @@ DROP FUNCTION resolve_identity(text, text, uuid);
 DROP TABLE identity;
 DROP TABLE app_user;
 DROP FUNCTION app_user_id();
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT EXECUTE ON FUNCTIONS TO PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM zapply_app;
 REVOKE USAGE ON SCHEMA public FROM zapply_app;

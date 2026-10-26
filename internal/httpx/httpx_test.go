@@ -109,3 +109,43 @@ func TestServerDrains(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 }
+
+func TestServerCancelsRequestsAfterShutdownTimeout(t *testing.T) {
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	srv := &httpx.Server{
+		Addr:            "127.0.0.1:0",
+		ShutdownTimeout: 50 * time.Millisecond,
+		Logger:          discard,
+		Handler: http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			close(started)
+			<-r.Context().Done() // a request that never finishes on its own
+			close(cancelled)
+		}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	addrc := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() { done <- srv.Run(ctx, func(a net.Addr) { addrc <- a }) }()
+	go func() {
+		if res, err := http.Get("http://" + (<-addrc).String()); err == nil {
+			res.Body.Close()
+		}
+	}()
+	<-started
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Run returned nil after shutdown timeout")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after shutdown timeout")
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight request context was not cancelled")
+	}
+}

@@ -39,6 +39,18 @@
   - `identity` is not readable
   - end-to-end `/v1/me`
 
+## Review fixes (independent review, round 1)
+
+| Finding | Fix | Regression test |
+|---|---|---|
+| `resolve_identity()` and `app_user_id()` were executable by `PUBLIC`. A schema-scoped `ALTER DEFAULT PRIVILEGES` cannot revoke the global function default | Explicit `REVOKE EXECUTE … FROM PUBLIC` on each function. `identity` gets RLS with no policies, so platform default grants (e.g. Supabase's `anon`) see nothing | `TestFunctionsAndIdentityNotPublic` |
+| When graceful shutdown timed out, requests kept running and `Store.Close` blocked | The request base context is cancelled and connections are closed when `Shutdown` times out | `TestServerCancelsRequestsAfterShutdownTimeout` |
+| pgx's default named prepared statements break behind Supavisor transaction mode | Exec mode by default; an explicit `default_query_exec_mode` in the URL overrides it | `TestNoNamedPreparedStatements` |
+| A failed first JWKS fetch still let the API start and pass readiness while rejecting every login | The first fetch must succeed. Unknown-kid refetches are limited to one a minute and fail fast past that | `TestJWKSUnavailableAtStartup` |
+| `Verify` ignored the request context, so a stalled JWKS refetch outlived the request | `KeyfuncCtx(ctx)`, plus a 10 s timeout on JWKS HTTP calls | `TestJWKSVerifyHonoursRequestContext` |
+
+Deployment note: when the database is a Supabase project, expose nothing from `public` through the Data API (PostgREST). zapply never uses it, and RLS is the only thing between it and the tables.
+
 ## Deferred on purpose
 
 - OpenAPI codegen arrives in part 2, when there are real resources to describe.

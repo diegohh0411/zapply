@@ -13,9 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MicahParks/jwkset"
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/time/rate"
 
 	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/httpx"
@@ -36,13 +38,15 @@ type Verifier interface {
 var ErrInvalidToken = errors.New("invalid token")
 
 type jwtVerifier struct {
-	keyfunc jwt.Keyfunc
+	// keyfunc is per request so key lookups (which may refresh the JWKS)
+	// stop when the request is cancelled.
+	keyfunc func(context.Context) jwt.Keyfunc
 	opts    []jwt.ParserOption
 }
 
-func (v *jwtVerifier) Verify(_ context.Context, raw string) (Principal, error) {
+func (v *jwtVerifier) Verify(ctx context.Context, raw string) (Principal, error) {
 	var claims jwt.RegisteredClaims
-	if _, err := jwt.ParseWithClaims(raw, &claims, v.keyfunc, v.opts...); err != nil {
+	if _, err := jwt.ParseWithClaims(raw, &claims, v.keyfunc(ctx), v.opts...); err != nil {
 		return Principal{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 	if claims.Subject == "" {
@@ -61,15 +65,37 @@ func parserOptions(issuer, audience string, methods []string) []jwt.ParserOption
 	}
 }
 
-// NewJWKS verifies asymmetric tokens against a provider's JWKS, refreshed in
-// the background until ctx is cancelled.
+// NewJWKS verifies asymmetric tokens against a provider's JWKS, refreshed
+// hourly in the background until ctx is cancelled. The first fetch must
+// succeed: starting with no keys would pass readiness yet reject every login.
 func NewJWKS(ctx context.Context, url, issuer, audience string) (Verifier, error) {
-	kf, err := keyfunc.NewDefaultCtx(ctx, []string{url})
+	remote, err := jwkset.NewStorageFromHTTP(url, jwkset.HTTPClientStorageOptions{
+		Ctx:             ctx,
+		HTTPTimeout:     10 * time.Second,
+		RefreshInterval: time.Hour,
+		RefreshErrorHandler: func(ctx context.Context, err error) {
+			logx.From(ctx).Warn("JWKS refresh failed; keeping cached keys", "url", url, "err", err)
+		},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("load JWKS: %w", err)
+		return nil, fmt.Errorf("load JWKS from %s: %w", url, err)
+	}
+	client, err := jwkset.NewHTTPClient(jwkset.HTTPClientOptions{
+		HTTPURLs: map[string]jwkset.Storage{url: remote},
+		// An unknown kid (key rotation) triggers at most one refetch a minute;
+		// over the limit, verification fails at once instead of waiting.
+		RefreshUnknownKID: rate.NewLimiter(rate.Every(time.Minute), 1),
+		RateLimitWaitMax:  time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	kf, err := keyfunc.New(keyfunc.Options{Ctx: ctx, Storage: client})
+	if err != nil {
+		return nil, err
 	}
 	return &jwtVerifier{
-		keyfunc: kf.Keyfunc,
+		keyfunc: kf.KeyfuncCtx,
 		opts:    parserOptions(issuer, audience, []string{"RS256", "ES256", "EdDSA"}),
 	}, nil
 }
@@ -77,8 +103,9 @@ func NewJWKS(ctx context.Context, url, issuer, audience string) (Verifier, error
 // NewDev verifies HS256 tokens signed with a shared development secret.
 func NewDev(secret, audience string) Verifier {
 	key := []byte(secret)
+	static := func(*jwt.Token) (any, error) { return key, nil }
 	return &jwtVerifier{
-		keyfunc: func(*jwt.Token) (any, error) { return key, nil },
+		keyfunc: func(context.Context) jwt.Keyfunc { return static },
 		opts:    parserOptions(config.DevIssuer, audience, []string{"HS256"}),
 	}
 }

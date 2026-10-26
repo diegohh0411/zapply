@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -87,17 +88,21 @@ func TestDevVerifier(t *testing.T) {
 	})
 }
 
+func writeJWKS(w http.ResponseWriter, key *rsa.PrivateKey) {
+	_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{map[string]string{
+		"kty": "RSA", "kid": "k1", "alg": "RS256", "use": "sig",
+		"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+		"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
+	}}})
+}
+
 func TestJWKSVerifier(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{map[string]string{
-			"kty": "RSA", "kid": "k1", "alg": "RS256", "use": "sig",
-			"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
-			"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
-		}}})
+		writeJWKS(w, key)
 	}))
 	defer srv.Close()
 
@@ -124,6 +129,62 @@ func TestJWKSVerifier(t *testing.T) {
 	hs := devToken(t, c, jwt.SigningMethodHS256, []byte(secret))
 	if _, err := v.Verify(ctx, hs); err == nil {
 		t.Fatal("JWKS verifier accepted HS256")
+	}
+}
+
+func TestJWKSUnavailableAtStartup(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, err := auth.NewJWKS(ctx, srv.URL, "https://idp.example", "authenticated"); err == nil {
+		t.Fatal("NewJWKS succeeded with no keys")
+	}
+}
+
+// An unknown kid refetches the JWKS; a stalled fetch must not outlive the request.
+func TestJWKSVerifyHonoursRequestContext(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stall := make(chan struct{})
+	defer close(stall)
+	var served atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !served.Swap(true) {
+			writeJWKS(w, key)
+			return
+		}
+		select {
+		case <-stall:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	v, err := auth.NewJWKS(ctx, srv.URL, "https://idp.example", "authenticated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := validClaims()
+	c.Issuer = "https://idp.example"
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, c)
+	tok.Header["kid"] = "rotated"
+	raw, _ := tok.SignedString(key)
+
+	reqCtx, reqCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer reqCancel()
+	start := time.Now()
+	if _, err := v.Verify(reqCtx, raw); err == nil {
+		t.Fatal("unknown kid verified")
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("Verify blocked %v after the request was cancelled", d)
 	}
 }
 
