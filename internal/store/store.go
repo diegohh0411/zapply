@@ -60,12 +60,23 @@ type Store struct {
 }
 
 // Open connects with the runtime role and refuses roles that would bypass RLS.
+func Open(ctx context.Context, url string) (*Store, error) {
+	pool, err := Connect(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	users, _ := lru.New[auth.Principal, uuid.UUID](50_000)
+	return &Store{pool: pool, users: users}, nil
+}
+
+// Connect opens a pool for a restricted role (the API's or the relay's) and
+// refuses roles that are superuser or bypass RLS.
 //
 // Queries use pgx's exec mode (no named prepared statements) unless the URL
 // sets default_query_exec_mode, so the pool works behind transaction-mode
 // poolers such as Supavisor that cannot carry prepared statements between
 // backends.
-func Open(ctx context.Context, url string) (*Store, error) {
+func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
@@ -87,8 +98,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, err
 	}
-	users, _ := lru.New[auth.Principal, uuid.UUID](50_000)
-	return &Store{pool: pool, users: users}, nil
+	return pool, nil
 }
 
 func (s *Store) Close() { s.pool.Close() }
@@ -108,7 +118,7 @@ func checkRuntimeRole(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("check runtime role: %w", err)
 	}
 	if super || bypass {
-		return fmt.Errorf("%w: %q (use the restricted runtime role, e.g. zapply_app)", ErrUnsafeRole, name)
+		return fmt.Errorf("%w: %q (use a restricted role, e.g. zapply_app)", ErrUnsafeRole, name)
 	}
 	return nil
 }

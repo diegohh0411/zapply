@@ -1,6 +1,6 @@
 # Part 3: Events (outbox relay → NATS → SSE)
 
-Status: planned.
+Status: in progress. Migration `00003` and the relay are built; the SSE gateway is next.
 
 Part 2 writes an `outbox` row in the same transaction as every library change. Part 3 delivers those rows to the user's open browser tabs as Server-Sent Events, so the web app (part 9) updates live and later parts (matching progress, renders, mail) can push to the same stream.
 

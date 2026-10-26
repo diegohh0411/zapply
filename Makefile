@@ -2,13 +2,16 @@ SHELL := /bin/bash
 COMPOSE ?= $(shell command -v podman >/dev/null && echo "podman compose" || echo "docker compose")
 ENV := set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: build run migrate token db-up db-down test test-integration vet image generate
+.PHONY: build run relay migrate token db-up db-down test test-integration vet image generate
 
 build:
 	go build -o bin/zapply ./cmd/zapply
 
 run: build ## API on the host, against `make db-up`
 	@$(ENV) bin/zapply api
+
+relay: build ## Outbox relay on the host, against `make db-up`
+	@$(ENV) bin/zapply relay
 
 migrate: build
 	@$(ENV) bin/zapply migrate
