@@ -380,11 +380,13 @@ type Organization struct {
 }
 
 type Outbox struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	Topic     string
-	Payload   json.RawMessage
-	CreatedAt time.Time
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Topic       string
+	Payload     json.RawMessage
+	CreatedAt   time.Time
+	Seq         *int64
+	PublishedAt *time.Time
 }
 
 type Profile struct {

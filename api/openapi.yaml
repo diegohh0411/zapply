@@ -1,9 +1,10 @@
 openapi: 3.0.3
 info:
   title: zapply API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Library of a person's career evidence. Design: docs/parts/02-library.md.
+    Live changes stream from /v1/events (docs/parts/03-events.md).
     Every /v1 operation requires `Authorization: Bearer <jwt>`. Errors are
     RFC 9457 problem+json; validation errors (422) list failing fields.
 security:
@@ -346,6 +347,55 @@ paths:
               schema: { $ref: "#/components/schemas/Evidence" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/events:
+    get:
+      operationId: streamEvents
+      tags: [events]
+      description: |
+        The user's change feed as Server-Sent Events (`text/event-stream`).
+        Served by a hand-written handler; the generated server skips the
+        `events` tag.
+
+        Each event has `id` (its seq), `event` (the topic, e.g.
+        `evidence.updated`) and `data` (an `EventData` JSON object). Refetch
+        the resource it names; events can repeat, so they are hints, not
+        state.
+
+        - `reset`: the Last-Event-ID is too old to replay. Refetch everything
+          after `ready`.
+        - `ready`: replay is done and the stream is live. Its `id` is the
+          position to resume from. Without a Last-Event-ID, fetch data only
+          after `ready`.
+
+        Comments (`: ping`) arrive every 20 s. The stream ends at token
+        expiry, when the server drains, when the client falls too far
+        behind, or when the server loses NATS. Reconnect with a fresh token
+        and `Last-Event-ID`. Browsers' `EventSource` can't send the bearer
+        header, so use a fetch-based SSE client.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: The id of the last event received; replay starts after it.
+          schema: { type: string, pattern: "^[0-9]+$" }
+      responses:
+        "200":
+          description: An open event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "429":
+          description: Too many streams are open for this user.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503":
+          description: Live events are temporarily unavailable; retry after `Retry-After` seconds.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -632,3 +682,30 @@ components:
         parent_id: { type: string, format: uuid }
         after_id: { type: string, format: uuid }
         before_id: { type: string, format: uuid }
+    EventData:
+      type: object
+      description: |
+        The `data` of a change event: the resource it concerns. `version` is
+        set for versioned resources (profile, evidence).
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer }
+    EventTopic:
+      type: string
+      description: The SSE `event` name of a change event.
+      enum:
+        - profile.updated
+        - organization.created
+        - organization.updated
+        - organization.deleted
+        - evidence.created
+        - evidence.updated
+        - evidence.moved
+        - evidence.archived
+        - evidence.unarchived
+        - evidence.deleted
+        - skill.created
+        - skill.updated
+        - skill.merged
+        - skill.deleted

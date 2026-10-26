@@ -48,12 +48,15 @@ func TestDevVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := v.Verify(context.Background(), tok)
+	got, err := v.Verify(context.Background(), tok)
 	if err != nil {
 		t.Fatalf("valid token rejected: %v", err)
 	}
-	if p != (auth.Principal{Issuer: config.DevIssuer, Subject: "alice"}) {
-		t.Fatalf("principal = %+v", p)
+	if got.Principal != (auth.Principal{Issuer: config.DevIssuer, Subject: "alice"}) {
+		t.Fatalf("principal = %+v", got.Principal)
+	}
+	if d := time.Until(got.ExpiresAt); d < 59*time.Minute || d > time.Hour {
+		t.Fatalf("expires in %v, want about 1h", d)
 	}
 
 	cases := map[string]func(*jwt.RegisteredClaims){

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -138,11 +139,20 @@ type Server struct {
 	ShutdownTimeout time.Duration
 	Logger          *slog.Logger
 
-	draining atomic.Bool
+	draining  atomic.Bool
+	drainOnce sync.Once
+	drainC    chan struct{}
 }
 
 // Draining reports whether shutdown has begun; readiness checks should fail.
 func (s *Server) Draining() bool { return s.draining.Load() }
+
+// DrainC is closed when draining begins. Long-lived handlers (SSE) end their
+// responses on it, so they don't hold graceful shutdown open.
+func (s *Server) DrainC() <-chan struct{} {
+	s.drainOnce.Do(func() { s.drainC = make(chan struct{}) })
+	return s.drainC
+}
 
 // Run serves until ctx is cancelled, then drains. ready is called once listening.
 func (s *Server) Run(ctx context.Context, ready func(addr net.Addr)) error {
@@ -176,6 +186,8 @@ func (s *Server) Run(ctx context.Context, ready func(addr net.Addr)) error {
 	}
 
 	s.draining.Store(true)
+	s.DrainC()
+	close(s.drainC)
 	s.Logger.Info("draining", "delay", s.DrainDelay)
 	time.Sleep(s.DrainDelay)
 

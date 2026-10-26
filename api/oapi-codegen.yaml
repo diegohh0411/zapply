@@ -6,3 +6,5 @@ generate:
   models: true
 output-options:
   skip-prune: true
+  # GET /v1/events streams SSE from a hand-written handler (internal/api/events.go).
+  exclude-tags: [events]

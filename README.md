@@ -13,9 +13,11 @@ Prerequisites: Go 1.27 and Podman (or Docker).
 
 ```bash
 cp .env.example .env
-make db-up            # Postgres 17 on 127.0.0.1:54329
+make db-up            # Postgres 17 on 127.0.0.1:54329, NATS on 127.0.0.1:4222
 make migrate          # apply migrations as the schema owner
 make run              # API on 127.0.0.1:8080
+make relay            # outbox relay → NATS (second terminal)
+curl -N -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/events   # live changes
 curl -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/me
 ```
 
@@ -32,4 +34,5 @@ With Podman, `make db-up` goes through `podman compose`. If it cannot reach the 
 
 - `zapply migrate` connects as the schema owner (`MIGRATE_DATABASE_URL`).
 - The API connects as `zapply_app` (`DATABASE_URL`). That role must not be superuser or `BYPASSRLS`, and the API refuses to start if it is.
+- `zapply relay` connects as `zapply_relay` (`RELAY_DATABASE_URL`). It can read and update the outbox and nothing else, and has the same superuser and `BYPASSRLS` check.
 - Every tenant query runs inside `store.InTenant`, which sets `app.user_id` for that transaction only. Forced row-level security enforces the isolation.

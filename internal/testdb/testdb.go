@@ -2,8 +2,9 @@
 //
 // Tests that need it are skipped unless ZAPPLY_TEST_DATABASE_URL points at an
 // admin connection to a throwaway cluster (see scripts/test-integration.sh).
-// The cluster must already have the zapply_app role with LOGIN and password
-// "zapply_app" (deploy/postgres/init.sql creates it). Roles are cluster-wide,
+// The cluster must already have the zapply_app and zapply_relay roles with
+// LOGIN, each with its name as password (deploy/postgres/init.sql creates
+// them). Roles are cluster-wide,
 // so creating them here would race between packages tested in parallel.
 package testdb
 
@@ -22,12 +23,11 @@ import (
 	"github.com/diegohh0411/zapply/internal/store"
 )
 
-const appPassword = "zapply_app"
-
 // DB is a fresh database with migrations applied.
 type DB struct {
 	AdminURL string // schema owner (superuser)
 	AppURL   string // restricted runtime role
+	RelayURL string // relay role, outbox only
 	Store    *store.Store
 }
 
@@ -68,7 +68,7 @@ func New(t *testing.T) *DB {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(st.Close)
-	return &DB{AdminURL: adminURL, AppURL: appURL, Store: st}
+	return &DB{AdminURL: adminURL, AppURL: appURL, RelayURL: withDB(t, base, name, "zapply_relay"), Store: st}
 }
 
 // Admin opens a superuser connection to the test database.
@@ -90,7 +90,7 @@ func withDB(t *testing.T, base, db, user string) string {
 	}
 	u.Path = "/" + db
 	if user != "" {
-		u.User = url.UserPassword(user, appPassword)
+		u.User = url.UserPassword(user, user)
 	}
 	return u.String()
 }
