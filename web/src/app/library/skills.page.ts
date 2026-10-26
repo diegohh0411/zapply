@@ -10,6 +10,7 @@ import { ZardSelectImports } from '@/shared/components/select';
 import { ZardSonnerService } from '@/shared/components/sonner';
 
 import { Api, type Schemas } from '../core/api';
+import { ConfirmService } from '../core/confirm.service';
 import { onChanges } from './live';
 
 type Skill = Schemas['Skill'];
@@ -108,6 +109,7 @@ const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'native'];
 export class SkillsPage {
   private readonly api = inject(Api).client;
   private readonly toast = inject(ZardSonnerService);
+  private readonly confirm = inject(ConfirmService);
 
   protected readonly types = TYPES;
   protected readonly levels = LEVELS;
@@ -164,6 +166,14 @@ export class SkillsPage {
   }
 
   protected async merge(s: Skill): Promise<void> {
+    const into = this.skills().find((x) => x.id === this.mergeInto);
+    const ok = await this.confirm.ask({
+      title: `Merge “${s.name}” into “${into?.name}”?`,
+      description: `Everything tagged “${s.name}” is re-tagged, then “${s.name}” is deleted.`,
+      okText: 'Merge',
+      destructive: false,
+    });
+    if (!ok) return;
     await this.run(async () => {
       Api.ok(await this.api.POST('/v1/skills/{id}/merge', { params: { path: { id: s.id } }, body: { into: this.mergeInto } }));
       this.dialogOpen.set(false);
@@ -172,6 +182,11 @@ export class SkillsPage {
   }
 
   protected async remove(s: Skill): Promise<void> {
+    const ok = await this.confirm.ask({
+      title: `Delete “${s.name}”?`,
+      description: 'It is removed from every experience entry and highlight that uses it.',
+    });
+    if (!ok) return;
     await this.run(async () => {
       Api.ok(await this.api.DELETE('/v1/skills/{id}', { params: { path: { id: s.id } } }));
       this.dialogOpen.set(false);

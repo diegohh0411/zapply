@@ -10,6 +10,7 @@ import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTableImports } from '@/shared/components/table';
 
 import { Api, type Schemas } from '../core/api';
+import { ConfirmService } from '../core/confirm.service';
 import { onChanges } from './live';
 
 type Org = Schemas['Organization'];
@@ -80,6 +81,7 @@ const TYPES: Schemas['OrganizationType'][] = ['company', 'education', 'nonprofit
 export class OrganizationsPage {
   private readonly api = inject(Api).client;
   private readonly toast = inject(ZardSonnerService);
+  private readonly confirm = inject(ConfirmService);
 
   protected readonly types = TYPES;
   protected readonly orgs = signal<Org[]>([]);
@@ -122,6 +124,11 @@ export class OrganizationsPage {
   }
 
   protected async remove(o: Org): Promise<void> {
+    const ok = await this.confirm.ask({
+      title: `Delete “${o.name}”?`,
+      description: 'Only possible while no experience links to it.',
+    });
+    if (!ok) return;
     try {
       Api.ok(await this.api.DELETE('/v1/organizations/{id}', { params: { path: { id: o.id } } }));
       await this.load();

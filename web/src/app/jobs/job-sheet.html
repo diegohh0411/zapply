@@ -39,7 +39,7 @@
             <z-dropdown-menu-item (click)="archive(true)"><ng-icon name="lucideArchive" /> Archive</z-dropdown-menu-item>
           }
           <z-dropdown-menu-separator />
-          <z-dropdown-menu-item zType="destructive" (click)="confirmDelete.set(true)"><ng-icon name="lucideTrash2" /> Delete</z-dropdown-menu-item>
+          <z-dropdown-menu-item zType="destructive" (click)="remove()"><ng-icon name="lucideTrash2" /> Delete</z-dropdown-menu-item>
         </z-dropdown-menu>
       </div>
     }
@@ -222,14 +222,3 @@
     </ol>
   </div>
 </ng-template>
-
-<z-alert-dialog [(zVisible)]="confirmDelete">
-  <z-alert-dialog-header>
-    <z-alert-dialog-title>Delete this job?</z-alert-dialog-title>
-    <z-alert-dialog-description>Its activity goes too. Archive it instead to keep the history.</z-alert-dialog-description>
-  </z-alert-dialog-header>
-  <z-alert-dialog-footer>
-    <button type="button" z-button zType="outline" z-alert-dialog-close>Cancel</button>
-    <button type="button" z-button zType="destructive" (click)="remove()">Delete</button>
-  </z-alert-dialog-footer>
-</z-alert-dialog>

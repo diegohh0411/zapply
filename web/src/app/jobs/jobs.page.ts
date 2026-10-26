@@ -20,6 +20,7 @@ import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardSwitchComponent } from '@/shared/components/switch';
 
+import { ConfirmService } from '../core/confirm.service';
 import { type BoardMove, JobBoard } from './job-board';
 import { JobSheet, type SheetTarget } from './job-sheet';
 import { JobTable } from './job-table';
@@ -59,6 +60,7 @@ export class JobsPage {
   protected readonly store = inject(JobsStore);
   private readonly router = inject(Router);
   private readonly toast = inject(ZardSonnerService);
+  private readonly confirm = inject(ConfirmService);
 
   /** ?job=<id> opens a job; ?job=new a blank one. ?view=<id> selects a saved view. */
   readonly job = input<string>();
@@ -207,6 +209,7 @@ export class JobsPage {
   protected async deleteView(): Promise<void> {
     const v = this.activeView();
     if (!v) return;
+    if (!(await this.confirm.ask({ title: `Delete the view “${v.name}”?`, description: 'Only the saved view goes; your jobs stay.' }))) return;
     try {
       await this.store.deleteView(v.id);
       this.selectView(null);

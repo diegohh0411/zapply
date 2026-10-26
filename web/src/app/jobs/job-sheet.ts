@@ -15,7 +15,6 @@ import {
   lucideTrash2,
 } from '@ng-icons/lucide';
 
-import { ZardAlertDialogImports } from '@/shared/components/alert-dialog';
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
@@ -27,6 +26,7 @@ import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
 import { ApiError } from '../core/api';
+import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, STATUS_DOT, WORK_MODES } from './format';
 import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
 
@@ -84,7 +84,6 @@ const emptyForm = (statusId = ''): Form => ({
     ...ZardSelectImports,
     ...ZardTabsImports,
     ...ZardDropdownImports,
-    ...ZardAlertDialogImports,
   ],
   providers: [
     provideIcons({
@@ -105,6 +104,7 @@ const emptyForm = (statusId = ''): Form => ({
 export class JobSheet {
   protected readonly store = inject(JobsStore);
   private readonly toast = inject(ZardSonnerService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly target = input<SheetTarget | null>(null);
   readonly visible = model(false);
@@ -123,7 +123,6 @@ export class JobSheet {
   protected readonly dirty = signal(false);
   protected readonly errors = signal<Record<string, string>>({});
   protected readonly activities = signal<JobActivity[]>([]);
-  protected readonly confirmDelete = signal(false);
   protected note = '';
   protected readonly editingNote = signal<string | null>(null);
   protected noteEdit = '';
@@ -149,7 +148,6 @@ export class JobSheet {
   private async load(t: SheetTarget | null, quiet = false): Promise<void> {
     this.errors.set({});
     this.dirty.set(false);
-    this.confirmDelete.set(false);
     this.editingNote.set(null);
     if (!t) return;
     if ('new' in t) {
@@ -240,9 +238,13 @@ export class JobSheet {
   protected async remove(): Promise<void> {
     const cur = this.job();
     if (!cur) return;
+    const ok = await this.confirm.ask({
+      title: `Delete “${cur.title}”?`,
+      description: 'Its activity goes too. Archive it instead to keep the history.',
+    });
+    if (!ok) return;
     try {
       await this.store.delete(cur.id);
-      this.confirmDelete.set(false);
       this.visible.set(false);
       this.toast.success('Job deleted');
     } catch (e) {
@@ -283,6 +285,7 @@ export class JobSheet {
   protected async deleteNote(a: JobActivity): Promise<void> {
     const cur = this.job();
     if (!cur) return;
+    if (!(await this.confirm.ask({ title: 'Delete this note?', description: a.body.length > 120 ? a.body.slice(0, 120) + '…' : a.body }))) return;
     try {
       await this.store.deleteNote(cur.id, a.id);
       await this.loadActivities(cur.id);

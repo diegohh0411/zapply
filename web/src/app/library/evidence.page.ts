@@ -10,6 +10,7 @@ import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardSwitchComponent } from '@/shared/components/switch';
 
 import { Api, type Schemas } from '../core/api';
+import { ConfirmService } from '../core/confirm.service';
 import { EvidenceSheet, type EvidenceTarget, humanize } from './evidence-sheet';
 import { onChanges } from './live';
 
@@ -122,6 +123,7 @@ const CATEGORIES: { value: Category; label: string; hint: string }[] = [
 export class EvidencePage {
   private readonly api = inject(Api).client;
   private readonly toast = inject(ZardSonnerService);
+  private readonly confirm = inject(ConfirmService);
 
   protected readonly categories = CATEGORIES;
   protected readonly humanize = humanize;
@@ -226,7 +228,13 @@ export class EvidencePage {
 
   protected async remove(e: Evidence): Promise<void> {
     const kids = this.items().filter((x) => x.parent_id === e.id).length;
-    if (!confirm(kids ? `Delete “${e.title}” and its ${kids} nested entries?` : `Delete “${e.title}”?`)) return;
+    const ok = await this.confirm.ask({
+      title: `Delete “${e.title}”?`,
+      description: kids
+        ? `Its ${kids} nested ${kids === 1 ? 'entry goes' : 'entries go'} too. Archive it instead to keep it out of CVs without losing it.`
+        : 'This cannot be undone. Archive it instead to keep it out of CVs without losing it.',
+    });
+    if (!ok) return;
     try {
       Api.ok(await this.api.DELETE('/v1/evidences/{id}', { params: { path: { id: e.id }, query: { cascade: kids > 0 } } }));
       await this.load();
