@@ -37,6 +37,11 @@ The build output is embedded with `go:embed` (`internal/webui`) and served by th
 
 ## Screens
 
+The frame is ZardUI's sidebar:
+- **Desktop:** it collapses to icons from the header button, the rail or Ctrl/⌘+B, and remembers its state in a cookie.
+- **Mobile:** it becomes a drawer that closes after you pick a page.
+- **Header:** a slim bar holds the toggle and the live-updates indicator.
+
 | Route | What |
 |---|---|
 | `/login` | Magic link and Google (Supabase), or development sign-in |
