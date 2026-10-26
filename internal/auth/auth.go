@@ -30,9 +30,16 @@ type Principal struct {
 	Subject string
 }
 
+// Token is a verified JWT: who it identifies and when it stops being valid.
+// Principal alone is the identity, so it stays usable as a cache key.
+type Token struct {
+	Principal Principal
+	ExpiresAt time.Time
+}
+
 // Verifier validates a raw JWT.
 type Verifier interface {
-	Verify(ctx context.Context, token string) (Principal, error)
+	Verify(ctx context.Context, token string) (Token, error)
 }
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -44,15 +51,19 @@ type jwtVerifier struct {
 	opts    []jwt.ParserOption
 }
 
-func (v *jwtVerifier) Verify(ctx context.Context, raw string) (Principal, error) {
+func (v *jwtVerifier) Verify(ctx context.Context, raw string) (Token, error) {
 	var claims jwt.RegisteredClaims
 	if _, err := jwt.ParseWithClaims(raw, &claims, v.keyfunc(ctx), v.opts...); err != nil {
-		return Principal{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return Token{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 	if claims.Subject == "" {
-		return Principal{}, fmt.Errorf("%w: missing sub", ErrInvalidToken)
+		return Token{}, fmt.Errorf("%w: missing sub", ErrInvalidToken)
 	}
-	return Principal{Issuer: claims.Issuer, Subject: claims.Subject}, nil
+	// exp is required by the parser options.
+	return Token{
+		Principal: Principal{Issuer: claims.Issuer, Subject: claims.Subject},
+		ExpiresAt: claims.ExpiresAt.Time,
+	}, nil
 }
 
 func parserOptions(issuer, audience string, methods []string) []jwt.ParserOption {
@@ -125,16 +136,16 @@ func MintDev(secret, audience, subject string, ttl time.Duration) (string, error
 // MultiVerifier tries each verifier in order and returns the first success.
 type MultiVerifier []Verifier
 
-func (m MultiVerifier) Verify(ctx context.Context, raw string) (Principal, error) {
+func (m MultiVerifier) Verify(ctx context.Context, raw string) (Token, error) {
 	err := ErrInvalidToken
 	for _, v := range m {
-		p, verr := v.Verify(ctx, raw)
+		tok, verr := v.Verify(ctx, raw)
 		if verr == nil {
-			return p, nil
+			return tok, nil
 		}
 		err = verr
 	}
-	return Principal{}, err
+	return Token{}, err
 }
 
 // Resolver maps a principal to an internal user ID, creating the user on first sight.
@@ -142,7 +153,10 @@ type Resolver interface {
 	ResolveUser(ctx context.Context, p Principal) (uuid.UUID, error)
 }
 
-type userKey struct{}
+type (
+	userKey    struct{}
+	expiresKey struct{}
+)
 
 // UserID returns the authenticated user. It panics if the Middleware did not
 // run, which is a routing bug rather than a client error.
@@ -159,6 +173,18 @@ func WithUser(ctx context.Context, id uuid.UUID) context.Context {
 	return context.WithValue(ctx, userKey{}, id)
 }
 
+// ExpiresAt returns when the request's token expires, or the zero time if the
+// Middleware did not run. Long-lived responses (SSE) end there.
+func ExpiresAt(ctx context.Context) time.Time {
+	t, _ := ctx.Value(expiresKey{}).(time.Time)
+	return t
+}
+
+// WithExpiry stores a token expiry in ctx. Exposed for tests.
+func WithExpiry(ctx context.Context, t time.Time) context.Context {
+	return context.WithValue(ctx, expiresKey{}, t)
+}
+
 // Middleware requires a valid bearer token and puts the user ID in the context.
 func Middleware(v Verifier, r Resolver) httpx.Middleware {
 	return func(next http.Handler) http.Handler {
@@ -169,19 +195,19 @@ func Middleware(v Verifier, r Resolver) httpx.Middleware {
 				httpx.WriteProblem(w, req, http.StatusUnauthorized, "missing bearer token")
 				return
 			}
-			p, err := v.Verify(req.Context(), raw)
+			tok, err := v.Verify(req.Context(), raw)
 			if err != nil {
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 				httpx.WriteProblem(w, req, http.StatusUnauthorized, "invalid token")
 				return
 			}
-			uid, err := r.ResolveUser(req.Context(), p)
+			uid, err := r.ResolveUser(req.Context(), tok.Principal)
 			if err != nil {
 				logx.From(req.Context()).Error("resolve user", "err", err)
 				httpx.WriteProblem(w, req, http.StatusServiceUnavailable, "")
 				return
 			}
-			ctx := WithUser(req.Context(), uid)
+			ctx := WithExpiry(WithUser(req.Context(), uid), tok.ExpiresAt)
 			ctx = logx.With(ctx, logx.From(ctx).With("user_id", uid))
 			next.ServeHTTP(w, req.WithContext(ctx))
 		})

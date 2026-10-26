@@ -1,5 +1,6 @@
 // Package api wires HTTP routes to the domain. /v1 is generated from
-// api/openapi.yaml (internal/api/gen); handlers live in library.go.
+// api/openapi.yaml (internal/api/gen); handlers live in library.go, and the
+// SSE feed in events.go.
 package api
 
 import (
@@ -14,6 +15,7 @@ import (
 
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/auth"
+	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
@@ -26,6 +28,12 @@ type Deps struct {
 	Logger   *slog.Logger
 	// Draining reports shutdown in progress, so /readyz fails first.
 	Draining func() bool
+	// Events serves GET /v1/events; nil answers 503.
+	Events *events.Hub
+	// Drain is closed when shutdown begins, ending event streams.
+	Drain <-chan struct{}
+	// Heartbeat is the SSE keep-alive interval (default 20 s).
+	Heartbeat time.Duration
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -41,6 +49,9 @@ func Handler(d Deps) http.Handler {
 		}),
 		gen.StdHTTPServerOptions{BaseRouter: v1, ErrorHandlerFunc: requestError},
 	)
+	// SSE streams outside the strict server, which can't stream; the
+	// endpoint is still documented in api/openapi.yaml.
+	v1.HandleFunc("GET /v1/events", srv.events)
 	v1.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, http.StatusNotFound, "")
 	})

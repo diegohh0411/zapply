@@ -32,6 +32,10 @@ type Config struct {
 
 	// NATSURL is the NATS server the relay publishes to and the API subscribes to.
 	NATSURL string
+	// SSEBuffer is how many events a stream buffers before it is closed.
+	SSEBuffer int
+	// SSEMaxStreamsPerUser caps one user's open streams on each replica.
+	SSEMaxStreamsPerUser int
 
 	Auth  Auth
 	Relay Relay
@@ -110,6 +114,12 @@ func Load() (Config, error) {
 	}
 	if c.Relay.Retention, err = time.ParseDuration(get("EVENT_RETENTION", "24h")); err != nil || c.Relay.Retention <= 0 {
 		errs = append(errs, fmt.Errorf("EVENT_RETENTION must be a positive duration, got %q", get("EVENT_RETENTION", "")))
+	}
+	if c.SSEBuffer, err = strconv.Atoi(get("SSE_BUFFER", "256")); err != nil || c.SSEBuffer < 1 {
+		errs = append(errs, fmt.Errorf("SSE_BUFFER must be a positive integer, got %q", get("SSE_BUFFER", "")))
+	}
+	if c.SSEMaxStreamsPerUser, err = strconv.Atoi(get("SSE_MAX_STREAMS_PER_USER", "8")); err != nil || c.SSEMaxStreamsPerUser < 1 {
+		errs = append(errs, fmt.Errorf("SSE_MAX_STREAMS_PER_USER must be a positive integer, got %q", get("SSE_MAX_STREAMS_PER_USER", "")))
 	}
 	if c.Relay.Batch, err = strconv.Atoi(get("RELAY_BATCH", "500")); err != nil || c.Relay.Batch < 1 || c.Relay.Batch > 10_000 {
 		errs = append(errs, fmt.Errorf("RELAY_BATCH must be between 1 and 10000, got %q", get("RELAY_BATCH", "")))

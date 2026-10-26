@@ -39,6 +39,60 @@ func (e Category) Valid() bool {
 	}
 }
 
+// Defines values for EventTopic.
+const (
+	EvidenceArchived    EventTopic = "evidence.archived"
+	EvidenceCreated     EventTopic = "evidence.created"
+	EvidenceDeleted     EventTopic = "evidence.deleted"
+	EvidenceMoved       EventTopic = "evidence.moved"
+	EvidenceUnarchived  EventTopic = "evidence.unarchived"
+	EvidenceUpdated     EventTopic = "evidence.updated"
+	OrganizationCreated EventTopic = "organization.created"
+	OrganizationDeleted EventTopic = "organization.deleted"
+	OrganizationUpdated EventTopic = "organization.updated"
+	ProfileUpdated      EventTopic = "profile.updated"
+	SkillCreated        EventTopic = "skill.created"
+	SkillDeleted        EventTopic = "skill.deleted"
+	SkillMerged         EventTopic = "skill.merged"
+	SkillUpdated        EventTopic = "skill.updated"
+)
+
+// Valid indicates whether the value is a known member of the EventTopic enum.
+func (e EventTopic) Valid() bool {
+	switch e {
+	case EvidenceArchived:
+		return true
+	case EvidenceCreated:
+		return true
+	case EvidenceDeleted:
+		return true
+	case EvidenceMoved:
+		return true
+	case EvidenceUnarchived:
+		return true
+	case EvidenceUpdated:
+		return true
+	case OrganizationCreated:
+		return true
+	case OrganizationDeleted:
+		return true
+	case OrganizationUpdated:
+		return true
+	case ProfileUpdated:
+		return true
+	case SkillCreated:
+		return true
+	case SkillDeleted:
+		return true
+	case SkillMerged:
+		return true
+	case SkillUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Form.
 const (
 	Credential  Form = "credential"
@@ -128,6 +182,16 @@ type ChildSummary struct {
 	Kind     string             `json:"kind"`
 	Title    string             `json:"title"`
 }
+
+// EventData The `data` of a change event: the resource it concerns. `version` is
+// set for versioned resources (profile, evidence).
+type EventData struct {
+	Id      openapi_types.UUID `json:"id"`
+	Version *int               `json:"version,omitempty"`
+}
+
+// EventTopic The SSE `event` name of a change event.
+type EventTopic string
 
 // Evidence defines model for Evidence.
 type Evidence struct {

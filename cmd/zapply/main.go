@@ -26,6 +26,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/api"
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/config"
+	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/relay"
@@ -92,12 +93,25 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		verifiers = append(verifiers, auth.NewDev(cfg.Auth.DevSecret, cfg.Auth.Audience))
 	}
 
+	// NATS only feeds /v1/events, so the API starts without it and that
+	// endpoint answers 503 until it connects.
+	hub, err := events.Connect(cfg.NATSURL, events.HubConfig{
+		Buffer:            cfg.SSEBuffer,
+		MaxStreamsPerUser: cfg.SSEMaxStreamsPerUser,
+	}, log)
+	if err != nil {
+		return err
+	}
+	defer hub.Close()
+
 	srv := &httpx.Server{Addr: cfg.HTTPAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	srv.Handler = api.Handler(api.Deps{
 		Store:    st,
 		Verifier: verifiers,
 		Logger:   log,
 		Draining: srv.Draining,
+		Events:   hub,
+		Drain:    srv.DrainC(),
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }

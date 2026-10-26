@@ -17,6 +17,13 @@ type Event struct {
 	Data  json.RawMessage `json:"data"`
 }
 
+// RelayLockKey is the relay's transaction-scoped advisory lock. The relay
+// holds it exclusively while it publishes a batch and commits. Replay takes it
+// shared, so it waits for an in-flight batch to commit: the relay publishes
+// before commit, so a stream that subscribed after the publish could
+// otherwise replay before the commit and miss the event in both places.
+const RelayLockKey int64 = 0x7a61_7070_6c79_0003
+
 // Subject is where the relay publishes a user's event, e.g.
 // user.0192….evidence.updated. Topics are dot-separated NATS tokens.
 func Subject(userID uuid.UUID, topic string) string {

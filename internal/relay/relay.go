@@ -1,7 +1,8 @@
 // Package relay moves committed outbox rows to NATS. Design:
 // docs/parts/03-events.md.
 //
-// Each batch is one transaction: take the relay's advisory lock, claim the
+// Each batch is one transaction: take the relay's advisory lock (see
+// events.RelayLockKey), claim the
 // oldest unpublished rows, stamp them with seq values, publish and flush, then
 // commit. The lock serializes batches across replicas, so seq follows publish
 // order. Publishing before commit makes delivery at-least-once: a crash in
@@ -23,11 +24,6 @@ import (
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/store/db"
 )
-
-// lockKey identifies the relay's transaction-scoped advisory lock. A
-// transaction lock, unlike a session lock, works behind transaction-mode
-// poolers.
-const lockKey int64 = 0x7a61_7070_6c79_0003
 
 // Publisher is the part of *nats.Conn the relay uses.
 type Publisher interface {
@@ -114,20 +110,23 @@ func (r *Relay) Run(ctx context.Context) error {
 	}
 }
 
-// Step relays one batch and reports how many events it published. It returns
-// 0 without error when another replica holds the lock.
+// Step relays one batch and reports how many events it published.
+//
+// It waits for the lock rather than skipping when it is held: a waiting
+// exclusive request queues ahead of new shared ones, so a burst of SSE
+// replays can't starve the relay. A transaction lock, unlike a session lock,
+// works behind transaction-mode poolers.
 func (r *Relay) Step(ctx context.Context) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, stepTimeout)
 	defer cancel()
 
 	var n int
 	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
-		var locked bool
-		if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock($1)`, lockKey).Scan(&locked); err != nil {
+		if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
 			return err
 		}
-		if !locked {
-			return nil
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, events.RelayLockKey); err != nil {
+			return fmt.Errorf("relay lock: %w", err)
 		}
 		q := db.New(tx)
 		rows, err := q.ClaimOutbox(ctx, int32(r.cfg.Batch))

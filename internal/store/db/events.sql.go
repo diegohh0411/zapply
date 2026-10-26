@@ -96,3 +96,73 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) erro
 	)
 	return err
 }
+
+const latestOutboxSeq = `-- name: LatestOutboxSeq :one
+SELECT coalesce(max(seq), 0)::bigint AS seq FROM outbox WHERE user_id = $1
+`
+
+func (q *Queries) LatestOutboxSeq(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, latestOutboxSeq, userID)
+	var seq int64
+	err := row.Scan(&seq)
+	return seq, err
+}
+
+const listOutboxAfter = `-- name: ListOutboxAfter :many
+SELECT seq::bigint AS seq, topic, payload FROM outbox
+WHERE user_id = $1 AND seq > $2::bigint
+ORDER BY seq
+LIMIT $3
+`
+
+type ListOutboxAfterParams struct {
+	UserID uuid.UUID
+	After  int64
+	N      int32
+}
+
+type ListOutboxAfterRow struct {
+	Seq     int64
+	Topic   string
+	Payload json.RawMessage
+}
+
+func (q *Queries) ListOutboxAfter(ctx context.Context, arg ListOutboxAfterParams) ([]ListOutboxAfterRow, error) {
+	rows, err := q.db.Query(ctx, listOutboxAfter, arg.UserID, arg.After, arg.N)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOutboxAfterRow
+	for rows.Next() {
+		var i ListOutboxAfterRow
+		if err := rows.Scan(&i.Seq, &i.Topic, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const outboxSeqExists = `-- name: OutboxSeqExists :one
+
+SELECT EXISTS (
+    SELECT 1 FROM outbox WHERE user_id = $1 AND seq = $2::bigint
+)
+`
+
+type OutboxSeqExistsParams struct {
+	UserID uuid.UUID
+	Seq    int64
+}
+
+// Replay for the SSE gateway, as zapply_app inside InTenant.
+func (q *Queries) OutboxSeqExists(ctx context.Context, arg OutboxSeqExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, outboxSeqExists, arg.UserID, arg.Seq)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}

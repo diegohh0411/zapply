@@ -17,6 +17,7 @@ make db-up            # Postgres 17 on 127.0.0.1:54329, NATS on 127.0.0.1:4222
 make migrate          # apply migrations as the schema owner
 make run              # API on 127.0.0.1:8080
 make relay            # outbox relay → NATS (second terminal)
+curl -N -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/events   # live changes
 curl -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/me
 ```
 

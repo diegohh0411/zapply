@@ -66,7 +66,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 ## Events
 
 - Domain writes insert an `outbox` row `(id, user_id, topic, payload, created_at)` in the same transaction.
-- `zapply relay` claims rows with `FOR UPDATE SKIP LOCKED`, publishes them to NATS `user.<user_id>.<topic>`, and deletes or marks them.
+- `zapply relay` claims rows under an advisory lock, stamps each with a `seq` in publish order, publishes them to NATS `user.<user_id>.<topic>`, and marks them published. Published rows are pruned after the retention window.
 - API replicas subscribe on demand for each connected SSE stream. Clients reconnect with `Last-Event-ID`, so missed events are replayed from the outbox's retention window.
 
 ## Observability and operations
