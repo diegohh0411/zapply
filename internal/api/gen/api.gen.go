@@ -932,8 +932,8 @@ type MePlatformRole string
 
 // Member defines model for Member.
 type Member struct {
+	Email      string             `json:"email"`
 	Id         openapi_types.UUID `json:"id"`
-	Label      string             `json:"label"`
 	Membership *Membership        `json:"membership"`
 	Usage      Usage              `json:"usage"`
 }

@@ -28,6 +28,12 @@ import (
 type Principal struct {
 	Issuer  string
 	Subject string
+	Email   string
+}
+
+type jwtClaims struct {
+	jwt.RegisteredClaims
+	Email string `json:"email"`
 }
 
 // Token is a verified JWT: who it identifies and when it stops being valid.
@@ -52,7 +58,7 @@ type jwtVerifier struct {
 }
 
 func (v *jwtVerifier) Verify(ctx context.Context, raw string) (Token, error) {
-	var claims jwt.RegisteredClaims
+	var claims jwtClaims
 	if _, err := jwt.ParseWithClaims(raw, &claims, v.keyfunc(ctx), v.opts...); err != nil {
 		return Token{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
@@ -61,7 +67,7 @@ func (v *jwtVerifier) Verify(ctx context.Context, raw string) (Token, error) {
 	}
 	// exp is required by the parser options.
 	return Token{
-		Principal: Principal{Issuer: claims.Issuer, Subject: claims.Subject},
+		Principal: Principal{Issuer: claims.Issuer, Subject: claims.Subject, Email: claims.Email},
 		ExpiresAt: claims.ExpiresAt.Time,
 	}, nil
 }

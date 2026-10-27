@@ -1153,7 +1153,7 @@ export interface components {
         Member: {
             /** Format: uuid */
             id: string;
-            label: string;
+            email: string;
             membership: components["schemas"]["Membership"] | null;
             usage: components["schemas"]["Usage"];
         };

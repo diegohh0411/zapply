@@ -199,7 +199,7 @@ func (s *Store) ResolveUser(ctx context.Context, p auth.Principal) (uuid.UUID, e
 	}
 	var id uuid.UUID
 	if err := s.pool.QueryRow(ctx,
-		`SELECT resolve_identity($1, $2, $3)`, p.Issuer, p.Subject, newID,
+		`SELECT resolve_identity($1, $2, $3, $4)`, p.Issuer, p.Subject, newID, p.Email,
 	).Scan(&id); err != nil {
 		return uuid.Nil, fmt.Errorf("resolve identity: %w", err)
 	}

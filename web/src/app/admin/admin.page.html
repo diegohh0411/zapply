@@ -144,13 +144,12 @@
             @for (m of members(); track m.id) {
               <tr class="border-t">
                 <td class="max-w-60 p-3">
-                  <div class="break-all font-medium">{{ m.label }}</div>
-                  <div class="break-all text-xs text-muted-foreground">{{ m.id }}</div>
+                  <div class="break-all font-medium">{{ m.email || 'Email unavailable' }}</div>
                 </td>
                 <td class="p-3">
                   <select
                     class="h-9 min-w-36 rounded-md border bg-background px-2"
-                    [attr.aria-label]="'Plan for ' + m.label"
+                    [attr.aria-label]="'Plan for ' + (m.email || 'member')"
                     [(ngModel)]="assignments[m.id]"
                   >
                     <option value="">Choose a plan</option>

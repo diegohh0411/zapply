@@ -234,7 +234,7 @@ func TestFunctionsAndIdentityNotPublic(t *testing.T) {
 		}
 	})
 
-	for _, fn := range []string{"resolve_identity(text,text,uuid)", "app_user_id()"} {
+	for _, fn := range []string{"resolve_identity(text,text,uuid,text)", "app_user_id()"} {
 		var ok bool
 		if err := admin.QueryRow(ctx, `SELECT has_function_privilege($1, $2, 'EXECUTE')`, role, fn).Scan(&ok); err != nil {
 			t.Fatal(err)

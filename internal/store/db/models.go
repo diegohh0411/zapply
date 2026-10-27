@@ -754,6 +754,7 @@ type Identity struct {
 	Subject   string
 	UserID    uuid.UUID
 	CreatedAt time.Time
+	Email     string
 }
 
 type Job struct {
