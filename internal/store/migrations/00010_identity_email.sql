@@ -5,7 +5,6 @@
 -- +goose StatementBegin
 ALTER TABLE public.identity ADD COLUMN email text NOT NULL DEFAULT '';
 
-DROP FUNCTION public.resolve_identity(text,text,uuid);
 CREATE FUNCTION public.resolve_identity(p_issuer text, p_subject text, p_new_id uuid, p_email text)
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER
@@ -13,30 +12,9 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE uid uuid;
 BEGIN
-    SELECT user_id INTO uid FROM identity
-     WHERE issuer = p_issuer AND subject = p_subject;
-    IF uid IS NOT NULL THEN
-        UPDATE identity SET email = NULLIF(btrim(p_email), '')
-         WHERE issuer = p_issuer AND subject = p_subject AND NULLIF(btrim(p_email), '') IS NOT NULL;
-        RETURN uid;
-    END IF;
-
-    INSERT INTO identity (issuer, subject, user_id, email)
-    VALUES (p_issuer, p_subject, p_new_id, COALESCE(NULLIF(btrim(p_email), ''), ''))
-    ON CONFLICT (issuer, subject) DO NOTHING
-    RETURNING user_id INTO uid;
-
-    IF uid IS NULL THEN
-        SELECT user_id INTO uid FROM identity
-         WHERE issuer = p_issuer AND subject = p_subject;
-        UPDATE identity SET email = NULLIF(btrim(p_email), '')
-         WHERE issuer = p_issuer AND subject = p_subject AND NULLIF(btrim(p_email), '') IS NOT NULL;
-        RETURN uid;
-    END IF;
-
-    PERFORM set_config('app.user_id', uid::text, true);
-    INSERT INTO app_user (id) VALUES (uid);
-    PERFORM set_config('app.user_id', '', true);
+    uid := public.resolve_identity(p_issuer, p_subject, p_new_id);
+    UPDATE identity SET email = btrim(p_email)
+     WHERE issuer = p_issuer AND subject = p_subject AND NULLIF(btrim(p_email), '') IS NOT NULL;
     RETURN uid;
 END $$;
 REVOKE EXECUTE ON FUNCTION resolve_identity(text,text,uuid,text) FROM PUBLIC;
@@ -55,28 +33,6 @@ ALTER FUNCTION platform.members(uuid,integer) OWNER TO zapply_platform;
 -- +goose Down
 DROP FUNCTION public.resolve_identity(text,text,uuid,text);
 ALTER TABLE public.identity DROP COLUMN email;
-CREATE FUNCTION public.resolve_identity(p_issuer text, p_subject text, p_new_id uuid)
-RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE uid uuid;
-BEGIN
-    SELECT user_id INTO uid FROM identity WHERE issuer = p_issuer AND subject = p_subject;
-    IF uid IS NOT NULL THEN RETURN uid; END IF;
-    INSERT INTO identity (issuer, subject, user_id) VALUES (p_issuer, p_subject, p_new_id)
-    ON CONFLICT (issuer, subject) DO NOTHING RETURNING user_id INTO uid;
-    IF uid IS NULL THEN
-        SELECT user_id INTO uid FROM identity WHERE issuer = p_issuer AND subject = p_subject;
-        RETURN uid;
-    END IF;
-    PERFORM set_config('app.user_id', uid::text, true);
-    INSERT INTO app_user (id) VALUES (uid);
-    PERFORM set_config('app.user_id', '', true);
-    RETURN uid;
-END $$;
-REVOKE EXECUTE ON FUNCTION resolve_identity(text,text,uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION resolve_identity(text,text,uuid) TO zapply_app;
 CREATE OR REPLACE FUNCTION platform.members(p_after uuid,p_limit integer) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, pg_temp AS $$ BEGIN
  PERFORM platform.assert_owner();
