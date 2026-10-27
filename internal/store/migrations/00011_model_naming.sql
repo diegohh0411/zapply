@@ -21,8 +21,6 @@ DO $$ DECLARE f record; BEGIN
  END LOOP;
 END $$;
 RESET ROLE;
--- Old queue kinds remain readable by the compatibility worker. New jobs and
--- events use model_operation; historical outbox entries retain their names.
 -- +goose StatementEnd
 
 -- +goose Down

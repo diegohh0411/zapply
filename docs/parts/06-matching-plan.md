@@ -95,8 +95,7 @@ those versions can upgrade safely.
 
 The shared packages live under `internal/model`. Administration uses
 `/v1/admin/model-attempts`, generated `ModelOperation`/`ModelAttempt` names, and
-`model_operation.changed` events. New River jobs use `model_operation`; a small
-legacy worker reads the previous persisted kind during upgrades. `LLM_MODEL`
+`model_operation.changed` events. River jobs use `model_operation`. `LLM_MODEL`
 and `LLM_ENDPOINT` remain specific to the text diagnostic.
 
 Apply migrations through **11** before updating API and worker processes.
@@ -275,7 +274,7 @@ row are diagnostics. This does not authorize resending uncertain attempts.
 **Operation kinds.** `model_operation.kind` gets a check constraint:
 `diagnostic` or `decision`. `Process` reads the kind and calls `Generate` or
 `Decide`; quoting, reservation, settlement, uncertainty and recovery are
-shared. New jobs use River kind `model_operation`; a legacy worker accepts jobs queued under the previous kind.
+shared. Jobs use River kind `model_operation`.
 
 **Results.** `platform.settle` stores raw answers JSON in
 `model_operation.result`. Raise its limit to 262,144 characters as a local
