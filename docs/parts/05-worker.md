@@ -104,8 +104,11 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
 - Apply migrations with `make migrate`. New migrations are 7 (platform), 8 (Go
   migration for River's pinned schema target), and 9 (queue grants). Runtime
   processes do not apply migrations. Production must provision restricted worker
-  credentials and allow the migration owner to assign function ownership to
-  `zapply_platform`; that role must stay non-login.
+  credentials. Migration 7 works with a non-superuser migration owner that has
+  `CREATEROLE` (for example Supabase's `postgres`): it creates `zapply_platform`
+  and grants itself `SET` on it, without inheritance, to assign function
+  ownership. If `zapply_platform` was created by another role, grant the
+  migration owner `SET` on it first. That role must stay non-login.
 - Configure `WORKER_DATABASE_URL` using a direct/session-capable connection,
   `SYSTEM_KEY_RING`, and `SYSTEM_KEY_ACTIVE_VERSION` on API and worker processes.
   The ring is a JSON map of version names to base64-encoded random 32-byte keys.

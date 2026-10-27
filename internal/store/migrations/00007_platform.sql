@@ -9,6 +9,16 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'zapply_platform') THEN
     CREATE ROLE zapply_platform NOLOGIN NOSUPERUSER NOBYPASSRLS;
   END IF;
+  -- Assigning ownership below needs membership. A non-superuser migration
+  -- owner (e.g. Supabase's postgres) gets only ADMIN on roles it creates in
+  -- PostgreSQL 16+, so grant SET without inheriting the role's privileges.
+  IF current_setting('server_version_num')::int >= 160000 THEN
+    IF NOT pg_has_role(current_user, 'zapply_platform', 'SET') THEN
+      EXECUTE format('GRANT zapply_platform TO %I WITH INHERIT FALSE, SET TRUE', current_user);
+    END IF;
+  ELSIF NOT pg_has_role(current_user, 'zapply_platform', 'MEMBER') THEN
+    EXECUTE format('GRANT zapply_platform TO %I', current_user);
+  END IF;
 END $$;
 CREATE SCHEMA platform;
 REVOKE ALL ON SCHEMA platform FROM PUBLIC;
@@ -386,17 +396,19 @@ CREATE POLICY platform_operation ON public.llm_operation TO zapply_platform
  USING(user_id=app_user_id()) WITH CHECK(user_id=app_user_id());
 GRANT INSERT ON public.outbox TO zapply_platform;
 CREATE POLICY platform_events ON public.outbox FOR INSERT TO zapply_platform WITH CHECK(true);
-DO $$ DECLARE f record; BEGIN
- FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='platform' LOOP
-   EXECUTE format('ALTER FUNCTION %s OWNER TO zapply_platform',f.signature);
- END LOOP;
-END $$;
 GRANT EXECUTE ON FUNCTION platform.role(),platform.plans(),platform.save_plan(uuid,text,bigint,bigint,integer),
  platform.save_membership(uuid,uuid,text,integer),platform.usage(),platform.members(uuid,integer),platform.usage_entries(bigint,integer),
  platform.keys(),platform.add_key(uuid,text,bytea,text,text),platform.activate_key(uuid,boolean,integer),
  platform.admin_attempts(uuid,integer),platform.resolve_attempt(uuid,bigint,text,text,integer),platform.assert_owner() TO zapply_app;
 GRANT EXECUTE ON FUNCTION platform.reserve(uuid,uuid,text,text,jsonb,bigint,timestamptz),platform.load_key(uuid),
  platform.attempts_for_operation(uuid),platform.uncertain(uuid,text,text),platform.settle(uuid,bigint,text,jsonb,text,text),platform.usage(),platform.eligible_at(bigint),platform.pending_operations(integer) TO zapply_worker;
+-- Transfer ownership last: a non-superuser migration owner does not inherit
+-- zapply_platform, so it can no longer grant on these functions afterwards.
+DO $$ DECLARE f record; BEGIN
+ FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='platform' LOOP
+   EXECUTE format('ALTER FUNCTION %s OWNER TO zapply_platform',f.signature);
+ END LOOP;
+END $$;
 -- +goose StatementEnd
 
 -- +goose Down
