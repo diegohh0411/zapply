@@ -1,7 +1,7 @@
 # Part 6: Matching pipeline
 
-Status: spec for review. Nothing here is built yet. An implementation plan
-(`06-matching-plan.md`) follows once this scope is agreed.
+Status: scope agreed; not built yet. The [implementation plan](06-matching-plan.md)
+records the proposed design.
 
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:
@@ -406,8 +406,8 @@ profile                  + auto_match boolean NOT NULL DEFAULT true
 - The cache tables hold only parsed answers. The raw model output stays in the
   part 5 operation result, bounded as it is today.
 - The finalize result (checks, relevance, ranks, coverage, selection) is
-  derived from the cache, the library's current structured fields and the
-  overrides on read, rather than stored. Changing the weights or a correction
+  derived on read from the cache, a snapshot of the structured fields the run
+  read (dates, levels, `auto_include`), and the overrides, rather than stored. Changing the weights or a correction
   never needs a backfill. The job score is stored on the run for the board and
   recomputed when an override changes.
 - Caches are per user. A global extraction cache (the same posting saved by
