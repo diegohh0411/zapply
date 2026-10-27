@@ -12,18 +12,7 @@
         }
       </z-sheet-description>
       <div class="flex flex-wrap items-center gap-2">
-        <z-select
-          class="w-48"
-          [zValue]="j.status_id"
-          (zSelectionChange)="changeStatus($any($event))"
-          aria-label="Status"
-        >
-          @for (s of store.statuses(); track s.id) {
-            <z-select-item [zValue]="s.id">
-              <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full" [class]="dot[s.color]"></span>{{ s.name }}</span>
-            </z-select-item>
-          }
-        </z-select>
+        <app-status-select [statuses]="store.statuses()" [value]="j.status_id" (selectionChange)="changeStatus($event)" />
         @if (j.url) {
           <a z-button zType="outline" zSize="sm" [href]="j.url" target="_blank" rel="noopener noreferrer">
             <ng-icon name="lucideExternalLink" /> Posting
@@ -100,11 +89,7 @@
     @if (isNew()) {
       <div class="field sm:col-span-2">
         <span>Status</span>
-        <z-select name="status_id" [(ngModel)]="form.status_id">
-          @for (s of store.statuses(); track s.id) {
-            <z-select-item [zValue]="s.id">{{ s.name }}</z-select-item>
-          }
-        </z-select>
+        <app-status-select [statuses]="store.statuses()" [value]="form.status_id" (selectionChange)="changeStatus($event)" />
       </div>
     }
     <div class="field" [class]="isNew() ? 'sm:col-span-2' : 'sm:col-span-3'">
