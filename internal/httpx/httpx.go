@@ -17,6 +17,10 @@ import (
 	"time"
 
 	"github.com/diegohh0411/zapply/internal/logx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Middleware wraps a handler. Chain applies them outermost first.
@@ -71,18 +75,26 @@ var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 func RequestLog(base *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			parent := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+			requestCtx, span := otel.Tracer("zapply/http").Start(parent, "http "+r.Method, trace.WithAttributes(attribute.String("http.request.method", r.Method)))
+			defer span.End()
+			r = r.WithContext(requestCtx)
 			id := r.Header.Get("X-Request-ID")
 			if !validRequestID.MatchString(id) {
 				id = newID()
 			}
 			w.Header().Set("X-Request-ID", id)
 			l := base.With("request_id", id)
+			if span.SpanContext().IsValid() {
+				l = l.With("trace_id", span.SpanContext().TraceID().String())
+			}
 			ctx := context.WithValue(r.Context(), requestIDKey{}, id)
 			ctx = logx.With(ctx, l)
 
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			start := time.Now()
 			next.ServeHTTP(rec, r.WithContext(ctx))
+			span.SetAttributes(attribute.Int("http.response.status_code", rec.status))
 
 			l.LogAttrs(ctx, slog.LevelInfo, "http request",
 				slog.String("method", r.Method),

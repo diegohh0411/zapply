@@ -28,26 +28,38 @@ var migrations embed.FS
 
 // Migrate applies pending migrations. url must connect as the schema owner.
 func Migrate(ctx context.Context, url string, log *slog.Logger) error {
+	return MigrateTo(ctx, url, 0, log)
+}
+
+// MigrateTo applies only forward migrations up to a fixed version. Zero means
+// all pending migrations. Upgrade tests use this to create real older schemas.
+func MigrateTo(ctx context.Context, url string, target int64, log *slog.Logger) error {
 	cfg, err := pgx.ParseConfig(url)
 	if err != nil {
 		return err
 	}
 	db := stdlib.OpenDB(*cfg)
 	defer db.Close()
-	return migrate(ctx, db, log)
+	return migrate(ctx, db, log, target)
 }
 
-func migrate(ctx context.Context, db *sql.DB, log *slog.Logger) error {
+func migrate(ctx context.Context, db *sql.DB, log *slog.Logger, target int64) error {
 	dir, err := fs.Sub(migrations, "migrations")
 	if err != nil {
 		return err
 	}
 	p, err := goose.NewProvider(goose.DialectPostgres, db, dir,
-		goose.WithGoMigrations(goose.NewGoMigration(6, &goose.GoFunc{RunTx: backfillJobURLs}, nil)))
+		goose.WithGoMigrations(goose.NewGoMigration(6, &goose.GoFunc{RunTx: backfillJobURLs}, nil),
+			goose.NewGoMigration(8, &goose.GoFunc{RunDB: migrateRiver}, nil)))
 	if err != nil {
 		return err
 	}
-	results, err := p.Up(ctx)
+	var results []*goose.MigrationResult
+	if target > 0 {
+		results, err = p.UpTo(ctx, target)
+	} else {
+		results, err = p.Up(ctx)
+	}
 	for _, r := range results {
 		log.Info("migration applied", "version", r.Source.Version, "file", r.Source.Path, "duration", r.Duration)
 	}
@@ -103,6 +115,10 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 }
 
 func (s *Store) Close() { s.pool.Close() }
+
+// Pool supplies the same database to River's insert-only client. All domain
+// queries still go through InTenant.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
 // Ping checks database reachability for readiness probes.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }

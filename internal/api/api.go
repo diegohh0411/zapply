@@ -23,10 +23,14 @@ import (
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
+	"github.com/diegohh0411/zapply/internal/membership"
+	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
+	"github.com/diegohh0411/zapply/internal/worker"
 )
 
 type Deps struct {
+	Keys     *secrets.Ring
 	Store    *store.Store
 	Verifier auth.Verifier
 	Logger   *slog.Logger
@@ -51,7 +55,12 @@ type Deps struct {
 const maxBody = 1 << 20
 
 func Handler(d Deps) http.Handler {
-	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store)}
+	queue, queueErr := worker.NewQueue(d.Store)
+	if queueErr != nil {
+		d.Logger.Error("queue initialization failed", "err", queueErr)
+		queue = nil
+	}
+	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue}
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
 		gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
@@ -72,7 +81,7 @@ func Handler(d Deps) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	root.HandleFunc("GET /readyz", d.ready)
-	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), limitBody))
+	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), srv.ownerOnly, limitBody))
 	if d.DevToken != nil {
 		root.Handle("POST /dev/token", httpx.Chain(http.HandlerFunc(d.devToken), limitBody))
 	}
@@ -182,7 +191,15 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var conflict *library.ConflictError
 	var bad errBadRequest
 	var dup *jobs.DuplicateError
+	var platformError *membership.Error
 	switch {
+	case errors.As(err, &platformError):
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(platformError.Status)
+		_ = json.NewEncoder(w).Encode(struct {
+			httpx.Problem
+			Code string `json:"code"`
+		}{httpx.Problem{Title: http.StatusText(platformError.Status), Status: platformError.Status, Detail: platformError.Detail, RequestID: httpx.RequestID(r.Context())}, platformError.Code})
 	case errors.As(err, &dup):
 		writeDuplicate(w, r, dup.ExistingID)
 	case errors.As(err, &invalid):

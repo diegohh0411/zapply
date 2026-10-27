@@ -15,9 +15,17 @@ COPY . .
 COPY --from=web /web/dist/web/browser/ internal/webui/dist/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/zapply ./cmd/zapply
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 COPY --from=build /out/zapply /zapply
 ENV ZAPPLY_ENV=production
 EXPOSE 8080
 ENTRYPOINT ["/zapply"]
+FROM runtime AS worker
+CMD ["worker"]
+
+FROM runtime AS relay
+CMD ["relay"]
+
+# Keep the API as the default image target.
+FROM runtime AS api
 CMD ["api"]

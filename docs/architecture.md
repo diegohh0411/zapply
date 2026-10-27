@@ -44,8 +44,8 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | Match runs in-process in Tauri | Durable **River** jobs (one per pipeline stage) with retries, cancellation and resume | Survives deploys and crashes; workers scale with load |
 | Scores cached per run | Scores cached by **content hash**: `(entry_version_hash, jd_hash, model, prompt_version)` | Re-matching, or matching a near-duplicate JD, costs no new calls |
 | Company profiles stored per user | A **global** `company` table, with user-only fields kept separate. Research is deduplicated by a unique job per domain | One research run serves every user who applies to that company |
-| Secrets in a `secrets` table | Envelope encryption: a data key per user, wrapped by a KMS (or a local master key in dev) | Database dumps do not leak provider keys or IMAP passwords |
-| Local llama.cpp on loopback | An **LLM gateway** module: provider registry, per-user budgets and rate limits, platform keys or BYOK, usage metering | Hosted inference is shared and costs money |
+| Secrets in a `secrets` table | Encrypted system-owned OpenRouter keys in the MVP; key management is specified in part 5. User-owned credentials arrive with later features | Database dumps must not leak provider keys or future IMAP passwords |
+| Local llama.cpp on loopback | An **LLM gateway** module: system-owned OpenRouter keys, owner-assigned plans, rolling 7-day and 30-day cost allowances, usage metering. BYOK follows a successful MVP | Hosted inference is shared and costs money |
 | Typst compiled in-process in a greedy loop | A render worker with the Typst CLI in the image; PDFs stored in S3-compatible storage behind signed URLs | Isolates CPU-heavy work; PDFs leave the database |
 | IMAP IDLE task per desktop app | A **mail watcher** fleet: per-account leases in Postgres, sharded, with reconnect and backoff (part 10) | Long-lived connections need owners, not stateless workers |
 | `cvd-mcp` over stdio | A remote MCP server (streamable HTTP + OAuth) on the API (part 11) | Works for hosted users |
@@ -56,7 +56,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 - Every tenant table has `user_id uuid not null` and `FORCE ROW LEVEL SECURITY` with the policy `user_id = current_setting('app.user_id')::uuid`.
 - The API connects as `zapply_app`, a role that owns nothing and has neither `BYPASSRLS` nor superuser. Migrations run as the owner role in a separate step (`zapply migrate`).
 - `store.InTenant(ctx, userID, fn)` opens a transaction, runs `set_config('app.user_id', $1, true)` and calls `fn`. The setting is transaction-local, so it works with transaction-mode poolers (PgBouncer, Supavisor).
-- Global tables (`company`, model catalog) have no RLS. Only workers write to them.
+- Global shared facts (`company`, model catalog) have no RLS. Only workers write to them. Platform administration data (plans, memberships, encrypted system keys) needs explicit owner authorization and database permissions, designed in part 5; it is not ordinary tenant data.
 
 ## Async work
 
@@ -73,7 +73,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 
 - `log/slog` JSON logs carrying a request ID and user ID, and OpenTelemetry traces across api → job → provider.
 - `/healthz` reports liveness. `/readyz` checks dependencies and fails during drain. SIGTERM flips readiness, waits for the drain period, then shuts down gracefully.
-- Configuration comes only from the environment (12-factor).
+- Deployment configuration comes from the environment (12-factor). Owner-managed plans, memberships, and encrypted system provider keys are application data, managed through the UI in part 5.
 
 ## Build plan
 
@@ -83,7 +83,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | 2 | Library: evidence model (education, paid and unpaid × engagement, credential, output, recognition), organizations, highlights, skills. OpenAPI + generated server, sqlc, outbox writes. See `docs/parts/02-library.md` |
 | 3 | Events: outbox relay → NATS → SSE gateway. See `docs/parts/03-events.md` |
 | 4 | Jobs and application tracking: postings, statuses, activity, views. See `docs/parts/04-jobs.md` |
-| 5 | Worker runtime + LLM gateway: River, provider registry, encrypted secrets, budgets |
+| 5 | Worker runtime + LLM gateway: River, system OpenRouter keys, platform owner UI, owner-assigned plans, rolling 7-day and 30-day cost allowances. See `docs/parts/05-worker.md` |
 | 6 | Matching pipeline: staged jobs, score cache keyed by content hash, explainability |
 | 7 | Rendering: Typst templates, page fitting, object storage, exports |
 | 8 | Company research: global cache, one research run per company, agent budget |

@@ -25,13 +25,21 @@ import (
 
 // DB is a fresh database with migrations applied.
 type DB struct {
-	AdminURL string // schema owner (superuser)
-	AppURL   string // restricted runtime role
-	RelayURL string // relay role, outbox only
-	Store    *store.Store
+	AdminURL  string // schema owner (superuser)
+	AppURL    string // restricted runtime role
+	RelayURL  string // relay role, outbox only
+	WorkerURL string // model execution role
+	Store     *store.Store
 }
 
 func New(t *testing.T) *DB {
+	t.Helper()
+	return NewAtVersion(t, 0)
+}
+
+// NewAtVersion provisions a real historical schema for upgrade tests; zero
+// selects all current migrations.
+func NewAtVersion(t *testing.T, version int64) *DB {
 	t.Helper()
 	base := os.Getenv("ZAPPLY_TEST_DATABASE_URL")
 	if base == "" {
@@ -58,7 +66,7 @@ func New(t *testing.T) *DB {
 	})
 
 	adminURL := withDB(t, base, name, "")
-	if err := store.Migrate(ctx, adminURL, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+	if err := store.MigrateTo(ctx, adminURL, version, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
@@ -68,7 +76,7 @@ func New(t *testing.T) *DB {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(st.Close)
-	return &DB{AdminURL: adminURL, AppURL: appURL, RelayURL: withDB(t, base, name, "zapply_relay"), Store: st}
+	return &DB{AdminURL: adminURL, AppURL: appURL, RelayURL: withDB(t, base, name, "zapply_relay"), WorkerURL: withDB(t, base, name, "zapply_worker"), Store: st}
 }
 
 // Admin opens a superuser connection to the test database.

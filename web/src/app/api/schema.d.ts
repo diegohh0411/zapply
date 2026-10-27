@@ -511,6 +511,199 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/usage/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listUsageEntries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPlans"];
+        put?: never;
+        post: operations["createPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updatePlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/members/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description If-Match: 0 assigns a first plan; later changes require the current version. */
+        put: operations["putMembership"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/system-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSystemKeys"];
+        put?: never;
+        post: operations["createSystemKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/system-keys/{id}/activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["activateSystemKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/llm-attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listLLMAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/llm-attempts/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveLLMAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/gateway-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createGatewayTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/gateway-tests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getGatewayTest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -526,6 +719,7 @@ export interface components {
              * @description On 409 for a duplicate job URL: the job already saved.
              */
             existing_id?: string;
+            code?: string;
             errors?: components["schemas"]["FieldError"][];
         };
         FieldError: {
@@ -538,6 +732,9 @@ export interface components {
             id: string;
             /** Format: date-time */
             created_at: string;
+            /** @enum {string} */
+            platform_role: "member" | "owner";
+            membership: components["schemas"]["Membership"] | null;
         };
         /** @enum {string} */
         Category: "education" | "paid" | "unpaid";
@@ -906,7 +1103,119 @@ export interface components {
          * @description The SSE `event` name of a change event.
          * @enum {string}
          */
-        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted";
+        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "llm_operation.changed";
+        Plan: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            cap_7d_usd: string;
+            cap_30d_usd: string;
+            version: number;
+        };
+        PlanInput: {
+            name: string;
+            cap_7d_usd: string;
+            cap_30d_usd: string;
+        };
+        Membership: {
+            /** Format: uuid */
+            user_id: string;
+            /** Format: uuid */
+            plan_id: string;
+            plan_name: string;
+            /** @enum {string} */
+            status: "active" | "suspended";
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MembershipInput: {
+            /** Format: uuid */
+            plan_id: string;
+            /** @enum {string} */
+            status: "active" | "suspended";
+        };
+        Usage: {
+            membership: components["schemas"]["Membership"] | null;
+            /** Format: date-time */
+            server_time: string;
+            cap_7d_usd: string;
+            cap_30d_usd: string;
+            spent_7d_usd: string;
+            spent_30d_usd: string;
+            reserved_usd: string;
+            available_7d_usd: string;
+            available_30d_usd: string;
+            /** Format: date-time */
+            next_capacity_at: string | null;
+            blocked_reason: string;
+        };
+        Member: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            membership: components["schemas"]["Membership"] | null;
+            usage: components["schemas"]["Usage"];
+        };
+        UsageEntry: {
+            id: string;
+            amount_usd: string;
+            /** Format: date-time */
+            accounted_at: string;
+            model: string;
+            source: string;
+        };
+        SystemKey: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            fingerprint: string;
+            active: boolean;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SystemKeyInput: {
+            label: string;
+            key: string;
+        };
+        KeyActivationInput: {
+            active: boolean;
+        };
+        AttemptSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            model: string;
+            state: string;
+            reserved_usd: string;
+            /** Format: date-time */
+            dispatched_at: string;
+            generation_id: string | null;
+            error_code: string;
+            version: number;
+        };
+        AttemptResolutionInput: {
+            amount_usd: string;
+            generation_id?: string | null;
+            reason: string;
+        };
+        LLMOperation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            /** @enum {string} */
+            status: "pending" | "blocked" | "running" | "completed" | "failed" | "needs_review" | "cancelled";
+            blocked_reason: string;
+            /** Format: date-time */
+            next_eligible_at: string | null;
+            result: string;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
     };
     responses: {
         /** @description An error. */
@@ -2041,6 +2350,357 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Usage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUsageEntries: {
+        parameters: {
+            query?: {
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageEntry"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            201: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updatePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMembers: {
+        parameters: {
+            query?: {
+                after?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putMembership: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Membership"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSystemKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemKey"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSystemKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemKeyInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            201: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemKey"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    activateSystemKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyActivationInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLLMAttempts: {
+        parameters: {
+            query?: {
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptSummary"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resolveLLMAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttemptResolutionInput"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createGatewayTest: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMOperation"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getGatewayTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMOperation"];
                 };
             };
             default: components["responses"]["Problem"];

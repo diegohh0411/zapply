@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: zapply API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Library of a person's career evidence (docs/parts/02-library.md) and the
     jobs they apply to (docs/parts/04-jobs.md).
@@ -731,6 +731,328 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  "/v1/usage":
+    "get":
+      "operationId": "getUsage"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Usage"
+        "default":
+          "$ref": "#/components/responses/Problem"
+  "/v1/usage/entries":
+    "get":
+      "operationId": "listUsageEntries"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/UsageEntry"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "name": "before"
+          "in": "query"
+          "schema":
+            "type": "string"
+        -
+          "name": "limit"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 1
+            "maximum": 100
+            "default": 50
+  "/v1/admin/plans":
+    "get":
+      "operationId": "listPlans"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/Plan"
+        "default":
+          "$ref": "#/components/responses/Problem"
+    "post":
+      "operationId": "createPlan"
+      "tags":
+        - "platform"
+      "responses":
+        "201":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Plan"
+          "headers":
+            "ETag":
+              "$ref": "#/components/headers/ETag"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/PlanInput"
+  "/v1/admin/plans/{id}":
+    "put":
+      "operationId": "updatePlan"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Plan"
+          "headers":
+            "ETag":
+              "$ref": "#/components/headers/ETag"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "$ref": "#/components/parameters/ID"
+        -
+          "$ref": "#/components/parameters/IfMatch"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/PlanInput"
+  "/v1/admin/members":
+    "get":
+      "operationId": "listMembers"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/Member"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "name": "after"
+          "in": "query"
+          "schema":
+            "type": "string"
+            "format": "uuid"
+        -
+          "name": "limit"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 1
+            "maximum": 100
+            "default": 50
+  "/v1/admin/members/{id}/membership":
+    "put":
+      "operationId": "putMembership"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Membership"
+          "headers":
+            "ETag":
+              "$ref": "#/components/headers/ETag"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "description": "If-Match: 0 assigns a first plan; later changes require the current version."
+      "parameters":
+        -
+          "$ref": "#/components/parameters/ID"
+        -
+          "$ref": "#/components/parameters/IfMatch"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/MembershipInput"
+  "/v1/admin/system-keys":
+    "get":
+      "operationId": "listSystemKeys"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/SystemKey"
+        "default":
+          "$ref": "#/components/responses/Problem"
+    "post":
+      "operationId": "createSystemKey"
+      "tags":
+        - "platform"
+      "responses":
+        "201":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/SystemKey"
+          "headers":
+            "ETag":
+              "$ref": "#/components/headers/ETag"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/SystemKeyInput"
+  "/v1/admin/system-keys/{id}/activation":
+    "put":
+      "operationId": "activateSystemKey"
+      "tags":
+        - "platform"
+      "responses":
+        "204":
+          "description": "Success."
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "$ref": "#/components/parameters/ID"
+        -
+          "$ref": "#/components/parameters/IfMatch"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/KeyActivationInput"
+  "/v1/admin/llm-attempts":
+    "get":
+      "operationId": "listLLMAttempts"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/AttemptSummary"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "name": "before"
+          "in": "query"
+          "schema":
+            "type": "string"
+            "format": "uuid"
+        -
+          "name": "limit"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 1
+            "maximum": 100
+            "default": 50
+  "/v1/admin/llm-attempts/{id}/resolve":
+    "post":
+      "operationId": "resolveLLMAttempt"
+      "tags":
+        - "platform"
+      "responses":
+        "204":
+          "description": "Success."
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "$ref": "#/components/parameters/ID"
+        -
+          "$ref": "#/components/parameters/IfMatch"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/AttemptResolutionInput"
+  "/v1/admin/gateway-tests":
+    "post":
+      "operationId": "createGatewayTest"
+      "tags":
+        - "platform"
+      "responses":
+        "202":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/LLMOperation"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "name": "Idempotency-Key"
+          "in": "header"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+            "maxLength": 255
+  "/v1/admin/gateway-tests/{id}":
+    "get":
+      "operationId": "getGatewayTest"
+      "tags":
+        - "platform"
+      "responses":
+        "200":
+          "description": "Success."
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/LLMOperation"
+        "default":
+          "$ref": "#/components/responses/Problem"
+      "parameters":
+        -
+          "$ref": "#/components/parameters/ID"
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -780,6 +1102,7 @@ components:
           type: string
           format: uuid
           description: "On 409 for a duplicate job URL: the job already saved."
+        code: { type: string }
         errors:
           type: array
           items: { $ref: "#/components/schemas/FieldError" }
@@ -792,10 +1115,14 @@ components:
 
     Me:
       type: object
-      required: [id, created_at]
+      required: [id, created_at, platform_role, membership]
       properties:
         id: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
+        platform_role: { type: string, enum: [member, owner] }
+        membership:
+          allOf: [{ $ref: "#/components/schemas/Membership" }]
+          nullable: true
 
     Category:
       type: string
@@ -1236,3 +1563,318 @@ components:
         - job_view.created
         - job_view.updated
         - job_view.deleted
+        - membership.changed
+        - usage.changed
+        - llm_operation.changed
+
+    "Plan":
+      "type": "object"
+      "required":
+        - "id"
+        - "name"
+        - "cap_7d_usd"
+        - "cap_30d_usd"
+        - "version"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "name":
+          "type": "string"
+        "cap_7d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "cap_30d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "version":
+          "type": "integer"
+    "PlanInput":
+      "type": "object"
+      "required":
+        - "name"
+        - "cap_7d_usd"
+        - "cap_30d_usd"
+      "properties":
+        "name":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 100
+        "cap_7d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "cap_30d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+    "Membership":
+      "type": "object"
+      "required":
+        - "user_id"
+        - "plan_id"
+        - "plan_name"
+        - "status"
+        - "version"
+        - "updated_at"
+      "properties":
+        "user_id":
+          "type": "string"
+          "format": "uuid"
+        "plan_id":
+          "type": "string"
+          "format": "uuid"
+        "plan_name":
+          "type": "string"
+        "status":
+          "type": "string"
+          "enum":
+            - "active"
+            - "suspended"
+        "version":
+          "type": "integer"
+        "updated_at":
+          "type": "string"
+          "format": "date-time"
+    "MembershipInput":
+      "type": "object"
+      "required":
+        - "plan_id"
+        - "status"
+      "properties":
+        "plan_id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "type": "string"
+          "enum":
+            - "active"
+            - "suspended"
+    "Usage":
+      "type": "object"
+      "required":
+        - "membership"
+        - "server_time"
+        - "cap_7d_usd"
+        - "cap_30d_usd"
+        - "spent_7d_usd"
+        - "spent_30d_usd"
+        - "reserved_usd"
+        - "available_7d_usd"
+        - "available_30d_usd"
+        - "next_capacity_at"
+        - "blocked_reason"
+      "properties":
+        "membership":
+          "allOf":
+            -
+              "$ref": "#/components/schemas/Membership"
+          "nullable": true
+        "server_time":
+          "type": "string"
+          "format": "date-time"
+        "cap_7d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "cap_30d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "spent_7d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "spent_30d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "reserved_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "available_7d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "available_30d_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "next_capacity_at":
+          "type": "string"
+          "format": "date-time"
+          "nullable": true
+        "blocked_reason":
+          "type": "string"
+    "Member":
+      "type": "object"
+      "required":
+        - "id"
+        - "label"
+        - "membership"
+        - "usage"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "label":
+          "type": "string"
+        "membership":
+          "allOf":
+            -
+              "$ref": "#/components/schemas/Membership"
+          "nullable": true
+        "usage":
+          "$ref": "#/components/schemas/Usage"
+    "UsageEntry":
+      "type": "object"
+      "required":
+        - "id"
+        - "amount_usd"
+        - "accounted_at"
+        - "model"
+        - "source"
+      "properties":
+        "id":
+          "type": "string"
+        "amount_usd":
+          "type": "string"
+        "accounted_at":
+          "type": "string"
+          "format": "date-time"
+        "model":
+          "type": "string"
+        "source":
+          "type": "string"
+    "SystemKey":
+      "type": "object"
+      "required":
+        - "id"
+        - "label"
+        - "fingerprint"
+        - "active"
+        - "version"
+        - "created_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "label":
+          "type": "string"
+        "fingerprint":
+          "type": "string"
+        "active":
+          "type": "boolean"
+        "version":
+          "type": "integer"
+        "created_at":
+          "type": "string"
+          "format": "date-time"
+    "SystemKeyInput":
+      "type": "object"
+      "required":
+        - "label"
+        - "key"
+      "properties":
+        "label":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 100
+        "key":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 4096
+          "writeOnly": true
+    "KeyActivationInput":
+      "type": "object"
+      "required":
+        - "active"
+      "properties":
+        "active":
+          "type": "boolean"
+    "AttemptSummary":
+      "type": "object"
+      "required":
+        - "id"
+        - "user_id"
+        - "model"
+        - "state"
+        - "reserved_usd"
+        - "dispatched_at"
+        - "generation_id"
+        - "error_code"
+        - "version"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "user_id":
+          "type": "string"
+          "format": "uuid"
+        "model":
+          "type": "string"
+        "state":
+          "type": "string"
+        "reserved_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "dispatched_at":
+          "type": "string"
+          "format": "date-time"
+        "generation_id":
+          "type": "string"
+          "nullable": true
+        "error_code":
+          "type": "string"
+        "version":
+          "type": "integer"
+    "AttemptResolutionInput":
+      "type": "object"
+      "required":
+        - "amount_usd"
+        - "reason"
+      "properties":
+        "amount_usd":
+          "type": "string"
+          "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "generation_id":
+          "type": "string"
+          "nullable": true
+          "maxLength": 128
+        "reason":
+          "type": "string"
+          "minLength": 3
+          "maxLength": 1000
+    "LLMOperation":
+      "type": "object"
+      "required":
+        - "id"
+        - "user_id"
+        - "status"
+        - "blocked_reason"
+        - "next_eligible_at"
+        - "result"
+        - "version"
+        - "created_at"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "user_id":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "type": "string"
+          "enum":
+            - "pending"
+            - "blocked"
+            - "running"
+            - "completed"
+            - "failed"
+            - "needs_review"
+            - "cancelled"
+        "blocked_reason":
+          "type": "string"
+        "next_eligible_at":
+          "type": "string"
+          "format": "date-time"
+          "nullable": true
+        "result":
+          "type": "string"
+        "version":
+          "type": "integer"
+        "created_at":
+          "type": "string"
+          "format": "date-time"

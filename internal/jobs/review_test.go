@@ -166,7 +166,7 @@ func TestRegressionUnicodeURLIndexLimit(t *testing.T) {
 }
 
 func TestUpgradeRepairsEscapedURLKeys(t *testing.T) {
-	d := testdb.New(t)
+	d := testdb.NewAtVersion(t, 5)
 	ctx := context.Background()
 	uid, err := d.Store.ResolveUser(ctx, auth.Principal{Issuer: "review", Subject: "upgrade"})
 	if err != nil {
@@ -182,9 +182,6 @@ func TestUpgradeRepairsEscapedURLKeys(t *testing.T) {
 	// Reproduce a database at version 5 with a key written by the old normalizer.
 	admin := d.Admin(t)
 	if _, err := admin.Exec(ctx, "UPDATE job SET normalized_url=$2 WHERE id=$1", created.ID, literal); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := admin.Exec(ctx, "DELETE FROM goose_db_version WHERE version_id=6"); err != nil {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))

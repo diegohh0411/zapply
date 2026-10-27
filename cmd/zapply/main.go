@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 
 	"github.com/diegohh0411/zapply/internal/api"
@@ -28,13 +29,17 @@ import (
 	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
+	"github.com/diegohh0411/zapply/internal/llm/openrouter"
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/relay"
+	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
+	"github.com/diegohh0411/zapply/internal/telemetry"
 	"github.com/diegohh0411/zapply/internal/webui"
+	"github.com/diegohh0411/zapply/internal/worker"
 )
 
-const usage = "usage: zapply <api|relay|migrate|devtoken> [flags]"
+const usage = "usage: zapply <api|worker|relay|migrate|owner|secrets|devtoken> [flags]"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -51,12 +56,38 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if os.Args[1] == "api" || os.Args[1] == "worker" || os.Args[1] == "relay" {
+		shutdown, err := telemetry.Init(ctx, os.Args[1])
+		if err != nil {
+			log.Error("tracing initialization failed")
+			os.Exit(1)
+		}
+		defer func() {
+			flush, done := context.WithTimeout(context.Background(), 5*time.Second)
+			defer done()
+			_ = shutdown(flush)
+		}()
+	}
 
 	switch os.Args[1] {
 	case "api":
 		err = runAPI(ctx, cfg, log)
 	case "relay":
 		err = runRelay(ctx, cfg, log)
+	case "worker":
+		err = runWorker(ctx, cfg, log)
+	case "owner":
+		err = runOwner(ctx, cfg, os.Args[2:])
+	case "secrets":
+		if len(os.Args) != 3 || os.Args[2] != "reencrypt" || cfg.MigrateDatabaseURL == "" {
+			err = errors.New("usage: zapply secrets reencrypt (requires MIGRATE_DATABASE_URL)")
+		} else {
+			var ring *secrets.Ring
+			ring, err = secrets.New(cfg.SystemKeyRing, cfg.SystemKeyActiveVersion)
+			if err == nil {
+				err = store.ReencryptCredentials(ctx, cfg.MigrateDatabaseURL, ring)
+			}
+		}
 	case "migrate":
 		err = runMigrate(ctx, cfg, log)
 	case "devtoken":
@@ -80,6 +111,10 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	defer st.Close()
+	keys, err := secrets.New(cfg.SystemKeyRing, cfg.SystemKeyActiveVersion)
+	if err != nil {
+		return err
+	}
 
 	var verifiers auth.MultiVerifier
 	if cfg.Auth.JWKSURL != "" {
@@ -119,6 +154,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	srv := &httpx.Server{Addr: cfg.HTTPAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	srv.Handler = api.Handler(api.Deps{
+		Keys:     keys,
 		Store:    st,
 		Verifier: verifiers,
 		Logger:   log,
@@ -129,6 +165,100 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		DevToken: devToken,
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
+}
+
+func runOwner(ctx context.Context, cfg config.Config, args []string) error {
+	if len(args) < 1 || (args[0] != "grant" && args[0] != "revoke") {
+		return errors.New("usage: zapply owner <grant|revoke> --user-id <existing UUID>")
+	}
+	fs := flag.NewFlagSet("owner", flag.ContinueOnError)
+	user := fs.String("user-id", "", "existing app user ID")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	id, err := uuid.Parse(*user)
+	if err != nil {
+		return errors.New("a valid --user-id is required")
+	}
+	if cfg.MigrateDatabaseURL == "" {
+		return errors.New("MIGRATE_DATABASE_URL is required for owner provisioning")
+	}
+	if err := store.SetOwner(ctx, cfg.MigrateDatabaseURL, id, args[0] == "grant"); err != nil {
+		return err
+	}
+	slog.Info("platform owner permission changed", "user_id", id, "action", args[0])
+	return nil
+}
+
+func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	if err := cfg.ValidateWorker(); err != nil {
+		return err
+	}
+	st, err := store.Open(ctx, cfg.Worker.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	keys, err := secrets.New(cfg.SystemKeyRing, cfg.SystemKeyActiveVersion)
+	if err != nil {
+		return err
+	}
+	runtime := &worker.Runtime{Store: st, Provider: openrouter.New(cfg.Worker.Model, cfg.Worker.Endpoint), Keys: keys, Log: log}
+	client, err := runtime.Client(cfg.Worker.Concurrency)
+	if err != nil {
+		return err
+	}
+	if err := client.Start(context.WithoutCancel(ctx)); err != nil {
+		return err
+	}
+	stopCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			check, done := context.WithTimeout(stopCtx, 20*time.Second)
+			err := runtime.Recover(check, client)
+			done()
+			if err != nil && stopCtx.Err() == nil {
+				log.Error("operation recovery failed", "err", err)
+			}
+			select {
+			case <-stopCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	stopped := make(chan error, 1)
+	go func() {
+		<-stopCtx.Done()
+		drain, done := context.WithTimeout(context.Background(), 110*time.Second)
+		defer done()
+		err := client.Stop(drain)
+		if err != nil {
+			hard, end := context.WithTimeout(context.Background(), 20*time.Second)
+			defer end()
+			err = errors.Join(err, client.StopAndCancel(hard))
+		}
+		stopped <- err
+	}()
+	srv := &httpx.Server{Addr: cfg.Worker.AdminAddr, DrainDelay: cfg.DrainDelay, Logger: log}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		check, cancel := context.WithTimeout(r.Context(), time.Second)
+		defer cancel()
+		if srv.Draining() || st.Ping(check) != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv.Handler = mux
+	err = srv.Run(ctx, func(addr net.Addr) { log.Info("worker admin listening", "addr", addr.String()) })
+	cancel()
+	return errors.Join(err, <-stopped)
 }
 
 // runRelay publishes outbox rows until ctx is cancelled. Its admin listener

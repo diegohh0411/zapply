@@ -37,9 +37,20 @@ type Config struct {
 	// SSEMaxStreamsPerUser caps one user's open streams on each replica.
 	SSEMaxStreamsPerUser int
 
-	Auth  Auth
-	Relay Relay
-	Web   Web
+	Auth                   Auth
+	Relay                  Relay
+	Web                    Web
+	Worker                 Worker
+	SystemKeyRing          string
+	SystemKeyActiveVersion string
+}
+
+type Worker struct {
+	DatabaseURL string
+	AdminAddr   string
+	Concurrency int
+	Model       string
+	Endpoint    string
 }
 
 // Web is public configuration for the browser app (served as /config.json).
@@ -72,12 +83,15 @@ const DevIssuer = "zapply-dev"
 
 func Load() (Config, error) {
 	c := Config{
-		Env:                Env(get("ZAPPLY_ENV", string(Development))),
-		LogFormat:          get("LOG_FORMAT", ""),
-		HTTPAddr:           get("HTTP_ADDR", ":"+get("PORT", "8080")), // PORT: set by Heroku
-		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		MigrateDatabaseURL: os.Getenv("MIGRATE_DATABASE_URL"),
-		NATSURL:            get("NATS_URL", "nats://127.0.0.1:4222"),
+		Env:                    Env(get("ZAPPLY_ENV", string(Development))),
+		LogFormat:              get("LOG_FORMAT", ""),
+		HTTPAddr:               get("HTTP_ADDR", ":"+get("PORT", "8080")), // PORT: set by Heroku
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		MigrateDatabaseURL:     os.Getenv("MIGRATE_DATABASE_URL"),
+		NATSURL:                get("NATS_URL", "nats://127.0.0.1:4222"),
+		SystemKeyRing:          os.Getenv("SYSTEM_KEY_RING"),
+		SystemKeyActiveVersion: os.Getenv("SYSTEM_KEY_ACTIVE_VERSION"),
+		Worker:                 Worker{DatabaseURL: os.Getenv("WORKER_DATABASE_URL"), AdminAddr: get("WORKER_ADMIN_ADDR", ":8082"), Model: os.Getenv("LLM_MODEL"), Endpoint: os.Getenv("LLM_ENDPOINT")},
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),
 			AdminAddr:   get("RELAY_ADMIN_ADDR", ":8081"),
@@ -95,6 +109,10 @@ func Load() (Config, error) {
 	}
 
 	var errs []error
+	var workerErr error
+	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "4")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
+		errs = append(errs, errors.New("WORKER_CONCURRENCY must be between 1 and 64"))
+	}
 	if c.Env != Development && c.Env != Production {
 		errs = append(errs, fmt.Errorf("ZAPPLY_ENV must be %q or %q, got %q", Development, Production, c.Env))
 	}
@@ -166,6 +184,13 @@ func (c Config) ValidateAPI() error {
 func (c Config) ValidateRelay() error {
 	if c.Relay.DatabaseURL == "" {
 		return errors.New("RELAY_DATABASE_URL is required")
+	}
+	return nil
+}
+
+func (c Config) ValidateWorker() error {
+	if c.Worker.DatabaseURL == "" {
+		return errors.New("WORKER_DATABASE_URL is required (direct or session-pooled Postgres)")
 	}
 	return nil
 }
