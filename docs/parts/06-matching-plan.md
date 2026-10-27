@@ -3,13 +3,13 @@
 Status: implemented against the [agreed scope](06-matching.md), with live
 provider verification still pending. The sections below retain the build design;
 the verification record distinguishes tested behavior from live prerequisites.
-Migration 00010 was free after the registered migrations 6 and 8 and SQL
-migration 9.
+Identity email uses migration 00010; matching follows at 00011 and shared
+model naming at 00012.
 
 ## Implementation and verification record
 
 Implemented in `internal/model/systemone`, `internal/model/openrouter/decisions.go`,
-`internal/decide`, `internal/match`, migration `00010_matching.sql`, the generated
+`internal/decide`, `internal/match`, migration `00011_matching.sql`, the generated
 0.6.0 API, and the jobs/admin/profile web features. Matching uses the existing
 operation state machine, reservation gate, encrypted keys and River kind.
 
@@ -64,7 +64,7 @@ Verification completed on 2026-10-27:
 - Local application image build (`docker build -t zapply:matching-check .`).
 
 Live paid probes and a browser walkthrough against a live provider have **not**
-been performed. No paid API call is part of the tests. Run migration 00010 before
+been performed. No paid API call is part of the tests. Run migration 00011 before
 updating API/worker processes; configure the owner model in Administration →
 System keys. Without a model, runs wait as `model_not_configured`.
 
@@ -86,19 +86,19 @@ new shapes. Live dispatch is still disabled pending verified billing bounds.
 
 ## Shared model naming
 
-Migration `00011_model_naming.sql` renames the shared gateway tables and their
+Migration `00012_model_naming.sql` renames the shared gateway tables and their
 constraints to `model_operation`, `model_request`, `platform.model_attempt` and
 `platform.model_usage`. It preserves existing rows, grants, foreign keys and
 function ownership, and rewrites the platform functions to use the new names.
-Migrations 7 and 10 retain their original identifiers so databases already at
-those versions can upgrade safely.
+Migrations 7 and 10 (identity email) retain their original identifiers. Matching
+runs at version 11 before this naming migration.
 
 The shared packages live under `internal/model`. Administration uses
 `/v1/admin/model-attempts`, generated `ModelOperation`/`ModelAttempt` names, and
 `model_operation.changed` events. River jobs use `model_operation`. `LLM_MODEL`
 and `LLM_ENDPOINT` remain specific to the text diagnostic.
 
-Apply migrations through **11** before updating API and worker processes.
+Apply migrations through **12** before updating API and worker processes.
 
 ## Outcome and boundaries
 
@@ -339,7 +339,7 @@ Enqueue(ctx, tx, user, model string, pending []Pending, owner Owner, opts) ([]uu
   reported to the owner as discarded.
 - Parts 8 and 10 reuse this package unchanged.
 
-## 3. Schema (migration `00010_matching.sql`)
+## 3. Schema (migration `00011_matching.sql`)
 
 The tables are as in the spec, plus `model_request`, `decision_request_item`, and:
 
