@@ -13,9 +13,8 @@ import (
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
-// BillingBound is an adapter assertion backed by documented provider billing
-// behavior. No production models are enabled until that evidence is recorded.
-// Bounds are deliberately code-owned, never editable through the owner UI.
+// BillingBound describes how a decision model bills and how large a request
+// it accepts. Quotes use it to size the budget reservation for each call.
 type BillingBound struct {
 	Reference             string
 	PerQuestion           bool
@@ -25,7 +24,15 @@ type BillingBound struct {
 	LookupSupported       bool
 }
 
-var verifiedDecisionBounds = map[string]BillingBound{}
+// ownerSelectedBound applies to any model the owner selects. It assumes the
+// full context and request fee charged per question to size a conservative
+// reservation. These billing assumptions are not provider-verified.
+var ownerSelectedBound = BillingBound{
+	Reference:             "owner-selected model, worst-case billing assumed",
+	PerQuestion:           true,
+	RequestFeePerQuestion: true,
+	MaxRequestBytes:       systemone.RequestBudget,
+}
 
 type DecisionModel struct {
 	FetchedAt    time.Time                  `json:"-"`
@@ -84,19 +91,13 @@ func (c *Client) DecisionModels(ctx context.Context, key string, refresh bool) (
 	c.modelsAt = time.Now()
 	return slices.Clone(models), nil
 }
-func (c *Client) bound(model string) (BillingBound, bool) {
-	if c.DecisionBounds != nil {
-		b, ok := c.DecisionBounds[model]
-		return b, ok
+func (c *Client) bound(model string) BillingBound {
+	if b, ok := c.DecisionBounds[model]; ok {
+		return b
 	}
-	b, ok := verifiedDecisionBounds[model]
-	return b, ok
+	return ownerSelectedBound
 }
 func (c *Client) compatibility(m DecisionModel) string {
-	b, ok := c.bound(m.ID)
-	if !ok || b.Reference == "" || b.MaxRequestBytes <= 0 {
-		return "billing_bounds_unverified"
-	}
 	if m.Context <= 0 {
 		return "invalid_context"
 	}
@@ -121,6 +122,9 @@ func (c *Client) QuoteDecision(ctx context.Context, r systemone.Request) (modela
 	if r.Model == "" {
 		return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_not_configured", Uncharged: true}
 	}
+	if len(r.Questions) == 0 {
+		return modelapi.Quote{}, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
+	}
 	models, e := c.DecisionModels(ctx, "", false)
 	if e != nil {
 		return modelapi.Quote{}, e
@@ -132,7 +136,7 @@ func (c *Client) QuoteDecision(ctx context.Context, r systemone.Request) (modela
 		if reason := c.compatibility(m); reason != "" {
 			return modelapi.Quote{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
 		}
-		b, _ := c.bound(m.ID)
+		b := c.bound(m.ID)
 		raw, e := json.Marshal(r)
 		if e != nil {
 			return modelapi.Quote{}, e
@@ -223,6 +227,5 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 	return result, nil
 }
 func (c *Client) DecisionLookupSupported(model string) bool {
-	b, ok := c.bound(model)
-	return ok && b.LookupSupported
+	return c.bound(model).LookupSupported
 }

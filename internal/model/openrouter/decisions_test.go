@@ -13,7 +13,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
-func TestDecisionHTTPAndVerifiedReservation(t *testing.T) {
+func TestDecisionHTTPAndReservation(t *testing.T) {
 	calls := 0
 	html := false
 	oversized := false
@@ -54,11 +54,21 @@ func TestDecisionHTTPAndVerifiedReservation(t *testing.T) {
 	c.HTTP = server.Client()
 	c.BaseURL = server.URL + "/api/v1"
 	request := systemone.Request{Model: "test/decision", State: systemone.Raw("record"), Questions: map[string]systemone.Question{"q1": {Type: "noul", Instructions: systemone.Raw("Is `record` relevant?")}, "q2": {Type: "noul", Instructions: systemone.Raw("Is `record` complete?")}}}
-	if _, e := c.QuoteDecision(context.Background(), request); e == nil || calls != 0 {
-		t.Fatal("unverified model dispatched")
+	// Owner-selected models reserve for full context and request fee per question.
+	q, e := c.QuoteDecision(context.Background(), request)
+	if e != nil || calls != 0 {
+		t.Fatalf("owner-selected quote: %v, calls %d", e, calls)
+	}
+	if want, _ := modelapi.ParseUSD("0.004"); q.Reserved != want {
+		t.Fatalf("worst-case reserve %d want %d", q.Reserved, want)
+	}
+	empty := request
+	empty.Questions = nil
+	if _, err := c.QuoteDecision(context.Background(), empty); err == nil || calls != 0 {
+		t.Fatalf("empty request: %v, calls %d", err, calls)
 	}
 	c.DecisionBounds = map[string]BillingBound{"test/decision": {Reference: "fake provider fixture: context charged per question, request fee once", PerQuestion: true, MaxRequestBytes: 10000}}
-	q, e := c.QuoteDecision(context.Background(), request)
+	q, e = c.QuoteDecision(context.Background(), request)
 	if e != nil {
 		t.Fatal(e)
 	}
