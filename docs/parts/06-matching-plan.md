@@ -12,8 +12,9 @@ reading, evidence/highlight/skill scoring, deterministic finalize, user
 corrections, automatic runs on job saves, the API, events and the Match tab.
 
 No chat-model calls, generated text, evaluation tooling, embeddings,
-multi-job ranking or model choice. No new infrastructure: Postgres, River and
-the existing gateway carry everything.
+multi-job ranking or per-user model choice. Owner model configuration is
+included. No new infrastructure: Postgres, River and the existing gateway
+carry everything.
 
 ## Existing integration points
 
@@ -58,14 +59,16 @@ low-allowance key records, in this document:
 - The response shape: `answers`, `usage.input_tokens`, `usage.output_tokens`,
   `usage.cost`, `id`, and `confidence` on answers.
 - Whether `GET /api/v1/generation?id=` finds a System One request's `id`.
-- The per-request question limit and input context for the configured model
-  (`/api/v1/models?output_modalities=decisions` gives `context_length` and
-  pricing).
+- Any documented request/per-question context limits and billing expansion
+  for the configured model. The filtered model catalogue supplies context and
+  pricing, not an assumed 128-question cap. A small successful probe cannot
+  establish an upper bound on billing or request size.
 - The status codes for an oversized request (`413`?), an unknown model and a
   bad key.
 
-Each item has a safe default below, so a missing answer narrows behavior
-rather than blocking the part.
+Record the documentation or fixture supporting each conclusion. Fake-provider
+work can proceed without a live key. Unverified billing bounds disable live
+dispatch for that model; unknown lookup behavior uses owner reconciliation.
 
 ## 1. System One in the gateway
 
@@ -74,12 +77,12 @@ rather than blocking the part.
 ```go
 type Question struct {
     Type         string          // noul | choice | score
-    Instructions json.RawMessage // a string, or an object carrying data
+    Instructions json.RawMessage // string, object or array
     Criteria     json.RawMessage // choice: {option: description}; score: [levels...]; noul: optional
 }
 type Request struct {
     Model     string
-    State     json.RawMessage // string or object
+    State     json.RawMessage // string, object or array
     Questions map[string]Question
 }
 type Answer struct {
@@ -88,7 +91,8 @@ type Answer struct {
     Choice        string
     Score         *float64
     Probabilities map[string]float64
-    Confidence    *float64
+    Confidence    *float64 // Choice/Score; Noul has no confidence field
+    Legend        map[string]json.RawMessage // Score levels
 }
 ```
 
@@ -106,29 +110,59 @@ Decide(ctx, key string, systemone.Request, Quote) (DecisionResult, error)
 - `DecisionResult` carries the parsed answers, `usage`, `usage.cost` as the
   billed amount (parsed without floats, as part 5 does), and `id` as the
   generation ID.
-- Errors follow part 5's classification: `400/401/404` uncharged
-  `request_rejected`, `402` `provider_balance`, `429` `rate_limited`, `413`
-  uncharged `request_too_large` (the packer halves the request and retries),
-  anything else after sending `uncertain`.
+- Errors reuse part 5's provider classification for verified uncharged
+  rejections, balance and rate limits. Split and retry a size rejection only
+  when the adapter establishes it was uncharged; a status such as `413` alone
+  is not proof for every provider. Anything else after sending is uncertain.
 - **Lookup:** if step 0 shows `/generation` finds System One ids, uncertain
   attempts reconcile automatically as in part 5. Otherwise they go to the
-  owner's unresolved-usage view; amounts are fractions of a cent.
+  owner's unresolved-usage view with their reservations retained.
 
-**Configuration and quotes.** `DECISION_MODEL` (for example
-`typesafe/jev-1.14`) is configured separately from part 5's `LLM_MODEL`.
-`QuoteDecision` reads the model's entry from
-`/api/v1/models?output_modalities=decisions`, caches it for 15 minutes like the
-chat quote, and rejects pricing fields other than `prompt`, `completion` and
-`request` (part 5's rule).
+**Owner configuration and quotes.** Add a singleton
+`platform.model_settings(decision_model, version, updated_at)`, with owner-only
+read/update functions and worker read access. The selected model is separate
+from the chat diagnostic's `LLM_MODEL`; no `DECISION_MODEL` environment variable
+is required. Use the existing encrypted system OpenRouter key, including key
+version retention on attempts. Never expose it to the browser.
 
-**Reservations bounded by the request.** The reservation is
-`(bytes + overhead) × prompt rate + questions × 32 × completion rate +
-request rate`, where `bytes` is the UTF-8 length of the serialized request.
-Byte-level tokenizers never produce more tokens than bytes, so this bounds the
-input; 32 output tokens per question bounds answers (observed: 1–21 for a whole
-request). A request whose bound exceeds the model's context is split before
-quoting. The settlement path already records any overshoot. Part 5's chat
-diagnostic is unchanged.
+- `GET /v1/admin/decision-models` proxies
+  `/api/v1/models?output_modalities=decisions`, handling catalogue pagination
+  if returned. Cache metadata for 15 minutes; return id, name, context, pricing
+  and compatibility reason. Check `architecture.output_modalities` too.
+- `GET/PUT /v1/admin/model-settings` reads/updates `{decision_model}` with a
+  version check. Validate a selection against refreshed metadata; a failed
+  catalogue refresh preserves the saved setting. Both endpoints require the
+  existing platform-owner check. No secret is returned or stored here.
+- `QuoteDecision` accepts the run's model, not the current global selection.
+  Capture the price snapshot with the attempt. Missing model, stale metadata
+  that cannot be refreshed, or unsupported billing blocks before dispatch.
+- A run with a selected model snapshots it at creation. A run created before
+  configuration has a nullable model, waits as `model_not_configured`, then
+  atomically binds the first configured model before lookup or dispatch. Later
+  changes affect new runs only. Recovery wakes blocked runs after configuration.
+
+**Reservations and packing require verified bounds.** Remove the previous
+`bytes + overhead` and `32 output tokens per question` assumptions. JSON wire
+bytes alone do not bound provider-side expansion, repeated state evaluation,
+or output billing across every decision model.
+
+For the MVP, enable only pricing profiles with zero completion rate and
+supported prompt/request charges; reject nonzero unknown pricing components.
+A model adapter must document whether billable input is bounded per request
+or per independently evaluated question. Conservatively reserve the advertised
+context times the prompt rate for each billable evaluation, plus the bounded
+request charge. If evaluation is per question, multiply the context allowance
+by the question count. If the advertised context does not bound billable
+input, or request-fee multiplicity is unknown, mark the model unsupported until
+a documented bound exists. No paid call is sent on a guessed bound.
+
+A verified tokenizer and provider serialization can later tighten the bound.
+Packing uses a separate conservative input-size check appropriate to the
+adapter, documented model limits and local request/response payload budgets.
+Start with all compatible pending questions sharing a state; split only to
+meet those budgets or a confirmed size rejection. A single oversized question
+is reported explicitly. No default provider question-count cap is invented.
+Part 5's chat diagnostic and central allowance gate are unchanged.
 
 **Stored requests.** A new tenant table keeps the exact request:
 
@@ -136,18 +170,22 @@ diagnostic is unchanged.
 llm_request   user_id · operation_id (PK, FK llm_operation) · body jsonb · created_at
 ```
 
-Forced RLS; `INSERT, SELECT` for `zapply_app` and `zapply_worker`. `Process`
-loads it, so retries send the same bytes and the operation's `request_hash`
-covers them. Operations without a row are diagnostics.
+Forced RLS; `INSERT, SELECT` for `zapply_app` and `zapply_worker`. Store a
+canonical request encoding or canonicalize the jsonb on serialization, so
+retries preserve the hashed payload. `Process` loads it; operations without a
+row are diagnostics. This does not authorize resending uncertain attempts.
 
 **Operation kinds.** `llm_operation.kind` gets a check constraint:
 `diagnostic` or `decision`. `Process` reads the kind and calls `Generate` or
 `Decide`; quoting, reservation, settlement, uncertainty and recovery are
 shared. The River kind stays `llm_diagnostic`, so queued jobs remain valid.
 
-**Results.** `platform.settle` stores the raw answers JSON in
-`llm_operation.result`. A migration raises its limit to 262,144 characters
-(128 answers with full distributions fit comfortably).
+**Results.** `platform.settle` stores raw answers JSON in
+`llm_operation.result`. Raise its limit to 262,144 characters as a local
+storage budget. Packing budgets response size from the accepted question
+schema, including echoed legends. Bound HTTP response reads too; oversized
+responses follow the uncertain-result path and retain their reservation
+until accounting resolves. Never silently truncate answers.
 
 **Completion hooks.** `Runtime` gets
 
@@ -186,15 +224,21 @@ Enqueue(ctx, tx, user, model string, pending []Pending, owner Owner, opts) ([]uu
   = SHA-256 of the canonical JSON question (type, instructions, criteria). The
   wording is part of the hash, so changing a question's text invalidates its
   answers without a version constant.
-- **Packing.** Requests group questions sharing a state, up to the model's
-  question limit (default 128) and a byte budget derived from its context.
-  Request question ids are short (`q1…`); the mapping to cache keys is stored
+- **Packing.** Requests group questions sharing exactly the same state,
+  subject to verified adapter limits and local payload budgets (section 1).
+  Removing cache hits must not change another question's state or wording.
+  Request question ids are short (`q1…`); the model never sees them, so every
+  instruction explicitly references its subject. The mapping to cache keys is stored
   with the operation (`decision_request_item(operation_id, request_key,
   state_hash, question_hash)`).
 - **Ingestion** (from the hook or recovery): parse the operation's result, and
   for every answer validate it against its question: type matches, `choice`
   names a known option, `score` probabilities cover the legend, probabilities
-  are finite, in [0, 1] and sum to 1 ± 0.01, `noul` in [0, 1]. Valid answers go
+  are finite, in [0, 1] and sum to 1 ± 0.01, `noul` in [0, 1]. Score must
+  equal Σ index × probability within numeric tolerance and its legend must
+  match the supplied criteria; Choice must name a maximal-probability option.
+  Choice/Score confidence must be finite in [0, 1]; Noul does not require it.
+  Reject unexpected answer keys. Valid answers go
   into `decision_answer` (`ON CONFLICT DO NOTHING`); invalid or missing ones are
   reported to the owner as discarded.
 - Parts 8 and 10 reuse this package unchanged.
@@ -237,20 +281,32 @@ Pure, unit-tested code with no database access:
 
 - **Posting reader.** `Lines(description) []Line`: normalize whitespace and
   bullet markers (`-`, `*`, `•`, `·`, numbered lists), split paragraphs into
-  sentences, drop lines under three words, split lines over 400 characters,
+  sentences, retain short qualification lines, preserve source spans and
+  neighbouring headings, split lines over 400 characters where possible,
   keep 120. `YearsIn(line) *int` parses "5+ years", "at least five years",
   "3-5 years" (lower bound), "minimum of 2 yrs", in English first; other
   languages leave it empty.
-- **Questions.** Builders for each stage, with the wording in one file:
-  `LineClass`, `LineType`, `Seniority`, `DegreeLevel`, `LanguageLevel`,
-  `EvidenceStrength` (the four-level `score`), `HighlightShows`, `SkillValued`.
-  Data (the line, the evidence document, the highlight) goes inside the
-  instructions object, as cvd's `with_data` does; the question sentence refers
-  to it by name. Evidence documents are rendered from library fields in a fixed
-  field order, so equal content gives an equal hash.
-- **States.** `read`, `level` and the skill questions use the posting
-  (`title`, `company`, `description`). `evidence` and `highlights` use only
-  `title` and `company`, so scores survive description edits that keep a line.
+- **Questions.** Builders for `LineClass`, `LineType`, `Seniority`,
+  `DegreeLevel`, `LanguageLevel`, `EvidenceStrength`, `HighlightStrength` and
+  `SkillValued`. Classification, type, degree and language questions for every
+  line are speculative and bundled with seniority and skills in `read`.
+  Degree, language and seniority choices include `not_specified`; irrelevant speculative answers are
+  ignored by Go. Unknown classifications are not silently treated as `other`.
+- **State and instructions.** `read` state holds the posting, source lines and
+  headings. Instructions refer to backticked paths such as
+  `posting.lines[3].text`. Skills are supplementary named data in their own
+  questions. `score` state contains `job_context` (title/company) and one full
+  evidence document with indexed highlights. A structured instruction has
+  `question` and `requirement` fields: the first asks about `evidence` or
+  `evidence.highlights[2]`, the second holds the source line to compare with.
+  This uses TypeSafe's documented supplementary-record pattern. Content is
+  never interpolated into the question sentence. Evidence state includes all
+  relevant library fields; canonical encoding makes equal content hash equally.
+- **Score rubric.** Both evidence and highlight strength use the four ordered,
+  self-contained criteria in the spec, with indices 0–3. Preserve the API score,
+  legend, probabilities and confidence; the application strength uses utilities
+  [0, 0.25, 0.6, 1]. Only skill valuation uses Noul. Question keys and numbers
+  in prose cannot substitute for a descriptive instruction or criterion.
 - **Requirements.** `Requirements(lines, answers)` applies the class rules,
   dedupes, keeps 40, and attaches `min_years` and levels.
 - **Checks.** `Years(ranges, asOf)` merges overlapping partial-date periods
@@ -261,8 +317,50 @@ Pure, unit-tested code with no database access:
   recency, checks, relevance, highlight and skill ranks, coverage with
   confidence, job score, must-haves, insights, `selection`, `skills`,
   `suggestions`. Deterministic for equal inputs, ties broken by library order.
-  Unanswered pairs are unknown, not zero: they don't lower coverage or
-  relevance, and the result counts them.
+  Unanswered pairs are unknown, not zero. Report observed coverage as
+  provisional if missing answers could change it. Do not label an unknown
+  requirement a gap, and suppress the aggregate score when its inputs are
+  incomplete. Ignore failed speculative answers that Go does not use; only
+  missing applicable answers make a result partial.
+
+### Example scoring request
+
+This request demonstrates the wire shape; the application builds it from an
+immutable snapshot and uses the complete rubric above in production:
+
+```json
+{
+  "model": "<owner-selected-model-id>",
+  "state": {
+    "job_context": {"title": "Backend engineer", "company": "Example"},
+    "evidence": {
+      "title": "Software engineer",
+      "highlights": [{"text": "Built and operated a Go payments service."}]
+    }
+  },
+  "questions": {
+    "q1": {
+      "type": "score",
+      "instructions": {
+        "question": "How strongly does `evidence.highlights[0].text` demonstrate `requirement`? Judge the supplied highlight itself.",
+        "requirement": "Experience building production services in Go"
+      },
+      "criteria": [
+        "The highlight provides no evidence of the work described in the requirement.",
+        "The highlight concerns a related area but gives no concrete example of the required work.",
+        "The highlight shows concrete comparable work without explicitly demonstrating the specific required work.",
+        "The highlight explicitly demonstrates the specific work described in the requirement."
+      ]
+    }
+  }
+}
+```
+
+A returned distribution `{0: 0.05, 1: 0.1, 2: 0.25, 3: 0.6}` has API score
+2.4 and application strength 0.775. Retain the independently returned
+confidence rather than using 0.775 as confidence. JSON probability keys are
+strings on the wire. Other questions in this request are evaluated independently;
+none can read `q1`'s answer.
 
 ## 5. Run orchestration
 
@@ -284,12 +382,14 @@ and is idempotent:
    questions. One request at a time matches the gateway's one-call-in-flight
    rule and keeps cancellation cheap.
 4. **Advance the stage** when every question in it is answered or unanswered:
-   `read` → build requirements (store `match_run_requirement`, seniority) →
-   `level` (skipped if none) → `evidence` (evidence × requirement and skills)
-   → `highlights` (pairs with expected strength ≥ 0.4) → `finalize`.
+   `read` → build requirements (store `match_run_requirement`, seniority,
+   applicable speculative levels and skill answers) → `score` (all evidence
+   and highlight × requirement questions, grouped per evidence state) →
+   `finalize`. No level or highlight follow-up phase. The 0.4 parent threshold
+   controls which highlight answers finalize uses, not which it asks.
 5. **Finalize:** run `Compute`, store `score`, `must_met`, `must_total`,
-   counters and `finished_at`; status `completed`, or `partial` when anything
-   is `unanswered`. If `rerun_requested`, create the follow-up run in the same
+   counters and `finished_at`; status `completed`, or `partial` when an
+   applicable question is `unanswered`. If `rerun_requested`, create the follow-up run in the same
    transaction.
 6. **Mirror status:** a run whose in-flight operation is `blocked` or
    `needs_review` shows the same status, reason and `next_eligible_at`;
@@ -299,12 +399,13 @@ and is idempotent:
 
 **Library reads.** At run creation the service snapshots eligible evidence
 (non-archived, not `career_break`, ≤ 300) into `match_run_item` with hashes and
-`facts`, and records `skills_hash` and `library_fingerprint`. Questions are
-built from live rows only while their hash equals the snapshot; an item edited
-mid-run is skipped (the run will be stale anyway).
+`facts`, and records `skills_hash` and `library_fingerprint`. Snapshot the job, skills
+and complete evidence/highlight documents needed to build questions too. Build
+questions from that immutable snapshot; edits during a run make it stale and
+do not mix new content into historical results.
 
-The run records `DECISION_MODEL` at creation; its cache lookups use that model,
-so changing the configured model starts fresh answers for new runs only.
+The run binds the persisted owner-selected model as in section 1; its cache
+lookups use that model. Existing bound runs retain it after a setting change.
 
 ## 6. Automatic runs and supersede
 
@@ -318,7 +419,8 @@ type Matcher interface {
 
 `CreateJob` and `UpdateJob` call it inside their transaction after the write.
 `match.Service.JobSaved` does nothing unless it's a create or the hash changed,
-the title or description is non-empty, the stage is not `closed`, and
+the description is non-empty on create (or content changed on update), the
+stage is `saved`, `active` or `offer`, and
 `profile.auto_match` is true. Then:
 
 - No active run → create one (`trigger = auto`) and `InsertTx` its
@@ -358,10 +460,10 @@ disabled.
 As listed in the spec. Implementation notes:
 
 - **Estimate** builds the questions a run would ask, looks them up in the
-  cache, packs the misses and sums each request's reservation from
-  `platform.model_quote`. Stages after `read` depend on answers not yet known,
-  so the estimate assumes every line is a requirement (capped at 40) and
-  every pair reaches the highlight stage; it's an upper bound. No quote, or one
+  cache, packs the misses and sums reservations using the verified adapter
+  bound and `platform.model_quote`. Before `read` answers exist, assume every
+  line is a requirement (capped at 40) and score every evidence/highlight pair.
+  Display this as a conservative estimate excluding retries and price changes. No quote, or one
   older than 15 minutes → `estimate_unavailable`; starting a run still works.
 - **Start**, **cancel**, **list** and **detail** as specified. Detail loads the
   run, requirements, items, cached answers and overrides, calls `Compute` with
@@ -388,18 +490,22 @@ As listed in the spec. Implementation notes:
 - Board cards and the table get a score badge (dimmed when stale); the table a
   sortable score column, client-side within the loaded page.
 - Settings toggle for `auto_match` where the profile is edited.
+- Owner-only Admin model settings: filtered decision-model picker, pricing and
+  context, compatibility explanations, save with a version check, explicit
+  unconfigured/unavailable states. It reuses the existing key management UI.
 - Requirement text renders as plain text only.
 
 ## 11. Tests and acceptance gates
 
 1. **Transport (fake HTTP).** Request body shape and URL; answers, `usage.cost`
    and `id` parsed; a `200` HTML body classified uncertain, never parsed;
-   `413` triggers a split; byte-bound reservations for ASCII, CJK and emoji;
-   pricing with unknown fields rejected. Part 5's tests pass unchanged and the
+   confirmed size rejection triggers a split; reservation bounds cover the
+   adapter's documented billing expansion, including multiple questions;
+   unsupported pricing or unverified bounds reject dispatch. Part 5's tests pass unchanged and the
    chat diagnostic still works end to end. `cancel_operation` racing `reserve`:
    exactly one wins.
 2. **Decision cache.** Equal content hits, changed wording misses; packing
-   respects the question limit and byte budget and groups by state; each
+   respects verified model limits and local payload budgets and groups by state; each
    invalid answer shape is discarded; ingesting twice is a no-op.
 3. **Matching domain (unit).** Line splitting on real-world postings (bullets,
    paragraphs, numbered lists); `YearsIn`; requirement rules and the 40 cap;
@@ -409,9 +515,12 @@ As listed in the spec. Implementation notes:
    denominator), the floor, suggestions, career breaks excluded, unanswered
    pairs, deterministic ties.
 4. **Orchestration (Postgres + fake provider).**
-   - Cold run walks every stage, one request at a time, and completes.
+   - Cold run walks `read → score → finalize`, one request at a time;
+     speculative levels and highlights add no serial phase.
    - Warm re-run: zero requests. Editing one evidence: only its questions.
-     Editing the description but keeping lines: only `read` questions.
+     Editing description while keeping requirement lines and title/company:
+     only `read` questions. Editing title/company invalidates evidence states.
+     Editing a highlight invalidates its parent evidence state.
    - Discarded answers retried once, then `unanswered` and `partial`.
    - Allowance exhausted mid-run → `blocked` with reason, then resumes; no
      membership → `blocked`, proceeds after a plan is assigned.
@@ -421,20 +530,25 @@ As listed in the spec. Implementation notes:
      cached.
    - Lost hook recovered by the scan; two workers never create duplicate
      operations for one run.
-5. **Auto-run.** Create with description → run; title edit → run; move,
+5. **Owner model settings.** Nonowners cannot list/change settings; listing
+   uses the decisions filter and existing key without disclosing it; stale or
+   failed metadata refresh preserves selection; unsupported models cannot
+   dispatch; bound runs keep their model, new runs use the changed model;
+   unconfigured runs resume and bind once; key rotation retains reconciliation.
+6. **Auto-run.** Create with description → run; title edit → run; move,
    archive, notes → none; closed stage → none; `auto_match` off → none; rapid
    saves → supersede before dispatch, `rerun_requested` after; a rolled-back
    job write leaves no run and no River job.
-6. **API.** Estimate with and without a quote; start idempotency and `409`
+7. **API.** Estimate with and without a quote; start idempotency and `409`
    with `existing_id`; tenant isolation on every endpoint; corrections update
    the score and emit; stale on the board after job and library edits; cost
    visible only to its owner.
-7. **Web.** Store tests in the existing harness: identity change clears runs,
+8. **Web.** Store tests in the existing harness: identity change clears runs,
    late responses don't overwrite newer runs, SSE refetch, correction
    round-trip. Typecheck and production build. Browser walkthrough with the
    fake provider: save a job, watch the stages, read gaps, correct a
    requirement, edit evidence, see stale, re-run.
-8. **Live check.** One manual run against `/api/v1/systemone` after deploy, by
+9. **Live check.** One manual run against `/api/v1/systemone` after deploy, by
    the owner with a plan. CI never spends credits.
 
 Run `make generate`, generated-file drift, `make vet`, the integration suite
@@ -443,7 +557,8 @@ with `-race`, web tests, typecheck and build, and the image build.
 ## 12. Build order
 
 1. The API probe (section 0), recorded here.
-2. System One transport, stored requests, operation kinds, hooks and
+2. Owner model settings/catalogue and System One transport, stored requests,
+   operation kinds, hooks and
    cancellation (section 1), with part 5 regressions green. Mergeable on its
    own, and what parts 8 and 10 build on.
 3. `internal/decide` and its tables.
@@ -452,12 +567,17 @@ with `-race`, web tests, typecheck and build, and the image build.
 6. API, OpenAPI and the auto-run hook.
 7. Web.
 8. Docs: record delivered behavior in `06-matching.md`, the part 5 note on
-   reservations, `.env.example` (`DECISION_MODEL`), README.
+   reservations and owner configuration, README.
 
 ## Deploying
 
 Apply the new migrations with `make migrate` before rolling out API and worker.
-Set `DECISION_MODEL` on the worker. Existing diagnostic operations keep working
+Choose the decision model in Admin using the existing OpenRouter key.
+Existing diagnostic operations keep working
 across the deploy: the River kind is unchanged and an operation without a
-stored request is a diagnostic. Without `DECISION_MODEL`, runs wait as
+stored request is a diagnostic. Without an owner-selected decision model, runs wait as
 `blocked` with `model_not_configured` and the rest of the app is unaffected.
+
+The [spec's design references](06-matching.md#design-references) document the
+question semantics. Live transport/billing probes remain unperformed until
+recorded here; nothing in this plan claims a successful paid verification.

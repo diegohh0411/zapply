@@ -12,8 +12,7 @@ allowances, reservations and reconciliation already apply.
 
 ## Decision models, not chat models
 
-Matching uses **System One decision models** (for example TypeSafe's Jev or
-Microsoft Decision-1) through OpenRouter's System One API
+Matching uses **System One decision models** (for example TypeSafe's Jev) through OpenRouter's System One API
 (`POST https://openrouter.ai/api/v1/systemone`), the same route cvd used. A
 decision model doesn't write text. It reads a **state** and answers typed
 **questions** about it:
@@ -28,16 +27,16 @@ That shapes the whole design:
 
 - **Go owns the workflow.** Go decides what to ask, splits the work into
   requests, and computes every result from the answers.
-- **Answers are calibrated.** Each answer is a probability distribution, so
-  scores are expected values with a confidence, not a single label.
-- **Nothing is invented.** The model can only pick among options we wrote, so it
-  can't make up a requirement, a citation or a claim. Requirements are lines
-  quoted from the posting; explanations are the user's own highlights.
-- **It's cheap.** Decision models charge for input only, at about $0.04 per
-  million tokens. A full match costs fractions of a cent, so asking many small
-  questions is affordable.
-- **Prompt injection has little to grab.** A manipulated posting can shift
-  probabilities, but it can't make the model output instructions, ids or text.
+- **Keep uncertainty.** Score and Choice return distributions and confidence;
+  Noul returns the probability of yes. Confidence describes the distribution,
+  not a guarantee of correctness or a measured accuracy for this app.
+- **Source text stays traceable.** Go quotes requirements from the posting and
+  maps answers to existing evidence and highlights. A classification or score
+  can still be wrong.
+- **Prices come from the selected model.** No fixed price or per-run cost is
+  assumed. All requests pass through the allowance gateway.
+- **Typed output limits the output surface.** It does not make untrusted text
+  unable to influence a judgment. All answers are validated before use.
 
 ## What changes from cvd
 
@@ -81,27 +80,29 @@ relevance floor for what goes on a CV.
 
 ## Pipeline
 
-A **match run** scores the user's library against one job. Go builds the
-questions; the gateway sends them in requests of up to 128 questions (or the
-model's own limit) within its input budget. Requests run one at a time.
+A **match run** scores the user's library against one job. There are two model
+phases, `read` and `score`, then deterministic `finalize`. Reading the posting
+creates the requirements used by scoring: that is a real dependency.
 
-| Stage | Questions | State |
-|---|---|---|
-| 1. `read` | One `choice` per posting line, plus the role's seniority | The posting |
-| 2. `level` | Degree or language level for requirements that need one | The posting |
-| 3. `evidence` | One `score` per (evidence, requirement); one `noul` per skill | The job's title and company |
-| 4. `highlights` | One `noul` per (highlight, requirement) where its evidence matched | The job's title and company |
-| 5. `finalize` | None | — |
+Within each phase, independent questions sharing a state go into one request
+when they fit. Degree/language questions are asked speculatively with line
+classification; highlight questions accompany evidence questions. Go ignores
+speculative answers that do not apply. Requests run one at a time under the
+part 5 gateway. Packing follows verified model/context and local payload
+budgets; there is no assumed API limit of 128 questions.
 
-A stage with every answer cached sends nothing. A run with everything cached
-makes no calls and finishes in one transaction.
+A phase with every answer cached sends nothing. A fully cached run finishes
+without a provider call.
 
 ### 1. Read the posting
 
 Go splits the description into **lines**: line breaks and bullet markers first,
-then sentences within long paragraphs. Lines under three words are dropped, and
-lines over 400 characters are split at sentence boundaries. The first 120
-lines are kept; a longer posting is marked `truncated`.
+then sentences within long paragraphs. Short lines are retained: "CPA" and
+"Go" can be qualifications. Lines over
+400 characters are split at sentence boundaries where possible. The first
+120 lines are kept; a longer posting is marked `truncated`. These are local
+product limits, not System One limits. Each line retains its source span;
+classification sees neighbouring lines and headings in the posting state.
 
 Each line gets one `choice` question, "What is this line of the job posting?":
 
@@ -125,36 +126,57 @@ seniority: `entry`, `junior`, `mid`, `senior`, `lead`, `executive`.
 - A job with an empty description is matched on its title as one requirement.
   A job with no requirements found completes with no score.
 
-### 2. Levels
+The same `read` request also asks degree and language levels for every line,
+and whether the role values each library skill. Degree choices include
+`not_specified`, `secondary`, `associate`, `bachelor`, `master`, `doctorate`;
+language choices include `not_specified`, A1 through C2, and `native`.
+Go uses a level only for a retained line with the corresponding type. There
+is no second model phase for levels. Seniority includes `not_specified` too.
 
-For requirements typed `education`, a `choice` over `none`, `secondary`,
-`associate`, `bachelor`, `master`, `doctorate` asks which degree it requires.
-For `language`, a `choice` over the CEFR levels asks which level it requires.
-Skipped when there are no such requirements.
+The state holds the posting and its indexed source lines. Questions refer to
+literal paths such as `posting.lines[3].text`, including the backticks.
+Question ids are response keys only: the model does not see them. Every
+instruction and criterion therefore states its meaning without relying on an
+id, a previous answer, or another option's description.
 
-### 3. Score evidence and skills
+### 2. Score evidence and highlights
 
-The state is the job's title and company. For every eligible evidence and every
-requirement, one `score` question:
+One state per evidence holds `job_context` (title and company) and the full
+`evidence` document: kind, category, title, organization, dates, summary,
+details, linked skills and indexed highlights. Questions for every retained
+requirement are bundled against that state. The requirement's source text is
+supplementary data in a named `requirement` field inside structured
+instructions; it is never spliced into the instruction sentence. This follows
+TypeSafe's pattern of comparing a state with a record supplied by code.
 
-> How strongly does `evidence` show `requirement`?
-> 0. Not at all
-> 1. **Adjacent**: related, but would not convince a reader on its own
-> 2. **Transferable**: a defensible substitute a reviewer would accept
-> 3. **Direct**: the evidence itself shows it
+Evidence and highlight strength are both **Score** questions. Instructions ask
+how strongly `evidence` (or `evidence.highlights[2]`) demonstrates `requirement`.
+The ordered `criteria` array contains self-contained descriptions:
 
-The evidence is sent as data inside the question: kind, category, title,
-organization, dates, summary, details, skills and highlights. Keeping the
-posting out of the state means an answer stays valid when the description
-changes but the requirement line doesn't.
+1. **None:** the supplied content provides no evidence of the qualification or
+   work described in the requirement.
+2. **Adjacent:** the content concerns a related area but provides no concrete
+   example of doing the work or demonstrating the qualification.
+3. **Transferable:** the content shows concrete comparable work or capability
+   that could support the requirement, without explicitly demonstrating the
+   specific qualification or work it describes.
+4. **Direct:** the content explicitly demonstrates the specific qualification
+   or work described in the requirement.
 
-Each answer is a distribution over the four levels. Go turns it into an
-**expected strength** with direct = 1.0, transferable = 0.6, adjacent = 0.25,
-none = 0, and keeps the probabilities for display.
+Array positions are levels 0–3. Numbers are not sent as descriptions, and each
+level is judged independently; no level refers to its neighbours. A compound
+posting line remains one quoted requirement in the MVP and may combine several
+qualifications; the UI allows ignoring it, and the score is not a separately
+verified answer for every clause.
 
-For each skill in the user's list, one `noul` with the posting as state: "Does
-this role require or value the skill `X`?" Skills never count toward
-coverage: a skill on its own proves no experience.
+Keep the API's `score = Σ level × probability`, full distribution, `legend`,
+and `confidence`. For aggregation, Go computes an **expected strength** using
+utilities [0, 0.25, 0.6, 1.0]. This is an application formula, distinct from the
+API score. A Noul probability must never be used as degree of strength.
+
+For each library skill, `read` asks one Noul: does the posting require or value
+this skill? That is a yes/no judgment. Skills never count toward coverage:
+a skill on its own proves no experience.
 
 Which evidence is scored:
 
@@ -167,14 +189,12 @@ Which evidence is scored:
 - At most 300 evidence documents per run, chosen in library order. More fails
   the run with a clear reason.
 
-### 4. Score highlights
+Every (highlight, requirement) gets the same strength rubric in the evidence
+request, even if its parent may score poorly. Go uses highlight answers as
+citations only where the parent's expected strength is at least 0.4. This
+avoids a model round trip that waited only to decide which questions to ask.
 
-Highlights are scored only where it matters: for each (evidence, requirement)
-pair whose expected strength is at least 0.4, one `noul` per highlight of that
-evidence: "Does `highlight` show `requirement`?" The answers pick the
-highlights that prove each match.
-
-### 5. Finalize (no model)
+### 3. Finalize (no model)
 
 Go turns the answers into the result. The constants below have a version
 (`scoring_version`). Changing them is a code change and never needs a call.
@@ -200,19 +220,20 @@ down 10% a year to a floor of 50%.
 
 - **Evidence relevance** = Σ over requirements of expected strength × recency ×
   requirement weight. It ranks evidence.
-- **Highlight relevance** = Σ over requirements of P(yes) × requirement weight.
+- **Highlight relevance** = Σ over requirements of expected highlight strength ×
+  requirement weight, using only parent pairs that meet the 0.4 threshold.
   It ranks highlights within their evidence; unscored highlights rank last, in
   library order.
 - **Skill relevance** = P(role values it) × 2, plus a share of the relevance of
   the evidence it's linked to.
 - **Requirement coverage** is the best checked strength any eligible evidence
   gives it: `met` (≥ 0.8), `partial` (≥ 0.5), `adjacent` (≥ 0.2) or `gap`.
-- **Job score** (0–100) = Σ requirement weight × best checked strength ×
-  recency, divided by Σ requirement weight. The run also reports "must-haves
-  met: 4 of 6" (counting `met` and `partial`).
-- **Confidence.** Each coverage shows the probability behind it ("direct,
-  82%"). Requirements where the best answer is uncertain (no level above 0.5)
-  are flagged so the user can check them.
+- **Job score** (0–100) = 100 × Σ requirement weight × best
+  (checked strength × recency), divided by Σ requirement weight. The run also
+  reports "must-haves met: 4 of 6" (counting `met` and `partial`).
+- **Confidence.** Show the best answer's distribution and API confidence
+  separately ("direct: 82% probability"). No level above 0.5 flags the answer
+  for review. This threshold is a product rule, not the confidence formula.
 
 ## Insights and user corrections
 
@@ -311,7 +332,9 @@ and the UI shows how many items changed.
 
 Re-running creates a new run and asks only questions whose answers aren't
 cached. Editing one evidence re-asks its questions; editing the description
-re-reads the posting, but every unchanged requirement line keeps its scores.
+re-reads the posting, but unchanged requirement lines keep their scores when
+the evidence state, including title/company context, is also unchanged. Adding
+or editing a highlight invalidates that evidence state and its answers.
 Runs are kept as history; the latest completed run is the job's current match.
 
 There is no "force re-score" in the MVP. A new model or question wording
@@ -328,7 +351,10 @@ invalidates the cache naturally, because both are part of the key. A new
   missing answers, unknown options or malformed probabilities are discarded.
   Discarded questions are asked once more in a later request; if they fail
   again, they're marked `unanswered` and the run completes as `partial`.
-  Finalize treats an unanswered pair as unknown, not as "not at all".
+  Only missing applicable answers make a run partial; failed speculative
+  answers that Go ignores do not. Unanswered pairs are unknown, not "not at
+  all". Coverage is provisional where missing answers could improve it; unknown
+  requirements are not labelled gaps. Suppress an incomplete aggregate score.
 - **Uncertain calls.** An uncertain part 5 attempt is never resent. The run
   waits in `needs_review`. Once the owner resolves the attempt, its questions
   are asked again in a **new** operation with its own reservation. The lost
@@ -342,22 +368,40 @@ invalidates the cache naturally, because both are part of the key. A new
 
 ## Estimate before running
 
-The estimate counts uncached questions, packs them into requests as the run
-would, and sums each request's reservation. Because decision models charge for
-input only and the reservation is bounded by the request's size, the estimate
-is close to the real cost. The UI compares it with the member's available
-allowance.
+The estimate counts uncached questions and request reservations under the
+selected model's current quote. Before `read` completes, scoring assumes every
+line becomes a requirement (up to 40), with every evidence/highlight pair
+asked. It is a conservative estimate, not a promised bill; actual requests,
+retries and pricing changes can differ. The UI compares the next reservation
+and estimated total with the member's available allowance.
+
+## Owner-selected decision model
+
+The platform owner selects the decision model in **Admin → Model settings**.
+The server lists models from OpenRouter using
+`GET /api/v1/models?output_modalities=decisions`; the picker shows model id,
+name, context and current pricing. It uses the existing system OpenRouter key
+and its rotation/reconciliation path. There is no second credential.
+
+The selection is a persisted platform setting, independent of the chat
+diagnostic's `LLM_MODEL`. Only owners can change it. A run snapshots its model
+when created; an unconfigured run waits as `blocked/model_not_configured` and
+binds the first configured model when resumed. Changing the selection affects
+new runs only. Missing models or unsupported pricing block calls explicitly;
+there is no silent model fallback. The MVP supports models whose pricing can
+be bounded by the gateway; the picker explains any unavailable option.
 
 ## Untrusted text
 
 A job description is untrusted text, and so is the library from the model's
 point of view.
 
-- The posting and the library are always sent as labelled data (the state, or
-  a field inside a question), never as the question's instruction.
-- The model can only answer with the options we defined, so a manipulated
-  posting can at most skew probabilities, and the cited highlights show what
-  each score rests on.
+- Posting and library content occupy named data fields, separated from the
+  application's instructions. This separation helps interpretation but does
+  not guarantee injection resistance.
+- Validate answer types, keys, probabilities and referenced sources. Typed
+  output does not prove a judgment is true; the UI shows the source text so
+  the user can inspect it.
 - Requirement text is displayed as plain text, never as HTML or Markdown.
 - Library content goes only to the configured provider, through the gateway,
   on the member's own allowance. Nothing is shared between tenants.
@@ -370,7 +414,8 @@ decision_answer         user_id · model · state_hash · question_hash
                         PK (user_id, model, state_hash, question_hash)
 
 match_run               id · user_id · job_id · job_hash · skills_hash
-                        library_fingerprint · model · question_version
+                        library_fingerprint · model? · question_version
+                        job_snapshot jsonb · skills_snapshot jsonb
                         scoring_version · trigger (manual, auto)
                         status · stage · truncated · seniority?
                         score? · must_met · must_total
@@ -390,14 +435,16 @@ match_override          user_id · job_id · text_hash
                         PK (user_id, job_id, text_hash)
 
 profile                 + auto_match boolean NOT NULL DEFAULT true
+platform.model_settings singleton · decision_model? · version · updated_at
 ```
 
 - `decision_answer` is the **generic decision cache**, not matching-specific:
   parts 8 and 10 reuse it. `state_hash` and `question_hash` are SHA-256 over
   the canonical JSON actually sent, so the key changes whenever the content or
   the wording does.
-- `facts` snapshots the structured fields finalize uses (dates, degree type and
-  status, `auto_include`, highlight hashes in order), so a run's result stays
+- `facts` snapshots the complete evidence/highlight content and the structured
+  fields finalize uses (dates, degree type and status, `auto_include`, highlight
+  hashes in order). Job and skills inputs are snapshotted too, so a run's result stays
   stable as the library changes; staleness tells the user to re-run.
 - Tenancy as in parts 2 and 4: `user_id` on every row, forced RLS with the
   `tenant` policy for `zapply_app` and `zapply_worker`, composite tenant FKs.
@@ -411,6 +458,8 @@ profile                 + auto_match boolean NOT NULL DEFAULT true
 
 | Endpoint | Notes |
 |---|---|
+| `GET /admin/decision-models` | Owner-only filtered model catalogue, pricing, context and compatibility |
+| `GET, PUT /admin/model-settings` | Owner-only persisted `{decision_model}` |
 | `GET /jobs/{id}/match-estimate` | Uncached questions, requests needed, estimated cost, available allowance |
 | `POST /jobs/{id}/match-runs` | Starts a run. `Idempotency-Key` required. `202` with the run; `409` with `existing_id` while one is active |
 | `GET /jobs/{id}/match-runs` | The job's runs, newest first. Cursor pagination |
@@ -441,7 +490,7 @@ profile                 + auto_match boolean NOT NULL DEFAULT true
   - A stale banner ("3 items changed since this match") with a Re-run button.
 - **Board and table:** a score badge on each matched job, dimmed when stale.
   A table column sorts by score.
-- **Settings:** the `auto_match` toggle.
+- **Settings:** the `auto_match` toggle; owner-only model picker in Admin.
 - Live updates use the existing SSE invalidation.
 
 ## Gateway changes needed
@@ -453,10 +502,10 @@ Part 5 shipped a chat-completions path for its diagnostic only. Matching needs:
   the response, with its `id` kept for reconciliation. Not the alpha
   `/api/alpha/decisions` route, and not `https://openrouter.ai/v1/systemone`
   (without `/api`), which answers `200` with an HTML page.
-- **Decision model configuration and quotes.** A separately configured
-  decision model (`DECISION_MODEL`), priced from OpenRouter's model listing
-  (`output_modalities=decisions`). Reservations are bounded by the request's
-  size instead of a full context window.
+- **Decision model configuration and quotes.** An owner-selected persisted
+  decision model, priced from OpenRouter's filtered listing. Reservations use
+  verified billing bounds; request-byte heuristics are not assumed safe for
+  every model (see the implementation plan).
 - **Stored requests.** The exact state and questions are stored with the
   operation, so a retry sends the same request.
 - **The decision cache** above, so every feature that asks questions pays once
@@ -500,9 +549,21 @@ Part 5 shipped a chat-completions path for its diagnostic only. Matching needs:
 1. **Migration number.** Part 7 is being built at the same time. This spec
    takes `00010`; part 7 should take the next free number, and whichever merges
    second renumbers if needed.
-2. **System One details to verify before building:** the per-request question
-   limit for each model (cvd used 128), the response's `usage` and `id` fields,
+2. **System One details to verify before building:** any documented model
+   limits (128 is not assumed), the response's `usage` and `id` fields,
    whether provider routing, `max_price` and generation lookup work for these
    requests, and each model's input context. The API reference doesn't state
    them.
    The plan falls back safely if they don't (see the plan's gateway section).
+
+## Design references
+
+Reviewed against TypeSafe's [building guide](https://docs.typesafe.ai/concepts/how-to-build-with-system-one),
+[state](https://docs.typesafe.ai/concepts/state),
+[question primitives](https://docs.typesafe.ai/primitives),
+[Score](https://docs.typesafe.ai/primitives/score), and
+[confidence](https://docs.typesafe.ai/confidence) documentation, and OpenRouter's
+[model catalogue filter](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+TypeSafe documents the question semantics; OpenRouter's transport, billing and
+reconciliation behavior must be checked separately. These are design references,
+not evidence of a successful live integration.
