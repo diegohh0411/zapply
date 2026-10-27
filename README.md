@@ -18,6 +18,7 @@ make migrate          # apply migrations as the schema owner
 make run              # API on 127.0.0.1:8080
 make relay            # outbox relay → NATS (second terminal)
 make worker           # River model worker (third terminal; model config below)
+# or, instead of the three above: make run-all   (one process, embedded NATS)
 curl -N -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/events   # live changes
 curl -H "Authorization: Bearer $(make -s token SUB=alice)" localhost:8080/v1/me
 ```
