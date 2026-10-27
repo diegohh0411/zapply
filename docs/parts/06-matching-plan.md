@@ -6,27 +6,31 @@ resolve implementation choices and can change without expanding the scope.
 
 ## Outcome and boundaries
 
-Deliver match runs end to end: requirement extraction and evidence/skill scoring
-through the part 5 gateway, content-hash caches, deterministic finalize, user
+Deliver match runs end to end on System One decision models: a System One
+transport in the part 5 gateway, a generic per-question decision cache, posting
+reading, evidence/highlight/skill scoring, deterministic finalize, user
 corrections, automatic runs on job saves, the API, events and the Match tab.
 
-No evaluation tooling, embeddings, highlight rewriting, multi-job ranking, or
-model choice. No new infrastructure: Postgres, River and the existing gateway
-carry everything.
+No chat-model calls, generated text, evaluation tooling, embeddings,
+multi-job ranking or model choice. No new infrastructure: Postgres, River and
+the existing gateway carry everything.
 
 ## Existing integration points
 
 - `internal/worker/worker.go`: `Runtime.Process` is the gateway's state machine
   (quote → `platform.reserve` → `Generate` → `platform.settle` / `uncertain`).
-  It is written for one River kind (`llm_diagnostic`) and one fixed prompt
-  (`openrouter.DiagnosticPrompt`). Matching generalizes it; it does not fork it.
-- `internal/llm/provider.go`: `Provider.Quote(ctx)` and
-  `Generate(ctx, key, quote)`. `internal/llm/openrouter` hard-codes 128 output
-  tokens and reserves the endpoint's full context.
+  It serves one River kind (`llm_diagnostic`) and one chat prompt
+  (`openrouter.DiagnosticPrompt`). Matching adds a second request type to the
+  same state machine; it does not fork it.
+- `internal/llm/provider.go`: `Provider.Quote(ctx)`, `Generate(ctx, key,
+  quote)`, `Lookup(ctx, key, generationID)`. `internal/llm/openrouter` talks to
+  `/chat/completions`, reads endpoint metadata from
+  `/models/{id}/endpoints`, requires `max_tokens` support, and reserves the
+  endpoint's full context.
 - `internal/store/migrations/00007_platform.sql`: `llm_operation` (result ≤
-  16,000 characters; app may only `SELECT, INSERT`), `platform.reserve` moves
-  an operation `pending|blocked → running`, `platform.settle` moves it to
-  `completed` (non-empty result) or `failed`, `platform.pending_operations`
+  16,000 characters; the app may only `SELECT, INSERT`). `platform.reserve`
+  moves an operation `pending|blocked → running`; `platform.settle` moves it to
+  `completed` (non-empty result) or `failed`; `platform.pending_operations`
   feeds recovery.
 - `internal/jobs/jobs.go`: `CreateJob` / `UpdateJob` compute `content_hash` and
   emit outbox events inside one `InTenant` transaction. The auto-run hook goes
@@ -35,86 +39,126 @@ carry everything.
   `InsertTx` inside tenant transactions.
 - Library tables use a role-less `tenant` policy (`00002`); jobs tables scope
   theirs `TO zapply_app` (`00004`). The worker has no grants on either today.
-- `api/openapi.yaml` `EventTopic`, the generated server in `internal/api/gen`,
-  and `web/src/app/jobs/job-sheet.*`, `jobs.store.ts`, `job-board.ts`,
-  `job-table.ts` on the web side.
+- cvd's working System One client and matcher, for reference:
+  `cvd/src-tauri/src/engine/{wire,http}.rs` and `cvd/src-tauri/src/matcher/`.
 
-New code: `internal/match` (domain: prompts, parsing, hashing, batching,
-`Compute`, service). Handlers go in
-`internal/api/match.go`, queries in `internal/store/queries/match.sql`, the web
-feature in `web/src/app/jobs/match/`.
+New code: `internal/llm/systemone` (wire types, transport), `internal/decide`
+(the decision cache and request packing, reusable by parts 8 and 10),
+`internal/match` (posting reading, question building, `Compute`, service).
+Handlers in `internal/api/match.go`, queries in
+`internal/store/queries/{decide,match}.sql`, the web feature in
+`web/src/app/jobs/match/`.
 
-## 1. Generalize the gateway
+## 0. Verify the API before coding
 
-Matching needs requests with real content, larger outputs and a hook when a
-call ends. Change the gateway once, keep the diagnostic as its first client.
+The API reference for `POST https://openrouter.ai/api/v1/systemone` shows the
+request but not every limit. Before step 1, one owner-run probe with a
+low-allowance key records, in this document:
 
-**Provider interface.**
+- The response shape: `answers`, `usage.input_tokens`, `usage.output_tokens`,
+  `usage.cost`, `id`, and `confidence` on answers.
+- Whether `GET /api/v1/generation?id=` finds a System One request's `id`.
+- The per-request question limit and input context for the configured model
+  (`/api/v1/models?output_modalities=decisions` gives `context_length` and
+  pricing).
+- The status codes for an oversized request (`413`?), an unknown model and a
+  bad key.
+
+Each item has a safe default below, so a missing answer narrows behavior
+rather than blocking the part.
+
+## 1. System One in the gateway
+
+**Wire types** (`internal/llm/systemone`), mirroring cvd's `wire.rs`:
 
 ```go
-type Request struct {
-    System, User string
-    Schema       json.RawMessage // JSON Schema for the answer; nil for plain text
-    MaxOutput    int
+type Question struct {
+    Type         string          // noul | choice | score
+    Instructions json.RawMessage // a string, or an object carrying data
+    Criteria     json.RawMessage // choice: {option: description}; score: [levels...]; noul: optional
 }
-Quote(ctx, Request) (Quote, error)          // reservation covers this request
-Generate(ctx, key string, Request, Quote) (Result, error)
+type Request struct {
+    Model     string
+    State     json.RawMessage // string or object
+    Questions map[string]Question
+}
+type Answer struct {
+    Type          string
+    Noul          *float64
+    Choice        string
+    Score         *float64
+    Probabilities map[string]float64
+    Confidence    *float64
+}
 ```
 
-- The diagnostic becomes `Request{User: DiagnosticPrompt, MaxOutput: 128}`.
-- `Generate` sends `system` and `user` messages and `max_tokens: MaxOutput`.
-  When `Schema` is set and the endpoint lists `structured_outputs` or
-  `response_format` in `supported_parameters`, it sends
-  `response_format: {type: "json_schema", strict: true}`; otherwise the prompt
-  asks for JSON only and parsing is strict either way.
-- `MaxOutput` is capped by the endpoint's `max_completion_tokens`. A request
-  whose `MaxOutput` the endpoint can't serve is `request_rejected`, uncharged.
-
-**Tighter reservations.** Today the quote reserves the endpoint's full context,
-which for a 1M-token model makes every matching call reserve dollars. With the
-request known at quote time, input is bounded by **UTF-8 byte length plus a
-fixed per-message overhead** (byte-level BPE and byte-fallback tokenizers never
-produce more tokens than bytes). The reservation becomes
-`min(context, bytes + overhead) × input rate + MaxOutput × output rate +
-request rate`. The diagnostic keeps working unchanged; the part 5 note about
-full-context reservations is updated. A unit test pins the bound for ASCII,
-CJK and emoji inputs, and the settlement path already records any overshoot.
-
-**Requests are stored, not rebuilt.** A prompt depends on library and job
-content that can change after queuing. A new tenant table holds it:
-
-```
-llm_request   user_id · operation_id (PK, FK llm_operation) · system · user
-              schema jsonb? · max_output · created_at
-```
-
-Forced RLS, `INSERT, SELECT` for `zapply_app` and `zapply_worker`. `Process`
-loads it (falling back to the diagnostic prompt when absent), so the request
-hash stays stable across retries and the exact prompt is auditable. The
-operation's `request_hash` covers the stored request.
-
-**Larger results.** Migration raises `llm_operation.result` to 65,536
-characters. Extract uses `MaxOutput` 3,000 tokens and score batches 6,000; the
-batch packer (section 4) keeps answers inside both limits.
-
-**Operation kinds and completion hooks.** `llm_operation.kind` gains a check
-constraint listing `diagnostic`, `match_extract`, `match_score`. The River job
-keeps kind `llm_diagnostic` (queued rows stay valid) but `Process` now reads
-the operation's kind. `Runtime` gets a registry:
+**Provider interface.** Add alongside the chat methods:
 
 ```go
-OnTerminal map[string]func(ctx context.Context, tx pgx.Tx, op Operation) error
+QuoteDecision(ctx, systemone.Request) (Quote, error)
+Decide(ctx, key string, systemone.Request, Quote) (DecisionResult, error)
 ```
 
-called in the same transaction that makes an operation `completed`, `failed`
-or `cancelled` (after `settle`, after the final uncharged failure, after the
-`needs_review → failed` path). Matching registers a hook that inserts a
-`match_advance` River job for the operation's run. Recovery (section 6) covers
-a hook lost to a crash.
+- The URL is fixed: `https://openrouter.ai/api/v1/systemone`. Not the alpha
+  `/api/alpha/decisions`, and not `/v1/systemone` without `/api`, which returns
+  `200` with an HTML page. A non-JSON `200` is classified `response_uncertain`,
+  never parsed as answers.
+- `DecisionResult` carries the parsed answers, `usage`, `usage.cost` as the
+  billed amount (parsed without floats, as part 5 does), and `id` as the
+  generation ID.
+- Errors follow part 5's classification: `400/401/404` uncharged
+  `request_rejected`, `402` `provider_balance`, `429` `rate_limited`, `413`
+  uncharged `request_too_large` (the packer halves the request and retries),
+  anything else after sending `uncertain`.
+- **Lookup:** if step 0 shows `/generation` finds System One ids, uncertain
+  attempts reconcile automatically as in part 5. Otherwise they go to the
+  owner's unresolved-usage view; amounts are fractions of a cent.
 
-**Timeouts.** Matching calls can take longer than the diagnostic: per-kind call
-timeouts (diagnostic 90 s, match 180 s), the reservation deadline at call
-timeout + 60 s, and River `JobTimeout` raised to match.
+**Configuration and quotes.** `DECISION_MODEL` (for example
+`typesafe/jev-1.14`) is configured separately from part 5's `LLM_MODEL`.
+`QuoteDecision` reads the model's entry from
+`/api/v1/models?output_modalities=decisions`, caches it for 15 minutes like the
+chat quote, and rejects pricing fields other than `prompt`, `completion` and
+`request` (part 5's rule).
+
+**Reservations bounded by the request.** The reservation is
+`(bytes + overhead) × prompt rate + questions × 32 × completion rate +
+request rate`, where `bytes` is the UTF-8 length of the serialized request.
+Byte-level tokenizers never produce more tokens than bytes, so this bounds the
+input; 32 output tokens per question bounds answers (observed: 1–21 for a whole
+request). A request whose bound exceeds the model's context is split before
+quoting. The settlement path already records any overshoot. Part 5's chat
+diagnostic is unchanged.
+
+**Stored requests.** A new tenant table keeps the exact request:
+
+```
+llm_request   user_id · operation_id (PK, FK llm_operation) · body jsonb · created_at
+```
+
+Forced RLS; `INSERT, SELECT` for `zapply_app` and `zapply_worker`. `Process`
+loads it, so retries send the same bytes and the operation's `request_hash`
+covers them. Operations without a row are diagnostics.
+
+**Operation kinds.** `llm_operation.kind` gets a check constraint:
+`diagnostic` or `decision`. `Process` reads the kind and calls `Generate` or
+`Decide`; quoting, reservation, settlement, uncertainty and recovery are
+shared. The River kind stays `llm_diagnostic`, so queued jobs remain valid.
+
+**Results.** `platform.settle` stores the raw answers JSON in
+`llm_operation.result`. A migration raises its limit to 262,144 characters
+(128 answers with full distributions fit comfortably).
+
+**Completion hooks.** `Runtime` gets
+
+```go
+OnTerminal func(ctx context.Context, tx pgx.Tx, op Operation) error
+```
+
+called in the transaction that makes an operation `completed`, `failed` or
+`cancelled`. `internal/decide` registers one that ingests answers (section 2)
+and notifies the operation's owner; matching's owner inserts a `match_advance`
+River job. Recovery (section 7) covers a hook lost to a crash.
 
 **Cancellation.** The API can't update `llm_operation`. Add
 `platform.cancel_operation(p_id)`: it cancels only `pending` or `blocked`
@@ -122,77 +166,105 @@ operations of the caller, writes `llm_operation.changed`, and returns whether
 it did. `platform.reserve` already refuses anything not `pending|blocked`, so a
 cancel racing a dispatch is safe: one of them wins.
 
-## 2. Schema (migration `00010_matching.sql`)
+## 2. The decision cache (`internal/decide`)
 
-The tables are as in the spec, with these refinements:
+A small generic layer between features and the gateway:
 
-- `match_run`: adds `library_fingerprint` (see section 7), `rerun_requested
-  boolean`, `cost` is not stored (summed from the ledger on read).
-  Partial unique index `(user_id, job_id) WHERE status IN ('pending','running',
-  'blocked','needs_review')` enforces one active run per job.
-- `match_run_item`: adds `facts jsonb`, a snapshot of the structured fields
-  finalize uses (kind, category, dates and precision, `is_current`,
-  `degree_type`/`status`, `auto_include`, linked skill names, highlight
-  hashes in order). Finalize computes from the snapshot, so a run's result is
-  stable even after the library changes; staleness tells the user to re-run.
-- `match_run_operation`: adds `try` (0 or 1) and `ingested_at`.
-- Cache answers are stored **by hash, not by id**. Highlights are sent as local
-  refs (`h1…hn`) and stored as highlight content hashes; skills as normalized
-  names. Part 2 can give unchanged highlights new ids on `PUT`, and a cached
-  answer must still map onto them. Ids are resolved at read time.
+```go
+type Ask struct {
+    State     json.RawMessage
+    Questions map[string]systemone.Question // caller's keys
+}
+// Lookup returns cached answers and the questions still missing.
+Lookup(ctx, tx, user, model string, asks []Ask) (Answers, []Pending, error)
+// Enqueue packs pending questions into requests and creates one operation
+// for the first request, or all of them (the caller chooses).
+Enqueue(ctx, tx, user, model string, pending []Pending, owner Owner, opts) ([]uuid.UUID, error)
+```
+
+- **Keys.** `state_hash` = SHA-256 of the canonical JSON state; `question_hash`
+  = SHA-256 of the canonical JSON question (type, instructions, criteria). The
+  wording is part of the hash, so changing a question's text invalidates its
+  answers without a version constant.
+- **Packing.** Requests group questions sharing a state, up to the model's
+  question limit (default 128) and a byte budget derived from its context.
+  Request question ids are short (`q1…`); the mapping to cache keys is stored
+  with the operation (`decision_request_item(operation_id, request_key,
+  state_hash, question_hash)`).
+- **Ingestion** (from the hook or recovery): parse the operation's result, and
+  for every answer validate it against its question: type matches, `choice`
+  names a known option, `score` probabilities cover the legend, probabilities
+  are finite, in [0, 1] and sum to 1 ± 0.01, `noul` in [0, 1]. Valid answers go
+  into `decision_answer` (`ON CONFLICT DO NOTHING`); invalid or missing ones are
+  reported to the owner as discarded.
+- Parts 8 and 10 reuse this package unchanged.
+
+## 3. Schema (migration `00010_matching.sql`)
+
+The tables are as in the spec, plus `llm_request`, `decision_request_item`, and:
+
+- `match_run`: partial unique index `(user_id, job_id) WHERE status IN
+  ('pending','running','blocked','needs_review')` enforces one active run per
+  job; `idempotency_key` with `UNIQUE (user_id, idempotency_key)`.
+- `match_run_question`: `user_id · run_id · stage · subject (requirement,
+  evidence, highlight, skill ids or text hashes) · state_hash · question_hash ·
+  status (cached, pending, answered, discarded, unanswered) · tries`. It lets
+  `Advance` know exactly what the run still needs and powers progress counts.
 - `profile.auto_match boolean NOT NULL DEFAULT true`.
-- `platform.model_quote(model, endpoint, quote jsonb, fetched_at)`: the worker
-  upserts every quote it fetches; the API reads it for estimates (section 8).
+- `platform.model_quote(model, quote jsonb, fetched_at)`: the worker upserts
+  every decision quote it fetches; the API reads it for estimates.
+- `platform.active_match_runs(p_limit)` and
+  `platform.operation_costs(p_ids uuid[])` (`SECURITY DEFINER`, caller's own
+  ledger only).
 - RLS: every new tenant table gets the `tenant` policy for `zapply_app` and
   `zapply_worker`. The worker gets `SELECT` on `job`, `job_status`, `profile`,
   `evidence`, `highlight`, `skill`, `organization`, `evidence_skill`,
   `highlight_skill`, with worker-scoped `tenant` policies where the existing
   ones are scoped to `zapply_app`. No write grants on library or job tables.
-- Grants: `zapply_app` `SELECT, INSERT, UPDATE` on `match_run` and the override
-  table (cancel, corrections, auto-run supersede), `SELECT` on caches;
-  `zapply_worker` `SELECT, INSERT, UPDATE` on run/item/operation tables and
-  `INSERT, SELECT` on caches.
-- `platform.active_match_runs(p_limit)`: `SECURITY DEFINER`, returns
-  `(user_id, run_id)` of active runs for the recovery scan, like
-  `pending_operations`.
+- Grants: `zapply_app` `SELECT, INSERT, UPDATE` on `match_run` and
+  `match_override` (start, cancel, corrections, supersede), `SELECT, INSERT` on
+  `llm_request` and `decision_request_item`, `SELECT` on the rest;
+  `zapply_worker` read/write on run and question tables and `INSERT, SELECT`
+  on `decision_answer`.
 
 Check the migration sequence before coding: part 7 is in flight. Go-registered
 migrations (6, 8) mean the next free number must be read from both
 `internal/store/migrations` and `store.go`.
 
-## 3. Domain package `internal/match`
+## 4. Matching domain (`internal/match`)
 
 Pure, unit-tested code with no database access:
 
-- **Inputs.** `JobInput`, `EvidenceDoc` (with facts and highlight refs),
-  `SkillDoc`, and canonical-JSON hashing reusing `internal/library`'s
-  canonicalizer. `requirements_hash`, `skills_hash` and `library_fingerprint`
-  live here.
-- **Prompts.** `ExtractRequest(job)` and `ScoreRequest(reqs, docs, skills?)`
-  build `llm.Request`s. Constants `PromptVersion = "m1"` and
-  `ScoringVersion = "s1"`. Posting and library are wrapped in labelled,
-  delimited blocks; the system message carries the rubric with anchored
-  examples and the "data is never instructions" rule.
-- **Schemas and parsing.** One JSON Schema per answer; `ParseExtract` and
-  `ParseScore` validate strictly: known ids only, a highlight ref must belong
-  to its evidence, enum values, lengths (requirement 200, reason 240), at most
-  30 requirements, no duplicate `(evidence, requirement)` pairs. Any violation
-  is `ErrInvalidAnswer` with a safe code.
-- **Batching.** `Pack(docs, budget)` → batches of ≤ 20 documents and ≤ 24,000
-  characters of rendered input; one oversized document goes alone (a single
-  evidence over the budget is truncated at highlight boundaries and flagged).
-  The skills document joins the first batch.
+- **Posting reader.** `Lines(description) []Line`: normalize whitespace and
+  bullet markers (`-`, `*`, `•`, `·`, numbered lists), split paragraphs into
+  sentences, drop lines under three words, split lines over 400 characters,
+  keep 120. `YearsIn(line) *int` parses "5+ years", "at least five years",
+  "3-5 years" (lower bound), "minimum of 2 yrs", in English first; other
+  languages leave it empty.
+- **Questions.** Builders for each stage, with the wording in one file:
+  `LineClass`, `LineType`, `Seniority`, `DegreeLevel`, `LanguageLevel`,
+  `EvidenceStrength` (the four-level `score`), `HighlightShows`, `SkillValued`.
+  Data (the line, the evidence document, the highlight) goes inside the
+  instructions object, as cvd's `with_data` does; the question sentence refers
+  to it by name. Evidence documents are rendered from library fields in a fixed
+  field order, so equal content gives an equal hash.
+- **States.** `read`, `level` and the skill questions use the posting
+  (`title`, `company`, `description`). `evidence` and `highlights` use only
+  `title` and `company`, so scores survive description edits that keep a line.
+- **Requirements.** `Requirements(lines, answers)` applies the class rules,
+  dedupes, keeps 40, and attaches `min_years` and levels.
 - **Checks.** `Years(ranges, asOf)` merges overlapping partial-date periods
   (a period starts at the beginning of its precision unit; current means
   `asOf`); `DegreeAtLeast`; `CEFRAtLeast` (A1 < … < C2 < native).
-- **Compute.** `Compute(run snapshot, extract, scores, skills, overrides, asOf)
-  → Result` implements finalize exactly as the spec states: recency, checked
-  strengths, relevance, highlight and skill ranks, coverage, job score,
-  must-haves, insights (gaps, near misses, hidden evidence, seniority fit),
-  `selection`, `skills`, `suggestions`. Deterministic for equal inputs,
-  including tie-breaks (library order).
+- **Compute.** `Compute(snapshot, requirements, answers, overrides, asOf) →
+  Result` implements finalize exactly as the spec states: expected strengths,
+  recency, checks, relevance, highlight and skill ranks, coverage with
+  confidence, job score, must-haves, insights, `selection`, `skills`,
+  `suggestions`. Deterministic for equal inputs, ties broken by library order.
+  Unanswered pairs are unknown, not zero: they don't lower coverage or
+  relevance, and the result counts them.
 
-## 4. Run orchestration
+## 5. Run orchestration
 
 One River job kind does the stepping:
 
@@ -204,197 +276,188 @@ type AdvanceArgs struct{ UserID, RunID uuid.UUID } // Kind "match_advance", uniq
 and is idempotent:
 
 1. **Terminal or cancelled run:** return.
-2. **Ingest** every linked operation that is terminal and not `ingested_at`:
-   - `completed`: parse. Valid → insert cache rows (`ON CONFLICT DO NOTHING`;
-     equal keys mean equal answers), mark items `scored`. Invalid → if `try =
-     0`, create a retry operation for the same batch (`try = 1`); else mark the
-     batch's items `unscored`.
-   - `failed` or `cancelled`: same as invalid, without a retry for `cancelled`.
-   - Extract failing twice fails the run (`error_code`).
-3. **Next step:**
-   - No requirements for `(job_hash, model, prompt version)` → create the
-     extract operation (unless one is in flight).
-   - Requirements known → set `requirements_hash`, resolve cache hits for every
-     pending item and the skills document, then create **one** score operation
-     for the next batch of uncached documents. One at a time matches the
-     gateway's one-call-in-flight rule and keeps cancellation cheap.
-   - Nothing left → finalize: run `Compute`, store `score`, `must_met`,
-     `must_total`, counters, `finished_at`; status `completed`, or `partial`
-     when anything is `unscored`. If `rerun_requested`, create a new run in the
-     same transaction.
-4. **Mirror status:** a run whose current operation is `blocked` or
-   `needs_review` shows the same status and the operation's reason and
-   `next_eligible_at`; otherwise `running`.
-5. Emit `match_run.changed` whenever status, stage or counters change.
-
-Creating an operation means: insert `llm_operation` (kind, idempotency key
-`match:{run}:{stage}:{batch}:{try}`, request hash), its `llm_request`, the
-`match_run_operation` link, and `InsertTx` of the gateway River job, all in the
-same transaction. The operation's model is the configured `LLM_MODEL`; the run
-records it and the prompt version at creation, so cache keys are stable.
-
-Cached answers are matched by the model and prompt version the run recorded.
-Changing `LLM_MODEL` therefore starts fresh caches for new runs without
-touching old ones.
+2. **Ingest** any terminal operation of the run not yet ingested (through
+   `internal/decide`). Discarded questions with `tries < 2` go back to
+   `pending`; otherwise `unanswered`.
+3. **Fill the current stage:** build its questions, mark cache hits
+   `answered`, and if nothing is in flight, enqueue **one** request of pending
+   questions. One request at a time matches the gateway's one-call-in-flight
+   rule and keeps cancellation cheap.
+4. **Advance the stage** when every question in it is answered or unanswered:
+   `read` → build requirements (store `match_run_requirement`, seniority) →
+   `level` (skipped if none) → `evidence` (evidence × requirement and skills)
+   → `highlights` (pairs with expected strength ≥ 0.4) → `finalize`.
+5. **Finalize:** run `Compute`, store `score`, `must_met`, `must_total`,
+   counters and `finished_at`; status `completed`, or `partial` when anything
+   is `unanswered`. If `rerun_requested`, create the follow-up run in the same
+   transaction.
+6. **Mirror status:** a run whose in-flight operation is `blocked` or
+   `needs_review` shows the same status, reason and `next_eligible_at`;
+   otherwise `running`. An operation that ends `failed` after an owner
+   resolution sends its questions back to `pending` as a new operation.
+7. Emit `match_run.changed` whenever status, stage or counters change.
 
 **Library reads.** At run creation the service snapshots eligible evidence
 (non-archived, not `career_break`, ≤ 300) into `match_run_item` with hashes and
-facts, and records `skills_hash` and `library_fingerprint`. Requests are built
-from the live rows only when their hash still equals the snapshot; an item
-edited in between is marked `skipped` (the run will be stale anyway).
+`facts`, and records `skills_hash` and `library_fingerprint`. Questions are
+built from live rows only while their hash equals the snapshot; an item edited
+mid-run is skipped (the run will be stale anyway).
 
-## 5. Automatic runs and supersede
+The run records `DECISION_MODEL` at creation; its cache lookups use that model,
+so changing the configured model starts fresh answers for new runs only.
+
+## 6. Automatic runs and supersede
 
 `jobs.Service` gets an optional dependency:
 
 ```go
 type Matcher interface {
-    JobSaved(ctx context.Context, tx pgx.Tx, uid uuid.UUID, job db.Job, hashChanged bool) error
+    JobSaved(ctx context.Context, tx pgx.Tx, uid uuid.UUID, job db.Job, created, hashChanged bool) error
 }
 ```
 
 `CreateJob` and `UpdateJob` call it inside their transaction after the write.
-`match.Service.JobSaved` does nothing unless the hash changed (or it's a
-create), the description or title is non-empty, the status's stage is not
-`closed`, and `profile.auto_match` is true. Then:
+`match.Service.JobSaved` does nothing unless it's a create or the hash changed,
+the title or description is non-empty, the stage is not `closed`, and
+`profile.auto_match` is true. Then:
 
 - No active run → create one (`trigger = auto`) and `InsertTx` its
   `match_advance`.
-- An active run with no operation that left `pending|blocked` → cancel its
-  open operations through `platform.cancel_operation`, mark it `cancelled`,
-  create the new run.
+- An active run with nothing dispatched (all its operations `pending` or
+  `blocked`) → cancel them through `platform.cancel_operation`, mark the run
+  `cancelled`, create the new run.
 - An active run that has dispatched → set `rerun_requested`; finalize starts
-  the follow-up run.
+  the follow-up.
 
-Moves between columns and archive changes don't touch `content_hash`, so they
-never trigger runs. Library edits never call the matcher. Tests run the jobs
-service with and without a matcher, so part 4 behavior is unchanged when
-matching is disabled.
+Moves, archive changes and notes don't change `content_hash`, so they never
+trigger runs. Library edits never call the matcher. Tests run the jobs service
+with and without a matcher, so part 4 behavior is unchanged when matching is
+disabled.
 
-## 6. Recovery
+## 7. Recovery
 
-- The worker's existing periodic scan also calls
-  `platform.active_match_runs(1000)` and inserts `match_advance` for each.
-  River uniqueness by args makes duplicate inserts harmless.
-- `Advance` repairs every lost-hook case by ingesting terminal operations it
-  finds, so the hook is an optimization, not a correctness requirement.
-- A crash between creating an operation and its River job can't happen: they
-  share a transaction.
+- The worker's periodic scan also calls `platform.active_match_runs(1000)` and
+  inserts `match_advance` for each; River uniqueness makes duplicates harmless.
+- `Advance` ingests any terminal operation it finds, so the hook is an
+  optimization, not a correctness requirement.
+- Operations and their River jobs are created in one transaction, so neither
+  exists without the other.
 
-## 7. Staleness and the board
+## 8. Staleness and the board
 
 - `library_fingerprint` = SHA-256 over sorted `(evidence id, content_hash)` of
-  eligible evidence plus `skills_hash`. Computing it is one aggregate query per
-  user.
-- `GET /jobs` computes the fingerprint once per request and joins each job's
-  latest run (`DISTINCT ON (job_id)` over an index on `(user_id, job_id,
-  created_at DESC)`): `stale = run.job_hash <> job.content_hash OR
+  eligible evidence plus `skills_hash`; one aggregate query per user.
+- `GET /jobs` computes it once per request and joins each job's latest run
+  (`DISTINCT ON (job_id)` over an index on `(user_id, job_id, created_at
+  DESC)`): `stale = run.job_hash <> job.content_hash OR
   run.library_fingerprint <> current`.
-- `GET /match-runs/{id}` additionally counts changed, added and removed items
-  by comparing the run's items with current hashes.
+- `GET /match-runs/{id}` additionally counts changed, added and removed items.
 
-## 8. API
+## 9. API
 
 As listed in the spec. Implementation notes:
 
-- **Estimate** reads `platform.model_quote` (written by the worker), rebuilds
-  the requests that would be sent for cache misses, and sums their per-request
-  reservations with the same function the gateway uses. No quote, or a quote
-  older than 15 minutes → `estimate_unavailable` with the reason; starting a
-  run is still allowed. Available allowance comes from `platform.usage()`.
-- **Start** is `POST` with `Idempotency-Key`, stored on the run
-  (`UNIQUE (user_id, idempotency_key)`); replay returns the same run.
-- **Run detail** loads run, items, cache rows and overrides, calls `Compute`
-  with `asOf = finished_at` (so recency doesn't drift on every read), maps
-  hashes to current ids, and adds the settled cost from a new
-  `platform.operation_costs(p_ids uuid[])` (sum of the caller's own ledger
-  entries, no other member data).
-- **Corrections** `PUT/DELETE /jobs/{id}/match-requirements/{requirement_id}`
-  validate the id against the latest completed run's requirements, upsert the
-  override, recompute that run's `score` and `must_*` with `Compute`, bump its
-  version and emit `match_run.changed`.
-- **Profile** `auto_match` joins the existing `If-Match` flow.
-- OpenAPI goes to 0.6.0: new schemas `MatchRun`, `MatchRunSummary`,
-  `MatchEstimate`, `Requirement`, `Coverage`, `EvidenceMatch`, `Insight`,
-  `Selection`; `JobSummary.match`; `Profile.auto_match`; `EventTopic` gains
+- **Estimate** builds the questions a run would ask, looks them up in the
+  cache, packs the misses and sums each request's reservation from
+  `platform.model_quote`. Stages after `read` depend on answers not yet known,
+  so the estimate assumes every line is a requirement (capped at 40) and
+  every pair reaches the highlight stage; it's an upper bound. No quote, or one
+  older than 15 minutes → `estimate_unavailable`; starting a run still works.
+- **Start**, **cancel**, **list** and **detail** as specified. Detail loads the
+  run, requirements, items, cached answers and overrides, calls `Compute` with
+  `asOf = finished_at`, maps hashes to current ids, and adds the settled cost
+  from `platform.operation_costs`.
+- **Corrections** `PUT/DELETE /jobs/{id}/match-overrides/{text_hash}` upsert
+  the override, recompute the latest completed run's `score` and `must_*`,
+  bump its version and emit `match_run.changed`.
+- OpenAPI goes to 0.6.0: `MatchRun`, `MatchRunSummary`, `MatchEstimate`,
+  `Requirement`, `Coverage`, `EvidenceMatch`, `Insight`, `Selection`;
+  `JobSummary.match`; `Profile.auto_match`; `EventTopic` gains
   `match_run.changed`. `make generate` regenerates server and client.
 
-## 9. Web
+## 10. Web
 
 - `web/src/app/jobs/match/`: `match.store.ts` (signals; per-job latest run,
   estimate, corrections; cleared on identity change like the jobs store;
   generation-guarded loads as in the part 4 fixes), `match-tab.ts/.html`, and
-  small presentational components for the score ring, requirement row and
-  evidence row.
+  small components for the score ring, requirement row (quoted line, class
+  control, coverage with confidence) and evidence row.
 - The job sheet gets a Match tab. SSE `match_run.changed` for the open job
   refetches the run; other jobs' events update board badges through the jobs
   store.
 - Board cards and the table get a score badge (dimmed when stale); the table a
-  sortable score column, sorted client-side within the loaded page.
+  sortable score column, client-side within the loaded page.
 - Settings toggle for `auto_match` where the profile is edited.
-- Requirement text and reasons render as plain text only.
+- Requirement text renders as plain text only.
 
-## 10. Tests and acceptance gates
+## 11. Tests and acceptance gates
 
-1. **Gateway generalization.** Fake HTTP: system/user messages, `max_tokens`,
-   `response_format` only when supported, byte-bound reservations (ASCII, CJK,
-   emoji), `MaxOutput` above the endpoint limit rejected uncharged. Existing
-   part 5 tests pass unchanged; the diagnostic still works end to end.
-   `cancel_operation` racing `reserve` in two transactions: exactly one wins.
-2. **Domain (unit).** Parsers reject each invalid shape; packing respects both
-   limits; `Years` across overlapping, partial and current ranges; degree and
-   CEFR ordering; `Compute` golden tests on recorded answers covering recency,
-   checks capping strength, overrides (`ignore` removes a requirement from the
-   denominator), floor, suggestions, career breaks excluded, deterministic
-   ties.
-3. **Orchestration (Postgres + fake provider).**
-   - Cold run: one extract, N score batches, one at a time, completed.
-   - Warm re-run: zero calls; editing one highlight: one batch.
-   - Same content with new highlight ids still maps citations.
-   - Invalid answer → one retry → `unscored` and `partial`; invalid extract
-     twice → `failed`.
-   - Allowance exhausted mid-run → `blocked` with reason and resume; no
-     membership → `blocked` and proceeds after a plan is assigned.
-   - Uncertain attempt → `needs_review`, owner resolution → `unscored`, run
-     continues; no call is ever resent.
-   - Cancel before dispatch makes no call; cancel after dispatch settles and
-     still caches.
-   - Lost hook (kill between settle and hook) recovered by the scan.
-   - Two workers advancing the same run never create duplicate operations.
-4. **Auto-run.** Create with description → run; title-only edit → run; move,
-   archive, notes edit → none; closed stage → none; `auto_match` off → none;
-   rapid saves → supersede before dispatch, `rerun_requested` after; jobs
-   rolled back → no run and no River job.
-5. **API.** Estimate with and without a quote; start idempotency and `409`
+1. **Transport (fake HTTP).** Request body shape and URL; answers, `usage.cost`
+   and `id` parsed; a `200` HTML body classified uncertain, never parsed;
+   `413` triggers a split; byte-bound reservations for ASCII, CJK and emoji;
+   pricing with unknown fields rejected. Part 5's tests pass unchanged and the
+   chat diagnostic still works end to end. `cancel_operation` racing `reserve`:
+   exactly one wins.
+2. **Decision cache.** Equal content hits, changed wording misses; packing
+   respects the question limit and byte budget and groups by state; each
+   invalid answer shape is discarded; ingesting twice is a no-op.
+3. **Matching domain (unit).** Line splitting on real-world postings (bullets,
+   paragraphs, numbered lists); `YearsIn`; requirement rules and the 40 cap;
+   `Years` across overlapping, partial and current ranges; degree and CEFR
+   ordering; `Compute` golden tests on recorded answers covering expected
+   strengths, recency, checks capping strength, overrides (`ignore` leaves the
+   denominator), the floor, suggestions, career breaks excluded, unanswered
+   pairs, deterministic ties.
+4. **Orchestration (Postgres + fake provider).**
+   - Cold run walks every stage, one request at a time, and completes.
+   - Warm re-run: zero requests. Editing one evidence: only its questions.
+     Editing the description but keeping lines: only `read` questions.
+   - Discarded answers retried once, then `unanswered` and `partial`.
+   - Allowance exhausted mid-run → `blocked` with reason, then resumes; no
+     membership → `blocked`, proceeds after a plan is assigned.
+   - Uncertain attempt → `needs_review`; after owner resolution its questions
+     go out in a new operation; the lost attempt is never resent.
+   - Cancel before dispatch sends nothing; after dispatch the answers are still
+     cached.
+   - Lost hook recovered by the scan; two workers never create duplicate
+     operations for one run.
+5. **Auto-run.** Create with description → run; title edit → run; move,
+   archive, notes → none; closed stage → none; `auto_match` off → none; rapid
+   saves → supersede before dispatch, `rerun_requested` after; a rolled-back
+   job write leaves no run and no River job.
+6. **API.** Estimate with and without a quote; start idempotency and `409`
    with `existing_id`; tenant isolation on every endpoint; corrections update
-   score and emit; stale on board after job and library edits; cost visible
-   only to its owner.
-6. **Web.** Store tests in the existing harness: identity change clears runs,
+   the score and emit; stale on the board after job and library edits; cost
+   visible only to its owner.
+7. **Web.** Store tests in the existing harness: identity change clears runs,
    late responses don't overwrite newer runs, SSE refetch, correction
    round-trip. Typecheck and production build. Browser walkthrough with the
-   fake provider: save a job, watch the run progress, read gaps, correct a
+   fake provider: save a job, watch the stages, read gaps, correct a
    requirement, edit evidence, see stale, re-run.
-7. **Live check.** One manual run against OpenRouter after deploy, by the
-   owner with a plan. CI never spends credits.
+8. **Live check.** One manual run against `/api/v1/systemone` after deploy, by
+   the owner with a plan. CI never spends credits.
 
 Run `make generate`, generated-file drift, `make vet`, the integration suite
 with `-race`, web tests, typecheck and build, and the image build.
 
-## 11. Build order
+## 12. Build order
 
-1. Gateway generalization (section 1) with part 5 regression tests green. This
-   is mergeable on its own and unblocks parts 7, 8 and 10.
-2. Migration, sqlc queries, `internal/match` domain package and its unit tests.
-3. Orchestration, recovery and the worker grants.
-4. API, OpenAPI and the auto-run hook.
-5. Web.
-6. Docs: record delivered behavior in `06-matching.md`, update the part 5 note
-   on reservations, `.env.example` (match timeouts if configurable), README.
+1. The API probe (section 0), recorded here.
+2. System One transport, stored requests, operation kinds, hooks and
+   cancellation (section 1), with part 5 regressions green. Mergeable on its
+   own, and what parts 8 and 10 build on.
+3. `internal/decide` and its tables.
+4. Migration, sqlc queries, `internal/match` domain and unit tests.
+5. Orchestration, recovery and worker grants.
+6. API, OpenAPI and the auto-run hook.
+7. Web.
+8. Docs: record delivered behavior in `06-matching.md`, the part 5 note on
+   reservations, `.env.example` (`DECISION_MODEL`), README.
 
 ## Deploying
 
 Apply the new migrations with `make migrate` before rolling out API and worker.
-Existing diagnostic operations keep working across the deploy: the River kind
-is unchanged and a missing `llm_request` row means the diagnostic prompt.
-`LLM_MODEL` must name an endpoint that supports `max_tokens` (already required)
-and, preferably, structured outputs.
+Set `DECISION_MODEL` on the worker. Existing diagnostic operations keep working
+across the deploy: the River kind is unchanged and an operation without a
+stored request is a diagnostic. Without `DECISION_MODEL`, runs wait as
+`blocked` with `model_not_configured` and the rest of the app is unaffected.
