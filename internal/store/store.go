@@ -43,14 +43,20 @@ func MigrateTo(ctx context.Context, url string, target int64, log *slog.Logger) 
 	return migrate(ctx, db, log, target)
 }
 
-func migrate(ctx context.Context, db *sql.DB, log *slog.Logger, target int64) error {
+// migrationProvider builds the complete SQL and Go migration catalog without
+// opening a database connection, so it can also be validated in unit tests.
+func migrationProvider(db *sql.DB) (*goose.Provider, error) {
 	dir, err := fs.Sub(migrations, "migrations")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, dir,
+	return goose.NewProvider(goose.DialectPostgres, db, dir,
 		goose.WithGoMigrations(goose.NewGoMigration(6, &goose.GoFunc{RunTx: backfillJobURLs}, nil),
 			goose.NewGoMigration(8, &goose.GoFunc{RunDB: migrateRiver}, nil)))
+}
+
+func migrate(ctx context.Context, db *sql.DB, log *slog.Logger, target int64) error {
+	p, err := migrationProvider(db)
 	if err != nil {
 		return err
 	}
