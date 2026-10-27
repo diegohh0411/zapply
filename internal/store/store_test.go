@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -34,6 +35,49 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	db := testdb.New(t)
 	if err := store.Migrate(context.Background(), db.AdminURL, discardLogger()); err != nil {
 		t.Fatalf("second migrate: %v", err)
+	}
+}
+
+func TestIdentityEmailMigrationWithoutInheritedPlatformOwnership(t *testing.T) {
+	db := testdb.NewAtVersion(t, 9)
+	ctx := context.Background()
+	admin := db.Admin(t)
+	role := "migration_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" NOLOGIN NOINHERIT NOSUPERUSER"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec(ctx, "REASSIGN OWNED BY "+role+" TO CURRENT_USER; DROP OWNED BY "+role+"; DROP ROLE "+role); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, statement := range []string{
+		"GRANT zapply_platform TO " + role + " WITH INHERIT FALSE, SET TRUE",
+		"GRANT USAGE, CREATE ON SCHEMA public TO " + role,
+		"GRANT USAGE, CREATE ON SCHEMA platform TO " + role,
+		"ALTER TABLE public.identity OWNER TO " + role,
+		"ALTER TABLE public.goose_db_version OWNER TO " + role,
+	} {
+		if _, err := admin.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	migrationURL, err := url.Parse(db.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := migrationURL.Query()
+	query.Set("role", role)
+	migrationURL.RawQuery = query.Encode()
+	if err := store.Migrate(ctx, migrationURL.String(), discardLogger()); err != nil {
+		t.Fatalf("migrate as non-inheriting schema owner: %v", err)
+	}
+	var owner string
+	if err := admin.QueryRow(ctx, `SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='platform.members(uuid,integer)'::regprocedure`).Scan(&owner); err != nil {
+		t.Fatal(err)
+	}
+	if owner != "zapply_platform" {
+		t.Fatalf("members function owner = %s; want zapply_platform", owner)
 	}
 }
 

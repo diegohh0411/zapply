@@ -20,6 +20,9 @@ END $$;
 REVOKE EXECUTE ON FUNCTION resolve_identity(text,text,uuid,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION resolve_identity(text,text,uuid,text) TO zapply_app;
 
+-- Migration 7 grants SET without INHERIT on this function's owner role.
+-- Switch explicitly so non-superuser schema owners can replace it.
+SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.members(p_after uuid,p_limit integer) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, pg_temp AS $$ BEGIN
  PERFORM platform.assert_owner();
@@ -27,12 +30,14 @@ SET search_path = pg_catalog, platform, pg_temp AS $$ BEGIN
    'membership',platform.membership_json(b.user_id),'usage',platform.usage_for(b.user_id)) ORDER BY b.user_id)
    FROM (SELECT user_id FROM platform.budget_account WHERE p_after IS NULL OR user_id>p_after ORDER BY user_id LIMIT least(greatest(p_limit,1),100)) b),'[]');
 END $$;
-ALTER FUNCTION platform.members(uuid,integer) OWNER TO zapply_platform;
+RESET ROLE;
 -- +goose StatementEnd
 
 -- +goose Down
+-- +goose StatementBegin
 DROP FUNCTION public.resolve_identity(text,text,uuid,text);
 ALTER TABLE public.identity DROP COLUMN email;
+SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.members(p_after uuid,p_limit integer) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, pg_temp AS $$ BEGIN
  PERFORM platform.assert_owner();
@@ -40,4 +45,5 @@ SET search_path = pg_catalog, platform, pg_temp AS $$ BEGIN
    'membership',platform.membership_json(b.user_id),'usage',platform.usage_for(b.user_id)) ORDER BY b.user_id)
    FROM (SELECT user_id FROM platform.budget_account WHERE p_after IS NULL OR user_id>p_after ORDER BY user_id LIMIT least(greatest(p_limit,1),100)) b),'[]');
 END $$;
-ALTER FUNCTION platform.members(uuid,integer) OWNER TO zapply_platform;
+RESET ROLE;
+-- +goose StatementEnd
