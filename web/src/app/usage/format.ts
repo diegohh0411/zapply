@@ -10,7 +10,24 @@ export function usagePercent(spent: string, reserved: string, cap: string): numb
     ? Math.min(100, Math.max(0, ((Number(spent) + Number(reserved)) / limit) * 100))
     : 0;
 }
-export function blockMessage(reason: string): string {
+const failureMessages: Record<string, string> = {
+  encryption_unavailable:
+    'The stored provider key could not be decrypted. Check the encryption key ring on the worker.',
+  request_rejected:
+    'The provider rejected the request. Check the provider key and model configuration.',
+  rate_limited: 'The provider stayed busy through every retry.',
+  provider_balance: 'The provider account has insufficient funds.',
+  provider_budget: 'The provider key reached its spending limit.',
+  stale_quote: 'Model pricing changed during every retry.',
+};
+/** Failed operations get final wording; other reasons describe a pause. */
+export function blockMessage(reason: string, status = ''): string {
+  if (status === 'failed' && reason !== 'result_unavailable') {
+    return (
+      (failureMessages[reason] ?? 'The request failed without a charge.') +
+      ' It will not be retried.'
+    );
+  }
   const messages: Record<string, string> = {
     membership_required: 'An owner needs to assign you a membership before you can use models.',
     membership_suspended:

@@ -126,12 +126,15 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
   in Unresolved usage. Resolution requires the local request deadline to pass,
   records the evidence, and never automatically regenerates lost output.
   Reconciliation passes do not change an unresolved attempt, so the owner's
-  resolution stays current and the original error class is kept.
+  resolution stays current and the original error class is kept. Passes back
+  off from one minute to one hour as the attempt ages, and automatic lookups
+  stop seven days after its deadline.
 - A provider-reported charge is saved with retries for up to a minute. If it
   still cannot be saved, the attempt becomes uncertain with its generation ID
   (error `settlement_failed`) and the automatic lookup recovers the cost.
 - If a stored key cannot be decrypted, the operation retries up to four times
-  (one uncharged attempt each) and then fails.
+  (one uncharged attempt each) and then fails. A failed operation keeps the
+  reason for its last uncharged attempt (for example `request_rejected`).
 - To rotate master encryption keys, first deploy a ring containing both versions
   to all API/worker processes, with the new active version. Run
   `zapply secrets reencrypt` using migration credentials and that ring. Retire the

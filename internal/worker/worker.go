@@ -215,16 +215,17 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 					return err
 				}
 			}
-			if a.GenerationID == nil {
-				return river.JobSnooze(time.Minute)
+			wait := reconcileDelay(a.Deadline)
+			if a.GenerationID == nil || time.Since(a.Deadline) > lookupWindow {
+				return river.JobSnooze(wait)
 			}
 			key, err := r.key(ctx, args.UserID, a.KeyID)
 			if err != nil {
-				return river.JobSnooze(time.Minute)
+				return river.JobSnooze(wait)
 			}
 			result, err := r.Provider.Lookup(ctx, key, *a.GenerationID)
 			if err != nil || result.Amount == nil {
-				return river.JobSnooze(time.Minute)
+				return river.JobSnooze(wait)
 			}
 			return r.settle(ctx, args, a.ID, result, op.Result, "generation_lookup", false, "")
 		}
@@ -333,6 +334,16 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	return river.JobSnooze(time.Minute)
 }
 
+// lookupWindow bounds automatic generation lookups. Older unresolved attempts
+// wait for an owner to resolve them from provider evidence.
+const lookupWindow = 7 * 24 * time.Hour
+
+// reconcileDelay backs off as an unresolved attempt ages: one minute at first,
+// growing to an hour about four hours after the deadline.
+func reconcileDelay(deadline time.Time) time.Duration {
+	return min(time.Hour, max(time.Minute, time.Since(deadline)/4))
+}
+
 func (r *Runtime) key(ctx context.Context, u, id uuid.UUID) (string, error) {
 	var encrypted []byte
 	var version string
@@ -350,20 +361,22 @@ func (r *Runtime) uncertain(ctx context.Context, args Args, id uuid.UUID, genera
 			return err
 		}
 		if result != "" {
-			_, err := tx.Exec(ctx, "UPDATE llm_operation SET result=$1 WHERE id=$2", result, args.OperationID)
+			_, err := tx.Exec(ctx, "UPDATE llm_operation SET result=$1 WHERE id=$2", stripNUL(result), args.OperationID)
 			return err
 		}
 		return nil
 	})
 }
 
+// stripNUL removes bytes Postgres text cannot store, which would fail every retry.
+func stripNUL(s string) string { return strings.ReplaceAll(s, "\x00", "") }
+
 // settleCharged records a provider-reported charge. Losing it would turn a
 // known cost into a manual resolution, so transient database failures are
 // retried; if the charge still cannot be saved, the generation ID is kept so the
 // reconciliation lookup can recover the cost.
 func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result llm.Result) error {
-	// Postgres text cannot store NUL bytes, which would fail every retry.
-	text := strings.ReplaceAll(result.Text, "\x00", "")
+	text := stripNUL(result.Text)
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer stop()
 	var err error
@@ -391,7 +404,7 @@ func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, re
 	}
 	last, stopLast := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer stopLast()
-	if e := r.uncertain(last, args, id, generation, "settlement_failed", ""); e != nil {
+	if e := r.uncertain(last, args, id, generation, "settlement_failed", text); e != nil {
 		return errors.Join(err, e)
 	}
 	return river.JobSnooze(time.Minute)
@@ -411,6 +424,11 @@ func (r *Runtime) settle(ctx context.Context, args Args, id uuid.UUID, result ll
 		}
 		if retry {
 			_, err := tx.Exec(ctx, "UPDATE llm_operation SET status='blocked',blocked_reason=$1,next_eligible_at=NULL WHERE id=$2", reason, args.OperationID)
+			return err
+		}
+		if reason != "" {
+			// Keep why a final uncharged attempt failed, not only that it did.
+			_, err := tx.Exec(ctx, "UPDATE llm_operation SET blocked_reason=$1 WHERE id=$2 AND status='failed'", reason, args.OperationID)
 			return err
 		}
 		return nil

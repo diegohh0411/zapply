@@ -30,6 +30,8 @@ type fake struct {
 	uncertain        bool
 	missingCost      bool
 	text             string
+	lookupFails      bool
+	lookups          atomic.Int32
 	entered, release chan struct{}
 }
 
@@ -53,7 +55,11 @@ func (f *fake) Generate(ctx context.Context, key string, _ llm.Quote) (llm.Resul
 		return llm.Result{}, &llm.ProviderError{Code: "transport_uncertain"}
 	}
 	if f.missingCost {
-		return llm.Result{GenerationID: "gen-missing-cost", Text: "OK"}, nil
+		text := "OK"
+		if f.text != "" {
+			text = f.text
+		}
+		return llm.Result{GenerationID: "gen-missing-cost", Text: text}, nil
 	}
 	amount := f.amount
 	text := "OK"
@@ -65,6 +71,10 @@ func (f *fake) Generate(ctx context.Context, key string, _ llm.Quote) (llm.Resul
 func (f *fake) Lookup(_ context.Context, key string, _ string) (llm.Result, error) {
 	if key != "test-provider-secret" {
 		return llm.Result{}, errors.New("lookup used replacement credential")
+	}
+	f.lookups.Add(1)
+	if f.lookupFails {
+		return llm.Result{}, errors.New("generation not found")
 	}
 	amount := f.amount
 	return llm.Result{Amount: &amount}, nil
@@ -582,11 +592,47 @@ func TestKeyFailureStopsRetrying(t *testing.T) {
 	for range 10 {
 		_ = f.r.Process(ctx, args)
 	}
-	if f.p.calls.Load() != 0 || f.state(t, args).Status != "failed" {
-		t.Fatalf("status=%s calls=%d", f.state(t, args).Status, f.p.calls.Load())
+	if op := f.state(t, args); f.p.calls.Load() != 0 || op.Status != "failed" || op.BlockedReason != "encryption_unavailable" {
+		t.Fatalf("status=%s reason=%s calls=%d", op.Status, op.BlockedReason, f.p.calls.Load())
 	}
 	var n int
 	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.llm_attempt").Scan(&n); err != nil || n != 5 {
 		t.Fatalf("attempts=%d err=%v", n, err)
+	}
+}
+
+func TestUncertainOutputWithNULKeepsGeneration(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.p.missingCost, f.p.text = true, "O\x00K"
+	args := f.operation(t)
+	if err := f.r.Process(ctx, args); err == nil {
+		t.Fatal("missing cost not paused")
+	}
+	// The lookup recovers the cost, and the received output is kept.
+	if err := f.r.Process(ctx, args); err != nil {
+		t.Fatal(err)
+	}
+	if op := f.state(t, args); op.Status != "completed" || op.Result != "OK" || f.p.lookups.Load() != 1 {
+		t.Fatalf("op=%+v lookups=%d", op, f.p.lookups.Load())
+	}
+}
+
+func TestGenerationLookupsStopAfterWindow(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.p.missingCost, f.p.lookupFails = true, true
+	args := f.operation(t)
+	_ = f.r.Process(ctx, args)
+	_ = f.r.Process(ctx, args)
+	if f.p.lookups.Load() != 1 {
+		t.Fatalf("lookups=%d", f.p.lookups.Load())
+	}
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.llm_attempt SET deadline_at=now()-interval '8 days'"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.r.Process(ctx, args)
+	if f.p.lookups.Load() != 1 || f.state(t, args).Status != "needs_review" {
+		t.Fatalf("lookups=%d status=%s", f.p.lookups.Load(), f.state(t, args).Status)
 	}
 }
