@@ -10,7 +10,7 @@ import (
 // SetOwner is an explicit deployment operation using the migration credentials.
 // It cannot be invoked through the runtime database role or HTTP API.
 func SetOwner(ctx context.Context, url string, id uuid.UUID, grant bool) error {
-	c, err := pgx.Connect(ctx, url)
+	c, err := connectAdmin(ctx, url)
 	if err != nil {
 		return err
 	}

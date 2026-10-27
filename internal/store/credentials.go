@@ -14,7 +14,7 @@ func ReencryptCredentials(ctx context.Context, url string, ring *secrets.Ring) e
 	if ring == nil {
 		return errors.New("encryption key ring is required")
 	}
-	c, err := pgx.Connect(ctx, url)
+	c, err := connectAdmin(ctx, url)
 	if err != nil {
 		return err
 	}
