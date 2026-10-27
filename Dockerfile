@@ -1,4 +1,4 @@
-# One image for every role: `zapply api`, `zapply migrate`, and later worker/relay.
+# One image for every role: `zapply api`, `worker`, `relay`, `all` and `migrate`.
 # The web app is built first and embedded into the binary.
 FROM docker.io/library/node:24-alpine AS web
 WORKDIR /web
@@ -25,6 +25,10 @@ CMD ["worker"]
 
 FROM runtime AS relay
 CMD ["relay"]
+
+# api, worker and relay in one process with embedded NATS (single dyno).
+FROM runtime AS all
+CMD ["all"]
 
 # Keep the API as the default image target.
 FROM runtime AS api

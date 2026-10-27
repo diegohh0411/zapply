@@ -1,11 +1,10 @@
 build:
   docker:
-    web: Dockerfile
-    worker:
+    # One dyno runs api, worker and relay with embedded NATS. To split them
+    # again, point web at the default target and add worker (target: worker)
+    # and relay (target: relay) process types.
+    web:
       dockerfile: Dockerfile
-      target: worker
-    relay:
-      dockerfile: Dockerfile
-      target: relay
+      target: all
 # No run section: Heroku would wrap a command in /bin/sh -c, which the
 # distroless image lacks. Each target supplies its own exec-form CMD.

@@ -1,11 +1,14 @@
 // Command zapply is the single binary for every server role:
 //
 //	zapply api       serve the HTTP API
+//	zapply worker    run durable model jobs
 //	zapply relay     publish committed outbox events to NATS
+//	zapply all       api, worker and relay in one process, with embedded NATS
 //	zapply migrate   apply database migrations (schema owner)
 //	zapply devtoken  print a development bearer token
 //
-// Later parts add worker. One image, each role scaled on its own.
+// One image, each role scaled on its own. `all` is for small deployments
+// that fit on a single machine.
 package main
 
 import (
@@ -22,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 
 	"github.com/diegohh0411/zapply/internal/api"
@@ -40,7 +44,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/worker"
 )
 
-const usage = "usage: zapply <api|worker|relay|migrate|owner|secrets|devtoken> [flags]"
+const usage = "usage: zapply <api|worker|relay|all|migrate|owner|secrets|devtoken> [flags]"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -52,12 +56,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "config:", err)
 		os.Exit(2)
 	}
-	log := logx.New(os.Stderr, cfg.LogFormat, cfg.LogLevel).With("role", os.Args[1])
+	base := logx.New(os.Stderr, cfg.LogFormat, cfg.LogLevel)
+	log := base.With("role", os.Args[1])
 	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if os.Args[1] == "api" || os.Args[1] == "worker" || os.Args[1] == "relay" {
+	if os.Args[1] == "api" || os.Args[1] == "worker" || os.Args[1] == "relay" || os.Args[1] == "all" {
 		shutdown, err := telemetry.Init(ctx, os.Args[1])
 		if err != nil {
 			log.Error("tracing initialization failed")
@@ -77,6 +82,8 @@ func main() {
 		err = runRelay(ctx, cfg, log)
 	case "worker":
 		err = runWorker(ctx, cfg, log)
+	case "all":
+		err = runAll(ctx, cfg, base)
 	case "owner":
 		err = runOwner(ctx, cfg, os.Args[2:])
 	case "secrets":
@@ -242,16 +249,23 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	stopped := make(chan error, 1)
 	go func() {
 		<-stopCtx.Done()
-		drain, done := context.WithTimeout(context.Background(), 110*time.Second)
+		// Heroku kills the process 30s after SIGTERM, so the soft and hard
+		// stops together leave a few seconds to spare.
+		drain, done := context.WithTimeout(context.Background(), 20*time.Second)
 		defer done()
 		err := client.Stop(drain)
 		if err != nil {
-			hard, end := context.WithTimeout(context.Background(), 20*time.Second)
+			hard, end := context.WithTimeout(context.Background(), 5*time.Second)
 			defer end()
 			err = errors.Join(err, client.StopAndCancel(hard))
 		}
 		stopped <- err
 	}()
+	if cfg.Worker.AdminAddr == "" {
+		<-ctx.Done()
+		cancel()
+		return <-stopped
+	}
 	srv := &httpx.Server{Addr: cfg.Worker.AdminAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -271,7 +285,8 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 }
 
 // runRelay publishes outbox rows until ctx is cancelled. Its admin listener
-// reports ready while both Postgres and NATS are reachable.
+// reports ready while both Postgres and NATS are reachable. An empty
+// AdminAddr skips the listener.
 func runRelay(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	if err := cfg.ValidateRelay(); err != nil {
 		return err
@@ -305,6 +320,9 @@ func runRelay(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		Batch:     cfg.Relay.Batch,
 		Retention: cfg.Relay.Retention,
 	}, log)
+	if cfg.Relay.AdminAddr == "" {
+		return r.Run(ctx)
+	}
 
 	srv := &httpx.Server{Addr: cfg.Relay.AdminAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	mux := http.NewServeMux()
@@ -329,6 +347,51 @@ func runRelay(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	err = srv.Run(ctx, func(addr net.Addr) { log.Info("relay admin listening", "addr", addr.String()) })
 	cancel()
 	return errors.Join(err, <-done)
+}
+
+// runAll runs the api, worker and relay in one process around an embedded
+// NATS server. If any of them stops, the others shut down too. Events lost
+// with NATS on a restart are replayed from the outbox when clients reconnect.
+func runAll(ctx context.Context, cfg config.Config, base *slog.Logger) error {
+	if err := errors.Join(cfg.ValidateAPI(), cfg.ValidateWorker(), cfg.ValidateRelay()); err != nil {
+		return err
+	}
+	ns, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true})
+	if err != nil {
+		return fmt.Errorf("embedded nats: %w", err)
+	}
+	go ns.Start()
+	defer ns.Shutdown()
+	if !ns.ReadyForConnections(5 * time.Second) {
+		return errors.New("embedded nats not ready")
+	}
+	cfg.NATSURL = ns.ClientURL()
+	// The API's /healthz and /readyz cover the whole process.
+	cfg.Worker.AdminAddr = ""
+	cfg.Relay.AdminAddr = ""
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	roles := []struct {
+		name string
+		run  func(context.Context, config.Config, *slog.Logger) error
+	}{{"api", runAPI}, {"worker", runWorker}, {"relay", runRelay}}
+	errs := make(chan error, len(roles))
+	for _, role := range roles {
+		go func() {
+			err := role.run(ctx, cfg, base.With("role", role.name))
+			if err != nil {
+				err = fmt.Errorf("%s: %w", role.name, err)
+			}
+			errs <- err
+			cancel()
+		}()
+	}
+	var all []error
+	for range roles {
+		all = append(all, <-errs)
+	}
+	return errors.Join(all...)
 }
 
 func runMigrate(ctx context.Context, cfg config.Config, log *slog.Logger) error {

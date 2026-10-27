@@ -7,7 +7,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 ## Principles
 
 1. **Stateless request path.** API processes keep no per-user state in memory, so any replica can serve any request. Anything slow or long-lived runs in a worker.
-2. **One binary, many roles.** `zapply api`, `zapply worker`, `zapply relay` and `zapply migrate` ship in the same image. Each role scales on its own.
+2. **One binary, many roles.** `zapply api`, `zapply worker`, `zapply relay` and `zapply migrate` ship in the same image. Each role scales on its own. `zapply all` runs api, worker and relay in one process with an embedded NATS server, for deployments small enough to fit on one dyno.
 3. **Postgres is the source of truth**, and it is also the first job queue and the event outbox. A new piece of infrastructure is added only when Postgres stops being enough, and NATS (part 3) is the only one planned.
 4. **Tenant isolation is enforced twice:** queries filter on `user_id` explicitly, and forced RLS rejects anything they miss.
 5. **Shared facts are shared.** Data that is not personal, such as company profiles and model catalogs, is stored once for everyone instead of once per user.
