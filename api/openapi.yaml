@@ -1702,14 +1702,14 @@ components:
       "type": "object"
       "required":
         - "id"
-        - "label"
+        - "email"
         - "membership"
         - "usage"
       "properties":
         "id":
           "type": "string"
           "format": "uuid"
-        "label":
+        "email":
           "type": "string"
         "membership":
           "allOf":
