@@ -5,14 +5,15 @@ import { lucideArrowDown, lucideArrowUp } from '@ng-icons/lucide';
 
 import { ZardTableImports } from '@/shared/components/table';
 
-import { ago, hostname, salary, STATUS_DOT } from './format';
+import { ago, hostname, salary } from './format';
 import type { JobStatus, JobSummary } from './jobs.store';
+import { StatusPill } from './status-pill';
 
 type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' | 'updated_at';
 
 @Component({
   selector: 'app-job-table',
-  imports: [DatePipe, NgIcon, ...ZardTableImports],
+  imports: [DatePipe, NgIcon, StatusPill, ...ZardTableImports],
   providers: [provideIcons({ lucideArrowUp, lucideArrowDown })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -41,9 +42,7 @@ type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' 
                 <td z-table-cell class="max-w-48 truncate">{{ j.company || host(j.url) }}</td>
                 <td z-table-cell>
                   @if (statusOf(j); as s) {
-                    <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
-                      <span class="size-2 rounded-full" [class]="dot[s.color]"></span>{{ s.name }}
-                    </span>
+                    <app-status-pill [status]="s" />
                   }
                 </td>
                 <td z-table-cell class="hidden max-w-40 truncate md:table-cell">{{ j.location }}</td>
@@ -68,7 +67,6 @@ export class JobTable {
   readonly jobs = input.required<JobSummary[]>();
   readonly open = output<string>();
 
-  protected readonly dot = STATUS_DOT;
   protected readonly host = hostname;
   protected readonly pay = salary;
   protected readonly sortKey = signal<Key>('updated_at');

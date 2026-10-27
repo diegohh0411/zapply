@@ -3,7 +3,8 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideArchive, lucideMapPin, lucidePlus, lucideWallet } from '@ng-icons/lucide';
 
-import { ago, hostname, salary, STATUS_DOT } from './format';
+import { ago, hostname, salary } from './format';
+import { StatusPill } from './status-pill';
 import { byPosition, type JobStatus, type JobSummary } from './jobs.store';
 
 export interface BoardMove {
@@ -15,7 +16,7 @@ export interface BoardMove {
 
 @Component({
   selector: 'app-job-board',
-  imports: [CdkDropListGroup, CdkDropList, CdkDrag, CdkDragPlaceholder, NgIcon],
+  imports: [CdkDropListGroup, CdkDropList, CdkDrag, CdkDragPlaceholder, NgIcon, StatusPill],
   providers: [provideIcons({ lucidePlus, lucideMapPin, lucideWallet, lucideArchive })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -23,8 +24,7 @@ export interface BoardMove {
       @for (col of columns(); track col.status.id) {
         <section class="flex w-72 shrink-0 flex-col rounded-xl bg-muted/50" [attr.aria-label]="col.status.name">
           <header class="flex items-center gap-2 px-3 pb-1 pt-3">
-            <span class="size-2.5 rounded-full" [class]="dot[col.status.color]"></span>
-            <h2 class="truncate text-sm font-medium">{{ col.status.name }}</h2>
+            <h2 class="min-w-0"><app-status-pill [status]="col.status" /></h2>
             <span class="text-xs tabular-nums text-muted-foreground">{{ col.jobs.length }}</span>
             <button
               type="button"
@@ -103,7 +103,6 @@ export class JobBoard {
   readonly add = output<string>();
   readonly move = output<BoardMove>();
 
-  protected readonly dot = STATUS_DOT;
   protected readonly host = hostname;
   protected readonly pay = salary;
 

@@ -37,10 +37,11 @@ import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
 import { MatchTab } from './match/match-tab';
+import { StatusSelect } from './status-select';
 import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
-import { EMPLOYMENT_TYPES, SALARY_PERIODS, STATUS_DOT, WORK_MODES } from './format';
+import { EMPLOYMENT_TYPES, SALARY_PERIODS, WORK_MODES } from './format';
 import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
 
 /** What the sheet shows: an existing job, or a new one in a status. */
@@ -86,6 +87,7 @@ const emptyForm = (statusId = ''): Form => ({
   selector: 'app-job-sheet',
   imports: [
     MatchTab,
+    StatusSelect,
     DatePipe,
     NgTemplateOutlet,
     FormsModule,
@@ -125,7 +127,6 @@ export class JobSheet {
   readonly visible = model(false);
   readonly opened = output<string>(); // a job id to switch to (duplicates)
 
-  protected readonly dot = STATUS_DOT;
   protected readonly workModes = WORK_MODES;
   protected readonly employmentTypes = EMPLOYMENT_TYPES;
   protected readonly salaryPeriods = SALARY_PERIODS;
