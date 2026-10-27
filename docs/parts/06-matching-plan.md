@@ -68,6 +68,22 @@ been performed. No paid API call is part of the tests. Run migration 00010 befor
 updating API/worker processes; configure the owner model in Administration →
 System keys. Without a model, runs wait as `model_not_configured`.
 
+## Review follow-up: stable cache inputs and language checks
+
+Posting-read state contains only the posting and source lines. Each skill's name
+is supplementary data in its own Noul question, so adding or changing a skill
+preserves all unrelated posting answers. Evidence scoring uses a dedicated
+content projection without CV inclusion flags or content-hash bookkeeping;
+highlight metric values and units are included. Display flags remain in the
+immutable snapshot for deterministic selection and staleness.
+
+Language checks and their explanations use the snapshot's full language skill
+list, including skills not linked to the evidence being scored. Regression tests
+cover cache reuse after inclusion toggles, new-skill-only requests, metric edits,
+and unlinked/mismatched/insufficient language proficiency. This changes cache keys
+for old state shapes; existing answers remain stored but are not reused for the
+new shapes. Live dispatch is still disabled pending verified billing bounds.
+
 ## Shared model naming
 
 Migration `00011_model_naming.sql` renames the shared gateway tables and their

@@ -31,10 +31,12 @@ type Skill struct {
 	Proficiency string `json:"proficiency"`
 }
 type Highlight struct {
-	ID          string  `json:"id"`
-	Text        string  `json:"text"`
-	AutoInclude bool    `json:"auto_include"`
-	Skills      []Skill `json:"skills"`
+	ID          string   `json:"id"`
+	Text        string   `json:"text"`
+	MetricValue *float64 `json:"metric_value"`
+	MetricUnit  string   `json:"metric_unit"`
+	AutoInclude bool     `json:"auto_include"`
+	Skills      []Skill  `json:"skills"`
 }
 type Evidence struct {
 	ID           string         `json:"id"`
@@ -169,7 +171,7 @@ func choice(question string, options map[string]string) systemone.Question {
 	return systemone.Question{Type: "choice", Instructions: systemone.Raw(question), Criteria: systemone.Raw(options)}
 }
 func ReadQuestions(s Snapshot) ([]decide.Pending, error) {
-	state := systemone.Raw(map[string]any{"posting": map[string]any{"title": s.Title, "company": s.Company, "description": s.Description, "lines": s.Lines}, "skills": s.Skills})
+	state := systemone.Raw(map[string]any{"posting": map[string]any{"title": s.Title, "company": s.Company, "description": s.Description, "lines": s.Lines}})
 	result := []decide.Pending{}
 	add := func(key string, q systemone.Question) error {
 		p, e := decide.New(key, state, q)
@@ -198,7 +200,8 @@ func ReadQuestions(s Snapshot) ([]decide.Pending, error) {
 		return nil, e
 	}
 	for i := range s.Skills {
-		if e := add("skill:"+s.Skills[i].ID, systemone.Question{Type: "noul", Instructions: systemone.Raw(fmt.Sprintf("Does `posting` require or value `skills[%d]`?", i))}); e != nil {
+		q := systemone.Question{Type: "noul", Instructions: systemone.Raw(map[string]string{"question": "Does `posting` require or value `skill`?", "skill": s.Skills[i].Name})}
+		if e := add("skill:"+s.Skills[i].ID, q); e != nil {
 			return nil, e
 		}
 	}
@@ -285,7 +288,7 @@ func ScoreQuestions(s Snapshot, requirements []Requirement) ([]decide.Pending, e
 		if e.Kind == "career_break" {
 			continue
 		}
-		state := systemone.Raw(map[string]any{"job_context": map[string]string{"title": s.Title, "company": s.Company}, "evidence": e})
+		state := systemone.Raw(map[string]any{"job_context": map[string]string{"title": s.Title, "company": s.Company}, "evidence": scoringEvidence(e)})
 		for _, r := range requirements {
 			subjects := []struct{ key, path string }{{Pair(e.ID, r.TextHash), "evidence"}}
 			for i, h := range e.Highlights {
@@ -499,7 +502,7 @@ func Compute(s Snapshot, requirements []Requirement, a map[string]systemone.Answ
 			}
 			if r.Language != "" && r.Language != "not_specified" {
 				met := false
-				for _, sk := range e.Skills {
+				for _, sk := range s.Skills {
 					if sk.Type == "language" && strings.Contains(strings.ToLower(r.Text), strings.ToLower(sk.Name)) && level(sk.Proficiency, languages) >= level(r.Language, languages) {
 						met = true
 					}
@@ -539,13 +542,9 @@ func Compute(s Snapshot, requirements []Requirement, a map[string]systemone.Answ
 		}
 		if r.Language != "" && r.Language != "not_specified" {
 			c.Check = "Required language level: " + r.Language
-			for _, e := range s.Evidence {
-				if e.ID == c.EvidenceID {
-					for _, skill := range e.Skills {
-						if skill.Type == "language" && strings.Contains(strings.ToLower(r.Text), strings.ToLower(skill.Name)) {
-							c.Check += "; " + skill.Name + " " + skill.Proficiency
-						}
-					}
+			for _, skill := range s.Skills {
+				if skill.Type == "language" && strings.Contains(strings.ToLower(r.Text), strings.ToLower(skill.Name)) {
+					c.Check += "; " + skill.Name + " " + skill.Proficiency
 				}
 			}
 		}
@@ -648,4 +647,36 @@ func Compute(s Snapshot, requirements []Requirement, a map[string]systemone.Answ
 		out.Score = &score
 	}
 	return out
+}
+
+// Model state contains claims, not CV selection preferences or bookkeeping.
+// Keep the full snapshot separately for deterministic selection and staleness.
+type evidenceState struct {
+	ID           string           `json:"id"`
+	Kind         string           `json:"kind"`
+	Category     string           `json:"category"`
+	Title        string           `json:"title"`
+	Summary      string           `json:"summary"`
+	Organization any              `json:"organization"`
+	StartDate    *string          `json:"start_date"`
+	EndDate      *string          `json:"end_date"`
+	IsCurrent    bool             `json:"is_current"`
+	Details      map[string]any   `json:"details"`
+	Highlights   []highlightState `json:"highlights"`
+	Skills       []Skill          `json:"skills"`
+}
+type highlightState struct {
+	ID          string   `json:"id"`
+	Text        string   `json:"text"`
+	MetricValue *float64 `json:"metric_value"`
+	MetricUnit  string   `json:"metric_unit"`
+	Skills      []Skill  `json:"skills"`
+}
+
+func scoringEvidence(e Evidence) evidenceState {
+	highlights := make([]highlightState, 0, len(e.Highlights))
+	for _, h := range e.Highlights {
+		highlights = append(highlights, highlightState{h.ID, h.Text, h.MetricValue, h.MetricUnit, h.Skills})
+	}
+	return evidenceState{e.ID, e.Kind, e.Category, e.Title, e.Summary, e.Organization, e.StartDate, e.EndDate, e.IsCurrent, e.Details, highlights, e.Skills}
 }

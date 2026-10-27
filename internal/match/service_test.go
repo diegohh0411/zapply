@@ -470,3 +470,31 @@ func TestVerifiedPackingLimitsSplitBeforeDispatch(t *testing.T) {
 		t.Fatalf("packing limits not applied: %#v calls %d", r, f.p.calls)
 	}
 }
+
+func TestDisplayFlagsReuseAnswersAndNewSkillsOnlyAskNewQuestion(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	r := f.start(t)
+	f.run(t, r.ID)
+	calls := f.p.calls
+	off := false
+	h := f.evidence.Highlights[0]
+	_, e := f.lib.UpdateEvidence(ctx, f.u, f.evidence.ID, f.evidence.Version, library.EvidenceInput{Kind: "project", Category: library.Paid, Title: f.evidence.Title, AutoInclude: &off, Highlights: []library.HighlightInput{{ID: &h.ID, Text: h.Text, AutoInclude: &off}}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	r = f.start(t)
+	r = f.run(t, r.ID)
+	if f.p.calls != calls || r.Cached != r.Total || len(r.Result.Selection) != 0 {
+		t.Fatalf("display edit lost cache: calls %d -> %d", calls, f.p.calls)
+	}
+	_, e = f.lib.CreateSkill(ctx, f.u, library.SkillInput{Name: "Go", Type: "hard"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	r = f.start(t)
+	r = f.run(t, r.ID)
+	if f.p.calls != calls+1 || r.Total-r.Cached != 1 {
+		t.Fatalf("new skill invalidated existing questions: %#v calls %d", r, f.p.calls)
+	}
+}

@@ -150,3 +150,60 @@ func TestIgnoredReadFailureAndRoundedDistribution(t *testing.T) {
 		t.Fatal("rounding exceeded score range")
 	}
 }
+
+func TestCacheStatesContainOnlyRelevantContent(t *testing.T) {
+	s := Snapshot{Title: "Engineer", Description: "Go", Lines: []Line{{Text: "Go"}}, Skills: []Skill{{ID: "go", Name: "Go"}}, Evidence: []Evidence{{ID: "e", Title: "Service", AutoInclude: true, ContentHash: "before", Highlights: []Highlight{{ID: "h", Text: "Improved throughput", AutoInclude: true, MetricValue: ptr(20.), MetricUnit: "percent"}}}}}
+	before, _ := ReadQuestions(s)
+	scores, _ := ScoreQuestions(s, []Requirement{{Text: "Go", TextHash: "r"}})
+	s.Skills = append([]Skill{{ID: "new", Name: "Python"}}, s.Skills...)
+	after, _ := ReadQuestions(s)
+	keys := map[string]string{}
+	for _, p := range after {
+		keys[p.Subject] = p.StateHash + p.QuestionHash
+	}
+	for _, p := range before {
+		if keys[p.Subject] != p.StateHash+p.QuestionHash {
+			t.Fatalf("unrelated skill invalidated %s", p.Subject)
+		}
+	}
+	s.Evidence[0].AutoInclude = false
+	s.Evidence[0].Highlights[0].AutoInclude = false
+	s.Evidence[0].ContentHash = "after"
+	next, _ := ScoreQuestions(s, []Requirement{{Text: "Go", TextHash: "r"}})
+	for i, p := range scores {
+		if p.StateHash != next[i].StateHash {
+			t.Fatal("selection flags invalidated scores")
+		}
+	}
+	if strings.Contains(string(next[0].State), "auto_include") || strings.Contains(string(next[0].State), "content_hash") {
+		t.Fatal("bookkeeping sent to model")
+	}
+	if !strings.Contains(string(next[0].State), "metric_value") || !strings.Contains(string(next[0].State), "percent") {
+		t.Fatal("metric missing from model state")
+	}
+	s.Evidence[0].Highlights[0].MetricValue = ptr(30.)
+	changed, _ := ScoreQuestions(s, []Requirement{{Text: "Go", TextHash: "r"}})
+	if changed[0].StateHash == next[0].StateHash {
+		t.Fatal("metric edit did not invalidate")
+	}
+}
+func TestLanguageCheckUsesUnlinkedLibrarySkills(t *testing.T) {
+	s := Snapshot{Evidence: []Evidence{{ID: "e", AutoInclude: true}}, Skills: []Skill{{ID: "english", Name: "English", Type: "language", Proficiency: "C2"}}}
+	req := []Requirement{{Text: "English at C1", TextHash: "english", Class: "must", Type: "language", Language: "C1"}}
+	yes := 1.
+	a := map[string]systemone.Answer{"seniority": {Choice: "mid"}, "skill:english": {Noul: &yes}, Pair("e", "english"): direct()}
+	r := Compute(s, req, a, nil, time.Now(), false)
+	if r.Score == nil || *r.Score != 100 || r.Requirements[0].Status != "met" || !strings.Contains(r.Requirements[0].Check, "English C2") {
+		t.Fatalf("unlinked language ignored: %#v", r)
+	}
+	s.Skills[0].Proficiency = "B2"
+	r = Compute(s, req, a, nil, time.Now(), false)
+	if r.Requirements[0].Strength != .6 {
+		t.Fatal("insufficient proficiency not capped")
+	}
+	s.Skills[0].Name = "French"
+	r = Compute(s, req, a, nil, time.Now(), false)
+	if r.Requirements[0].Strength != .6 {
+		t.Fatal("different language accepted")
+	}
+}
