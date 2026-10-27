@@ -821,6 +821,21 @@ type JobView struct {
 	UpdatedAt time.Time
 }
 
+type LlmOperation struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Kind           string
+	IdempotencyKey string
+	RequestHash    string
+	Status         string
+	BlockedReason  string
+	NextEligibleAt *time.Time
+	Result         string
+	Version        int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Organization struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
@@ -841,6 +856,94 @@ type Outbox struct {
 	CreatedAt   time.Time
 	Seq         *int64
 	PublishedAt *time.Time
+}
+
+type PlatformAudit struct {
+	ID        int64
+	ActorID   *uuid.UUID
+	Action    string
+	SubjectID uuid.UUID
+	Detail    json.RawMessage
+	CreatedAt time.Time
+}
+
+type PlatformBudgetAccount struct {
+	UserID uuid.UUID
+}
+
+type PlatformLlmAttempt struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	OperationID   uuid.UUID
+	AttemptNumber int32
+	RequestHash   string
+	Model         string
+	KeyID         uuid.UUID
+	Quote         json.RawMessage
+	Reserved      int64
+	DispatchedAt  time.Time
+	DeadlineAt    time.Time
+	State         string
+	GenerationID  *string
+	ErrorCode     string
+	Version       int32
+}
+
+type PlatformLlmUsage struct {
+	ID          int64
+	AttemptID   uuid.UUID
+	UserID      uuid.UUID
+	Amount      int64
+	AccountedAt time.Time
+	Source      string
+	DedupKey    string
+	Usage       json.RawMessage
+	CreatedAt   time.Time
+}
+
+type PlatformMembership struct {
+	UserID    uuid.UUID
+	PlanID    uuid.UUID
+	Status    string
+	Version   int32
+	UpdatedAt time.Time
+}
+
+type PlatformOperationIndex struct {
+	OperationID    uuid.UUID
+	UserID         uuid.UUID
+	Status         string
+	NextEligibleAt *time.Time
+	UpdatedAt      time.Time
+}
+
+type PlatformOwner struct {
+	UserID uuid.UUID
+}
+
+type PlatformPlan struct {
+	ID        uuid.UUID
+	Name      string
+	Cap7d     int64
+	Cap30d    int64
+	Version   int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type PlatformProviderLock struct {
+	ID bool
+}
+
+type PlatformSystemKey struct {
+	ID                uuid.UUID
+	Label             string
+	Ciphertext        []byte
+	EncryptionVersion string
+	Fingerprint       string
+	Active            bool
+	Version           int32
+	CreatedAt         time.Time
 }
 
 type Profile struct {

@@ -93,6 +93,8 @@ const (
 	JobViewCreated      EventTopic = "job_view.created"
 	JobViewDeleted      EventTopic = "job_view.deleted"
 	JobViewUpdated      EventTopic = "job_view.updated"
+	LlmOperationChanged EventTopic = "llm_operation.changed"
+	MembershipChanged   EventTopic = "membership.changed"
 	OrganizationCreated EventTopic = "organization.created"
 	OrganizationDeleted EventTopic = "organization.deleted"
 	OrganizationUpdated EventTopic = "organization.updated"
@@ -101,6 +103,7 @@ const (
 	SkillDeleted        EventTopic = "skill.deleted"
 	SkillMerged         EventTopic = "skill.merged"
 	SkillUpdated        EventTopic = "skill.updated"
+	UsageChanged        EventTopic = "usage.changed"
 )
 
 // Valid indicates whether the value is a known member of the EventTopic enum.
@@ -150,6 +153,10 @@ func (e EventTopic) Valid() bool {
 		return true
 	case JobViewUpdated:
 		return true
+	case LlmOperationChanged:
+		return true
+	case MembershipChanged:
+		return true
 	case OrganizationCreated:
 		return true
 	case OrganizationDeleted:
@@ -165,6 +172,8 @@ func (e EventTopic) Valid() bool {
 	case SkillMerged:
 		return true
 	case SkillUpdated:
+		return true
+	case UsageChanged:
 		return true
 	default:
 		return false
@@ -239,22 +248,22 @@ func (e JobSort) Valid() bool {
 
 // Defines values for JobStage.
 const (
-	Active JobStage = "active"
-	Closed JobStage = "closed"
-	Offer  JobStage = "offer"
-	Saved  JobStage = "saved"
+	JobStageActive JobStage = "active"
+	JobStageClosed JobStage = "closed"
+	JobStageOffer  JobStage = "offer"
+	JobStageSaved  JobStage = "saved"
 )
 
 // Valid indicates whether the value is a known member of the JobStage enum.
 func (e JobStage) Valid() bool {
 	switch e {
-	case Active:
+	case JobStageActive:
 		return true
-	case Closed:
+	case JobStageClosed:
 		return true
-	case Offer:
+	case JobStageOffer:
 		return true
-	case Saved:
+	case JobStageSaved:
 		return true
 	default:
 		return false
@@ -312,6 +321,93 @@ func (e JobViewLayout) Valid() bool {
 	case Board:
 		return true
 	case Table:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LLMOperationStatus.
+const (
+	Blocked     LLMOperationStatus = "blocked"
+	Cancelled   LLMOperationStatus = "cancelled"
+	Completed   LLMOperationStatus = "completed"
+	Failed      LLMOperationStatus = "failed"
+	NeedsReview LLMOperationStatus = "needs_review"
+	Pending     LLMOperationStatus = "pending"
+	Running     LLMOperationStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the LLMOperationStatus enum.
+func (e LLMOperationStatus) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case Cancelled:
+		return true
+	case Completed:
+		return true
+	case Failed:
+		return true
+	case NeedsReview:
+		return true
+	case Pending:
+		return true
+	case Running:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MePlatformRole.
+const (
+	MePlatformRoleMember MePlatformRole = "member"
+	MePlatformRoleOwner  MePlatformRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the MePlatformRole enum.
+func (e MePlatformRole) Valid() bool {
+	switch e {
+	case MePlatformRoleMember:
+		return true
+	case MePlatformRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MembershipStatus.
+const (
+	MembershipStatusActive    MembershipStatus = "active"
+	MembershipStatusSuspended MembershipStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the MembershipStatus enum.
+func (e MembershipStatus) Valid() bool {
+	switch e {
+	case MembershipStatusActive:
+		return true
+	case MembershipStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MembershipInputStatus.
+const (
+	MembershipInputStatusActive    MembershipInputStatus = "active"
+	MembershipInputStatusSuspended MembershipInputStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the MembershipInputStatus enum.
+func (e MembershipInputStatus) Valid() bool {
+	switch e {
+	case MembershipInputStatusActive:
+		return true
+	case MembershipInputStatusSuspended:
 		return true
 	default:
 		return false
@@ -412,6 +508,26 @@ func (e WorkMode) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AttemptResolutionInput defines model for AttemptResolutionInput.
+type AttemptResolutionInput struct {
+	AmountUsd    string  `json:"amount_usd"`
+	GenerationId *string `json:"generation_id,omitempty"`
+	Reason       string  `json:"reason"`
+}
+
+// AttemptSummary defines model for AttemptSummary.
+type AttemptSummary struct {
+	DispatchedAt time.Time          `json:"dispatched_at"`
+	ErrorCode    string             `json:"error_code"`
+	GenerationId *string            `json:"generation_id"`
+	Id           openapi_types.UUID `json:"id"`
+	Model        string             `json:"model"`
+	ReservedUsd  string             `json:"reserved_usd"`
+	State        string             `json:"state"`
+	UserId       openapi_types.UUID `json:"user_id"`
+	Version      int                `json:"version"`
 }
 
 // Category defines model for Category.
@@ -764,6 +880,11 @@ type JobViewInput struct {
 // JobViewLayout defines model for JobViewLayout.
 type JobViewLayout string
 
+// KeyActivationInput defines model for KeyActivationInput.
+type KeyActivationInput struct {
+	Active bool `json:"active"`
+}
+
 // Kind defines model for Kind.
 type Kind struct {
 	Categories []Category `json:"categories"`
@@ -777,6 +898,21 @@ type Kind struct {
 	Kind          string                 `json:"kind"`
 }
 
+// LLMOperation defines model for LLMOperation.
+type LLMOperation struct {
+	BlockedReason  string             `json:"blocked_reason"`
+	CreatedAt      time.Time          `json:"created_at"`
+	Id             openapi_types.UUID `json:"id"`
+	NextEligibleAt *time.Time         `json:"next_eligible_at"`
+	Result         string             `json:"result"`
+	Status         LLMOperationStatus `json:"status"`
+	UserId         openapi_types.UUID `json:"user_id"`
+	Version        int                `json:"version"`
+}
+
+// LLMOperationStatus defines model for LLMOperation.Status.
+type LLMOperationStatus string
+
 // Link defines model for Link.
 type Link struct {
 	Label string `json:"label"`
@@ -785,9 +921,44 @@ type Link struct {
 
 // Me defines model for Me.
 type Me struct {
-	CreatedAt time.Time          `json:"created_at"`
-	Id        openapi_types.UUID `json:"id"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+	Membership   *Membership        `json:"membership"`
+	PlatformRole MePlatformRole     `json:"platform_role"`
 }
+
+// MePlatformRole defines model for Me.PlatformRole.
+type MePlatformRole string
+
+// Member defines model for Member.
+type Member struct {
+	Id         openapi_types.UUID `json:"id"`
+	Label      string             `json:"label"`
+	Membership *Membership        `json:"membership"`
+	Usage      Usage              `json:"usage"`
+}
+
+// Membership defines model for Membership.
+type Membership struct {
+	PlanId    openapi_types.UUID `json:"plan_id"`
+	PlanName  string             `json:"plan_name"`
+	Status    MembershipStatus   `json:"status"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UserId    openapi_types.UUID `json:"user_id"`
+	Version   int                `json:"version"`
+}
+
+// MembershipStatus defines model for Membership.Status.
+type MembershipStatus string
+
+// MembershipInput defines model for MembershipInput.
+type MembershipInput struct {
+	PlanId openapi_types.UUID    `json:"plan_id"`
+	Status MembershipInputStatus `json:"status"`
+}
+
+// MembershipInputStatus defines model for MembershipInput.Status.
+type MembershipInputStatus string
 
 // Organization defines model for Organization.
 type Organization struct {
@@ -816,8 +987,25 @@ type OrganizationType string
 // Example: 2021-03
 type PartialDate = string
 
+// Plan defines model for Plan.
+type Plan struct {
+	Cap30dUsd string             `json:"cap_30d_usd"`
+	Cap7dUsd  string             `json:"cap_7d_usd"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+	Version   int                `json:"version"`
+}
+
+// PlanInput defines model for PlanInput.
+type PlanInput struct {
+	Cap30dUsd string `json:"cap_30d_usd"`
+	Cap7dUsd  string `json:"cap_7d_usd"`
+	Name      string `json:"name"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
+	Code   *string       `json:"code,omitempty"`
 	Detail *string       `json:"detail,omitempty"`
 	Errors *[]FieldError `json:"errors,omitempty"`
 
@@ -887,6 +1075,46 @@ type SkillMerge struct {
 // SkillType defines model for SkillType.
 type SkillType string
 
+// SystemKey defines model for SystemKey.
+type SystemKey struct {
+	Active      bool               `json:"active"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Fingerprint string             `json:"fingerprint"`
+	Id          openapi_types.UUID `json:"id"`
+	Label       string             `json:"label"`
+	Version     int                `json:"version"`
+}
+
+// SystemKeyInput defines model for SystemKeyInput.
+type SystemKeyInput struct {
+	Key   *string `json:"key,omitempty"`
+	Label string  `json:"label"`
+}
+
+// Usage defines model for Usage.
+type Usage struct {
+	Available30dUsd string      `json:"available_30d_usd"`
+	Available7dUsd  string      `json:"available_7d_usd"`
+	BlockedReason   string      `json:"blocked_reason"`
+	Cap30dUsd       string      `json:"cap_30d_usd"`
+	Cap7dUsd        string      `json:"cap_7d_usd"`
+	Membership      *Membership `json:"membership"`
+	NextCapacityAt  *time.Time  `json:"next_capacity_at"`
+	ReservedUsd     string      `json:"reserved_usd"`
+	ServerTime      time.Time   `json:"server_time"`
+	Spent30dUsd     string      `json:"spent_30d_usd"`
+	Spent7dUsd      string      `json:"spent_7d_usd"`
+}
+
+// UsageEntry defines model for UsageEntry.
+type UsageEntry struct {
+	AccountedAt time.Time `json:"accounted_at"`
+	AmountUsd   string    `json:"amount_usd"`
+	Id          string    `json:"id"`
+	Model       string    `json:"model"`
+	Source      string    `json:"source"`
+}
+
 // WorkMode defines model for WorkMode.
 type WorkMode string
 
@@ -898,6 +1126,47 @@ type IdempotencyKey = string
 
 // IfMatch defines model for IfMatch.
 type IfMatch = string
+
+// CreateGatewayTestParams defines parameters for CreateGatewayTest.
+type CreateGatewayTestParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ListLLMAttemptsParams defines parameters for ListLLMAttempts.
+type ListLLMAttemptsParams struct {
+	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ResolveLLMAttemptParams defines parameters for ResolveLLMAttempt.
+type ResolveLLMAttemptParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListMembersParams defines parameters for ListMembers.
+type ListMembersParams struct {
+	After *openapi_types.UUID `form:"after,omitempty" json:"after,omitempty"`
+	Limit *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// PutMembershipParams defines parameters for PutMembership.
+type PutMembershipParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// UpdatePlanParams defines parameters for UpdatePlan.
+type UpdatePlanParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ActivateSystemKeyParams defines parameters for ActivateSystemKey.
+type ActivateSystemKeyParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
 
 // ListEvidencesParams defines parameters for ListEvidences.
 type ListEvidencesParams struct {
@@ -958,6 +1227,30 @@ type PutProfileParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ListUsageEntriesParams defines parameters for ListUsageEntries.
+type ListUsageEntriesParams struct {
+	Before *string `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ResolveLLMAttemptJSONRequestBody defines body for ResolveLLMAttempt for application/json ContentType.
+type ResolveLLMAttemptJSONRequestBody = AttemptResolutionInput
+
+// PutMembershipJSONRequestBody defines body for PutMembership for application/json ContentType.
+type PutMembershipJSONRequestBody = MembershipInput
+
+// CreatePlanJSONRequestBody defines body for CreatePlan for application/json ContentType.
+type CreatePlanJSONRequestBody = PlanInput
+
+// UpdatePlanJSONRequestBody defines body for UpdatePlan for application/json ContentType.
+type UpdatePlanJSONRequestBody = PlanInput
+
+// CreateSystemKeyJSONRequestBody defines body for CreateSystemKey for application/json ContentType.
+type CreateSystemKeyJSONRequestBody = SystemKeyInput
+
+// ActivateSystemKeyJSONRequestBody defines body for ActivateSystemKey for application/json ContentType.
+type ActivateSystemKeyJSONRequestBody = KeyActivationInput
+
 // CreateEvidenceJSONRequestBody defines body for CreateEvidence for application/json ContentType.
 type CreateEvidenceJSONRequestBody = EvidenceCreate
 
@@ -1017,6 +1310,42 @@ type MergeSkillJSONRequestBody = SkillMerge
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (POST /v1/admin/gateway-tests)
+	CreateGatewayTest(w http.ResponseWriter, r *http.Request, params CreateGatewayTestParams)
+
+	// (GET /v1/admin/gateway-tests/{id})
+	GetGatewayTest(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/admin/llm-attempts)
+	ListLLMAttempts(w http.ResponseWriter, r *http.Request, params ListLLMAttemptsParams)
+
+	// (POST /v1/admin/llm-attempts/{id}/resolve)
+	ResolveLLMAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveLLMAttemptParams)
+
+	// (GET /v1/admin/members)
+	ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams)
+
+	// (PUT /v1/admin/members/{id}/membership)
+	PutMembership(w http.ResponseWriter, r *http.Request, id ID, params PutMembershipParams)
+
+	// (GET /v1/admin/plans)
+	ListPlans(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/admin/plans)
+	CreatePlan(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/plans/{id})
+	UpdatePlan(w http.ResponseWriter, r *http.Request, id ID, params UpdatePlanParams)
+
+	// (GET /v1/admin/system-keys)
+	ListSystemKeys(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/admin/system-keys)
+	CreateSystemKey(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/system-keys/{id}/activation)
+	ActivateSystemKey(w http.ResponseWriter, r *http.Request, id ID, params ActivateSystemKeyParams)
 
 	// (GET /v1/evidences)
 	ListEvidences(w http.ResponseWriter, r *http.Request, params ListEvidencesParams)
@@ -1146,6 +1475,12 @@ type ServerInterface interface {
 
 	// (POST /v1/skills/{id}/merge)
 	MergeSkill(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/usage)
+	GetUsage(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/usage/entries)
+	ListUsageEntries(w http.ResponseWriter, r *http.Request, params ListUsageEntriesParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1156,6 +1491,441 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateGatewayTest operation middleware
+func (siw *ServerInterfaceWrapper) CreateGatewayTest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateGatewayTestParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateGatewayTest(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGatewayTest operation middleware
+func (siw *ServerInterfaceWrapper) GetGatewayTest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGatewayTest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLLMAttempts operation middleware
+func (siw *ServerInterfaceWrapper) ListLLMAttempts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLLMAttemptsParams
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLLMAttempts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveLLMAttempt operation middleware
+func (siw *ServerInterfaceWrapper) ResolveLLMAttempt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveLLMAttemptParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveLLMAttempt(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMembersParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMembers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutMembership operation middleware
+func (siw *ServerInterfaceWrapper) PutMembership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutMembershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutMembership(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListPlans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePlan operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlan(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlan(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePlan operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdatePlanParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlan(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSystemKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListSystemKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSystemKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSystemKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateSystemKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSystemKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActivateSystemKey operation middleware
+func (siw *ServerInterfaceWrapper) ActivateSystemKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ActivateSystemKeyParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActivateSystemKey(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListEvidences operation middleware
 func (siw *ServerInterfaceWrapper) ListEvidences(w http.ResponseWriter, r *http.Request) {
@@ -2454,6 +3224,66 @@ func (siw *ServerInterfaceWrapper) MergeSkill(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetUsage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsageEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListUsageEntries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListUsageEntriesParams
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsageEntries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2617,11 +3447,527 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/job-views", wrapper.CreateJobView)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/job-views/{id}", wrapper.DeleteJobView)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/job-views/{id}", wrapper.PutJobView)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/usage", wrapper.GetUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/usage/entries", wrapper.ListUsageEntries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/plans", wrapper.ListPlans)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/plans", wrapper.CreatePlan)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/plans/{id}", wrapper.UpdatePlan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/members", wrapper.ListMembers)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/members/{id}/membership", wrapper.PutMembership)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/system-keys", wrapper.ListSystemKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/system-keys", wrapper.CreateSystemKey)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/system-keys/{id}/activation", wrapper.ActivateSystemKey)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/llm-attempts", wrapper.ListLLMAttempts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/llm-attempts/{id}/resolve", wrapper.ResolveLLMAttempt)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/gateway-tests", wrapper.CreateGatewayTest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/gateway-tests/{id}", wrapper.GetGatewayTest)
 
 	return m
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type CreateGatewayTestRequestObject struct {
+	Params CreateGatewayTestParams
+}
+
+type CreateGatewayTestResponseObject interface {
+	VisitCreateGatewayTestResponse(w http.ResponseWriter) error
+}
+
+type CreateGatewayTest202JSONResponse LLMOperation
+
+func (response CreateGatewayTest202JSONResponse) VisitCreateGatewayTestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateGatewayTestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateGatewayTestdefaultApplicationProblemPlusJSONResponse) VisitCreateGatewayTestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGatewayTestRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetGatewayTestResponseObject interface {
+	VisitGetGatewayTestResponse(w http.ResponseWriter) error
+}
+
+type GetGatewayTest200JSONResponse LLMOperation
+
+func (response GetGatewayTest200JSONResponse) VisitGetGatewayTestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetGatewayTestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetGatewayTestdefaultApplicationProblemPlusJSONResponse) VisitGetGatewayTestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLLMAttemptsRequestObject struct {
+	Params ListLLMAttemptsParams
+}
+
+type ListLLMAttemptsResponseObject interface {
+	VisitListLLMAttemptsResponse(w http.ResponseWriter) error
+}
+
+type ListLLMAttempts200JSONResponse []AttemptSummary
+
+func (response ListLLMAttempts200JSONResponse) VisitListLLMAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLLMAttemptsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLLMAttemptsdefaultApplicationProblemPlusJSONResponse) VisitListLLMAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveLLMAttemptRequestObject struct {
+	Id     ID `json:"id"`
+	Params ResolveLLMAttemptParams
+	Body   *ResolveLLMAttemptJSONRequestBody
+}
+
+type ResolveLLMAttemptResponseObject interface {
+	VisitResolveLLMAttemptResponse(w http.ResponseWriter) error
+}
+
+type ResolveLLMAttempt204Response struct {
+}
+
+func (response ResolveLLMAttempt204Response) VisitResolveLLMAttemptResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResolveLLMAttemptdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResolveLLMAttemptdefaultApplicationProblemPlusJSONResponse) VisitResolveLLMAttemptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMembersRequestObject struct {
+	Params ListMembersParams
+}
+
+type ListMembersResponseObject interface {
+	VisitListMembersResponse(w http.ResponseWriter) error
+}
+
+type ListMembers200JSONResponse []Member
+
+func (response ListMembers200JSONResponse) VisitListMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMembersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMembersdefaultApplicationProblemPlusJSONResponse) VisitListMembersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutMembershipRequestObject struct {
+	Id     ID `json:"id"`
+	Params PutMembershipParams
+	Body   *PutMembershipJSONRequestBody
+}
+
+type PutMembershipResponseObject interface {
+	VisitPutMembershipResponse(w http.ResponseWriter) error
+}
+
+type PutMembership200ResponseHeaders struct {
+	ETag *string
+}
+
+type PutMembership200JSONResponse struct {
+	Body    Membership
+	Headers PutMembership200ResponseHeaders
+}
+
+func (response PutMembership200JSONResponse) VisitPutMembershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutMembershipdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutMembershipdefaultApplicationProblemPlusJSONResponse) VisitPutMembershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlansRequestObject struct {
+}
+
+type ListPlansResponseObject interface {
+	VisitListPlansResponse(w http.ResponseWriter) error
+}
+
+type ListPlans200JSONResponse []Plan
+
+func (response ListPlans200JSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlansdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListPlansdefaultApplicationProblemPlusJSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlanRequestObject struct {
+	Body *CreatePlanJSONRequestBody
+}
+
+type CreatePlanResponseObject interface {
+	VisitCreatePlanResponse(w http.ResponseWriter) error
+}
+
+type CreatePlan201ResponseHeaders struct {
+	ETag *string
+}
+
+type CreatePlan201JSONResponse struct {
+	Body    Plan
+	Headers CreatePlan201ResponseHeaders
+}
+
+func (response CreatePlan201JSONResponse) VisitCreatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreatePlandefaultApplicationProblemPlusJSONResponse) VisitCreatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlanRequestObject struct {
+	Id     ID `json:"id"`
+	Params UpdatePlanParams
+	Body   *UpdatePlanJSONRequestBody
+}
+
+type UpdatePlanResponseObject interface {
+	VisitUpdatePlanResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlan200ResponseHeaders struct {
+	ETag *string
+}
+
+type UpdatePlan200JSONResponse struct {
+	Body    Plan
+	Headers UpdatePlan200ResponseHeaders
+}
+
+func (response UpdatePlan200JSONResponse) VisitUpdatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdatePlandefaultApplicationProblemPlusJSONResponse) VisitUpdatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemKeysRequestObject struct {
+}
+
+type ListSystemKeysResponseObject interface {
+	VisitListSystemKeysResponse(w http.ResponseWriter) error
+}
+
+type ListSystemKeys200JSONResponse []SystemKey
+
+func (response ListSystemKeys200JSONResponse) VisitListSystemKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemKeysdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListSystemKeysdefaultApplicationProblemPlusJSONResponse) VisitListSystemKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSystemKeyRequestObject struct {
+	Body *CreateSystemKeyJSONRequestBody
+}
+
+type CreateSystemKeyResponseObject interface {
+	VisitCreateSystemKeyResponse(w http.ResponseWriter) error
+}
+
+type CreateSystemKey201ResponseHeaders struct {
+	ETag *string
+}
+
+type CreateSystemKey201JSONResponse struct {
+	Body    SystemKey
+	Headers CreateSystemKey201ResponseHeaders
+}
+
+func (response CreateSystemKey201JSONResponse) VisitCreateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSystemKeydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSystemKeydefaultApplicationProblemPlusJSONResponse) VisitCreateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ActivateSystemKeyRequestObject struct {
+	Id     ID `json:"id"`
+	Params ActivateSystemKeyParams
+	Body   *ActivateSystemKeyJSONRequestBody
+}
+
+type ActivateSystemKeyResponseObject interface {
+	VisitActivateSystemKeyResponse(w http.ResponseWriter) error
+}
+
+type ActivateSystemKey204Response struct {
+}
+
+func (response ActivateSystemKey204Response) VisitActivateSystemKeyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ActivateSystemKeydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ActivateSystemKeydefaultApplicationProblemPlusJSONResponse) VisitActivateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListEvidencesRequestObject struct {
 	Params ListEvidencesParams
@@ -4411,8 +5757,121 @@ func (response MergeSkilldefaultApplicationProblemPlusJSONResponse) VisitMergeSk
 	return err
 }
 
+type GetUsageRequestObject struct {
+}
+
+type GetUsageResponseObject interface {
+	VisitGetUsageResponse(w http.ResponseWriter) error
+}
+
+type GetUsage200JSONResponse Usage
+
+func (response GetUsage200JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUsagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetUsagedefaultApplicationProblemPlusJSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsageEntriesRequestObject struct {
+	Params ListUsageEntriesParams
+}
+
+type ListUsageEntriesResponseObject interface {
+	VisitListUsageEntriesResponse(w http.ResponseWriter) error
+}
+
+type ListUsageEntries200JSONResponse []UsageEntry
+
+func (response ListUsageEntries200JSONResponse) VisitListUsageEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsageEntriesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListUsageEntriesdefaultApplicationProblemPlusJSONResponse) VisitListUsageEntriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+
+	// (POST /v1/admin/gateway-tests)
+	CreateGatewayTest(ctx context.Context, request CreateGatewayTestRequestObject) (CreateGatewayTestResponseObject, error)
+
+	// (GET /v1/admin/gateway-tests/{id})
+	GetGatewayTest(ctx context.Context, request GetGatewayTestRequestObject) (GetGatewayTestResponseObject, error)
+
+	// (GET /v1/admin/llm-attempts)
+	ListLLMAttempts(ctx context.Context, request ListLLMAttemptsRequestObject) (ListLLMAttemptsResponseObject, error)
+
+	// (POST /v1/admin/llm-attempts/{id}/resolve)
+	ResolveLLMAttempt(ctx context.Context, request ResolveLLMAttemptRequestObject) (ResolveLLMAttemptResponseObject, error)
+
+	// (GET /v1/admin/members)
+	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
+
+	// (PUT /v1/admin/members/{id}/membership)
+	PutMembership(ctx context.Context, request PutMembershipRequestObject) (PutMembershipResponseObject, error)
+
+	// (GET /v1/admin/plans)
+	ListPlans(ctx context.Context, request ListPlansRequestObject) (ListPlansResponseObject, error)
+
+	// (POST /v1/admin/plans)
+	CreatePlan(ctx context.Context, request CreatePlanRequestObject) (CreatePlanResponseObject, error)
+
+	// (PUT /v1/admin/plans/{id})
+	UpdatePlan(ctx context.Context, request UpdatePlanRequestObject) (UpdatePlanResponseObject, error)
+
+	// (GET /v1/admin/system-keys)
+	ListSystemKeys(ctx context.Context, request ListSystemKeysRequestObject) (ListSystemKeysResponseObject, error)
+
+	// (POST /v1/admin/system-keys)
+	CreateSystemKey(ctx context.Context, request CreateSystemKeyRequestObject) (CreateSystemKeyResponseObject, error)
+
+	// (PUT /v1/admin/system-keys/{id}/activation)
+	ActivateSystemKey(ctx context.Context, request ActivateSystemKeyRequestObject) (ActivateSystemKeyResponseObject, error)
 
 	// (GET /v1/evidences)
 	ListEvidences(ctx context.Context, request ListEvidencesRequestObject) (ListEvidencesResponseObject, error)
@@ -4542,6 +6001,12 @@ type StrictServerInterface interface {
 
 	// (POST /v1/skills/{id}/merge)
 	MergeSkill(ctx context.Context, request MergeSkillRequestObject) (MergeSkillResponseObject, error)
+
+	// (GET /v1/usage)
+	GetUsage(ctx context.Context, request GetUsageRequestObject) (GetUsageResponseObject, error)
+
+	// (GET /v1/usage/entries)
+	ListUsageEntries(ctx context.Context, request ListUsageEntriesRequestObject) (ListUsageEntriesResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -4581,6 +6046,356 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// CreateGatewayTest operation middleware
+func (sh *strictHandler) CreateGatewayTest(w http.ResponseWriter, r *http.Request, params CreateGatewayTestParams) {
+	var request CreateGatewayTestRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateGatewayTest(ctx, request.(CreateGatewayTestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateGatewayTest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateGatewayTestResponseObject); ok {
+		if err := validResponse.VisitCreateGatewayTestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetGatewayTest operation middleware
+func (sh *strictHandler) GetGatewayTest(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetGatewayTestRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetGatewayTest(ctx, request.(GetGatewayTestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetGatewayTest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetGatewayTestResponseObject); ok {
+		if err := validResponse.VisitGetGatewayTestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLLMAttempts operation middleware
+func (sh *strictHandler) ListLLMAttempts(w http.ResponseWriter, r *http.Request, params ListLLMAttemptsParams) {
+	var request ListLLMAttemptsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLLMAttempts(ctx, request.(ListLLMAttemptsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLLMAttempts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLLMAttemptsResponseObject); ok {
+		if err := validResponse.VisitListLLMAttemptsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveLLMAttempt operation middleware
+func (sh *strictHandler) ResolveLLMAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveLLMAttemptParams) {
+	var request ResolveLLMAttemptRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ResolveLLMAttemptJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveLLMAttempt(ctx, request.(ResolveLLMAttemptRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveLLMAttempt")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveLLMAttemptResponseObject); ok {
+		if err := validResponse.VisitResolveLLMAttemptResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMembers operation middleware
+func (sh *strictHandler) ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams) {
+	var request ListMembersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMembers(ctx, request.(ListMembersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMembers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMembersResponseObject); ok {
+		if err := validResponse.VisitListMembersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutMembership operation middleware
+func (sh *strictHandler) PutMembership(w http.ResponseWriter, r *http.Request, id ID, params PutMembershipParams) {
+	var request PutMembershipRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body PutMembershipJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutMembership(ctx, request.(PutMembershipRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutMembership")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutMembershipResponseObject); ok {
+		if err := validResponse.VisitPutMembershipResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlans operation middleware
+func (sh *strictHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	var request ListPlansRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlans(ctx, request.(ListPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlansResponseObject); ok {
+		if err := validResponse.VisitListPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePlan operation middleware
+func (sh *strictHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
+	var request CreatePlanRequestObject
+
+	var body CreatePlanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePlan(ctx, request.(CreatePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePlanResponseObject); ok {
+		if err := validResponse.VisitCreatePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePlan operation middleware
+func (sh *strictHandler) UpdatePlan(w http.ResponseWriter, r *http.Request, id ID, params UpdatePlanParams) {
+	var request UpdatePlanRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdatePlanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlan(ctx, request.(UpdatePlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlanResponseObject); ok {
+		if err := validResponse.VisitUpdatePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSystemKeys operation middleware
+func (sh *strictHandler) ListSystemKeys(w http.ResponseWriter, r *http.Request) {
+	var request ListSystemKeysRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSystemKeys(ctx, request.(ListSystemKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSystemKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSystemKeysResponseObject); ok {
+		if err := validResponse.VisitListSystemKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSystemKey operation middleware
+func (sh *strictHandler) CreateSystemKey(w http.ResponseWriter, r *http.Request) {
+	var request CreateSystemKeyRequestObject
+
+	var body CreateSystemKeyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSystemKey(ctx, request.(CreateSystemKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSystemKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSystemKeyResponseObject); ok {
+		if err := validResponse.VisitCreateSystemKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ActivateSystemKey operation middleware
+func (sh *strictHandler) ActivateSystemKey(w http.ResponseWriter, r *http.Request, id ID, params ActivateSystemKeyParams) {
+	var request ActivateSystemKeyRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ActivateSystemKeyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ActivateSystemKey(ctx, request.(ActivateSystemKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ActivateSystemKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ActivateSystemKeyResponseObject); ok {
+		if err := validResponse.VisitActivateSystemKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListEvidences operation middleware
@@ -5809,6 +7624,56 @@ func (sh *strictHandler) MergeSkill(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(MergeSkillResponseObject); ok {
 		if err := validResponse.VisitMergeSkillResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUsage operation middleware
+func (sh *strictHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
+	var request GetUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUsage(ctx, request.(GetUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUsageResponseObject); ok {
+		if err := validResponse.VisitGetUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUsageEntries operation middleware
+func (sh *strictHandler) ListUsageEntries(w http.ResponseWriter, r *http.Request, params ListUsageEntriesParams) {
+	var request ListUsageEntriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUsageEntries(ctx, request.(ListUsageEntriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUsageEntries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUsageEntriesResponseObject); ok {
+		if err := validResponse.VisitListUsageEntriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -15,6 +15,7 @@ import {
 import { ZardSidebarImports } from '@/shared/components/sidebar';
 
 import { AuthService } from '../core/auth.service';
+import { AccountService } from '../core/account.service';
 import { EventsService } from '../core/events.service';
 import { ThemeService } from './theme';
 
@@ -56,7 +57,7 @@ interface NavItem {
         </z-sidebar-header>
 
         <z-sidebar-content>
-          @for (group of groups; track group.label) {
+          @for (group of groups(); track group.label) {
             <z-sidebar-group>
               <z-sidebar-group-label>{{ group.label }}</z-sidebar-group-label>
               <z-sidebar-group-content>
@@ -86,13 +87,23 @@ interface NavItem {
         <z-sidebar-footer>
           <ul z-sidebar-menu>
             <li z-sidebar-menu-item>
-              <button type="button" z-sidebar-menu-button (click)="theme.toggle()" [zTooltip]="theme.dark() ? 'Light theme' : 'Dark theme'">
+              <button
+                type="button"
+                z-sidebar-menu-button
+                (click)="theme.toggle()"
+                [zTooltip]="theme.dark() ? 'Light theme' : 'Dark theme'"
+              >
                 <ng-icon [name]="theme.dark() ? 'lucideSun' : 'lucideMoon'" />
                 <span>{{ theme.dark() ? 'Light theme' : 'Dark theme' }}</span>
               </button>
             </li>
             <li z-sidebar-menu-item>
-              <button type="button" z-sidebar-menu-button (click)="auth.signOut()" [zTooltip]="'Sign out ' + (auth.session()?.label ?? '')">
+              <button
+                type="button"
+                z-sidebar-menu-button
+                (click)="auth.signOut()"
+                [zTooltip]="'Sign out ' + (auth.session()?.label ?? '')"
+              >
                 <ng-icon name="lucideLogOut" />
                 <span class="truncate">Sign out · {{ auth.session()?.label }}</span>
               </button>
@@ -106,14 +117,23 @@ interface NavItem {
       <main z-sidebar-inset class="min-h-0 overflow-hidden">
         <header class="flex h-11 shrink-0 items-center gap-2 border-b px-2">
           <button z-sidebar-trigger></button>
-          <span class="ml-auto flex items-center gap-2 pr-2 text-xs text-muted-foreground" [title]="'Live updates: ' + events.status()">
+          <span
+            class="ml-auto flex items-center gap-2 pr-2 text-xs text-muted-foreground"
+            [title]="'Live updates: ' + events.status()"
+          >
             <span
               class="size-2 rounded-full"
               [class.bg-emerald-500]="events.status() === 'live'"
               [class.bg-amber-500]="events.status() === 'connecting'"
               [class.bg-muted-foreground]="events.status() === 'offline'"
             ></span>
-            {{ events.status() === 'live' ? 'Live' : events.status() === 'connecting' ? 'Connecting…' : 'Offline' }}
+            {{
+              events.status() === 'live'
+                ? 'Live'
+                : events.status() === 'connecting'
+                  ? 'Connecting…'
+                  : 'Offline'
+            }}
           </span>
         </header>
         <div class="min-h-0 flex-1 overflow-auto">
@@ -125,11 +145,15 @@ interface NavItem {
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
+  private readonly account = inject(AccountService);
   protected readonly events = inject(EventsService);
   protected readonly theme = inject(ThemeService);
 
-  protected readonly groups: { label: string; items: NavItem[] }[] = [
-    { label: 'Applications', items: [{ path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' }] },
+  protected readonly groups = computed<{ label: string; items: NavItem[] }[]>(() => [
+    {
+      label: 'Applications',
+      items: [{ path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' }],
+    },
     {
       label: 'Library',
       items: [
@@ -139,5 +163,14 @@ export class Shell {
         { path: '/library/skills', label: 'Skills', icon: 'lucideSparkles' },
       ],
     },
-  ];
+    { label: 'Account', items: [{ path: '/usage', label: 'Model usage', icon: 'lucideSparkles' }] },
+    ...(this.account.me()?.platform_role === 'owner'
+      ? [
+          {
+            label: 'Platform',
+            items: [{ path: '/admin/plans', label: 'Administration', icon: 'lucideBuilding2' }],
+          },
+        ]
+      : []),
+  ]);
 }

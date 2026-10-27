@@ -12,15 +12,19 @@ import (
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
+	"github.com/diegohh0411/zapply/internal/membership"
+	"github.com/diegohh0411/zapply/internal/worker"
 )
 
 // server implements gen.StrictServerInterface. Handlers convert between the
 // generated contract types and the library; errors are mapped centrally in
 // writeError.
 type server struct {
-	deps Deps
-	lib  *library.Service
-	jobs *jobs.Service
+	deps    Deps
+	lib     *library.Service
+	jobs    *jobs.Service
+	members *membership.Service
+	queue   *worker.Queue
 }
 
 var _ gen.StrictServerInterface = (*server)(nil)
@@ -46,7 +50,15 @@ func (s *server) GetMe(ctx context.Context, _ gen.GetMeRequestObject) (gen.GetMe
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetMe200JSONResponse{Id: me.ID, CreatedAt: me.CreatedAt}, nil
+	role, err := s.members.Role(ctx, uid(ctx))
+	if err != nil {
+		return nil, err
+	}
+	usage, err := decodePlatform[gen.Usage](s.members.Usage(ctx, uid(ctx)))
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetMe200JSONResponse{Id: me.ID, CreatedAt: me.CreatedAt, PlatformRole: gen.MePlatformRole(role), Membership: usage.Membership}, nil
 }
 
 func (s *server) ListKinds(context.Context, gen.ListKindsRequestObject) (gen.ListKindsResponseObject, error) {
