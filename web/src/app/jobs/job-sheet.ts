@@ -36,6 +36,7 @@ import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
+import { MatchTab } from './match/match-tab';
 import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
@@ -84,6 +85,7 @@ const emptyForm = (statusId = ''): Form => ({
 @Component({
   selector: 'app-job-sheet',
   imports: [
+    MatchTab,
     DatePipe,
     NgTemplateOutlet,
     FormsModule,

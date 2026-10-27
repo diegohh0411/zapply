@@ -1,5 +1,5 @@
-// Package llm contains model accounting and provider-independent contracts.
-package llm
+// Package model contains model accounting and provider-independent contracts.
+package model
 
 import (
 	"encoding/json"

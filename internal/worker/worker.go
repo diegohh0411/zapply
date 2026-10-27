@@ -13,8 +13,9 @@ import (
 	"time"
 
 	"github.com/diegohh0411/zapply/internal/library"
-	"github.com/diegohh0411/zapply/internal/llm"
 	"github.com/diegohh0411/zapply/internal/membership"
+	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/google/uuid"
@@ -36,10 +37,11 @@ type Args struct {
 	TraceParent string    `json:"traceparent,omitempty"`
 }
 
-func (Args) Kind() string { return "llm_diagnostic" }
+func (Args) Kind() string { return "model_operation" }
 
 type Operation struct {
 	ID             uuid.UUID  `json:"id"`
+	Kind           string     `json:"kind"`
 	UserID         uuid.UUID  `json:"user_id"`
 	Status         string     `json:"status"`
 	BlockedReason  string     `json:"blocked_reason"`
@@ -67,7 +69,7 @@ func NewQueue(st *store.Store) (*Queue, error) {
 	return &Queue{st, c}, err
 }
 func (q *Queue) Enqueue(ctx context.Context, u uuid.UUID, key, requestID string) (Operation, error) {
-	ctx, span := otel.Tracer("zapply/worker").Start(ctx, "llm.enqueue")
+	ctx, span := otel.Tracer("zapply/worker").Start(ctx, "modelapi.enqueue")
 	defer span.End()
 	carrier := propagation.MapCarrier{}
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
@@ -83,11 +85,11 @@ func (q *Queue) Enqueue(ctx context.Context, u uuid.UUID, key, requestID string)
 			return err
 		}
 		var inserted uuid.UUID
-		err := tx.QueryRow(ctx, `INSERT INTO llm_operation(id,user_id,idempotency_key,request_hash) VALUES($1,$2,$3,$4)
+		err := tx.QueryRow(ctx, `INSERT INTO model_operation(id,user_id,idempotency_key,request_hash) VALUES($1,$2,$3,$4)
    ON CONFLICT(user_id,kind,idempotency_key) DO NOTHING RETURNING id`, id, u, key, hash).Scan(&inserted)
 		if errors.Is(err, pgx.ErrNoRows) {
 			var oldHash string
-			if err := tx.QueryRow(ctx, "SELECT id,request_hash FROM llm_operation WHERE user_id=$1 AND kind='diagnostic' AND idempotency_key=$2", u, key).Scan(&id, &oldHash); err != nil {
+			if err := tx.QueryRow(ctx, "SELECT id,request_hash FROM model_operation WHERE user_id=$1 AND kind='diagnostic' AND idempotency_key=$2", u, key).Scan(&id, &oldHash); err != nil {
 				return err
 			}
 			if oldHash != hash {
@@ -101,7 +103,7 @@ func (q *Queue) Enqueue(ctx context.Context, u uuid.UUID, key, requestID string)
 			}
 		}
 		var raw []byte
-		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM llm_operation o WHERE id=$1", id).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM model_operation o WHERE id=$1", id).Scan(&raw); err != nil {
 			return err
 		}
 		return json.Unmarshal(raw, &op)
@@ -115,7 +117,7 @@ func (q *Queue) Get(ctx context.Context, u, id uuid.UUID) (Operation, error) {
 			return err
 		}
 		var raw []byte
-		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM llm_operation o WHERE id=$1 AND user_id=$2", id, u).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM model_operation o WHERE id=$1 AND user_id=$2", id, u).Scan(&raw); err != nil {
 			return err
 		}
 		return json.Unmarshal(raw, &op)
@@ -128,15 +130,22 @@ func (q *Queue) Get(ctx context.Context, u, id uuid.UUID) (Operation, error) {
 
 type Runtime struct {
 	river.WorkerDefaults[Args]
-	Store    *store.Store
-	Provider llm.Provider
-	Keys     *secrets.Ring
-	Log      *slog.Logger
+	Store           *store.Store
+	Provider        modelapi.Provider
+	Keys            *secrets.Ring
+	Log             *slog.Logger
+	OnTerminal      func(context.Context, pgx.Tx, Operation) error
+	AddWorkers      func(*river.Workers)
+	RecoverFeatures func(context.Context, *river.Client[pgx.Tx]) error
 }
 
 func (r *Runtime) Client(concurrency int) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, r)
+	river.AddWorker(workers, &legacyWorker{runtime: r})
+	if r.AddWorkers != nil {
+		r.AddWorkers(workers)
+	}
 	return river.NewClient(riverpgxv5.New(r.Store.Pool()), &river.Config{Schema: "river", Workers: workers,
 		Queues: map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: concurrency}}, Logger: r.Log, JobTimeout: 2 * time.Minute})
 }
@@ -146,7 +155,7 @@ func (r *Runtime) tx(ctx context.Context, u uuid.UUID, fn func(pgx.Tx) error) er
 }
 func (r *Runtime) Work(ctx context.Context, j *river.Job[Args]) error {
 	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier{"traceparent": j.Args.TraceParent})
-	ctx, span := otel.Tracer("zapply/worker").Start(ctx, "llm.operation", trace.WithAttributes(attribute.String("operation.id", j.Args.OperationID.String()), attribute.String("user.id", j.Args.UserID.String())))
+	ctx, span := otel.Tracer("zapply/worker").Start(ctx, "modelapi.operation", trace.WithAttributes(attribute.String("operation.id", j.Args.OperationID.String()), attribute.String("user.id", j.Args.UserID.String())))
 	defer span.End()
 	err := r.Process(ctx, j.Args)
 	// Snoozing is ordinary scheduling, not a provider failure.
@@ -178,6 +187,9 @@ func (r *Runtime) Recover(ctx context.Context, client *river.Client[pgx.Tx]) err
 			return err
 		}
 	}
+	if r.RecoverFeatures != nil {
+		return r.RecoverFeatures(ctx, client)
+	}
 	return nil
 }
 
@@ -185,13 +197,25 @@ func (r *Runtime) Recover(ctx context.Context, client *river.Client[pgx.Tx]) err
 func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var op Operation
 	var attempts []Attempt
+	var decision *systemone.Request
 	if err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
 		var raw []byte
-		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM llm_operation o WHERE id=$1 AND user_id=$2", args.OperationID, args.UserID).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM model_operation o WHERE id=$1 AND user_id=$2", args.OperationID, args.UserID).Scan(&raw); err != nil {
 			return err
 		}
 		if err := json.Unmarshal(raw, &op); err != nil {
 			return err
+		}
+		if op.Kind == "decision" {
+			var body []byte
+			if err := tx.QueryRow(ctx, "SELECT body FROM model_request WHERE operation_id=$1 AND user_id=$2", op.ID, args.UserID).Scan(&body); err != nil {
+				return err
+			}
+			var req systemone.Request
+			if err := json.Unmarshal(body, &req); err != nil {
+				return err
+			}
+			decision = &req
 		}
 		if err := tx.QueryRow(ctx, "SELECT platform.attempts_for_operation($1)", args.OperationID).Scan(&raw); err != nil {
 			return err
@@ -202,7 +226,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	}
 	switch op.Status {
 	case "completed", "failed", "cancelled":
-		return nil
+		return r.tx(ctx, args.UserID, func(tx pgx.Tx) error { return r.terminal(ctx, tx, args) })
 	}
 	if len(attempts) > 0 {
 		a := attempts[0]
@@ -216,7 +240,12 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				}
 			}
 			wait := reconcileDelay(a.Deadline)
-			if a.GenerationID == nil || time.Since(a.Deadline) > lookupWindow {
+			lookupAllowed := true
+			if decision != nil {
+				dp, ok := r.Provider.(modelapi.DecisionProvider)
+				lookupAllowed = ok && dp.DecisionLookupSupported(decision.Model)
+			}
+			if !lookupAllowed || a.GenerationID == nil || time.Since(a.Deadline) > lookupWindow {
 				return river.JobSnooze(wait)
 			}
 			key, err := r.key(ctx, args.UserID, a.KeyID)
@@ -232,21 +261,63 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		// An owner resolved accounting; no generation is repeated to recover output.
 		if op.Status == "needs_review" || op.Status == "running" {
 			return r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
-				_, err := tx.Exec(ctx, "UPDATE llm_operation SET status='failed',blocked_reason='result_unavailable',version=version+1,updated_at=now() WHERE id=$1", op.ID)
+				_, err := tx.Exec(ctx, "UPDATE model_operation SET status='failed',blocked_reason='result_unavailable',version=version+1,updated_at=now() WHERE id=$1", op.ID)
 				if err != nil {
 					return err
 				}
-				return emit(ctx, tx, args.UserID, op.ID, "llm_operation.changed")
+				if err := emit(ctx, tx, args.UserID, op.ID, "model_operation.changed"); err != nil {
+					return err
+				}
+				return r.terminal(ctx, tx, args)
 			})
 		}
 	}
-	quote, err := r.Provider.Quote(ctx)
+	var quote modelapi.Quote
+	var err error
+	if decision != nil {
+		dp, ok := r.Provider.(modelapi.DecisionProvider)
+		if !ok {
+			return r.block(ctx, args, "decision_provider_unavailable", nil, 5*time.Minute)
+		}
+		quote, err = dp.QuoteDecision(ctx, *decision)
+	} else {
+		quote, err = r.Provider.Quote(ctx)
+	}
+	if decision != nil && quote.Model != "" {
+		if e := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `INSERT INTO platform.model_quote(model,quote) VALUES($1,$2) ON CONFLICT(model) DO UPDATE SET quote=EXCLUDED.quote,fetched_at=now()`, quote.Model, systemone.Raw(quote))
+			return e
+		}); e != nil {
+			return e
+		}
+	}
 	if err != nil {
-		return r.block(ctx, args, "provider_metadata_unavailable", nil, 5*time.Minute)
+		reason := "provider_metadata_unavailable"
+		var pe *modelapi.ProviderError
+		if errors.As(err, &pe) {
+			reason = pe.Code
+		}
+		if decision != nil && reason == "request_too_large" && quote.Decision {
+			return r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
+				tag, e := tx.Exec(ctx, `UPDATE model_operation SET status='failed',blocked_reason='request_too_large',version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('pending','blocked')`, op.ID, args.UserID)
+				if e != nil {
+					return e
+				}
+				if tag.RowsAffected() == 0 {
+					return nil
+				}
+				return r.terminal(ctx, tx, args)
+			})
+		}
+		return r.block(ctx, args, reason, nil, 5*time.Minute)
 	}
 	id := uuid.Must(uuid.NewV7())
 	rawQuote, _ := json.Marshal(quote)
-	hash := sha256.Sum256(rawQuote)
+	hashInput := rawQuote
+	if decision != nil {
+		hashInput = systemone.Raw(map[string]any{"quote": quote, "request": decision})
+	}
+	hash := sha256.Sum256(hashInput)
 	var reservation struct {
 		Reason string    `json:"reason"`
 		KeyID  uuid.UUID `json:"key_id"`
@@ -285,7 +356,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		// releases one reservation; cap retries like other uncharged failures.
 		zero := int64(0)
 		retry := len(attempts) < 4
-		if err := r.settle(ctx, args, id, llm.Result{Amount: &zero}, "", "confirmed_uncharged", retry, "encryption_unavailable"); err != nil {
+		if err := r.settle(ctx, args, id, modelapi.Result{Amount: &zero}, "", "confirmed_uncharged", retry, "encryption_unavailable"); err != nil {
 			return err
 		}
 		if retry {
@@ -294,7 +365,12 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		return nil
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	result, err := r.Provider.Generate(callCtx, key, quote)
+	var result modelapi.Result
+	if decision != nil {
+		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
+	} else {
+		result, err = r.Provider.Generate(callCtx, key, quote)
+	}
 	cancel()
 	// Keep a bounded cleanup context after cancellation so a charged result can be
 	// recorded during drain instead of triggering a second external call.
@@ -302,11 +378,11 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	defer stop()
 	if result.Amount != nil {
 		if *result.Amount > quote.Reserved && r.Log != nil {
-			r.Log.Error("provider charge exceeded reservation", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "reserved_usd", llm.USD(quote.Reserved), "actual_usd", llm.USD(*result.Amount))
+			r.Log.Error("provider charge exceeded reservation", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "reserved_usd", modelapi.USD(quote.Reserved), "actual_usd", modelapi.USD(*result.Amount))
 		}
 		return r.settleCharged(ctx, args, id, result)
 	}
-	var pe *llm.ProviderError
+	var pe *modelapi.ProviderError
 	if errors.As(err, &pe) && pe.Uncharged {
 		zero := int64(0)
 		result.Amount = &zero
@@ -361,7 +437,7 @@ func (r *Runtime) uncertain(ctx context.Context, args Args, id uuid.UUID, genera
 			return err
 		}
 		if result != "" {
-			_, err := tx.Exec(ctx, "UPDATE llm_operation SET result=$1 WHERE id=$2", stripNUL(result), args.OperationID)
+			_, err := tx.Exec(ctx, "UPDATE model_operation SET result=$1 WHERE id=$2", stripNUL(result), args.OperationID)
 			return err
 		}
 		return nil
@@ -375,7 +451,7 @@ func stripNUL(s string) string { return strings.ReplaceAll(s, "\x00", "") }
 // known cost into a manual resolution, so transient database failures are
 // retried; if the charge still cannot be saved, the generation ID is kept so the
 // reconciliation lookup can recover the cost.
-func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result llm.Result) error {
+func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result modelapi.Result) error {
 	text := stripNUL(result.Text)
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer stop()
@@ -409,7 +485,7 @@ func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, re
 	}
 	return river.JobSnooze(time.Minute)
 }
-func (r *Runtime) settle(ctx context.Context, args Args, id uuid.UUID, result llm.Result, text, source string, retry bool, reason string) error {
+func (r *Runtime) settle(ctx context.Context, args Args, id uuid.UUID, result modelapi.Result, text, source string, retry bool, reason string) error {
 	var generation *string
 	if result.GenerationID != "" {
 		generation = &result.GenerationID
@@ -423,26 +499,29 @@ func (r *Runtime) settle(ctx context.Context, args Args, id uuid.UUID, result ll
 			return err
 		}
 		if retry {
-			_, err := tx.Exec(ctx, "UPDATE llm_operation SET status='blocked',blocked_reason=$1,next_eligible_at=NULL WHERE id=$2", reason, args.OperationID)
+			_, err := tx.Exec(ctx, "UPDATE model_operation SET status='blocked',blocked_reason=$1,next_eligible_at=NULL WHERE id=$2", reason, args.OperationID)
 			return err
 		}
 		if reason != "" {
 			// Keep why a final uncharged attempt failed, not only that it did.
-			_, err := tx.Exec(ctx, "UPDATE llm_operation SET blocked_reason=$1 WHERE id=$2 AND status='failed'", reason, args.OperationID)
-			return err
+			_, err := tx.Exec(ctx, "UPDATE model_operation SET blocked_reason=$1 WHERE id=$2 AND status='failed'", reason, args.OperationID)
+			if err != nil {
+				return err
+			}
+			return r.terminal(ctx, tx, args)
 		}
-		return nil
+		return r.terminal(ctx, tx, args)
 	})
 	return err
 }
 func (r *Runtime) block(ctx context.Context, args Args, reason string, next *time.Time, delay time.Duration) error {
 	err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, "UPDATE llm_operation SET status='blocked',blocked_reason=$1,next_eligible_at=$2,version=version+1,updated_at=now() WHERE id=$3 AND status IN('pending','blocked')", reason, next, args.OperationID)
+		tag, err := tx.Exec(ctx, "UPDATE model_operation SET status='blocked',blocked_reason=$1,next_eligible_at=$2,version=version+1,updated_at=now() WHERE id=$3 AND status IN('pending','blocked')", reason, next, args.OperationID)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() > 0 {
-			return emit(ctx, tx, args.UserID, args.OperationID, "llm_operation.changed")
+			return emit(ctx, tx, args.UserID, args.OperationID, "model_operation.changed")
 		}
 		return nil
 	})
@@ -454,5 +533,26 @@ func (r *Runtime) block(ctx context.Context, args Args, reason string, next *tim
 func emit(ctx context.Context, tx pgx.Tx, u, id uuid.UUID, topic string) error {
 	payload, _ := json.Marshal(map[string]any{"id": id})
 	_, err := tx.Exec(ctx, "INSERT INTO outbox(id,user_id,topic,payload) VALUES($1,$2,$3,$4)", uuid.Must(uuid.NewV7()), u, topic, json.RawMessage(payload))
+	return err
+}
+
+func (r *Runtime) terminal(ctx context.Context, tx pgx.Tx, args Args) error {
+	if r.OnTerminal == nil {
+		return nil
+	}
+	var raw []byte
+	if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM model_operation o WHERE id=$1 AND user_id=$2", args.OperationID, args.UserID).Scan(&raw); err != nil {
+		return err
+	}
+	var op Operation
+	if err := json.Unmarshal(raw, &op); err != nil {
+		return err
+	}
+	return r.OnTerminal(ctx, tx, op)
+}
+
+// InsertTx shares the insert-only queue with feature jobs.
+func (q *Queue) InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs) error {
+	_, err := q.client.InsertTx(ctx, tx, args, insertOptions())
 	return err
 }

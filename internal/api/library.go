@@ -12,7 +12,9 @@ import (
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
+	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
+	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/worker"
 )
 
@@ -20,11 +22,13 @@ import (
 // generated contract types and the library; errors are mapped centrally in
 // writeError.
 type server struct {
-	deps    Deps
-	lib     *library.Service
-	jobs    *jobs.Service
-	members *membership.Service
-	queue   *worker.Queue
+	deps           Deps
+	lib            *library.Service
+	jobs           *jobs.Service
+	members        *membership.Service
+	queue          *worker.Queue
+	matcher        *match.Service
+	decisionModels *openrouter.Client
 }
 
 var _ gen.StrictServerInterface = (*server)(nil)
@@ -95,7 +99,7 @@ func (s *server) PutProfile(ctx context.Context, req gen.PutProfileRequestObject
 	b := req.Body
 	in := library.Profile{
 		FullName: deref(b.FullName), Headline: deref(b.Headline), Email: deref(b.Email), Phone: deref(b.Phone),
-		Location: deref(b.Location), Summary: deref(b.Summary),
+		Location: deref(b.Location), Summary: deref(b.Summary), AutoMatch: b.AutoMatch == nil || *b.AutoMatch,
 	}
 	if b.Links != nil {
 		for _, l := range *b.Links {
@@ -111,7 +115,7 @@ func (s *server) PutProfile(ctx context.Context, req gen.PutProfileRequestObject
 
 func toProfile(p library.Profile) gen.Profile {
 	out := gen.Profile{
-		FullName: p.FullName, Headline: p.Headline, Email: p.Email, Phone: p.Phone,
+		AutoMatch: &p.AutoMatch, FullName: p.FullName, Headline: p.Headline, Email: p.Email, Phone: p.Phone,
 		Location: p.Location, Summary: p.Summary, Version: p.Version, Links: []gen.Link{},
 	}
 	for _, l := range p.Links {

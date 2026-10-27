@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: zapply API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Library of a person's career evidence (docs/parts/02-library.md) and the
     jobs they apply to (docs/parts/04-jobs.md).
@@ -960,9 +960,9 @@ paths:
           "application/json":
             "schema":
               "$ref": "#/components/schemas/KeyActivationInput"
-  "/v1/admin/llm-attempts":
+  "/v1/admin/model-attempts":
     "get":
-      "operationId": "listLLMAttempts"
+      "operationId": "listModelAttempts"
       "tags":
         - "platform"
       "responses":
@@ -991,9 +991,9 @@ paths:
             "minimum": 1
             "maximum": 100
             "default": 50
-  "/v1/admin/llm-attempts/{id}/resolve":
+  "/v1/admin/model-attempts/{id}/resolve":
     "post":
-      "operationId": "resolveLLMAttempt"
+      "operationId": "resolveModelAttempt"
       "tags":
         - "platform"
       "responses":
@@ -1023,7 +1023,7 @@ paths:
           "content":
             "application/json":
               "schema":
-                "$ref": "#/components/schemas/LLMOperation"
+                "$ref": "#/components/schemas/ModelOperation"
         "default":
           "$ref": "#/components/responses/Problem"
       "parameters":
@@ -1046,12 +1046,162 @@ paths:
           "content":
             "application/json":
               "schema":
-                "$ref": "#/components/schemas/LLMOperation"
+                "$ref": "#/components/schemas/ModelOperation"
         "default":
           "$ref": "#/components/responses/Problem"
       "parameters":
         -
           "$ref": "#/components/parameters/ID"
+
+  /v1/admin/decision-models:
+    get:
+      operationId: listDecisionModels
+      responses:
+        '200':
+          description: Decision model catalogue (owner only).
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DecisionModel' } }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/model-settings:
+    get:
+      operationId: getModelSettings
+      responses:
+        '200':
+          description: Owner model settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelSettings' }
+        default: { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putModelSettings
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision_model]
+              properties:
+                decision_model: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelSettings' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/jobs/{id}/match-estimate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getMatchEstimate
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchEstimate' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/jobs/{id}/match-runs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listMatchRuns
+      parameters:
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchRunPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createMatchRun
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        '202':
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchRun' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/match-runs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getMatchRun
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchRun' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/match-runs/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: cancelMatchRun
+      responses:
+        '204':
+          description: Success.
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/jobs/{id}/match-overrides/{text_hash}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: text_hash
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[a-f0-9]{64}$" }
+    put:
+      operationId: putMatchOverride
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [class]
+              properties:
+                class: { type: string, enum: [must, preferred, duty, ignore] }
+      responses:
+        '204':
+          description: Success.
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteMatchOverride
+      responses:
+        '204':
+          description: Success.
+        default: { $ref: '#/components/responses/Problem' }
 
 components:
   securitySchemes:
@@ -1160,6 +1310,7 @@ components:
     ProfileInput:
       type: object
       properties:
+        auto_match: { type: boolean, default: true }
         full_name: { type: string }
         headline: { type: string }
         email: { type: string }
@@ -1419,6 +1570,7 @@ components:
       required: [id, status_id, title, company, url, location, salary_currency, source,
                  position, version, archived, status_changed_at, created_at, updated_at]
       properties:
+        match: { $ref: "#/components/schemas/MatchRunSummary" }
         id: { type: string, format: uuid }
         status_id: { type: string, format: uuid }
         title: { type: string }
@@ -1565,7 +1717,8 @@ components:
         - job_view.deleted
         - membership.changed
         - usage.changed
-        - llm_operation.changed
+        - model_operation.changed
+        - match_run.changed
 
     "Plan":
       "type": "object"
@@ -1837,7 +1990,7 @@ components:
           "type": "string"
           "minLength": 3
           "maxLength": 1000
-    "LLMOperation":
+    "ModelOperation":
       "type": "object"
       "required":
         - "id"
@@ -1878,3 +2031,174 @@ components:
         "created_at":
           "type": "string"
           "format": "date-time"
+
+    DecisionModel:
+      type: object
+      required: [id, name, context_length, pricing, compatibility_reason]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        context_length: { type: integer }
+        pricing: { type: object, additionalProperties: true }
+        compatibility_reason: { type: string }
+    ModelSettings:
+      type: object
+      required: [version, decision_model, updated_at]
+      properties:
+        decision_model: { type: string, nullable: true }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    MatchRunSummary:
+      type: object
+      required: [run_id, status, stale]
+      properties:
+        run_id: { type: string, format: uuid }
+        status: { type: string }
+        score: { type: number, nullable: true }
+        stale: { type: boolean }
+    MatchEstimate:
+      type: object
+      required: [available, reason, questions, requests]
+      properties:
+        available: { type: boolean }
+        reason: { type: string }
+        cost_usd: { type: string, nullable: true }
+        questions: { type: integer }
+        requests: { type: integer }
+        available_7d_usd: { type: string }
+        available_30d_usd: { type: string }
+    Requirement:
+      type: object
+      required: [text, text_hash, class, original_class, type, line, min_years]
+      properties:
+        text: { type: string }
+        text_hash: { type: string }
+        class: { type: string }
+        original_class: { type: string }
+        type: { type: string }
+        line: { type: integer }
+        source_start: { type: integer }
+        source_end: { type: integer }
+        min_years: { type: number }
+        degree: { type: string }
+        language: { type: string }
+    Coverage:
+      allOf:
+        - $ref: '#/components/schemas/Requirement'
+        - type: object
+          required: [status, strength, provisional, highlight_ids, review]
+          properties:
+            status: { type: string }
+            strength: { type: number }
+            provisional: { type: boolean }
+            evidence_title: { type: string }
+            evidence_id: { type: string }
+            highlight_ids: { type: array, items: { type: string } }
+            answer:
+              type: object
+              properties:
+                score: { type: number }
+                confidence: { type: number }
+                probabilities: { type: object, additionalProperties: { type: number } }
+                legend: { type: object, additionalProperties: true }
+            check: { type: string }
+            review: { type: boolean }
+            citations:
+              type: array
+              items:
+                type: object
+                required: [id, text]
+                properties:
+                  id: { type: string }
+                  text: { type: string }
+    Selection:
+      type: object
+      required: [evidence_id, relevance, highlight_ids]
+      properties:
+        title: { type: string }
+        evidence_id: { type: string }
+        relevance: { type: number }
+        highlight_ids: { type: array, items: { type: string } }
+    EvidenceMatch:
+      allOf:
+        - $ref: '#/components/schemas/Selection'
+    Insight:
+      type: object
+      required: [type, text]
+      properties:
+        type: { type: string }
+        text: { type: string }
+        text_hash: { type: string }
+        evidence_id: { type: string }
+    MatchResult:
+      type: object
+      required: [score, must_met, must_total, partial, seniority, relevant_years, scoring_version, requirements, evidence, selection, suggestions, skills, insights]
+      properties:
+        score: { type: number, nullable: true }
+        must_met: { type: integer }
+        must_total: { type: integer }
+        partial: { type: boolean }
+        seniority: { type: string }
+        relevant_years: { type: number }
+        scoring_version: { type: integer }
+        requirements: { type: array, items: { $ref: '#/components/schemas/Coverage' } }
+        evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceMatch' } }
+        selection: { type: array, items: { $ref: '#/components/schemas/Selection' } }
+        suggestions: { type: array, items: { $ref: '#/components/schemas/Selection' } }
+        insights: { type: array, items: { $ref: '#/components/schemas/Insight' } }
+        skills:
+          type: array
+          items:
+            type: object
+            required: [skill_id, relevance]
+            properties:
+              skill_id: { type: string }
+              name: { type: string }
+              relevance: { type: number }
+    MatchRun:
+      type: object
+      required: [id, job_id, status, stage, model, trigger, blocked_reason, version, total, answered, cached, unanswered, created_at, stale, changed, added, removed, cost_usd]
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        status: { type: string }
+        stage: { type: string }
+        model: { type: string, nullable: true }
+        trigger: { type: string }
+        blocked_reason: { type: string }
+        next_eligible_at: { type: string, format: date-time, nullable: true }
+        version: { type: integer }
+        total: { type: integer }
+        answered: { type: integer }
+        cached: { type: integer }
+        unanswered: { type: integer }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        score: { type: number, nullable: true }
+        must_met: { type: integer }
+        must_total: { type: integer }
+        stale: { type: boolean }
+        truncated: { type: boolean }
+        obsolete_overrides: { type: array, items: { type: string } }
+        changed: { type: integer }
+        added: { type: integer }
+        removed: { type: integer }
+        cost_usd: { type: string }
+        selection: { type: array, items: { $ref: '#/components/schemas/Selection' } }
+        suggestions: { type: array, items: { $ref: '#/components/schemas/Selection' } }
+        skills:
+          type: array
+          items:
+            type: object
+            required: [skill_id, relevance]
+            properties:
+              skill_id: { type: string }
+              name: { type: string }
+              relevance: { type: number }
+        result: { $ref: '#/components/schemas/MatchResult' }
+    MatchRunPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/MatchRun' } }
+        next_cursor: { type: string, format: uuid }

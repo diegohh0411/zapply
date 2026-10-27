@@ -122,7 +122,8 @@ export class JobsStore {
     this.events.changes.pipe(takeUntilDestroyed(destroy)).subscribe((e) => {
       if (!this.loaded) return;
       const [kind] = e.topic.split('.');
-      if (kind === 'job') {
+      if (kind === 'match_run' || ['evidence','skill','organization'].includes(kind)) { void this.loadJobs(); }
+      else if (kind === 'job') {
         if (e.topic === 'job.deleted') {
           this.deleted.add(e.data.id);
           this.remove(e.data.id);

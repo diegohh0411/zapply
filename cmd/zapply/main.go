@@ -29,8 +29,9 @@ import (
 	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
-	"github.com/diegohh0411/zapply/internal/llm/openrouter"
 	"github.com/diegohh0411/zapply/internal/logx"
+	"github.com/diegohh0411/zapply/internal/match"
+	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/relay"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -204,6 +205,14 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	runtime := &worker.Runtime{Store: st, Provider: openrouter.New(cfg.Worker.Model, cfg.Worker.Endpoint), Keys: keys, Log: log}
+	q, err := worker.NewQueue(st)
+	if err != nil {
+		return err
+	}
+	matcher := match.New(st, q)
+	runtime.OnTerminal = matcher.OnTerminal
+	runtime.AddWorkers = matcher.AddWorkers
+	runtime.RecoverFeatures = matcher.Recover
 	client, err := runtime.Client(cfg.Worker.Concurrency)
 	if err != nil {
 		return err

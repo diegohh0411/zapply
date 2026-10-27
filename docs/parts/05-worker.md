@@ -1,11 +1,11 @@
-# Part 5: Worker runtime and LLM gateway
+# Part 5: Worker runtime and model gateway
 
 Status: implemented. The [implementation plan](05-worker-plan.md) records the
 design; this document records the delivered behavior and setup. Provider
 credentials, model configuration, and production deployment are still operational
 setup steps, not bundled credentials or an automatic deployment.
 
-This part introduces River workers and a platform-funded LLM gateway through
+This part introduces River workers and a platform-funded model gateway through
 OpenRouter. It includes the platform owner role, owner administration screens,
 and member usage screens. Matching logic remains in part 6.
 
@@ -73,7 +73,7 @@ keeps its reservation and cannot automatically trigger another paid call.
    Creating a diagnostic and enqueueing it share one transaction. Rescued/retried
    jobs reuse persisted state, and a periodic scan recovers abandoned operations.
    Worker concurrency defaults to four, with one unresolved call per member.
-3. **Gateway and accounting:** `internal/llm` and `internal/llm/openrouter`
+3. **Gateway and accounting:** `internal/model` and `internal/model/openrouter`
    quote, reserve, invoke once, settle, and reconcile. The ledger supports
    idempotent settlements and append-only corrections. Ambiguous calls keep their
    holds; a known generation ID permits lookup using the original credential.
@@ -144,8 +144,17 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
 
 ## MVP limits
 
-- Only non-streaming text diagnostics are exposed in this part. Future matching
-  stages use the same gateway; there is no arbitrary chat API.
+- Diagnostics and part 6 typed decision requests share the same gateway. Stored
+  decision requests are immutable, use the existing River kind and encrypted
+  system key, and settle through the same allowance ledger. There is no arbitrary
+  chat API. The owner selects the decision model in Administration, independently
+  of the diagnostic's `LLM_MODEL`/`LLM_ENDPOINT`.
+- Decision reservations require an explicitly verified model adapter. It bounds
+  billable input per request or per question and request-fee multiplicity;
+  unsupported pricing and unverified bounds block before dispatch. The production
+  registry starts empty pending the part 6 live verification. Decision IDs use
+  automatic accounting lookup only when the adapter confirms support; otherwise
+  uncertain reservations remain for owner reconciliation.
 - Reservations conservatively cover the selected endpoint's full context plus
   bounded output until model-specific input tokenization is added. A request can
   therefore pause even when its eventual actual charge would fit the allowance.

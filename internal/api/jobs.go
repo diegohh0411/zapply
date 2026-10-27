@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -88,9 +89,24 @@ func (s *server) ListJobs(ctx context.Context, req gen.ListJobsRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
+	ids := make([]uuid.UUID, len(list))
+	for i, j := range list {
+		ids[i] = j.ID
+	}
+	summaries, err := s.matcher.Summaries(ctx, uid(ctx), ids)
+	if err != nil {
+		return nil, err
+	}
 	out := gen.ListJobs200JSONResponse{Items: make([]gen.JobSummary, len(list))}
 	for i, j := range list {
 		out.Items[i] = toJobSummary(j)
+		if summary, ok := summaries[j.ID]; ok {
+			v, e := convertMatch[gen.MatchRunSummary](summary, nil)
+			if e != nil {
+				return nil, e
+			}
+			out.Items[i].Match = &v
+		}
 	}
 	if next != "" {
 		out.NextCursor = &next
@@ -103,7 +119,19 @@ func (s *server) GetJob(ctx context.Context, req gen.GetJobRequestObject) (gen.G
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetJob200JSONResponse{Body: toJob(j), Headers: gen.GetJob200ResponseHeaders{ETag: etag(j.Version)}}, nil
+	out := toJob(j)
+	summaries, e := s.matcher.Summaries(ctx, uid(ctx), []uuid.UUID{j.ID})
+	if e != nil {
+		return nil, e
+	}
+	if summary, ok := summaries[j.ID]; ok {
+		v, e := convertMatch[gen.MatchRunSummary](summary, nil)
+		if e != nil {
+			return nil, e
+		}
+		out.Match = &v
+	}
+	return gen.GetJob200JSONResponse{Body: out, Headers: gen.GetJob200ResponseHeaders{ETag: etag(j.Version)}}, nil
 }
 
 func (s *server) CreateJob(ctx context.Context, req gen.CreateJobRequestObject) (gen.CreateJobResponseObject, error) {

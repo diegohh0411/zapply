@@ -26,7 +26,10 @@ import (
 // Service implements the tracking use cases. Every method runs in one
 // tenant transaction and records its domain events in the outbox.
 type Service struct {
-	store *store.Store
+	store   *store.Store
+	Matcher interface {
+		JobSaved(context.Context, pgx.Tx, uuid.UUID, db.Job, bool, bool) error
+	}
 }
 
 func NewService(st *store.Store) *Service { return &Service{store: st} }

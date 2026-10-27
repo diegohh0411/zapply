@@ -38,6 +38,7 @@
   @if (loading()) {
     <p role="status" class="text-sm text-muted-foreground">Loading…</p>
   }
+  @if (section() === 'system-keys') { <app-model-settings /> }
   @switch (section()) {
     @case ('plans') {
       <section class="space-y-4 rounded-xl border p-5">

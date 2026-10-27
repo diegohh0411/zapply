@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/library"
-	"github.com/diegohh0411/zapply/internal/llm"
+	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/store/db"
@@ -103,11 +103,11 @@ func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, mon
 	if name == "" || utf8.RuneCountInString(name) > 100 || strings.ContainsRune(name, 0) {
 		return nil, invalid("name", "must be between 1 and 100 characters")
 	}
-	w, err := llm.ParseUSD(week)
+	w, err := modelapi.ParseUSD(week)
 	if err != nil || w <= 0 || !inputAmount.MatchString(week) {
 		return nil, invalid("cap_7d_usd", "must be a positive USD amount")
 	}
-	m, err := llm.ParseUSD(month)
+	m, err := modelapi.ParseUSD(month)
 	if err != nil || m <= 0 || !inputAmount.MatchString(month) {
 		return nil, invalid("cap_30d_usd", "must be a positive USD amount")
 	}
@@ -144,7 +144,7 @@ func (s *Service) ActivateKey(ctx context.Context, u, id uuid.UUID, active bool,
 	return s.exec(ctx, u, "SELECT platform.activate_key($1,$2,$3)", id, active, version)
 }
 func (s *Service) Resolve(ctx context.Context, u, id uuid.UUID, amount string, generation *string, reason string, version int) error {
-	n, err := llm.ParseUSD(amount)
+	n, err := modelapi.ParseUSD(amount)
 	if err != nil || !inputAmount.MatchString(amount) {
 		return invalid("amount_usd", "must be a non-negative USD amount")
 	}

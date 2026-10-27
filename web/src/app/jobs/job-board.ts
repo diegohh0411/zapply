@@ -73,6 +73,7 @@ export interface BoardMove {
                     }
                   </span>
                 }
+                @if (job.match; as m) { <span class="self-start rounded-full border px-2 py-0.5 text-xs" [class.opacity-50]="m.stale">Match {{ m.score === null || m.score === undefined ? m.status : m.score.toFixed(0) + '/100' }}{{ m.stale ? ' · stale' : '' }}</span> }
                 <span class="text-[11px] text-muted-foreground/80">In this column {{ since(job.status_changed_at) }}</span>
                 <div *cdkDragPlaceholder class="h-16 rounded-lg border-2 border-dashed border-brand/40 bg-brand/5"></div>
               </button>

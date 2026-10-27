@@ -1,0 +1,53 @@
+<section class="space-y-5 py-4" aria-label="Job match">
+  <div class="flex items-center justify-between gap-3">
+    <h2 class="font-medium">Library match</h2>
+    @if (active()) {
+      <button z-button zType="outline" [zDisabled]="busy()" (click)="action('cancel')">Cancel run</button>
+    } @else {
+      <button z-button [zDisabled]="busy()" (click)="action('start')">{{ run() ? 'Re-run match' : 'Match library' }}</button>
+    }
+  </div>
+  @if (error() || store.errors().get(jobId())) { <p role="alert" class="text-sm text-destructive">{{ error() || store.errors().get(jobId()) }}</p> }
+  @if (run(); as r) {
+    <div class="rounded-xl border p-4 space-y-2" aria-live="polite">
+      <p class="text-sm font-medium">{{ r.status }} · {{ r.stage }}</p>
+      @if (r.blocked_reason) { <p class="text-sm text-muted-foreground">{{ r.blocked_reason.replaceAll('_', ' ') }}</p> }
+      @if (r.next_eligible_at) { <p class="text-xs">Next eligible {{ r.next_eligible_at | date:'medium' }}</p> }
+      @if (active()) { <progress class="w-full" [value]="r.answered + r.unanswered" [max]="r.total || 1" aria-label="Questions processed"></progress> }
+      <p class="text-xs text-muted-foreground">{{ r.answered }} of {{ r.total }} answered · {{ r.cached }} cached · {{ r.unanswered }} unanswered</p>
+      @if (r.obsolete_overrides?.length) { <p class="text-xs text-amber-700">{{ r.obsolete_overrides!.length }} corrections no longer apply to the current posting.</p> }
+      @if (r.truncated) { <p class="text-xs text-amber-700">This run reads the first 120 posting lines.</p> }
+      @if (r.stale) { <p class="text-sm text-amber-700">Inputs changed: {{ r.changed }} edited, {{ r.added }} added, {{ r.removed }} removed. Re-run for a current match.</p> }
+      @if (r.score !== null && r.score !== undefined) {
+        <div class="flex items-center gap-4"><div class="grid size-20 place-content-center rounded-full border-4 border-primary text-2xl font-semibold" aria-label="Job match score">{{ r.score | number:'1.0-0' }}</div><p class="text-sm">Must-haves met: {{ r.must_met }} of {{ r.must_total }}</p></div>
+      } @else if (r.status === 'partial') { <p class="text-sm">Some applicable answers are unknown. A complete score is unavailable.</p> }
+      <p class="text-xs text-muted-foreground">Settled cost: ${{ r.cost_usd || '0' }} · {{ r.model || 'Waiting for model configuration' }}</p>
+    </div>
+    @if ((r.status === 'completed' || r.status === 'partial') && r.result; as result) {
+      @if (result.seniority) { <p class="text-sm">Role seniority: {{ result.seniority.replaceAll('_',' ') }} · {{ result.relevant_years | number:'1.1-1' }} relevant years</p> }
+      @for (req of result.requirements; track req.text_hash) {
+        <article class="space-y-2 rounded-lg border p-3">
+          <p class="text-sm">{{ req.text }}</p>
+          <div class="flex flex-wrap items-center gap-3 text-xs">
+            <label>Classification <select class="rounded border bg-background p-1" [ngModel]="req.class" (ngModelChange)="action('correct',req.text_hash,$event)" [disabled]="busy()"><option value="must">Must have</option><option value="preferred">Preferred</option><option value="duty">Duty</option><option value="ignore">Ignore</option></select></label>
+            @if (req.class !== req.original_class) { <button class="underline" (click)="action('correct',req.text_hash,'reset')">Restore model reading</button> }
+            <span>{{ req.status }}{{ req.provisional ? ' · provisional' : '' }}</span>
+            @if (req.check) { <span>{{ req.check }}</span> }
+          </div>
+          @if (req.answer; as a) { <p class="text-xs text-muted-foreground">Direct probability: {{ (a.probabilities?.['3'] ?? 0) * 100 | number:'1.0-0' }}% · API confidence: {{ (a.confidence ?? 0) * 100 | number:'1.0-0' }}%{{ req.review ? ' · Review this judgment' : '' }}</p> }
+          @if (req.evidence_id) { <p class="text-xs">{{ req.evidence_title || 'Supporting evidence' }} · {{ req.highlight_ids.length }} supporting highlights</p> }
+          @for (citation of req.citations ?? []; track citation.id) { <blockquote class="border-l-2 pl-3 text-xs text-muted-foreground">{{ citation.text }}</blockquote> }
+          @if (req.status === 'gap') { <a class="text-xs underline" routerLink="/library/evidence">Add evidence in your library</a> }
+        </article>
+      }
+      @if (result.requirements.length === 0 && r.status === 'completed') { <p class="text-sm text-muted-foreground">No requirements were found in this posting.</p> }
+      @if (result.selection.length) { <h3 class="text-sm font-medium">Ranked selection for your CV</h3> }
+      @for (item of result.selection; track item.evidence_id) { <div class="rounded border p-3 text-xs">{{ item.title || 'Evidence' }} · relevance {{ item.relevance | number:'1.1-2' }} · {{ item.highlight_ids.length }} highlights</div> }
+      @if (result.suggestions.length) { <h3 class="text-sm font-medium">Matching evidence kept out of automatic CVs</h3> }
+      @for (item of result.suggestions; track item.evidence_id) { <p class="text-sm">{{ item.title || 'Evidence' }} · relevance {{ item.relevance | number:'1.1-2' }}</p> }
+      @if (result.skills.length) { <h3 class="text-sm font-medium">Ranked skills</h3><div class="flex flex-wrap gap-2">@for (skill of result.skills; track skill.skill_id) {<span class="rounded-full border px-2 py-1 text-xs">{{ skill.name || 'Skill' }} · {{ skill.relevance | number:'1.1-2' }}</span>}</div> }
+      @for (insight of result.insights; track $index) { @if (insight.type === 'near_miss' && insight.text) { <p class="text-sm text-muted-foreground">Near miss: {{ insight.text }}</p> } }
+    }
+  } @else { <p class="text-sm text-muted-foreground">Compare this posting with the evidence in your library.</p> }
+  @if (estimate(); as e) { <p class="text-xs text-muted-foreground">{{ e.available ? 'Conservative estimate: $' + e.cost_usd + ' (excludes retries and price changes)' : 'Cost estimate is unavailable. You can queue a run; calls wait until configuration and allowance permit them.' }}</p> }
+</section>

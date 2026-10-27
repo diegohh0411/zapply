@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/diegohh0411/zapply/internal/auth"
-	"github.com/diegohh0411/zapply/internal/llm"
 	"github.com/diegohh0411/zapply/internal/membership"
+	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/testdb"
@@ -35,49 +35,49 @@ type fake struct {
 	entered, release chan struct{}
 }
 
-func (f *fake) Quote(context.Context) (llm.Quote, error) {
-	return llm.Quote{Model: "test/model", Endpoint: "test", Reserved: f.amount, FetchedAt: time.Now()}, nil
+func (f *fake) Quote(context.Context) (modelapi.Quote, error) {
+	return modelapi.Quote{Model: "test/model", Endpoint: "test", Reserved: f.amount, FetchedAt: time.Now()}, nil
 }
-func (f *fake) Generate(ctx context.Context, key string, _ llm.Quote) (llm.Result, error) {
+func (f *fake) Generate(ctx context.Context, key string, _ modelapi.Quote) (modelapi.Result, error) {
 	f.calls.Add(1)
 	if key != "test-provider-secret" {
-		return llm.Result{}, errors.New("wrong credential")
+		return modelapi.Result{}, errors.New("wrong credential")
 	}
 	if f.entered != nil {
 		close(f.entered)
 		select {
 		case <-f.release:
 		case <-ctx.Done():
-			return llm.Result{}, ctx.Err()
+			return modelapi.Result{}, ctx.Err()
 		}
 	}
 	if f.uncertain {
-		return llm.Result{}, &llm.ProviderError{Code: "transport_uncertain"}
+		return modelapi.Result{}, &modelapi.ProviderError{Code: "transport_uncertain"}
 	}
 	if f.missingCost {
 		text := "OK"
 		if f.text != "" {
 			text = f.text
 		}
-		return llm.Result{GenerationID: "gen-missing-cost", Text: text}, nil
+		return modelapi.Result{GenerationID: "gen-missing-cost", Text: text}, nil
 	}
 	amount := f.amount
 	text := "OK"
 	if f.text != "" {
 		text = f.text
 	}
-	return llm.Result{GenerationID: "gen-" + uuid.NewString(), Text: text, Amount: &amount, Usage: json.RawMessage(`{"prompt_tokens":4}`)}, nil
+	return modelapi.Result{GenerationID: "gen-" + uuid.NewString(), Text: text, Amount: &amount, Usage: json.RawMessage(`{"prompt_tokens":4}`)}, nil
 }
-func (f *fake) Lookup(_ context.Context, key string, _ string) (llm.Result, error) {
+func (f *fake) Lookup(_ context.Context, key string, _ string) (modelapi.Result, error) {
 	if key != "test-provider-secret" {
-		return llm.Result{}, errors.New("lookup used replacement credential")
+		return modelapi.Result{}, errors.New("lookup used replacement credential")
 	}
 	f.lookups.Add(1)
 	if f.lookupFails {
-		return llm.Result{}, errors.New("generation not found")
+		return modelapi.Result{}, errors.New("generation not found")
 	}
 	amount := f.amount
-	return llm.Result{Amount: &amount}, nil
+	return modelapi.Result{Amount: &amount}, nil
 }
 
 type fixture struct {
@@ -90,9 +90,10 @@ type fixture struct {
 	plan uuid.UUID
 }
 
-func setup(t *testing.T) *fixture {
+func setup(t *testing.T) *fixture { return setupVersion(t, 0) }
+func setupVersion(t *testing.T, version int64) *fixture {
 	t.Helper()
-	db := testdb.New(t)
+	db := testdb.NewAtVersion(t, version)
 	ctx := context.Background()
 	u, err := db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "owner"})
 	if err != nil {
@@ -129,7 +130,7 @@ func setup(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	amount, _ := llm.ParseUSD("0.6")
+	amount, _ := modelapi.ParseUSD("0.6")
 	p := &fake{amount: amount}
 	r := &worker.Runtime{Store: st, Provider: p, Keys: ring, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	return &fixture{db, u, s, q, r, p, plan}
@@ -202,7 +203,7 @@ func TestConcurrentReservationsAndReplay(t *testing.T) {
 		t.Fatalf("blocked state: %+v", op)
 	}
 	got := f.usage(t)["reserved_usd"]
-	if n, err := llm.ParseUSD(got.(string)); err != nil || n != 0 {
+	if n, err := modelapi.ParseUSD(got.(string)); err != nil || n != 0 {
 		t.Fatalf("hold not released: %v", got)
 	}
 	// A plan change preserves the first charge and makes a second call eligible.
@@ -225,7 +226,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := f.db.Admin(t)
-	if _, err := admin.Exec(ctx, "UPDATE platform.llm_usage SET accounted_at=now()-interval '8 days'"); err != nil {
+	if _, err := admin.Exec(ctx, "UPDATE platform.model_usage SET accounted_at=now()-interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
 	second := f.operation(t)
@@ -243,7 +244,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 	if op := f.state(t, third); op.BlockedReason != "usage_limit" {
 		t.Fatalf("monthly block: %+v", op)
 	}
-	if _, err := admin.Exec(ctx, "UPDATE platform.llm_usage SET accounted_at=now()-interval '31 days'"); err != nil {
+	if _, err := admin.Exec(ctx, "UPDATE platform.model_usage SET accounted_at=now()-interval '31 days'"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.s.SaveMembership(ctx, f.u, f.u, f.plan, "suspended", 1); err != nil {
@@ -284,7 +285,7 @@ func TestUncertainOutcomeNeverResends(t *testing.T) {
 		t.Fatal("uncertain outcome was hidden")
 	}
 	// Neither elapsed windows nor expired worker leases release an uncertain hold.
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.llm_attempt SET dispatched_at=now()-interval '40 days',deadline_at=now()-interval '1 day'"); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET dispatched_at=now()-interval '40 days',deadline_at=now()-interval '1 day'"); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := f.s.Attempts(ctx, f.u, nil, 50)
@@ -307,7 +308,7 @@ func TestUncertainOutcomeNeverResends(t *testing.T) {
 	if err := f.r.Process(ctx, args); err == nil {
 		t.Fatal("unresolved attempt not paused")
 	}
-	if n, _ := llm.ParseUSD(f.usage(t)["reserved_usd"].(string)); n != f.p.amount {
+	if n, _ := modelapi.ParseUSD(f.usage(t)["reserved_usd"].(string)); n != f.p.amount {
 		t.Fatalf("uncertain hold=%d", n)
 	}
 	if err := f.s.Resolve(ctx, f.u, rows[0].ID, "0.4", nil, "Confirmed in provider activity", rows[0].Version); err != nil {
@@ -362,7 +363,7 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 	args := f.operation(t)
 	if err := f.db.Store.InTenant(ctx, other, func(tx pgx.Tx) error {
 		var count int
-		if err := tx.QueryRow(ctx, "SELECT count(*) FROM llm_operation WHERE id=$1", args.OperationID).Scan(&count); err != nil {
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM model_operation WHERE id=$1", args.OperationID).Scan(&count); err != nil {
 			return err
 		}
 		if count != 0 {
@@ -372,7 +373,7 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, query := range []string{"SELECT * FROM platform.system_key", "SELECT * FROM platform.llm_usage", "SELECT platform.settle(NULL,0,NULL,'{}','','provider_response')"} {
+	for _, query := range []string{"SELECT * FROM platform.system_key", "SELECT * FROM platform.model_usage", "SELECT platform.settle(NULL,0,NULL,'{}','','provider_response')"} {
 		if err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error { _, err := tx.Exec(ctx, query); return err }); err == nil {
 			t.Fatalf("API role executed %s", query)
 		}
@@ -429,7 +430,7 @@ func TestDurableDispatchCrashAndLateCorrection(t *testing.T) {
 	ctx := context.Background()
 	args := f.operation(t)
 	attempt := uuid.Must(uuid.NewV7())
-	q, _ := json.Marshal(llm.Quote{Model: "test/model", Reserved: f.p.amount})
+	q, _ := json.Marshal(modelapi.Quote{Model: "test/model", Reserved: f.p.amount})
 	if err := f.r.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
 		var raw []byte
 		return tx.QueryRow(ctx, "SELECT platform.reserve($1,$2,$3,$4,$5,$6,$7)", attempt, args.OperationID, "test/model", "request", json.RawMessage(q), f.p.amount, time.Now().Add(time.Minute)).Scan(&raw)
@@ -437,14 +438,14 @@ func TestDurableDispatchCrashAndLateCorrection(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate process death after committing dispatch, before knowing if HTTP ran.
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.llm_attempt SET deadline_at=now()-interval '1 second' WHERE id=$1", attempt); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET deadline_at=now()-interval '1 second' WHERE id=$1", attempt); err != nil {
 		t.Fatal(err)
 	}
 	_ = f.r.Process(ctx, args)
 	if f.p.calls.Load() != 0 || f.state(t, args).Status != "needs_review" {
 		t.Fatal("crashed dispatch was repeated")
 	}
-	amount, _ := llm.ParseUSD("0.6")
+	amount, _ := modelapi.ParseUSD("0.6")
 	settle := func(cost int64) {
 		t.Helper()
 		if err := f.r.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
@@ -456,12 +457,12 @@ func TestDurableDispatchCrashAndLateCorrection(t *testing.T) {
 	}
 	settle(amount)
 	settle(amount)
-	corrected, _ := llm.ParseUSD("0.4")
+	corrected, _ := modelapi.ParseUSD("0.4")
 	settle(corrected)
 	settle(corrected)
 	var entries int
 	var total int64
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*),sum(amount) FROM platform.llm_usage WHERE attempt_id=$1", attempt).Scan(&entries, &total); err != nil {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*),sum(amount) FROM platform.model_usage WHERE attempt_id=$1", attempt).Scan(&entries, &total); err != nil {
 		t.Fatal(err)
 	}
 	if entries != 2 || total != corrected {
@@ -509,7 +510,7 @@ func TestRiverExecutesAndRecoversAbandonedOperations(t *testing.T) {
 		t.Fatalf("paid calls=%d", f.p.calls.Load())
 	}
 	var events int
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM outbox WHERE topic='llm_operation.changed'").Scan(&events); err != nil || events == 0 {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM outbox WHERE topic='model_operation.changed'").Scan(&events); err != nil || events == 0 {
 		t.Fatalf("completion event=%d %v", events, err)
 	}
 }
@@ -524,7 +525,7 @@ func TestQueueFailureRollsBackOperation(t *testing.T) {
 		t.Fatal("queue failure was hidden")
 	}
 	var count int
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM llm_operation WHERE idempotency_key='rollback-test'").Scan(&count); err != nil || count != 0 {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM model_operation WHERE idempotency_key='rollback-test'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("orphaned operation count=%d %v", count, err)
 	}
 }
@@ -596,7 +597,7 @@ func TestKeyFailureStopsRetrying(t *testing.T) {
 		t.Fatalf("status=%s reason=%s calls=%d", op.Status, op.BlockedReason, f.p.calls.Load())
 	}
 	var n int
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.llm_attempt").Scan(&n); err != nil || n != 5 {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.model_attempt").Scan(&n); err != nil || n != 5 {
 		t.Fatalf("attempts=%d err=%v", n, err)
 	}
 }
@@ -628,7 +629,7 @@ func TestGenerationLookupsStopAfterWindow(t *testing.T) {
 	if f.p.lookups.Load() != 1 {
 		t.Fatalf("lookups=%d", f.p.lookups.Load())
 	}
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.llm_attempt SET deadline_at=now()-interval '8 days'"); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET deadline_at=now()-interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
 	_ = f.r.Process(ctx, args)

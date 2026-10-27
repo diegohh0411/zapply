@@ -8,7 +8,7 @@ import { ZardTableImports } from '@/shared/components/table';
 import { ago, hostname, salary, STATUS_DOT } from './format';
 import type { JobStatus, JobSummary } from './jobs.store';
 
-type Key = 'title' | 'company' | 'status' | 'location' | 'applied_on' | 'updated_at';
+type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' | 'updated_at';
 
 @Component({
   selector: 'app-job-table',
@@ -49,11 +49,12 @@ type Key = 'title' | 'company' | 'status' | 'location' | 'applied_on' | 'updated
                 <td z-table-cell class="hidden max-w-40 truncate md:table-cell">{{ j.location }}</td>
                 <td z-table-cell class="hidden whitespace-nowrap md:table-cell">{{ j.applied_on ? (j.applied_on | date: 'mediumDate') : '' }}</td>
                 <td z-table-cell class="whitespace-nowrap text-muted-foreground">{{ since(j.updated_at) }}</td>
+                <td z-table-cell [class.opacity-50]="j.match?.stale">{{ j.match?.score?.toFixed(0) ?? j.match?.status ?? '—' }}{{ j.match?.stale ? ' · stale' : '' }}</td>
                 <td z-table-cell class="hidden whitespace-nowrap lg:table-cell">{{ pay(j) }}</td>
               </tr>
             } @empty {
               <tr z-table-row>
-                <td z-table-cell colspan="7" class="py-10 text-center text-muted-foreground">No jobs match.</td>
+                <td z-table-cell colspan="8" class="py-10 text-center text-muted-foreground">No jobs match.</td>
               </tr>
             }
           </tbody>
@@ -80,6 +81,7 @@ export class JobTable {
     { key: 'location', label: 'Location', class: 'hidden md:table-cell' },
     { key: 'applied_on', label: 'Applied', class: 'hidden md:table-cell' },
     { key: 'updated_at', label: 'Updated' },
+    { key: 'score', label: 'Match' },
   ];
 
   private readonly statusIndex = computed(() => new Map(this.statuses().map((s, i) => [s.id, { s, i }])));
@@ -90,6 +92,7 @@ export class JobTable {
     const idx = this.statusIndex();
     const val = (j: JobSummary): string | number => {
       switch (key) {
+        case 'score': return j.match?.score ?? -1;
         case 'status':
           return idx.get(j.status_id)?.i ?? 99;
         case 'company':

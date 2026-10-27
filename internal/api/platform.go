@@ -129,11 +129,11 @@ func (s *server) ActivateSystemKey(ctx context.Context, req gen.ActivateSystemKe
 	}
 	return gen.ActivateSystemKey204Response{}, nil
 }
-func (s *server) ListLLMAttempts(ctx context.Context, req gen.ListLLMAttemptsRequestObject) (gen.ListLLMAttemptsResponseObject, error) {
-	v, err := decodePlatform[gen.ListLLMAttempts200JSONResponse](s.members.Attempts(ctx, uid(ctx), req.Params.Before, pageLimit(req.Params.Limit)))
+func (s *server) ListModelAttempts(ctx context.Context, req gen.ListModelAttemptsRequestObject) (gen.ListModelAttemptsResponseObject, error) {
+	v, err := decodePlatform[gen.ListModelAttempts200JSONResponse](s.members.Attempts(ctx, uid(ctx), req.Params.Before, pageLimit(req.Params.Limit)))
 	return v, err
 }
-func (s *server) ResolveLLMAttempt(ctx context.Context, req gen.ResolveLLMAttemptRequestObject) (gen.ResolveLLMAttemptResponseObject, error) {
+func (s *server) ResolveModelAttempt(ctx context.Context, req gen.ResolveModelAttemptRequestObject) (gen.ResolveModelAttemptResponseObject, error) {
 	ver, err := parseIfMatch(req.Params.IfMatch)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (s *server) ResolveLLMAttempt(ctx context.Context, req gen.ResolveLLMAttemp
 	if err := s.members.Resolve(ctx, uid(ctx), req.Id, b.AmountUsd, b.GenerationId, b.Reason, ver); err != nil {
 		return nil, err
 	}
-	return gen.ResolveLLMAttempt204Response{}, nil
+	return gen.ResolveModelAttempt204Response{}, nil
 }
 func (s *server) CreateGatewayTest(ctx context.Context, req gen.CreateGatewayTestRequestObject) (gen.CreateGatewayTestResponseObject, error) {
 	if s.queue == nil {
