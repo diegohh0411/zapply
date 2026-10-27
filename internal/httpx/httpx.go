@@ -205,7 +205,9 @@ func (s *Server) Run(ctx context.Context, ready func(addr net.Addr)) error {
 
 	timeout := s.ShutdownTimeout
 	if timeout == 0 {
-		timeout = 25 * time.Second
+		// With the default 5s DrainDelay, this leaves Heroku's 30s SIGTERM
+		// window a few seconds for closing pools and flushing telemetry.
+		timeout = 20 * time.Second
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
