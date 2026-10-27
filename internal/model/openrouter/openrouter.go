@@ -36,7 +36,7 @@ type Client struct {
 	cached          modelapi.Quote
 	models          []DecisionModel
 	modelsAt        time.Time
-	// DecisionBounds is for fake HTTP tests only. Production uses verifiedDecisionBounds.
+	// DecisionBounds is for fake HTTP tests only. Production uses ownerSelectedBound.
 	DecisionBounds map[string]BillingBound
 }
 

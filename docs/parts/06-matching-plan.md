@@ -16,12 +16,12 @@ operation state machine, reservation gate, encrypted keys and River kind.
 The fake HTTP fixture in `internal/model/openrouter/decisions_test.go` verifies the
 stable `/api/v1/systemone` route, response accounting, JSON-only decoding,
 per-question billing expansion and request rejection before sending. It is a
-fixture contract, not proof of OpenRouter's live billing behavior. The production
-`verifiedDecisionBounds` registry is intentionally empty. Catalogue models show
-`billing_bounds_unverified`; selecting one saves it, but paid dispatch stays
-blocked. Enabling an adapter requires a source for its context/billing and
-request-size bounds, supported pricing, and lookup behavior. No environment
-variable or UI setting bypasses that check.
+fixture contract, not proof of OpenRouter's live billing behavior. Any catalogue
+model the owner selects can dispatch. Without a known bound it gets
+`ownerSelectedBound`, which conservatively assumes full context and the
+request fee charged once per question. These billing assumptions are not
+provider-verified. Generation lookup is off for these models, so an uncertain attempt
+waits for the owner to resolve it.
 
 `internal/match/service_test.go` covers cold and fully cached runs, discarded
 answers and partial results, corrections, tenant isolation, stale library input,
