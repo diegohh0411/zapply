@@ -682,6 +682,24 @@ type AppUser struct {
 	CreatedAt time.Time
 }
 
+type DecisionAnswer struct {
+	UserID       uuid.UUID
+	Model        string
+	StateHash    string
+	QuestionHash string
+	Answer       json.RawMessage
+	CreatedAt    time.Time
+}
+
+type DecisionRequestItem struct {
+	UserID       uuid.UUID
+	OperationID  uuid.UUID
+	RequestKey   string
+	Model        string
+	StateHash    string
+	QuestionHash string
+}
+
 type Evidence struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
@@ -821,7 +839,81 @@ type JobView struct {
 	UpdatedAt time.Time
 }
 
-type LlmOperation struct {
+type MatchOverride struct {
+	UserID   uuid.UUID
+	JobID    uuid.UUID
+	TextHash string
+	Class    string
+}
+
+type MatchRun struct {
+	ID                 uuid.UUID
+	UserID             uuid.UUID
+	JobID              uuid.UUID
+	IdempotencyKey     string
+	Trigger            string
+	Status             string
+	Stage              string
+	Model              *string
+	JobHash            string
+	LibraryFingerprint string
+	SkillsHash         string
+	Snapshot           json.RawMessage
+	Result             json.RawMessage
+	Score              *float64
+	MustMet            int32
+	MustTotal          int32
+	BlockedReason      string
+	NextEligibleAt     *time.Time
+	RerunRequested     bool
+	Version            int32
+	Total              int32
+	Answered           int32
+	Cached             int32
+	Unanswered         int32
+	CreatedAt          time.Time
+	FinishedAt         *time.Time
+}
+
+type MatchRunItem struct {
+	UserID      uuid.UUID
+	RunID       uuid.UUID
+	EvidenceID  uuid.UUID
+	ContentHash string
+	Facts       json.RawMessage
+}
+
+type MatchRunOperation struct {
+	UserID      uuid.UUID
+	RunID       uuid.UUID
+	OperationID uuid.UUID
+	Ingested    bool
+}
+
+type MatchRunQuestion struct {
+	UserID       uuid.UUID
+	RunID        uuid.UUID
+	Stage        string
+	Subject      string
+	StateHash    string
+	QuestionHash string
+	State        json.RawMessage
+	Question     json.RawMessage
+	Status       string
+	Tries        int32
+	OperationID  *uuid.UUID
+	RequestKey   *string
+	Answer       []byte
+}
+
+type MatchRunRequirement struct {
+	UserID   uuid.UUID
+	RunID    uuid.UUID
+	TextHash string
+	Facts    json.RawMessage
+}
+
+type ModelOperation struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
 	Kind           string
@@ -834,6 +926,13 @@ type LlmOperation struct {
 	Version        int32
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type ModelRequest struct {
+	UserID      uuid.UUID
+	OperationID uuid.UUID
+	Body        json.RawMessage
+	CreatedAt   time.Time
 }
 
 type Organization struct {
@@ -871,7 +970,22 @@ type PlatformBudgetAccount struct {
 	UserID uuid.UUID
 }
 
-type PlatformLlmAttempt struct {
+type PlatformMatchIndex struct {
+	RunID     uuid.UUID
+	UserID    uuid.UUID
+	Status    string
+	UpdatedAt time.Time
+}
+
+type PlatformMembership struct {
+	UserID    uuid.UUID
+	PlanID    uuid.UUID
+	Status    string
+	Version   int32
+	UpdatedAt time.Time
+}
+
+type PlatformModelAttempt struct {
 	ID            uuid.UUID
 	UserID        uuid.UUID
 	OperationID   uuid.UUID
@@ -889,7 +1003,20 @@ type PlatformLlmAttempt struct {
 	Version       int32
 }
 
-type PlatformLlmUsage struct {
+type PlatformModelQuote struct {
+	Model     string
+	Quote     json.RawMessage
+	FetchedAt time.Time
+}
+
+type PlatformModelSetting struct {
+	ID            bool
+	DecisionModel *string
+	Version       int32
+	UpdatedAt     time.Time
+}
+
+type PlatformModelUsage struct {
 	ID          int64
 	AttemptID   uuid.UUID
 	UserID      uuid.UUID
@@ -899,14 +1026,6 @@ type PlatformLlmUsage struct {
 	DedupKey    string
 	Usage       json.RawMessage
 	CreatedAt   time.Time
-}
-
-type PlatformMembership struct {
-	UserID    uuid.UUID
-	PlanID    uuid.UUID
-	Status    string
-	Version   int32
-	UpdatedAt time.Time
 }
 
 type PlatformOperationIndex struct {
@@ -957,6 +1076,7 @@ type Profile struct {
 	Summary   string
 	Version   int32
 	UpdatedAt time.Time
+	AutoMatch bool
 }
 
 type Skill struct {

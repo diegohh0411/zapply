@@ -1,3 +1,4 @@
+import { ModelSettings } from './model-settings';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -25,7 +26,7 @@ type Attempt = Schemas['AttemptSummary'];
 
 @Component({
   selector: 'app-admin-page',
-  imports: [DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent],
+  imports: [ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -40,7 +41,7 @@ export class AdminPage {
   protected readonly members = signal<Member[]>([]);
   protected readonly keys = signal<Schemas['SystemKey'][]>([]);
   protected readonly attempts = signal<Attempt[]>([]);
-  protected readonly operation = signal<Schemas['LLMOperation'] | null>(null);
+  protected readonly operation = signal<Schemas['ModelOperation'] | null>(null);
   protected readonly loading = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
@@ -66,7 +67,7 @@ export class AdminPage {
       void this.load();
     });
     const change = this.events.changes.subscribe((e) => {
-      if (e.topic === 'llm_operation.changed') void this.refreshOperation();
+      if (e.topic === 'model_operation.changed') void this.refreshOperation();
     });
     const focus = () => void this.load();
     window.addEventListener('focus', focus);
@@ -124,7 +125,7 @@ export class AdminPage {
       } else if (section === 'usage') {
         const before = append ? this.attempts().at(-1)?.id : undefined;
         const list = Api.ok(
-          await this.api.client.GET('/v1/admin/llm-attempts', {
+          await this.api.client.GET('/v1/admin/model-attempts', {
             params: { query: { before, limit: 50 } },
           }),
         );
@@ -250,7 +251,7 @@ export class AdminPage {
     const body = { ...this.resolution, generation_id: this.resolution.generation_id || undefined };
     await this.mutate(async () => {
       Api.ok(
-        await this.api.client.POST('/v1/admin/llm-attempts/{id}/resolve', {
+        await this.api.client.POST('/v1/admin/model-attempts/{id}/resolve', {
           params: { path: { id: a.id }, header: { 'If-Match': '"' + a.version + '"' } },
           body,
         }),

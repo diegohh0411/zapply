@@ -1,7 +1,10 @@
 # Part 6: Matching pipeline
 
-Status: scope agreed; not built yet. The [implementation plan](06-matching-plan.md)
-records the proposed design.
+Status: implemented with fake-provider integration coverage. The
+[implementation plan](06-matching-plan.md) records the design and verification.
+Live decision dispatch remains disabled until a model adapter has documented
+billing and input bounds and the owner completes the live probe. The model
+catalogue and owner selection work independently of that dispatch gate.
 
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:
@@ -343,7 +346,7 @@ invalidates the cache naturally, because both are part of the key. A new
 
 ## Failures, budget and cancellation
 
-- **Budget.** Each request is one part 5 `llm_operation`. When an allowance
+- **Budget.** Each request is one part 5 `model_operation`. When an allowance
   can't cover the next request, the run shows `blocked` with the gateway's
   reason and `next_eligible_at`, and resumes on its own. Answers already paid
   for stay cached.

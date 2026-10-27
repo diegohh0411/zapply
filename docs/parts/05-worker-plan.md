@@ -32,8 +32,8 @@ or build a model management UI in this part.
 - Reuse the outbox/relay for tenant notifications; do not introduce a second
   stream for administrative data.
 
-Add `internal/membership` for owner/member services, `internal/llm` for accounting
-and gateway contracts, `internal/llm/openrouter` for the adapter, `internal/secrets`
+Add `internal/membership` for owner/member services, `internal/model` for accounting
+and gateway contracts, `internal/model/openrouter` for the adapter, `internal/secrets`
 for encryption, and `internal/worker` for River wiring. Keep SQL and generated
 code in the existing store layout; add API handlers in `internal/api` and Angular
 features in `web/src/app/admin` and `web/src/app/usage`.
@@ -93,16 +93,16 @@ where applicable. Proposed relations:
 - `platform.system_key_version`: OpenRouter label, encrypted secret, encryption
   key version, fingerprint, and timestamps. A protected provider configuration
   selects one current version; retain older versions for pending reconciliation.
-- Tenant `llm_operation`: kind, status, request/idempotency hash, next eligibility
+- Tenant `model_operation`: kind, status, request/idempotency hash, next eligibility
   time/reason, bounded result, timestamps, and version. Queue payloads contain
   only tenant/operation IDs and trace context, not prompts or secrets.
-- `platform.llm_attempt`: tenant/operation IDs, attempt number, request hash,
+- `platform.model_attempt`: tenant/operation IDs, attempt number, request hash,
   model, credential version, pricing snapshot, reservation amount, dispatch time,
   generation ID, lifecycle state, and recorded provider error class. Unique
   `(user_id, operation_id, attempt_number)` and a partial unique constraint prevent
   multiple unresolved attempts for one operation. Enforce uniqueness of known
   `(provider, generation_id)` across attempts, including manual reconciliation.
-- `platform.llm_usage`: append-only charge/reconciliation entries linked to an
+- `platform.model_usage`: append-only charge/reconciliation entries linked to an
   attempt, with provider-reported usage, amount, accounting time, source, and
   deduplication key. Never rewrite history to reset a plan. A correction is a
   linked delta; repeating the same settlement cannot add the charge twice.
@@ -300,7 +300,7 @@ Define these in OpenAPI before handlers; regenerate the Go server and web types:
   tokens or arbitrary identity-table access.
 - `/v1/admin/system-keys`: list/create versions and an explicit activation/
   deactivation action; updates never return the submitted secret.
-- `/v1/admin/llm-attempts`: filter uncertain/failed accounting; `/{id}/resolve`
+- `/v1/admin/model-attempts`: filter uncertain/failed accounting; `/{id}/resolve`
   performs audited, version-checked resolution and rejects conflicting repeats.
 - `POST /v1/admin/gateway-tests`: enqueue a fixed-prompt diagnostic for the actor;
   `GET /v1/admin/gateway-tests/{id}` reads that actor's operation. Require
@@ -323,7 +323,7 @@ Use `/usage` and guarded `/admin/...` routes with the existing Angular/ZardUI
 components and generated client. Clear role, membership, and usage state on
 identity changes; stale requests must not restore another member's data.
 
-Publish tenant `membership.changed`, `usage.changed`, and `llm_operation.changed`
+Publish tenant `membership.changed`, `usage.changed`, and `model_operation.changed`
 events as invalidations with IDs/versions only. Plan edits notify affected
 members in the same transaction; for the MVP this can insert one outbox row per
 assigned member without taking their account locks. Owner lists refresh after

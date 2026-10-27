@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diegohh0411/zapply/internal/llm"
+	modelapi "github.com/diegohh0411/zapply/internal/model"
 )
 
 const catalog = `{"data":{"endpoints":[{"tag":"test","context_length":1000,"max_completion_tokens":1024,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","completion":"0.0000016","request":"0"}}]}}`
@@ -59,9 +59,9 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := llm.ParseUSD("0.0006048")
+	want, _ := modelapi.ParseUSD("0.0006048")
 	if q.Reserved != want {
-		t.Fatalf("reserved %s", llm.USD(q.Reserved))
+		t.Fatalf("reserved %s", modelapi.USD(q.Reserved))
 	}
 	_, err = c.Quote(context.Background())
 	if err != nil || metadata.Load() != 1 {
@@ -71,7 +71,7 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	amount, _ := llm.ParseUSD("0.0001")
+	amount, _ := modelapi.ParseUSD("0.0001")
 	if result.Amount == nil || *result.Amount != amount || result.Text != "OK" {
 		t.Fatalf("billing: %+v", result)
 	}
@@ -90,9 +90,9 @@ func TestAmbiguousRequestIsNotRetried(t *testing.T) {
 	c := New("test/model", "test")
 	c.BaseURL = server.URL
 	c.HTTP = server.Client()
-	q := llm.Quote{Model: "test/model", Endpoint: "test", InputRate: "0", OutputRate: "0", RequestRate: "0", MaxOutput: 128, FetchedAt: time.Now()}
+	q := modelapi.Quote{Model: "test/model", Endpoint: "test", InputRate: "0", OutputRate: "0", RequestRate: "0", MaxOutput: 128, FetchedAt: time.Now()}
 	_, err := c.Generate(context.Background(), "secret", q)
-	var p *llm.ProviderError
+	var p *modelapi.ProviderError
 	if !errors.As(err, &p) || p.Uncharged || calls.Load() != 1 {
 		t.Fatalf("ambiguous outcome: %v calls %d", err, calls.Load())
 	}
@@ -142,8 +142,8 @@ func TestErrorResponsesPreserveBillingEvidence(t *testing.T) {
 			c := New("test/model", "test")
 			c.BaseURL = server.URL
 			c.HTTP = server.Client()
-			result, err := c.Generate(context.Background(), "secret", llm.Quote{Model: "test/model", Endpoint: "test", InputRate: "0", OutputRate: "0", RequestRate: "0", MaxOutput: 128, FetchedAt: time.Now()})
-			var pe *llm.ProviderError
+			result, err := c.Generate(context.Background(), "secret", modelapi.Quote{Model: "test/model", Endpoint: "test", InputRate: "0", OutputRate: "0", RequestRate: "0", MaxOutput: 128, FetchedAt: time.Now()})
+			var pe *modelapi.ProviderError
 			if !errors.As(err, &pe) || pe.Uncharged != tc.uncharged || (result.Amount != nil) != tc.charged {
 				t.Fatalf("result=%+v error=%+v", result, pe)
 			}

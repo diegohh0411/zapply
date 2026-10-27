@@ -74,3 +74,23 @@ fixed-prompt model diagnostic. Key inputs never return in API responses.
 Setup, accounting rules, conservative reservations, and recovery commands are in
 [`docs/parts/05-worker.md`](docs/parts/05-worker.md). Optional tracing uses standard
 `OTEL_EXPORTER_OTLP_*` configuration and exports only when an endpoint is set.
+
+## Matching
+
+Part 6 adds automatic matching when saved jobs change, reusable decision-answer
+caching, deterministic coverage and CV selections, corrections, run history and
+staleness. Open a saved job's **Match** tab; automatic matching can be turned off
+in Profile. Apply migrations through 00011 before deploying the updated API and worker.
+
+Choose the decision model under **Administration → System keys**. It uses the
+same active OpenRouter key; no decision-model environment variable is required.
+Runs can queue without a model or membership and wait for configuration or
+allowance. Live dispatch is gated on documented model billing/input bounds;
+the initial production adapter registry is empty pending verification. Fake
+providers cover the complete pipeline without spending credits. Details and
+verification prerequisites: [Part 6](docs/parts/06-matching-plan.md).
+
+Shared gateway code is under `internal/model`. Migration 00011 preserves existing
+accounting data while renaming shared gateway objects to `model_*`; administration
+uses `/v1/admin/model-attempts` and `model_operation.changed` events. Text diagnostic
+configuration retains the LLM-specific `LLM_MODEL`/`LLM_ENDPOINT` names.

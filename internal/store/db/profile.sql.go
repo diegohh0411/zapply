@@ -13,7 +13,7 @@ import (
 )
 
 const getProfile = `-- name: GetProfile :one
-SELECT user_id, full_name, headline, email, phone, location, links, summary, version, updated_at FROM profile WHERE user_id = $1
+SELECT user_id, full_name, headline, email, phone, location, links, summary, version, updated_at, auto_match FROM profile WHERE user_id = $1
 `
 
 func (q *Queries) GetProfile(ctx context.Context, userID uuid.UUID) (Profile, error) {
@@ -30,26 +30,28 @@ func (q *Queries) GetProfile(ctx context.Context, userID uuid.UUID) (Profile, er
 		&i.Summary,
 		&i.Version,
 		&i.UpdatedAt,
+		&i.AutoMatch,
 	)
 	return i, err
 }
 
 const insertProfile = `-- name: InsertProfile :one
-INSERT INTO profile (user_id, full_name, headline, email, phone, location, links, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO profile (user_id, full_name, headline, email, phone, location, links, summary, auto_match)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id) DO NOTHING
-RETURNING user_id, full_name, headline, email, phone, location, links, summary, version, updated_at
+RETURNING user_id, full_name, headline, email, phone, location, links, summary, version, updated_at, auto_match
 `
 
 type InsertProfileParams struct {
-	UserID   uuid.UUID
-	FullName string
-	Headline string
-	Email    string
-	Phone    string
-	Location string
-	Links    json.RawMessage
-	Summary  string
+	UserID    uuid.UUID
+	FullName  string
+	Headline  string
+	Email     string
+	Phone     string
+	Location  string
+	Links     json.RawMessage
+	Summary   string
+	AutoMatch bool
 }
 
 func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (Profile, error) {
@@ -62,6 +64,7 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (P
 		arg.Location,
 		arg.Links,
 		arg.Summary,
+		arg.AutoMatch,
 	)
 	var i Profile
 	err := row.Scan(
@@ -75,6 +78,7 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (P
 		&i.Summary,
 		&i.Version,
 		&i.UpdatedAt,
+		&i.AutoMatch,
 	)
 	return i, err
 }
@@ -82,21 +86,22 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) (P
 const updateProfile = `-- name: UpdateProfile :one
 UPDATE profile
 SET full_name = $3, headline = $4, email = $5, phone = $6, location = $7, links = $8,
-    summary = $9, version = version + 1, updated_at = now()
+    summary = $9, auto_match = $10, version = version + 1, updated_at = now()
 WHERE user_id = $1 AND version = $2
-RETURNING user_id, full_name, headline, email, phone, location, links, summary, version, updated_at
+RETURNING user_id, full_name, headline, email, phone, location, links, summary, version, updated_at, auto_match
 `
 
 type UpdateProfileParams struct {
-	UserID   uuid.UUID
-	Version  int32
-	FullName string
-	Headline string
-	Email    string
-	Phone    string
-	Location string
-	Links    json.RawMessage
-	Summary  string
+	UserID    uuid.UUID
+	Version   int32
+	FullName  string
+	Headline  string
+	Email     string
+	Phone     string
+	Location  string
+	Links     json.RawMessage
+	Summary   string
+	AutoMatch bool
 }
 
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (Profile, error) {
@@ -110,6 +115,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		arg.Location,
 		arg.Links,
 		arg.Summary,
+		arg.AutoMatch,
 	)
 	var i Profile
 	err := row.Scan(
@@ -123,6 +129,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		&i.Summary,
 		&i.Version,
 		&i.UpdatedAt,
+		&i.AutoMatch,
 	)
 	return i, err
 }

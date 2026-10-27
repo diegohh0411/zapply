@@ -640,14 +640,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/admin/llm-attempts": {
+    "/v1/admin/model-attempts": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listLLMAttempts"];
+        get: operations["listModelAttempts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -656,7 +656,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/admin/llm-attempts/{id}/resolve": {
+    "/v1/admin/model-attempts/{id}/resolve": {
         parameters: {
             query?: never;
             header?: never;
@@ -665,7 +665,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["resolveLLMAttempt"];
+        post: operations["resolveModelAttempt"];
         delete?: never;
         options?: never;
         head?: never;
@@ -699,6 +699,129 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/decision-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDecisionModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/model-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getModelSettings"];
+        put: operations["putModelSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/match-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getMatchEstimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/match-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listMatchRuns"];
+        put?: never;
+        post: operations["createMatchRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/match-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getMatchRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/match-runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelMatchRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/match-overrides/{text_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                text_hash: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMatchOverride"];
+        post?: never;
+        delete: operations["deleteMatchOverride"];
         options?: never;
         head?: never;
         patch?: never;
@@ -762,6 +885,8 @@ export interface components {
             url: string;
         };
         ProfileInput: {
+            /** @default true */
+            auto_match: boolean;
             full_name?: string;
             headline?: string;
             email?: string;
@@ -988,6 +1113,7 @@ export interface components {
             applied_on?: string;
         };
         JobSummary: {
+            match?: components["schemas"]["MatchRunSummary"];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -1103,7 +1229,7 @@ export interface components {
          * @description The SSE `event` name of a change event.
          * @enum {string}
          */
-        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "llm_operation.changed";
+        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed";
         Plan: {
             /** Format: uuid */
             id: string;
@@ -1201,7 +1327,7 @@ export interface components {
             generation_id?: string | null;
             reason: string;
         };
-        LLMOperation: {
+        ModelOperation: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -1215,6 +1341,151 @@ export interface components {
             version: number;
             /** Format: date-time */
             created_at: string;
+        };
+        DecisionModel: {
+            id: string;
+            name: string;
+            context_length: number;
+            pricing: {
+                [key: string]: unknown;
+            };
+            compatibility_reason: string;
+        };
+        ModelSettings: {
+            decision_model: string | null;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MatchRunSummary: {
+            /** Format: uuid */
+            run_id: string;
+            status: string;
+            score?: number | null;
+            stale: boolean;
+        };
+        MatchEstimate: {
+            available: boolean;
+            reason: string;
+            cost_usd?: string | null;
+            questions: number;
+            requests: number;
+            available_7d_usd?: string;
+            available_30d_usd?: string;
+        };
+        Requirement: {
+            text: string;
+            text_hash: string;
+            class: string;
+            original_class: string;
+            type: string;
+            line: number;
+            source_start?: number;
+            source_end?: number;
+            min_years: number;
+            degree?: string;
+            language?: string;
+        };
+        Coverage: components["schemas"]["Requirement"] & {
+            status: string;
+            strength: number;
+            provisional: boolean;
+            evidence_title?: string;
+            evidence_id?: string;
+            highlight_ids: string[];
+            answer?: {
+                score?: number;
+                confidence?: number;
+                probabilities?: {
+                    [key: string]: number;
+                };
+                legend?: {
+                    [key: string]: unknown;
+                };
+            };
+            check?: string;
+            review: boolean;
+            citations?: {
+                id: string;
+                text: string;
+            }[];
+        };
+        Selection: {
+            title?: string;
+            evidence_id: string;
+            relevance: number;
+            highlight_ids: string[];
+        };
+        EvidenceMatch: components["schemas"]["Selection"];
+        Insight: {
+            type: string;
+            text: string;
+            text_hash?: string;
+            evidence_id?: string;
+        };
+        MatchResult: {
+            score: number | null;
+            must_met: number;
+            must_total: number;
+            partial: boolean;
+            seniority: string;
+            relevant_years: number;
+            scoring_version: number;
+            requirements: components["schemas"]["Coverage"][];
+            evidence: components["schemas"]["EvidenceMatch"][];
+            selection: components["schemas"]["Selection"][];
+            suggestions: components["schemas"]["Selection"][];
+            insights: components["schemas"]["Insight"][];
+            skills: {
+                skill_id: string;
+                name?: string;
+                relevance: number;
+            }[];
+        };
+        MatchRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            job_id: string;
+            status: string;
+            stage: string;
+            model: string | null;
+            trigger: string;
+            blocked_reason: string;
+            /** Format: date-time */
+            next_eligible_at?: string | null;
+            version: number;
+            total: number;
+            answered: number;
+            cached: number;
+            unanswered: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string | null;
+            score?: number | null;
+            must_met?: number;
+            must_total?: number;
+            stale: boolean;
+            truncated?: boolean;
+            obsolete_overrides?: string[];
+            changed: number;
+            added: number;
+            removed: number;
+            cost_usd: string;
+            selection?: components["schemas"]["Selection"][];
+            suggestions?: components["schemas"]["Selection"][];
+            skills?: {
+                skill_id: string;
+                name?: string;
+                relevance: number;
+            }[];
+            result?: components["schemas"]["MatchResult"];
+        };
+        MatchRunPage: {
+            items: components["schemas"]["MatchRun"][];
+            /** Format: uuid */
+            next_cursor?: string;
         };
     };
     responses: {
@@ -2608,7 +2879,7 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
-    listLLMAttempts: {
+    listModelAttempts: {
         parameters: {
             query?: {
                 before?: string;
@@ -2632,7 +2903,7 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
-    resolveLLMAttempt: {
+    resolveModelAttempt: {
         parameters: {
             query?: never;
             header: {
@@ -2677,7 +2948,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMOperation"];
+                    "application/json": components["schemas"]["ModelOperation"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -2700,8 +2971,249 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMOperation"];
+                    "application/json": components["schemas"]["ModelOperation"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDecisionModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Decision model catalogue (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionModel"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getModelSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner model settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putModelSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    decision_model: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMatchEstimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchEstimate"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMatchRuns: {
+        parameters: {
+            query?: {
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchRunPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createMatchRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchRun"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMatchRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchRun"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    cancelMatchRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putMatchOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                text_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    class: "must" | "preferred" | "duty" | "ignore";
+                };
+            };
+        };
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteMatchOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                text_hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

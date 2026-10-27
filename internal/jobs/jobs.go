@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -162,7 +163,8 @@ func (s *Service) CreateJob(ctx context.Context, uid uuid.UUID, in JobInput) (Jo
 		return Job{}, err
 	}
 	var out Job
-	err = s.tx(ctx, uid, func(q *db.Queries) error {
+	err = s.store.InTenant(ctx, uid, func(tx pgx.Tx) error {
+		q := db.New(tx)
 		statuses, err := ensureStatuses(ctx, q, uid)
 		if err != nil {
 			return err
@@ -212,9 +214,15 @@ func (s *Service) CreateJob(ctx context.Context, uid uuid.UUID, in JobInput) (Jo
 		if err := addActivity(ctx, q, uid, row.ID, db.JobActivityTypeCreated, "", st.Name, ""); err != nil {
 			return err
 		}
+		if s.Matcher != nil {
+			if err := s.Matcher.JobSaved(ctx, tx, uid, row, true, true); err != nil {
+				return err
+			}
+		}
 		out = jobFromRow(row)
 		return emit(ctx, q, uid, "job.created", map[string]any{"id": row.ID, "version": row.Version})
 	})
+	err = translate(err)
 	var c *library.ConflictError
 	if errors.As(err, &c) && norm != "" {
 		// Lost a race with a concurrent save of the same posting.
@@ -269,7 +277,8 @@ func (s *Service) UpdateJob(ctx context.Context, uid, id uuid.UUID, ifVersion in
 		return Job{}, err
 	}
 	var out Job
-	err = s.tx(ctx, uid, func(q *db.Queries) error {
+	err = s.store.InTenant(ctx, uid, func(tx pgx.Tx) error {
+		q := db.New(tx)
 		// Lock order everywhere: status rows, then job rows.
 		var to *db.JobStatus
 		if in.StatusID != nil {
@@ -320,9 +329,15 @@ func (s *Service) UpdateJob(ctx context.Context, uid, id uuid.UUID, ifVersion in
 				return err
 			}
 		}
+		if s.Matcher != nil {
+			if err := s.Matcher.JobSaved(ctx, tx, uid, row, false, !bytes.Equal(cur.ContentHash, row.ContentHash)); err != nil {
+				return err
+			}
+		}
 		out = jobFromRow(row)
 		return nil
 	})
+	err = translate(err)
 	var c *library.ConflictError
 	if errors.As(err, &c) && norm != "" {
 		return Job{}, s.duplicateOf(ctx, uid, norm, err)

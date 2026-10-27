@@ -58,6 +58,7 @@
           <ng-container *ngTemplateOutlet="details" />
         </z-tab>
         @if (!isNew()) {
+          <z-tab label="Match"><app-match-tab [jobId]="job()!.id" /></z-tab>
           <z-tab [label]="'Activity (' + activities().length + ')'">
             <ng-container *ngTemplateOutlet="timeline" />
           </z-tab>

@@ -1,8 +1,89 @@
 # Part 6 implementation plan
 
-Status: implementation proposal based on the [agreed scope](06-matching.md).
-This is a build plan, not a record of delivered functionality. Defaults below
-resolve implementation choices and can change without expanding the scope.
+Status: implemented against the [agreed scope](06-matching.md), with live
+provider verification still pending. The sections below retain the build design;
+the verification record distinguishes tested behavior from live prerequisites.
+Migration 00010 was free after the registered migrations 6 and 8 and SQL
+migration 9.
+
+## Implementation and verification record
+
+Implemented in `internal/model/systemone`, `internal/model/openrouter/decisions.go`,
+`internal/decide`, `internal/match`, migration `00010_matching.sql`, the generated
+0.6.0 API, and the jobs/admin/profile web features. Matching uses the existing
+operation state machine, reservation gate, encrypted keys and River kind.
+
+The fake HTTP fixture in `internal/model/openrouter/decisions_test.go` verifies the
+stable `/api/v1/systemone` route, response accounting, JSON-only decoding,
+per-question billing expansion and request rejection before sending. It is a
+fixture contract, not proof of OpenRouter's live billing behavior. The production
+`verifiedDecisionBounds` registry is intentionally empty. Catalogue models show
+`billing_bounds_unverified`; selecting one saves it, but paid dispatch stays
+blocked. Enabling an adapter requires a source for its context/billing and
+request-size bounds, supported pricing, and lookup behavior. No environment
+variable or UI setting bypasses that check.
+
+`internal/match/service_test.go` covers cold and fully cached runs, discarded
+answers and partial results, corrections, tenant isolation, stale library input,
+automatic superseding, unconfigured model binding, retained model snapshots,
+uncertain accounting followed by a new operation, cached estimates, and the
+cancel/reserve race. Domain and cache tests cover source spans, short lines,
+years, overlapping periods, deterministic ties, unknown coverage, ignored
+requirements, numeric JSON canonicalization and answer validation. Web tests
+exercise identity changes, out-of-order responses, SSE and correction reloads.
+
+Implementation details resolved during testing:
+
+- `match_run_operation` retains every operation, including retries, for complete
+  cost accounting after question mappings advance to a new operation.
+- Job locks are exposed to the worker through a tenant-scoped definer function;
+  the worker has no general permission to edit jobs. Automatic superseding checks
+  dispatch history while holding the reservation lock.
+- A local size rejection records adapter packing limits before a new bundle is
+  created. This does not authorize retrying an uncertain HTTP rejection.
+- Canonicalization normalizes numeric spelling as well as key order, so jsonb
+  expansion of exponent notation preserves the cache and request hashes.
+- Staleness fingerprints complete evidence/skill snapshots, including linked
+  organizations and highlights. Details recompute from immutable inputs at
+  `finished_at` and hide deleted evidence, highlights and skills from selections.
+- More than 300 eligible evidence documents produces a failed run with
+  `evidence_limit_exceeded`; the job save and board remain usable.
+- Estimates require a fresh verified quote. Before reading completes they assume
+  no scoring cache hits and reserve for up to 40 longest lines; retries and price
+  changes remain excluded. Completed warm runs can estimate zero requests.
+- The Part 7 `selection`, `skills` and `suggestions` contract is exposed at the
+  top level of run detail as well as in its grouped `result`.
+
+Verification completed on 2026-10-27:
+
+- `make generate`, followed by checksums of all generated Go/client files: no drift.
+- `make vet` and `git diff --check`.
+- `go test -race -count=1 ./...` with disposable Postgres 17, plus final targeted
+  matching/API/cache/transport/gateway regression runs after refinements.
+- Web `npm test`, `npm run typecheck` and `npm run build`.
+- Local application image build (`docker build -t zapply:matching-check .`).
+
+Live paid probes and a browser walkthrough against a live provider have **not**
+been performed. No paid API call is part of the tests. Run migration 00010 before
+updating API/worker processes; configure the owner model in Administration →
+System keys. Without a model, runs wait as `model_not_configured`.
+
+## Shared model naming
+
+Migration `00011_model_naming.sql` renames the shared gateway tables and their
+constraints to `model_operation`, `model_request`, `platform.model_attempt` and
+`platform.model_usage`. It preserves existing rows, grants, foreign keys and
+function ownership, and rewrites the platform functions to use the new names.
+Migrations 7 and 10 retain their original identifiers so databases already at
+those versions can upgrade safely.
+
+The shared packages live under `internal/model`. Administration uses
+`/v1/admin/model-attempts`, generated `ModelOperation`/`ModelAttempt` names, and
+`model_operation.changed` events. New River jobs use `model_operation`; a small
+legacy worker reads the previous persisted kind during upgrades. `LLM_MODEL`
+and `LLM_ENDPOINT` remain specific to the text diagnostic.
+
+Apply migrations through **11** before updating API and worker processes.
 
 ## Outcome and boundaries
 
@@ -20,15 +101,15 @@ carry everything.
 
 - `internal/worker/worker.go`: `Runtime.Process` is the gateway's state machine
   (quote → `platform.reserve` → `Generate` → `platform.settle` / `uncertain`).
-  It serves one River kind (`llm_diagnostic`) and one chat prompt
+  It serves one River kind (`model_operation`) and one chat prompt
   (`openrouter.DiagnosticPrompt`). Matching adds a second request type to the
   same state machine; it does not fork it.
-- `internal/llm/provider.go`: `Provider.Quote(ctx)`, `Generate(ctx, key,
-  quote)`, `Lookup(ctx, key, generationID)`. `internal/llm/openrouter` talks to
+- `internal/model/provider.go`: `Provider.Quote(ctx)`, `Generate(ctx, key,
+  quote)`, `Lookup(ctx, key, generationID)`. `internal/model/openrouter` talks to
   `/chat/completions`, reads endpoint metadata from
   `/models/{id}/endpoints`, requires `max_tokens` support, and reserves the
   endpoint's full context.
-- `internal/store/migrations/00007_platform.sql`: `llm_operation` (result ≤
+- `internal/store/migrations/00007_platform.sql`: `model_operation` (result ≤
   16,000 characters; the app may only `SELECT, INSERT`). `platform.reserve`
   moves an operation `pending|blocked → running`; `platform.settle` moves it to
   `completed` (non-empty result) or `failed`; `platform.pending_operations`
@@ -43,7 +124,7 @@ carry everything.
 - cvd's working System One client and matcher, for reference:
   `cvd/src-tauri/src/engine/{wire,http}.rs` and `cvd/src-tauri/src/matcher/`.
 
-New code: `internal/llm/systemone` (wire types, transport), `internal/decide`
+New code: `internal/model/systemone` (wire types, transport), `internal/decide`
 (the decision cache and request packing, reusable by parts 8 and 10),
 `internal/match` (posting reading, question building, `Compute`, service).
 Handlers in `internal/api/match.go`, queries in
@@ -72,7 +153,7 @@ dispatch for that model; unknown lookup behavior uses owner reconciliation.
 
 ## 1. System One in the gateway
 
-**Wire types** (`internal/llm/systemone`), mirroring cvd's `wire.rs`:
+**Wire types** (`internal/model/systemone`), mirroring cvd's `wire.rs`:
 
 ```go
 type Question struct {
@@ -167,7 +248,7 @@ Part 5's chat diagnostic and central allowance gate are unchanged.
 **Stored requests.** A new tenant table keeps the exact request:
 
 ```
-llm_request   user_id · operation_id (PK, FK llm_operation) · body jsonb · created_at
+model_request   user_id · operation_id (PK, FK model_operation) · body jsonb · created_at
 ```
 
 Forced RLS; `INSERT, SELECT` for `zapply_app` and `zapply_worker`. Store a
@@ -175,13 +256,13 @@ canonical request encoding or canonicalize the jsonb on serialization, so
 retries preserve the hashed payload. `Process` loads it; operations without a
 row are diagnostics. This does not authorize resending uncertain attempts.
 
-**Operation kinds.** `llm_operation.kind` gets a check constraint:
+**Operation kinds.** `model_operation.kind` gets a check constraint:
 `diagnostic` or `decision`. `Process` reads the kind and calls `Generate` or
 `Decide`; quoting, reservation, settlement, uncertainty and recovery are
-shared. The River kind stays `llm_diagnostic`, so queued jobs remain valid.
+shared. New jobs use River kind `model_operation`; a legacy worker accepts jobs queued under the previous kind.
 
 **Results.** `platform.settle` stores raw answers JSON in
-`llm_operation.result`. Raise its limit to 262,144 characters as a local
+`model_operation.result`. Raise its limit to 262,144 characters as a local
 storage budget. Packing budgets response size from the accepted question
 schema, including echoed legends. Bound HTTP response reads too; oversized
 responses follow the uncertain-result path and retain their reservation
@@ -198,9 +279,9 @@ called in the transaction that makes an operation `completed`, `failed` or
 and notifies the operation's owner; matching's owner inserts a `match_advance`
 River job. Recovery (section 7) covers a hook lost to a crash.
 
-**Cancellation.** The API can't update `llm_operation`. Add
+**Cancellation.** The API can't update `model_operation`. Add
 `platform.cancel_operation(p_id)`: it cancels only `pending` or `blocked`
-operations of the caller, writes `llm_operation.changed`, and returns whether
+operations of the caller, writes `model_operation.changed`, and returns whether
 it did. `platform.reserve` already refuses anything not `pending|blocked`, so a
 cancel racing a dispatch is safe: one of them wins.
 
@@ -245,7 +326,7 @@ Enqueue(ctx, tx, user, model string, pending []Pending, owner Owner, opts) ([]uu
 
 ## 3. Schema (migration `00010_matching.sql`)
 
-The tables are as in the spec, plus `llm_request`, `decision_request_item`, and:
+The tables are as in the spec, plus `model_request`, `decision_request_item`, and:
 
 - `match_run`: partial unique index `(user_id, job_id) WHERE status IN
   ('pending','running','blocked','needs_review')` enforces one active run per
@@ -267,7 +348,7 @@ The tables are as in the spec, plus `llm_request`, `decision_request_item`, and:
   ones are scoped to `zapply_app`. No write grants on library or job tables.
 - Grants: `zapply_app` `SELECT, INSERT, UPDATE` on `match_run` and
   `match_override` (start, cancel, corrections, supersede), `SELECT, INSERT` on
-  `llm_request` and `decision_request_item`, `SELECT` on the rest;
+  `model_request` and `decision_request_item`, `SELECT` on the rest;
   `zapply_worker` read/write on run and question tables and `INSERT, SELECT`
   on `decision_answer`.
 
@@ -574,8 +655,8 @@ with `-race`, web tests, typecheck and build, and the image build.
 Apply the new migrations with `make migrate` before rolling out API and worker.
 Choose the decision model in Admin using the existing OpenRouter key.
 Existing diagnostic operations keep working
-across the deploy: the River kind is unchanged and an operation without a
-stored request is a diagnostic. Without an owner-selected decision model, runs wait as
+across the deploy: the worker accepts the previous persisted River kind, and
+an operation without a stored request is a diagnostic. Without an owner-selected decision model, runs wait as
 `blocked` with `model_not_configured` and the rest of the app is unaffected.
 
 The [spec's design references](06-matching.md#design-references) document the

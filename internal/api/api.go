@@ -23,7 +23,9 @@ import (
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
+	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
+	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/worker"
@@ -61,6 +63,9 @@ func Handler(d Deps) http.Handler {
 		queue = nil
 	}
 	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue}
+	srv.matcher = match.New(d.Store, queue)
+	srv.jobs.Matcher = srv.matcher
+	srv.decisionModels = openrouter.New("", "")
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
 		gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
@@ -192,7 +197,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var bad errBadRequest
 	var dup *jobs.DuplicateError
 	var platformError *membership.Error
+	var matchConflict *match.Conflict
 	switch {
+	case errors.As(err, &matchConflict):
+		httpx.WriteJSON(w, 409, map[string]any{"title": "A match run is already active", "status": 409, "existing_id": matchConflict.ExistingID})
 	case errors.As(err, &platformError):
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(platformError.Status)

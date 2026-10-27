@@ -71,39 +71,40 @@ func (e EmploymentType) Valid() bool {
 
 // Defines values for EventTopic.
 const (
-	EvidenceArchived    EventTopic = "evidence.archived"
-	EvidenceCreated     EventTopic = "evidence.created"
-	EvidenceDeleted     EventTopic = "evidence.deleted"
-	EvidenceMoved       EventTopic = "evidence.moved"
-	EvidenceUnarchived  EventTopic = "evidence.unarchived"
-	EvidenceUpdated     EventTopic = "evidence.updated"
-	JobActivityCreated  EventTopic = "job_activity.created"
-	JobActivityDeleted  EventTopic = "job_activity.deleted"
-	JobActivityUpdated  EventTopic = "job_activity.updated"
-	JobArchived         EventTopic = "job.archived"
-	JobCreated          EventTopic = "job.created"
-	JobDeleted          EventTopic = "job.deleted"
-	JobMoved            EventTopic = "job.moved"
-	JobStatusCreated    EventTopic = "job_status.created"
-	JobStatusDeleted    EventTopic = "job_status.deleted"
-	JobStatusMoved      EventTopic = "job_status.moved"
-	JobStatusUpdated    EventTopic = "job_status.updated"
-	JobUnarchived       EventTopic = "job.unarchived"
-	JobUpdated          EventTopic = "job.updated"
-	JobViewCreated      EventTopic = "job_view.created"
-	JobViewDeleted      EventTopic = "job_view.deleted"
-	JobViewUpdated      EventTopic = "job_view.updated"
-	LlmOperationChanged EventTopic = "llm_operation.changed"
-	MembershipChanged   EventTopic = "membership.changed"
-	OrganizationCreated EventTopic = "organization.created"
-	OrganizationDeleted EventTopic = "organization.deleted"
-	OrganizationUpdated EventTopic = "organization.updated"
-	ProfileUpdated      EventTopic = "profile.updated"
-	SkillCreated        EventTopic = "skill.created"
-	SkillDeleted        EventTopic = "skill.deleted"
-	SkillMerged         EventTopic = "skill.merged"
-	SkillUpdated        EventTopic = "skill.updated"
-	UsageChanged        EventTopic = "usage.changed"
+	EvidenceArchived      EventTopic = "evidence.archived"
+	EvidenceCreated       EventTopic = "evidence.created"
+	EvidenceDeleted       EventTopic = "evidence.deleted"
+	EvidenceMoved         EventTopic = "evidence.moved"
+	EvidenceUnarchived    EventTopic = "evidence.unarchived"
+	EvidenceUpdated       EventTopic = "evidence.updated"
+	JobActivityCreated    EventTopic = "job_activity.created"
+	JobActivityDeleted    EventTopic = "job_activity.deleted"
+	JobActivityUpdated    EventTopic = "job_activity.updated"
+	JobArchived           EventTopic = "job.archived"
+	JobCreated            EventTopic = "job.created"
+	JobDeleted            EventTopic = "job.deleted"
+	JobMoved              EventTopic = "job.moved"
+	JobStatusCreated      EventTopic = "job_status.created"
+	JobStatusDeleted      EventTopic = "job_status.deleted"
+	JobStatusMoved        EventTopic = "job_status.moved"
+	JobStatusUpdated      EventTopic = "job_status.updated"
+	JobUnarchived         EventTopic = "job.unarchived"
+	JobUpdated            EventTopic = "job.updated"
+	JobViewCreated        EventTopic = "job_view.created"
+	JobViewDeleted        EventTopic = "job_view.deleted"
+	JobViewUpdated        EventTopic = "job_view.updated"
+	MatchRunChanged       EventTopic = "match_run.changed"
+	MembershipChanged     EventTopic = "membership.changed"
+	ModelOperationChanged EventTopic = "model_operation.changed"
+	OrganizationCreated   EventTopic = "organization.created"
+	OrganizationDeleted   EventTopic = "organization.deleted"
+	OrganizationUpdated   EventTopic = "organization.updated"
+	ProfileUpdated        EventTopic = "profile.updated"
+	SkillCreated          EventTopic = "skill.created"
+	SkillDeleted          EventTopic = "skill.deleted"
+	SkillMerged           EventTopic = "skill.merged"
+	SkillUpdated          EventTopic = "skill.updated"
+	UsageChanged          EventTopic = "usage.changed"
 )
 
 // Valid indicates whether the value is a known member of the EventTopic enum.
@@ -153,9 +154,11 @@ func (e EventTopic) Valid() bool {
 		return true
 	case JobViewUpdated:
 		return true
-	case LlmOperationChanged:
+	case MatchRunChanged:
 		return true
 	case MembershipChanged:
+		return true
+	case ModelOperationChanged:
 		return true
 	case OrganizationCreated:
 		return true
@@ -327,39 +330,6 @@ func (e JobViewLayout) Valid() bool {
 	}
 }
 
-// Defines values for LLMOperationStatus.
-const (
-	Blocked     LLMOperationStatus = "blocked"
-	Cancelled   LLMOperationStatus = "cancelled"
-	Completed   LLMOperationStatus = "completed"
-	Failed      LLMOperationStatus = "failed"
-	NeedsReview LLMOperationStatus = "needs_review"
-	Pending     LLMOperationStatus = "pending"
-	Running     LLMOperationStatus = "running"
-)
-
-// Valid indicates whether the value is a known member of the LLMOperationStatus enum.
-func (e LLMOperationStatus) Valid() bool {
-	switch e {
-	case Blocked:
-		return true
-	case Cancelled:
-		return true
-	case Completed:
-		return true
-	case Failed:
-		return true
-	case NeedsReview:
-		return true
-	case Pending:
-		return true
-	case Running:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MePlatformRole.
 const (
 	MePlatformRoleMember MePlatformRole = "member"
@@ -408,6 +378,39 @@ func (e MembershipInputStatus) Valid() bool {
 	case MembershipInputStatusActive:
 		return true
 	case MembershipInputStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelOperationStatus.
+const (
+	Blocked     ModelOperationStatus = "blocked"
+	Cancelled   ModelOperationStatus = "cancelled"
+	Completed   ModelOperationStatus = "completed"
+	Failed      ModelOperationStatus = "failed"
+	NeedsReview ModelOperationStatus = "needs_review"
+	Pending     ModelOperationStatus = "pending"
+	Running     ModelOperationStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the ModelOperationStatus enum.
+func (e ModelOperationStatus) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case Cancelled:
+		return true
+	case Completed:
+		return true
+	case Failed:
+		return true
+	case NeedsReview:
+		return true
+	case Pending:
+		return true
+	case Running:
 		return true
 	default:
 		return false
@@ -510,6 +513,30 @@ func (e WorkMode) Valid() bool {
 	}
 }
 
+// Defines values for PutMatchOverrideJSONBodyClass.
+const (
+	Duty      PutMatchOverrideJSONBodyClass = "duty"
+	Ignore    PutMatchOverrideJSONBodyClass = "ignore"
+	Must      PutMatchOverrideJSONBodyClass = "must"
+	Preferred PutMatchOverrideJSONBodyClass = "preferred"
+)
+
+// Valid indicates whether the value is a known member of the PutMatchOverrideJSONBodyClass enum.
+func (e PutMatchOverrideJSONBodyClass) Valid() bool {
+	switch e {
+	case Duty:
+		return true
+	case Ignore:
+		return true
+	case Must:
+		return true
+	case Preferred:
+		return true
+	default:
+		return false
+	}
+}
+
 // AttemptResolutionInput defines model for AttemptResolutionInput.
 type AttemptResolutionInput struct {
 	AmountUsd    string  `json:"amount_usd"`
@@ -540,6 +567,48 @@ type ChildSummary struct {
 	Id       openapi_types.UUID `json:"id"`
 	Kind     string             `json:"kind"`
 	Title    string             `json:"title"`
+}
+
+// Coverage defines model for Coverage.
+type Coverage struct {
+	Answer *struct {
+		Confidence    *float32                `json:"confidence,omitempty"`
+		Legend        *map[string]interface{} `json:"legend,omitempty"`
+		Probabilities *map[string]float32     `json:"probabilities,omitempty"`
+		Score         *float32                `json:"score,omitempty"`
+	} `json:"answer,omitempty"`
+	Check     *string `json:"check,omitempty"`
+	Citations *[]struct {
+		Id   string `json:"id"`
+		Text string `json:"text"`
+	} `json:"citations,omitempty"`
+	Class         string   `json:"class"`
+	Degree        *string  `json:"degree,omitempty"`
+	EvidenceId    *string  `json:"evidence_id,omitempty"`
+	EvidenceTitle *string  `json:"evidence_title,omitempty"`
+	HighlightIds  []string `json:"highlight_ids"`
+	Language      *string  `json:"language,omitempty"`
+	Line          int      `json:"line"`
+	MinYears      float32  `json:"min_years"`
+	OriginalClass string   `json:"original_class"`
+	Provisional   bool     `json:"provisional"`
+	Review        bool     `json:"review"`
+	SourceEnd     *int     `json:"source_end,omitempty"`
+	SourceStart   *int     `json:"source_start,omitempty"`
+	Status        string   `json:"status"`
+	Strength      float32  `json:"strength"`
+	Text          string   `json:"text"`
+	TextHash      string   `json:"text_hash"`
+	Type          string   `json:"type"`
+}
+
+// DecisionModel defines model for DecisionModel.
+type DecisionModel struct {
+	CompatibilityReason string                 `json:"compatibility_reason"`
+	ContextLength       int                    `json:"context_length"`
+	Id                  string                 `json:"id"`
+	Name                string                 `json:"name"`
+	Pricing             map[string]interface{} `json:"pricing"`
 }
 
 // EmploymentType defines model for EmploymentType.
@@ -625,6 +694,9 @@ type EvidenceCreate struct {
 	Url     *string      `json:"url,omitempty"`
 }
 
+// EvidenceMatch defines model for EvidenceMatch.
+type EvidenceMatch = Selection
+
 // EvidenceMove defines model for EvidenceMove.
 type EvidenceMove struct {
 	AfterId  *openapi_types.UUID `json:"after_id,omitempty"`
@@ -699,6 +771,14 @@ type HighlightInput struct {
 	Text        string              `json:"text"`
 }
 
+// Insight defines model for Insight.
+type Insight struct {
+	EvidenceId *string `json:"evidence_id,omitempty"`
+	Text       string  `json:"text"`
+	TextHash   *string `json:"text_hash,omitempty"`
+	Type       string  `json:"type"`
+}
+
 // Job defines model for Job.
 type Job struct {
 	AppliedOn      *openapi_types.Date `json:"applied_on,omitempty"`
@@ -709,6 +789,7 @@ type Job struct {
 	EmploymentType *EmploymentType     `json:"employment_type,omitempty"`
 	Id             openapi_types.UUID  `json:"id"`
 	Location       string              `json:"location"`
+	Match          *MatchRunSummary    `json:"match,omitempty"`
 	Notes          string              `json:"notes"`
 
 	// Position Sort key within the status column.
@@ -833,6 +914,7 @@ type JobSummary struct {
 	EmploymentType *EmploymentType     `json:"employment_type,omitempty"`
 	Id             openapi_types.UUID  `json:"id"`
 	Location       string              `json:"location"`
+	Match          *MatchRunSummary    `json:"match,omitempty"`
 
 	// Position Sort key within the status column.
 	Position        string             `json:"position"`
@@ -898,25 +980,93 @@ type Kind struct {
 	Kind          string                 `json:"kind"`
 }
 
-// LLMOperation defines model for LLMOperation.
-type LLMOperation struct {
-	BlockedReason  string             `json:"blocked_reason"`
-	CreatedAt      time.Time          `json:"created_at"`
-	Id             openapi_types.UUID `json:"id"`
-	NextEligibleAt *time.Time         `json:"next_eligible_at"`
-	Result         string             `json:"result"`
-	Status         LLMOperationStatus `json:"status"`
-	UserId         openapi_types.UUID `json:"user_id"`
-	Version        int                `json:"version"`
-}
-
-// LLMOperationStatus defines model for LLMOperation.Status.
-type LLMOperationStatus string
-
 // Link defines model for Link.
 type Link struct {
 	Label string `json:"label"`
 	Url   string `json:"url"`
+}
+
+// MatchEstimate defines model for MatchEstimate.
+type MatchEstimate struct {
+	Available       bool    `json:"available"`
+	Available30dUsd *string `json:"available_30d_usd,omitempty"`
+	Available7dUsd  *string `json:"available_7d_usd,omitempty"`
+	CostUsd         *string `json:"cost_usd,omitempty"`
+	Questions       int     `json:"questions"`
+	Reason          string  `json:"reason"`
+	Requests        int     `json:"requests"`
+}
+
+// MatchResult defines model for MatchResult.
+type MatchResult struct {
+	Evidence       []EvidenceMatch `json:"evidence"`
+	Insights       []Insight       `json:"insights"`
+	MustMet        int             `json:"must_met"`
+	MustTotal      int             `json:"must_total"`
+	Partial        bool            `json:"partial"`
+	RelevantYears  float32         `json:"relevant_years"`
+	Requirements   []Coverage      `json:"requirements"`
+	Score          *float32        `json:"score"`
+	ScoringVersion int             `json:"scoring_version"`
+	Selection      []Selection     `json:"selection"`
+	Seniority      string          `json:"seniority"`
+	Skills         []struct {
+		Name      *string `json:"name,omitempty"`
+		Relevance float32 `json:"relevance"`
+		SkillId   string  `json:"skill_id"`
+	} `json:"skills"`
+	Suggestions []Selection `json:"suggestions"`
+}
+
+// MatchRun defines model for MatchRun.
+type MatchRun struct {
+	Added             int                `json:"added"`
+	Answered          int                `json:"answered"`
+	BlockedReason     string             `json:"blocked_reason"`
+	Cached            int                `json:"cached"`
+	Changed           int                `json:"changed"`
+	CostUsd           string             `json:"cost_usd"`
+	CreatedAt         time.Time          `json:"created_at"`
+	FinishedAt        *time.Time         `json:"finished_at,omitempty"`
+	Id                openapi_types.UUID `json:"id"`
+	JobId             openapi_types.UUID `json:"job_id"`
+	Model             *string            `json:"model"`
+	MustMet           *int               `json:"must_met,omitempty"`
+	MustTotal         *int               `json:"must_total,omitempty"`
+	NextEligibleAt    *time.Time         `json:"next_eligible_at,omitempty"`
+	ObsoleteOverrides *[]string          `json:"obsolete_overrides,omitempty"`
+	Removed           int                `json:"removed"`
+	Result            *MatchResult       `json:"result,omitempty"`
+	Score             *float32           `json:"score,omitempty"`
+	Selection         *[]Selection       `json:"selection,omitempty"`
+	Skills            *[]struct {
+		Name      *string `json:"name,omitempty"`
+		Relevance float32 `json:"relevance"`
+		SkillId   string  `json:"skill_id"`
+	} `json:"skills,omitempty"`
+	Stage       string       `json:"stage"`
+	Stale       bool         `json:"stale"`
+	Status      string       `json:"status"`
+	Suggestions *[]Selection `json:"suggestions,omitempty"`
+	Total       int          `json:"total"`
+	Trigger     string       `json:"trigger"`
+	Truncated   *bool        `json:"truncated,omitempty"`
+	Unanswered  int          `json:"unanswered"`
+	Version     int          `json:"version"`
+}
+
+// MatchRunPage defines model for MatchRunPage.
+type MatchRunPage struct {
+	Items      []MatchRun          `json:"items"`
+	NextCursor *openapi_types.UUID `json:"next_cursor,omitempty"`
+}
+
+// MatchRunSummary defines model for MatchRunSummary.
+type MatchRunSummary struct {
+	RunId  openapi_types.UUID `json:"run_id"`
+	Score  *float32           `json:"score,omitempty"`
+	Stale  bool               `json:"stale"`
+	Status string             `json:"status"`
 }
 
 // Me defines model for Me.
@@ -959,6 +1109,28 @@ type MembershipInput struct {
 
 // MembershipInputStatus defines model for MembershipInput.Status.
 type MembershipInputStatus string
+
+// ModelOperation defines model for ModelOperation.
+type ModelOperation struct {
+	BlockedReason  string               `json:"blocked_reason"`
+	CreatedAt      time.Time            `json:"created_at"`
+	Id             openapi_types.UUID   `json:"id"`
+	NextEligibleAt *time.Time           `json:"next_eligible_at"`
+	Result         string               `json:"result"`
+	Status         ModelOperationStatus `json:"status"`
+	UserId         openapi_types.UUID   `json:"user_id"`
+	Version        int                  `json:"version"`
+}
+
+// ModelOperationStatus defines model for ModelOperation.Status.
+type ModelOperationStatus string
+
+// ModelSettings defines model for ModelSettings.
+type ModelSettings struct {
+	DecisionModel *string   `json:"decision_model"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       int       `json:"version"`
+}
 
 // Organization defines model for Organization.
 type Organization struct {
@@ -1019,6 +1191,7 @@ type Problem struct {
 
 // Profile defines model for Profile.
 type Profile struct {
+	AutoMatch *bool      `json:"auto_match,omitempty"`
 	Email     string     `json:"email"`
 	FullName  string     `json:"full_name"`
 	Headline  string     `json:"headline"`
@@ -1032,13 +1205,14 @@ type Profile struct {
 
 // ProfileInput defines model for ProfileInput.
 type ProfileInput struct {
-	Email    *string `json:"email,omitempty"`
-	FullName *string `json:"full_name,omitempty"`
-	Headline *string `json:"headline,omitempty"`
-	Links    *[]Link `json:"links,omitempty"`
-	Location *string `json:"location,omitempty"`
-	Phone    *string `json:"phone,omitempty"`
-	Summary  *string `json:"summary,omitempty"`
+	AutoMatch *bool   `json:"auto_match,omitempty"`
+	Email     *string `json:"email,omitempty"`
+	FullName  *string `json:"full_name,omitempty"`
+	Headline  *string `json:"headline,omitempty"`
+	Links     *[]Link `json:"links,omitempty"`
+	Location  *string `json:"location,omitempty"`
+	Phone     *string `json:"phone,omitempty"`
+	Summary   *string `json:"summary,omitempty"`
 }
 
 // Reorder defines model for Reorder.
@@ -1047,8 +1221,31 @@ type Reorder struct {
 	BeforeId *openapi_types.UUID `json:"before_id,omitempty"`
 }
 
+// Requirement defines model for Requirement.
+type Requirement struct {
+	Class         string  `json:"class"`
+	Degree        *string `json:"degree,omitempty"`
+	Language      *string `json:"language,omitempty"`
+	Line          int     `json:"line"`
+	MinYears      float32 `json:"min_years"`
+	OriginalClass string  `json:"original_class"`
+	SourceEnd     *int    `json:"source_end,omitempty"`
+	SourceStart   *int    `json:"source_start,omitempty"`
+	Text          string  `json:"text"`
+	TextHash      string  `json:"text_hash"`
+	Type          string  `json:"type"`
+}
+
 // SalaryPeriod defines model for SalaryPeriod.
 type SalaryPeriod string
+
+// Selection defines model for Selection.
+type Selection struct {
+	EvidenceId   string   `json:"evidence_id"`
+	HighlightIds []string `json:"highlight_ids"`
+	Relevance    float32  `json:"relevance"`
+	Title        *string  `json:"title,omitempty"`
+}
 
 // Skill defines model for Skill.
 type Skill struct {
@@ -1132,18 +1329,6 @@ type CreateGatewayTestParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
-// ListLLMAttemptsParams defines parameters for ListLLMAttempts.
-type ListLLMAttemptsParams struct {
-	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
-	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// ResolveLLMAttemptParams defines parameters for ResolveLLMAttempt.
-type ResolveLLMAttemptParams struct {
-	// IfMatch The ETag from the last read. A stale value fails with 412.
-	IfMatch IfMatch `json:"If-Match"`
-}
-
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
 	After *openapi_types.UUID `form:"after,omitempty" json:"after,omitempty"`
@@ -1152,6 +1337,29 @@ type ListMembersParams struct {
 
 // PutMembershipParams defines parameters for PutMembership.
 type PutMembershipParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListModelAttemptsParams defines parameters for ListModelAttempts.
+type ListModelAttemptsParams struct {
+	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ResolveModelAttemptParams defines parameters for ResolveModelAttempt.
+type ResolveModelAttemptParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// PutModelSettingsJSONBody defines parameters for PutModelSettings.
+type PutModelSettingsJSONBody struct {
+	DecisionModel *string `json:"decision_model"`
+}
+
+// PutModelSettingsParams defines parameters for PutModelSettings.
+type PutModelSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
 }
@@ -1221,6 +1429,25 @@ type PutJobParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// PutMatchOverrideJSONBody defines parameters for PutMatchOverride.
+type PutMatchOverrideJSONBody struct {
+	Class PutMatchOverrideJSONBodyClass `json:"class"`
+}
+
+// PutMatchOverrideJSONBodyClass defines parameters for PutMatchOverride.
+type PutMatchOverrideJSONBodyClass string
+
+// ListMatchRunsParams defines parameters for ListMatchRuns.
+type ListMatchRunsParams struct {
+	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateMatchRunParams defines parameters for CreateMatchRun.
+type CreateMatchRunParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
 // PutProfileParams defines parameters for PutProfile.
 type PutProfileParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
@@ -1233,11 +1460,14 @@ type ListUsageEntriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ResolveLLMAttemptJSONRequestBody defines body for ResolveLLMAttempt for application/json ContentType.
-type ResolveLLMAttemptJSONRequestBody = AttemptResolutionInput
-
 // PutMembershipJSONRequestBody defines body for PutMembership for application/json ContentType.
 type PutMembershipJSONRequestBody = MembershipInput
+
+// ResolveModelAttemptJSONRequestBody defines body for ResolveModelAttempt for application/json ContentType.
+type ResolveModelAttemptJSONRequestBody = AttemptResolutionInput
+
+// PutModelSettingsJSONRequestBody defines body for PutModelSettings for application/json ContentType.
+type PutModelSettingsJSONRequestBody PutModelSettingsJSONBody
 
 // CreatePlanJSONRequestBody defines body for CreatePlan for application/json ContentType.
 type CreatePlanJSONRequestBody = PlanInput
@@ -1287,6 +1517,9 @@ type CreateJobNoteJSONRequestBody = JobNoteInput
 // UpdateJobNoteJSONRequestBody defines body for UpdateJobNote for application/json ContentType.
 type UpdateJobNoteJSONRequestBody = JobNoteInput
 
+// PutMatchOverrideJSONRequestBody defines body for PutMatchOverride for application/json ContentType.
+type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
+
 // MoveJobJSONRequestBody defines body for MoveJob for application/json ContentType.
 type MoveJobJSONRequestBody = JobMove
 
@@ -1311,23 +1544,32 @@ type MergeSkillJSONRequestBody = SkillMerge
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /v1/admin/decision-models)
+	ListDecisionModels(w http.ResponseWriter, r *http.Request)
+
 	// (POST /v1/admin/gateway-tests)
 	CreateGatewayTest(w http.ResponseWriter, r *http.Request, params CreateGatewayTestParams)
 
 	// (GET /v1/admin/gateway-tests/{id})
 	GetGatewayTest(w http.ResponseWriter, r *http.Request, id ID)
 
-	// (GET /v1/admin/llm-attempts)
-	ListLLMAttempts(w http.ResponseWriter, r *http.Request, params ListLLMAttemptsParams)
-
-	// (POST /v1/admin/llm-attempts/{id}/resolve)
-	ResolveLLMAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveLLMAttemptParams)
-
 	// (GET /v1/admin/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams)
 
 	// (PUT /v1/admin/members/{id}/membership)
 	PutMembership(w http.ResponseWriter, r *http.Request, id ID, params PutMembershipParams)
+
+	// (GET /v1/admin/model-attempts)
+	ListModelAttempts(w http.ResponseWriter, r *http.Request, params ListModelAttemptsParams)
+
+	// (POST /v1/admin/model-attempts/{id}/resolve)
+	ResolveModelAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveModelAttemptParams)
+
+	// (GET /v1/admin/model-settings)
+	GetModelSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/model-settings)
+	PutModelSettings(w http.ResponseWriter, r *http.Request, params PutModelSettingsParams)
 
 	// (GET /v1/admin/plans)
 	ListPlans(w http.ResponseWriter, r *http.Request)
@@ -1428,6 +1670,21 @@ type ServerInterface interface {
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(w http.ResponseWriter, r *http.Request, id ID)
 
+	// (GET /v1/jobs/{id}/match-estimate)
+	GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (DELETE /v1/jobs/{id}/match-overrides/{text_hash})
+	DeleteMatchOverride(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, textHash string)
+
+	// (PUT /v1/jobs/{id}/match-overrides/{text_hash})
+	PutMatchOverride(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, textHash string)
+
+	// (GET /v1/jobs/{id}/match-runs)
+	ListMatchRuns(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListMatchRunsParams)
+
+	// (POST /v1/jobs/{id}/match-runs)
+	CreateMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CreateMatchRunParams)
+
 	// (POST /v1/jobs/{id}/move)
 	MoveJob(w http.ResponseWriter, r *http.Request, id ID)
 
@@ -1436,6 +1693,12 @@ type ServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/match-runs/{id})
+	GetMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /v1/match-runs/{id}/cancel)
+	CancelMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -1491,6 +1754,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListDecisionModels operation middleware
+func (siw *ServerInterfaceWrapper) ListDecisionModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDecisionModels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateGatewayTest operation middleware
 func (siw *ServerInterfaceWrapper) CreateGatewayTest(w http.ResponseWriter, r *http.Request) {
@@ -1554,106 +1831,6 @@ func (siw *ServerInterfaceWrapper) GetGatewayTest(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetGatewayTest(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListLLMAttempts operation middleware
-func (siw *ServerInterfaceWrapper) ListLLMAttempts(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListLLMAttemptsParams
-
-	// ------------- Optional query parameter "before" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListLLMAttempts(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ResolveLLMAttempt operation middleware
-func (siw *ServerInterfaceWrapper) ResolveLLMAttempt(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "id" -------------
-	var id ID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ResolveLLMAttemptParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ResolveLLMAttempt(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1754,6 +1931,165 @@ func (siw *ServerInterfaceWrapper) PutMembership(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutMembership(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListModelAttempts operation middleware
+func (siw *ServerInterfaceWrapper) ListModelAttempts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelAttemptsParams
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModelAttempts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveModelAttempt operation middleware
+func (siw *ServerInterfaceWrapper) ResolveModelAttempt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveModelAttemptParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveModelAttempt(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetModelSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetModelSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetModelSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutModelSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutModelSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutModelSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutModelSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2873,6 +3209,211 @@ func (siw *ServerInterfaceWrapper) ArchiveJob(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetMatchEstimate operation middleware
+func (siw *ServerInterfaceWrapper) GetMatchEstimate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMatchEstimate(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMatchOverride operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMatchOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "text_hash" -------------
+	var textHash string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "text_hash", r.PathValue("text_hash"), &textHash, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "text_hash", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMatchOverride(w, r, id, textHash)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutMatchOverride operation middleware
+func (siw *ServerInterfaceWrapper) PutMatchOverride(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "text_hash" -------------
+	var textHash string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "text_hash", r.PathValue("text_hash"), &textHash, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "text_hash", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutMatchOverride(w, r, id, textHash)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMatchRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListMatchRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMatchRunsParams
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMatchRuns(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMatchRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateMatchRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMatchRunParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMatchRun(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MoveJob operation middleware
 func (siw *ServerInterfaceWrapper) MoveJob(w http.ResponseWriter, r *http.Request) {
 
@@ -2930,6 +3471,58 @@ func (siw *ServerInterfaceWrapper) ListKinds(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMatchRun operation middleware
+func (siw *ServerInterfaceWrapper) GetMatchRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMatchRun(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelMatchRun operation middleware
+func (siw *ServerInterfaceWrapper) CancelMatchRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelMatchRun(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3457,15 +4050,63 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/system-keys", wrapper.ListSystemKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/system-keys", wrapper.CreateSystemKey)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/system-keys/{id}/activation", wrapper.ActivateSystemKey)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/llm-attempts", wrapper.ListLLMAttempts)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/llm-attempts/{id}/resolve", wrapper.ResolveLLMAttempt)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-attempts", wrapper.ListModelAttempts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/model-attempts/{id}/resolve", wrapper.ResolveModelAttempt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/gateway-tests", wrapper.CreateGatewayTest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/gateway-tests/{id}", wrapper.GetGatewayTest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/decision-models", wrapper.ListDecisionModels)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-estimate", wrapper.GetMatchEstimate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.ListMatchRuns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.CreateMatchRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/match-runs/{id}", wrapper.GetMatchRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/match-runs/{id}/cancel", wrapper.CancelMatchRun)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.DeleteMatchOverride)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.PutMatchOverride)
 
 	return m
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ListDecisionModelsRequestObject struct {
+}
+
+type ListDecisionModelsResponseObject interface {
+	VisitListDecisionModelsResponse(w http.ResponseWriter) error
+}
+
+type ListDecisionModels200JSONResponse []DecisionModel
+
+func (response ListDecisionModels200JSONResponse) VisitListDecisionModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDecisionModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListDecisionModelsdefaultApplicationProblemPlusJSONResponse) VisitListDecisionModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type CreateGatewayTestRequestObject struct {
 	Params CreateGatewayTestParams
@@ -3475,7 +4116,7 @@ type CreateGatewayTestResponseObject interface {
 	VisitCreateGatewayTestResponse(w http.ResponseWriter) error
 }
 
-type CreateGatewayTest202JSONResponse LLMOperation
+type CreateGatewayTest202JSONResponse ModelOperation
 
 func (response CreateGatewayTest202JSONResponse) VisitCreateGatewayTestResponse(w http.ResponseWriter) error {
 
@@ -3514,7 +4155,7 @@ type GetGatewayTestResponseObject interface {
 	VisitGetGatewayTestResponse(w http.ResponseWriter) error
 }
 
-type GetGatewayTest200JSONResponse LLMOperation
+type GetGatewayTest200JSONResponse ModelOperation
 
 func (response GetGatewayTest200JSONResponse) VisitGetGatewayTestResponse(w http.ResponseWriter) error {
 
@@ -3534,80 +4175,6 @@ type GetGatewayTestdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetGatewayTestdefaultApplicationProblemPlusJSONResponse) VisitGetGatewayTestResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListLLMAttemptsRequestObject struct {
-	Params ListLLMAttemptsParams
-}
-
-type ListLLMAttemptsResponseObject interface {
-	VisitListLLMAttemptsResponse(w http.ResponseWriter) error
-}
-
-type ListLLMAttempts200JSONResponse []AttemptSummary
-
-func (response ListLLMAttempts200JSONResponse) VisitListLLMAttemptsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListLLMAttemptsdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response ListLLMAttemptsdefaultApplicationProblemPlusJSONResponse) VisitListLLMAttemptsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(response.StatusCode)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ResolveLLMAttemptRequestObject struct {
-	Id     ID `json:"id"`
-	Params ResolveLLMAttemptParams
-	Body   *ResolveLLMAttemptJSONRequestBody
-}
-
-type ResolveLLMAttemptResponseObject interface {
-	VisitResolveLLMAttemptResponse(w http.ResponseWriter) error
-}
-
-type ResolveLLMAttempt204Response struct {
-}
-
-func (response ResolveLLMAttempt204Response) VisitResolveLLMAttemptResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type ResolveLLMAttemptdefaultApplicationProblemPlusJSONResponse struct {
-	Body       Problem
-	StatusCode int
-}
-
-func (response ResolveLLMAttemptdefaultApplicationProblemPlusJSONResponse) VisitResolveLLMAttemptResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -3698,6 +4265,158 @@ type PutMembershipdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PutMembershipdefaultApplicationProblemPlusJSONResponse) VisitPutMembershipResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelAttemptsRequestObject struct {
+	Params ListModelAttemptsParams
+}
+
+type ListModelAttemptsResponseObject interface {
+	VisitListModelAttemptsResponse(w http.ResponseWriter) error
+}
+
+type ListModelAttempts200JSONResponse []AttemptSummary
+
+func (response ListModelAttempts200JSONResponse) VisitListModelAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelAttemptsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListModelAttemptsdefaultApplicationProblemPlusJSONResponse) VisitListModelAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveModelAttemptRequestObject struct {
+	Id     ID `json:"id"`
+	Params ResolveModelAttemptParams
+	Body   *ResolveModelAttemptJSONRequestBody
+}
+
+type ResolveModelAttemptResponseObject interface {
+	VisitResolveModelAttemptResponse(w http.ResponseWriter) error
+}
+
+type ResolveModelAttempt204Response struct {
+}
+
+func (response ResolveModelAttempt204Response) VisitResolveModelAttemptResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResolveModelAttemptdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResolveModelAttemptdefaultApplicationProblemPlusJSONResponse) VisitResolveModelAttemptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelSettingsRequestObject struct {
+}
+
+type GetModelSettingsResponseObject interface {
+	VisitGetModelSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetModelSettings200JSONResponse ModelSettings
+
+func (response GetModelSettings200JSONResponse) VisitGetModelSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetModelSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetModelSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutModelSettingsRequestObject struct {
+	Params PutModelSettingsParams
+	Body   *PutModelSettingsJSONRequestBody
+}
+
+type PutModelSettingsResponseObject interface {
+	VisitPutModelSettingsResponse(w http.ResponseWriter) error
+}
+
+type PutModelSettings200JSONResponse ModelSettings
+
+func (response PutModelSettings200JSONResponse) VisitPutModelSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutModelSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutModelSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutModelSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5105,6 +5824,194 @@ func (response ArchiveJobdefaultApplicationProblemPlusJSONResponse) VisitArchive
 	return err
 }
 
+type GetMatchEstimateRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetMatchEstimateResponseObject interface {
+	VisitGetMatchEstimateResponse(w http.ResponseWriter) error
+}
+
+type GetMatchEstimate200JSONResponse MatchEstimate
+
+func (response GetMatchEstimate200JSONResponse) VisitGetMatchEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMatchEstimatedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMatchEstimatedefaultApplicationProblemPlusJSONResponse) VisitGetMatchEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMatchOverrideRequestObject struct {
+	Id       openapi_types.UUID `json:"id"`
+	TextHash string             `json:"text_hash"`
+}
+
+type DeleteMatchOverrideResponseObject interface {
+	VisitDeleteMatchOverrideResponse(w http.ResponseWriter) error
+}
+
+type DeleteMatchOverride204Response struct {
+}
+
+func (response DeleteMatchOverride204Response) VisitDeleteMatchOverrideResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMatchOverridedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteMatchOverridedefaultApplicationProblemPlusJSONResponse) VisitDeleteMatchOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutMatchOverrideRequestObject struct {
+	Id       openapi_types.UUID `json:"id"`
+	TextHash string             `json:"text_hash"`
+	Body     *PutMatchOverrideJSONRequestBody
+}
+
+type PutMatchOverrideResponseObject interface {
+	VisitPutMatchOverrideResponse(w http.ResponseWriter) error
+}
+
+type PutMatchOverride204Response struct {
+}
+
+func (response PutMatchOverride204Response) VisitPutMatchOverrideResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PutMatchOverridedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutMatchOverridedefaultApplicationProblemPlusJSONResponse) VisitPutMatchOverrideResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMatchRunsRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params ListMatchRunsParams
+}
+
+type ListMatchRunsResponseObject interface {
+	VisitListMatchRunsResponse(w http.ResponseWriter) error
+}
+
+type ListMatchRuns200JSONResponse MatchRunPage
+
+func (response ListMatchRuns200JSONResponse) VisitListMatchRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMatchRunsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMatchRunsdefaultApplicationProblemPlusJSONResponse) VisitListMatchRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMatchRunRequestObject struct {
+	Id     openapi_types.UUID `json:"id"`
+	Params CreateMatchRunParams
+}
+
+type CreateMatchRunResponseObject interface {
+	VisitCreateMatchRunResponse(w http.ResponseWriter) error
+}
+
+type CreateMatchRun202JSONResponse MatchRun
+
+func (response CreateMatchRun202JSONResponse) VisitCreateMatchRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMatchRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateMatchRundefaultApplicationProblemPlusJSONResponse) VisitCreateMatchRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MoveJobRequestObject struct {
 	Id   ID `json:"id"`
 	Body *MoveJobJSONRequestBody
@@ -5231,6 +6138,78 @@ type ListKindsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListKindsdefaultApplicationProblemPlusJSONResponse) VisitListKindsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMatchRunRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetMatchRunResponseObject interface {
+	VisitGetMatchRunResponse(w http.ResponseWriter) error
+}
+
+type GetMatchRun200JSONResponse MatchRun
+
+func (response GetMatchRun200JSONResponse) VisitGetMatchRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMatchRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMatchRundefaultApplicationProblemPlusJSONResponse) VisitGetMatchRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelMatchRunRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type CancelMatchRunResponseObject interface {
+	VisitCancelMatchRunResponse(w http.ResponseWriter) error
+}
+
+type CancelMatchRun204Response struct {
+}
+
+func (response CancelMatchRun204Response) VisitCancelMatchRunResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type CancelMatchRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelMatchRundefaultApplicationProblemPlusJSONResponse) VisitCancelMatchRunResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5837,23 +6816,32 @@ func (response ListUsageEntriesdefaultApplicationProblemPlusJSONResponse) VisitL
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /v1/admin/decision-models)
+	ListDecisionModels(ctx context.Context, request ListDecisionModelsRequestObject) (ListDecisionModelsResponseObject, error)
+
 	// (POST /v1/admin/gateway-tests)
 	CreateGatewayTest(ctx context.Context, request CreateGatewayTestRequestObject) (CreateGatewayTestResponseObject, error)
 
 	// (GET /v1/admin/gateway-tests/{id})
 	GetGatewayTest(ctx context.Context, request GetGatewayTestRequestObject) (GetGatewayTestResponseObject, error)
 
-	// (GET /v1/admin/llm-attempts)
-	ListLLMAttempts(ctx context.Context, request ListLLMAttemptsRequestObject) (ListLLMAttemptsResponseObject, error)
-
-	// (POST /v1/admin/llm-attempts/{id}/resolve)
-	ResolveLLMAttempt(ctx context.Context, request ResolveLLMAttemptRequestObject) (ResolveLLMAttemptResponseObject, error)
-
 	// (GET /v1/admin/members)
 	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
 
 	// (PUT /v1/admin/members/{id}/membership)
 	PutMembership(ctx context.Context, request PutMembershipRequestObject) (PutMembershipResponseObject, error)
+
+	// (GET /v1/admin/model-attempts)
+	ListModelAttempts(ctx context.Context, request ListModelAttemptsRequestObject) (ListModelAttemptsResponseObject, error)
+
+	// (POST /v1/admin/model-attempts/{id}/resolve)
+	ResolveModelAttempt(ctx context.Context, request ResolveModelAttemptRequestObject) (ResolveModelAttemptResponseObject, error)
+
+	// (GET /v1/admin/model-settings)
+	GetModelSettings(ctx context.Context, request GetModelSettingsRequestObject) (GetModelSettingsResponseObject, error)
+
+	// (PUT /v1/admin/model-settings)
+	PutModelSettings(ctx context.Context, request PutModelSettingsRequestObject) (PutModelSettingsResponseObject, error)
 
 	// (GET /v1/admin/plans)
 	ListPlans(ctx context.Context, request ListPlansRequestObject) (ListPlansResponseObject, error)
@@ -5954,6 +6942,21 @@ type StrictServerInterface interface {
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(ctx context.Context, request ArchiveJobRequestObject) (ArchiveJobResponseObject, error)
 
+	// (GET /v1/jobs/{id}/match-estimate)
+	GetMatchEstimate(ctx context.Context, request GetMatchEstimateRequestObject) (GetMatchEstimateResponseObject, error)
+
+	// (DELETE /v1/jobs/{id}/match-overrides/{text_hash})
+	DeleteMatchOverride(ctx context.Context, request DeleteMatchOverrideRequestObject) (DeleteMatchOverrideResponseObject, error)
+
+	// (PUT /v1/jobs/{id}/match-overrides/{text_hash})
+	PutMatchOverride(ctx context.Context, request PutMatchOverrideRequestObject) (PutMatchOverrideResponseObject, error)
+
+	// (GET /v1/jobs/{id}/match-runs)
+	ListMatchRuns(ctx context.Context, request ListMatchRunsRequestObject) (ListMatchRunsResponseObject, error)
+
+	// (POST /v1/jobs/{id}/match-runs)
+	CreateMatchRun(ctx context.Context, request CreateMatchRunRequestObject) (CreateMatchRunResponseObject, error)
+
 	// (POST /v1/jobs/{id}/move)
 	MoveJob(ctx context.Context, request MoveJobRequestObject) (MoveJobResponseObject, error)
 
@@ -5962,6 +6965,12 @@ type StrictServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(ctx context.Context, request ListKindsRequestObject) (ListKindsResponseObject, error)
+
+	// (GET /v1/match-runs/{id})
+	GetMatchRun(ctx context.Context, request GetMatchRunRequestObject) (GetMatchRunResponseObject, error)
+
+	// (POST /v1/match-runs/{id}/cancel)
+	CancelMatchRun(ctx context.Context, request CancelMatchRunRequestObject) (CancelMatchRunResponseObject, error)
 
 	// (GET /v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -6048,6 +7057,30 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// ListDecisionModels operation middleware
+func (sh *strictHandler) ListDecisionModels(w http.ResponseWriter, r *http.Request) {
+	var request ListDecisionModelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDecisionModels(ctx, request.(ListDecisionModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDecisionModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDecisionModelsResponseObject); ok {
+		if err := validResponse.VisitListDecisionModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateGatewayTest operation middleware
 func (sh *strictHandler) CreateGatewayTest(w http.ResponseWriter, r *http.Request, params CreateGatewayTestParams) {
 	var request CreateGatewayTestRequestObject
@@ -6093,66 +7126,6 @@ func (sh *strictHandler) GetGatewayTest(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetGatewayTestResponseObject); ok {
 		if err := validResponse.VisitGetGatewayTestResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListLLMAttempts operation middleware
-func (sh *strictHandler) ListLLMAttempts(w http.ResponseWriter, r *http.Request, params ListLLMAttemptsParams) {
-	var request ListLLMAttemptsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListLLMAttempts(ctx, request.(ListLLMAttemptsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListLLMAttempts")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListLLMAttemptsResponseObject); ok {
-		if err := validResponse.VisitListLLMAttemptsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ResolveLLMAttempt operation middleware
-func (sh *strictHandler) ResolveLLMAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveLLMAttemptParams) {
-	var request ResolveLLMAttemptRequestObject
-
-	request.Id = id
-	request.Params = params
-
-	var body ResolveLLMAttemptJSONRequestBody
-	if err := runtime.BindJSONBody(r, &body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ResolveLLMAttempt(ctx, request.(ResolveLLMAttemptRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ResolveLLMAttempt")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ResolveLLMAttemptResponseObject); ok {
-		if err := validResponse.VisitResolveLLMAttemptResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6213,6 +7186,123 @@ func (sh *strictHandler) PutMembership(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutMembershipResponseObject); ok {
 		if err := validResponse.VisitPutMembershipResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListModelAttempts operation middleware
+func (sh *strictHandler) ListModelAttempts(w http.ResponseWriter, r *http.Request, params ListModelAttemptsParams) {
+	var request ListModelAttemptsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListModelAttempts(ctx, request.(ListModelAttemptsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListModelAttempts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListModelAttemptsResponseObject); ok {
+		if err := validResponse.VisitListModelAttemptsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveModelAttempt operation middleware
+func (sh *strictHandler) ResolveModelAttempt(w http.ResponseWriter, r *http.Request, id ID, params ResolveModelAttemptParams) {
+	var request ResolveModelAttemptRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body ResolveModelAttemptJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveModelAttempt(ctx, request.(ResolveModelAttemptRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveModelAttempt")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveModelAttemptResponseObject); ok {
+		if err := validResponse.VisitResolveModelAttemptResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetModelSettings operation middleware
+func (sh *strictHandler) GetModelSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetModelSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetModelSettings(ctx, request.(GetModelSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetModelSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetModelSettingsResponseObject); ok {
+		if err := validResponse.VisitGetModelSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutModelSettings operation middleware
+func (sh *strictHandler) PutModelSettings(w http.ResponseWriter, r *http.Request, params PutModelSettingsParams) {
+	var request PutModelSettingsRequestObject
+
+	request.Params = params
+
+	var body PutModelSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutModelSettings(ctx, request.(PutModelSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutModelSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutModelSettingsResponseObject); ok {
+		if err := validResponse.VisitPutModelSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7180,6 +8270,147 @@ func (sh *strictHandler) ArchiveJob(w http.ResponseWriter, r *http.Request, id I
 	}
 }
 
+// GetMatchEstimate operation middleware
+func (sh *strictHandler) GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetMatchEstimateRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMatchEstimate(ctx, request.(GetMatchEstimateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMatchEstimate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMatchEstimateResponseObject); ok {
+		if err := validResponse.VisitGetMatchEstimateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMatchOverride operation middleware
+func (sh *strictHandler) DeleteMatchOverride(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, textHash string) {
+	var request DeleteMatchOverrideRequestObject
+
+	request.Id = id
+	request.TextHash = textHash
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMatchOverride(ctx, request.(DeleteMatchOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMatchOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMatchOverrideResponseObject); ok {
+		if err := validResponse.VisitDeleteMatchOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutMatchOverride operation middleware
+func (sh *strictHandler) PutMatchOverride(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, textHash string) {
+	var request PutMatchOverrideRequestObject
+
+	request.Id = id
+	request.TextHash = textHash
+
+	var body PutMatchOverrideJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutMatchOverride(ctx, request.(PutMatchOverrideRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutMatchOverride")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutMatchOverrideResponseObject); ok {
+		if err := validResponse.VisitPutMatchOverrideResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMatchRuns operation middleware
+func (sh *strictHandler) ListMatchRuns(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params ListMatchRunsParams) {
+	var request ListMatchRunsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMatchRuns(ctx, request.(ListMatchRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMatchRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMatchRunsResponseObject); ok {
+		if err := validResponse.VisitListMatchRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMatchRun operation middleware
+func (sh *strictHandler) CreateMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params CreateMatchRunParams) {
+	var request CreateMatchRunRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMatchRun(ctx, request.(CreateMatchRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMatchRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMatchRunResponseObject); ok {
+		if err := validResponse.VisitCreateMatchRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // MoveJob operation middleware
 func (sh *strictHandler) MoveJob(w http.ResponseWriter, r *http.Request, id ID) {
 	var request MoveJobRequestObject
@@ -7256,6 +8487,58 @@ func (sh *strictHandler) ListKinds(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListKindsResponseObject); ok {
 		if err := validResponse.VisitListKindsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMatchRun operation middleware
+func (sh *strictHandler) GetMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetMatchRunRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMatchRun(ctx, request.(GetMatchRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMatchRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMatchRunResponseObject); ok {
+		if err := validResponse.VisitGetMatchRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelMatchRun operation middleware
+func (sh *strictHandler) CancelMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CancelMatchRunRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelMatchRun(ctx, request.(CancelMatchRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelMatchRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelMatchRunResponseObject); ok {
+		if err := validResponse.VisitCancelMatchRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

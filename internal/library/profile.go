@@ -15,6 +15,7 @@ import (
 )
 
 type Profile struct {
+	AutoMatch bool
 	FullName  string
 	Headline  string
 	Email     string
@@ -39,7 +40,7 @@ func (s *Service) GetProfile(ctx context.Context, uid uuid.UUID) (Profile, error
 	err := s.tx(ctx, uid, func(q *db.Queries) error {
 		row, err := q.GetProfile(ctx, uid)
 		if errors.Is(err, pgx.ErrNoRows) {
-			p = Profile{Links: []Link{}}
+			p = Profile{Links: []Link{}, AutoMatch: true}
 			return nil
 		}
 		if err != nil {
@@ -65,12 +66,12 @@ func (s *Service) PutProfile(ctx context.Context, uid uuid.UUID, ifVersion int, 
 		if ifVersion == 0 {
 			row, err = q.InsertProfile(ctx, db.InsertProfileParams{
 				UserID: uid, FullName: in.FullName, Headline: in.Headline, Email: in.Email,
-				Phone: in.Phone, Location: in.Location, Links: links, Summary: in.Summary,
+				Phone: in.Phone, Location: in.Location, Links: links, Summary: in.Summary, AutoMatch: in.AutoMatch,
 			})
 		} else {
 			row, err = q.UpdateProfile(ctx, db.UpdateProfileParams{
 				UserID: uid, Version: int32(ifVersion), FullName: in.FullName, Headline: in.Headline,
-				Email: in.Email, Phone: in.Phone, Location: in.Location, Links: links, Summary: in.Summary,
+				Email: in.Email, Phone: in.Phone, Location: in.Location, Links: links, Summary: in.Summary, AutoMatch: in.AutoMatch,
 			})
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -128,7 +129,7 @@ func cleanProfile(p *Profile) error {
 
 func profileFromRow(r db.Profile) (Profile, error) {
 	p := Profile{
-		FullName: r.FullName, Headline: r.Headline, Email: r.Email, Phone: r.Phone,
+		AutoMatch: r.AutoMatch, FullName: r.FullName, Headline: r.Headline, Email: r.Email, Phone: r.Phone,
 		Location: r.Location, Summary: r.Summary, Version: int(r.Version), UpdatedAt: r.UpdatedAt,
 	}
 	if err := json.Unmarshal(r.Links, &p.Links); err != nil {
