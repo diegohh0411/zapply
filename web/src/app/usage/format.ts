@@ -4,6 +4,21 @@ export function usd(value: string): string {
   const trimmed = fraction.replace(/0+$/, '');
   return '$' + whole + (trimmed ? '.' + trimmed : '.00');
 }
+
+/** Show usage amounts at cent precision without making sub-cent charges look free. */
+export function usageUsd(value: string): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return usd(value);
+  if (amount !== 0 && Math.abs(amount) < 0.01) {
+    return amount < 0 ? '>-$0.01' : '<$0.01';
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 export function usagePercent(spent: string, reserved: string, cap: string): number {
   const limit = Number(cap);
   return limit > 0
