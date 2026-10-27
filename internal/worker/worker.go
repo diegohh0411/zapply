@@ -19,6 +19,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
@@ -209,8 +210,10 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 			if a.State == "dispatching" && time.Now().Before(a.Deadline) {
 				return river.JobSnooze(time.Until(a.Deadline))
 			}
-			if err := r.uncertain(ctx, args, a.ID, a.GenerationID, "reconciling", ""); err != nil {
-				return err
+			if a.State == "dispatching" {
+				if err := r.uncertain(ctx, args, a.ID, a.GenerationID, "reconciling", ""); err != nil {
+					return err
+				}
 			}
 			if a.GenerationID == nil {
 				return river.JobSnooze(time.Minute)
@@ -277,11 +280,17 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	}
 	key, err := r.key(ctx, args.UserID, reservation.KeyID)
 	if err != nil {
+		// The key is only readable through this attempt, so a failure still
+		// releases one reservation; cap retries like other uncharged failures.
 		zero := int64(0)
-		if err := r.settle(ctx, args, id, llm.Result{Amount: &zero}, "", "confirmed_uncharged", true, "encryption_unavailable"); err != nil {
+		retry := len(attempts) < 4
+		if err := r.settle(ctx, args, id, llm.Result{Amount: &zero}, "", "confirmed_uncharged", retry, "encryption_unavailable"); err != nil {
 			return err
 		}
-		return river.JobSnooze(time.Minute)
+		if retry {
+			return river.JobSnooze(time.Minute)
+		}
+		return nil
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	result, err := r.Provider.Generate(callCtx, key, quote)
@@ -294,7 +303,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if *result.Amount > quote.Reserved && r.Log != nil {
 			r.Log.Error("provider charge exceeded reservation", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "reserved_usd", llm.USD(quote.Reserved), "actual_usd", llm.USD(*result.Amount))
 		}
-		return r.settle(cleanup, args, id, result, result.Text, "provider_response", false, "")
+		return r.settleCharged(ctx, args, id, result)
 	}
 	var pe *llm.ProviderError
 	if errors.As(err, &pe) && pe.Uncharged {
@@ -346,6 +355,46 @@ func (r *Runtime) uncertain(ctx context.Context, args Args, id uuid.UUID, genera
 		}
 		return nil
 	})
+}
+
+// settleCharged records a provider-reported charge. Losing it would turn a
+// known cost into a manual resolution, so transient database failures are
+// retried; if the charge still cannot be saved, the generation ID is kept so the
+// reconciliation lookup can recover the cost.
+func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result llm.Result) error {
+	// Postgres text cannot store NUL bytes, which would fail every retry.
+	text := strings.ReplaceAll(result.Text, "\x00", "")
+	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer stop()
+	var err error
+	for wait := 250 * time.Millisecond; ; wait *= 2 {
+		if err = r.settle(cleanup, args, id, result, text, "provider_response", false, ""); err == nil {
+			return nil
+		}
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && strings.HasPrefix(pe.Code, "ZA") {
+			break // Application rejections are deterministic.
+		}
+		select {
+		case <-cleanup.Done():
+		case <-time.After(wait):
+			continue
+		}
+		break
+	}
+	if r.Log != nil {
+		r.Log.Error("provider charge could not be saved", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "error", err)
+	}
+	var generation *string
+	if result.GenerationID != "" {
+		generation = &result.GenerationID
+	}
+	last, stopLast := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer stopLast()
+	if e := r.uncertain(last, args, id, generation, "settlement_failed", ""); e != nil {
+		return errors.Join(err, e)
+	}
+	return river.JobSnooze(time.Minute)
 }
 func (r *Runtime) settle(ctx context.Context, args Args, id uuid.UUID, result llm.Result, text, source string, retry bool, reason string) error {
 	var generation *string

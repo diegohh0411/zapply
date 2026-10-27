@@ -122,6 +122,13 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
   Without an ID, the owner confirms its actual charge against provider evidence
   in Unresolved usage. Resolution requires the local request deadline to pass,
   records the evidence, and never automatically regenerates lost output.
+  Reconciliation passes do not change an unresolved attempt, so the owner's
+  resolution stays current and the original error class is kept.
+- A provider-reported charge is saved with retries for up to a minute. If it
+  still cannot be saved, the attempt becomes uncertain with its generation ID
+  (error `settlement_failed`) and the automatic lookup recovers the cost.
+- If a stored key cannot be decrypted, the operation retries up to four times
+  (one uncharged attempt each) and then fails.
 - To rotate master encryption keys, first deploy a ring containing both versions
   to all API/worker processes, with the new active version. Run
   `zapply secrets reencrypt` using migration credentials and that ring. Retire the

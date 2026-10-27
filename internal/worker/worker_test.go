@@ -29,6 +29,7 @@ type fake struct {
 	amount           int64
 	uncertain        bool
 	missingCost      bool
+	text             string
 	entered, release chan struct{}
 }
 
@@ -55,7 +56,11 @@ func (f *fake) Generate(ctx context.Context, key string, _ llm.Quote) (llm.Resul
 		return llm.Result{GenerationID: "gen-missing-cost", Text: "OK"}, nil
 	}
 	amount := f.amount
-	return llm.Result{GenerationID: "gen-" + uuid.NewString(), Text: "OK", Amount: &amount, Usage: json.RawMessage(`{"prompt_tokens":4}`)}, nil
+	text := "OK"
+	if f.text != "" {
+		text = f.text
+	}
+	return llm.Result{GenerationID: "gen-" + uuid.NewString(), Text: text, Amount: &amount, Usage: json.RawMessage(`{"prompt_tokens":4}`)}, nil
 }
 func (f *fake) Lookup(_ context.Context, key string, _ string) (llm.Result, error) {
 	if key != "test-provider-secret" {
@@ -277,14 +282,20 @@ func TestUncertainOutcomeNeverResends(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rows []struct {
-		ID      uuid.UUID `json:"id"`
-		Version int       `json:"version"`
+		ID        uuid.UUID `json:"id"`
+		Version   int       `json:"version"`
+		ErrorCode string    `json:"error_code"`
 	}
 	if err := json.Unmarshal(raw, &rows); err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 {
+	if len(rows) != 1 || rows[0].ErrorCode != "transport_uncertain" {
 		t.Fatalf("attempts=%s", raw)
+	}
+	// A reconciliation pass while the owner checks the provider must not make
+	// their resolution stale.
+	if err := f.r.Process(ctx, args); err == nil {
+		t.Fatal("unresolved attempt not paused")
 	}
 	if n, _ := llm.ParseUSD(f.usage(t)["reserved_usd"].(string)); n != f.p.amount {
 		t.Fatalf("uncertain hold=%d", n)
@@ -547,5 +558,35 @@ func TestProviderAndMasterKeyRotationPreserveAccounting(t *testing.T) {
 	var oldKeys int
 	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.system_key WHERE encryption_version<>'v2'").Scan(&oldKeys); err != nil || oldKeys != 0 {
 		t.Fatalf("old encryption versions=%d %v", oldKeys, err)
+	}
+}
+
+func TestChargedOutputWithNULIsSaved(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.p.text = "O\x00K"
+	args := f.operation(t)
+	if err := f.r.Process(ctx, args); err != nil {
+		t.Fatal(err)
+	}
+	if op := f.state(t, args); op.Status != "completed" || op.Result != "OK" {
+		t.Fatalf("charged output lost: %+v", op)
+	}
+}
+
+func TestKeyFailureStopsRetrying(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.r.Keys = nil
+	args := f.operation(t)
+	for range 10 {
+		_ = f.r.Process(ctx, args)
+	}
+	if f.p.calls.Load() != 0 || f.state(t, args).Status != "failed" {
+		t.Fatalf("status=%s calls=%d", f.state(t, args).Status, f.p.calls.Load())
+	}
+	var n int
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.llm_attempt").Scan(&n); err != nil || n != 5 {
+		t.Fatalf("attempts=%d err=%v", n, err)
 	}
 }

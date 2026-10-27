@@ -293,8 +293,13 @@ $$;
 CREATE FUNCTION platform.uncertain(p_id uuid,p_generation text,p_reason text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, pg_temp AS $$ DECLARE a platform.llm_attempt; BEGIN
  PERFORM 1 FROM platform.budget_account WHERE user_id=public.app_user_id() FOR UPDATE;
- UPDATE platform.llm_attempt SET state='uncertain',generation_id=COALESCE(generation_id,p_generation),error_code=p_reason,version=version+1
- WHERE id=p_id AND user_id=public.app_user_id() AND state IN('dispatching','uncertain') RETURNING * INTO a;
+ -- Only a real change bumps versions: reconciliation must not invalidate an
+ -- owner's pending resolution or replace the original error class.
+ UPDATE platform.llm_attempt SET state='uncertain',generation_id=COALESCE(generation_id,p_generation),
+   error_code=CASE WHEN state='dispatching' THEN p_reason ELSE error_code END,version=version+1
+ WHERE id=p_id AND user_id=public.app_user_id()
+   AND (state='dispatching' OR (state='uncertain' AND generation_id IS NULL AND p_generation IS NOT NULL))
+ RETURNING * INTO a;
  IF FOUND THEN
    UPDATE public.llm_operation SET status='needs_review',blocked_reason='accounting_pending',version=version+1,updated_at=now() WHERE id=a.operation_id AND user_id=a.user_id;
    PERFORM platform.emit(a.user_id,'usage.changed',a.user_id);
