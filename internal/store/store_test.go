@@ -69,7 +69,8 @@ func TestIdentityEmailMigrationWithoutInheritedPlatformOwnership(t *testing.T) {
 	query := migrationURL.Query()
 	query.Set("role", role)
 	migrationURL.RawQuery = query.Encode()
-	if err := store.Migrate(ctx, migrationURL.String(), discardLogger()); err != nil {
+	// This role owns the identity schema change, not later feature migrations.
+	if err := store.MigrateTo(ctx, migrationURL.String(), 10, discardLogger()); err != nil {
 		t.Fatalf("migrate as non-inheriting schema owner: %v", err)
 	}
 	var owner string

@@ -80,7 +80,7 @@ Setup, accounting rules, conservative reservations, and recovery commands are in
 Part 6 adds automatic matching when saved jobs change, reusable decision-answer
 caching, deterministic coverage and CV selections, corrections, run history and
 staleness. Open a saved job's **Match** tab; automatic matching can be turned off
-in Profile. Apply migrations through 00011 before deploying the updated API and worker.
+in Profile. Apply migrations through 00012 before deploying the updated API and worker.
 
 Choose the decision model under **Administration → System keys**. It uses the
 same active OpenRouter key; no decision-model environment variable is required.
@@ -90,7 +90,7 @@ the initial production adapter registry is empty pending verification. Fake
 providers cover the complete pipeline without spending credits. Details and
 verification prerequisites: [Part 6](docs/parts/06-matching-plan.md).
 
-Shared gateway code is under `internal/model`. Migration 00011 preserves existing
+Shared gateway code is under `internal/model`. Migration 00012 preserves existing
 accounting data while renaming shared gateway objects to `model_*`; administration
 uses `/v1/admin/model-attempts` and `model_operation.changed` events. Text diagnostic
 configuration retains the LLM-specific `LLM_MODEL`/`LLM_ENDPOINT` names.

@@ -90,10 +90,9 @@ type fixture struct {
 	plan uuid.UUID
 }
 
-func setup(t *testing.T) *fixture { return setupVersion(t, 0) }
-func setupVersion(t *testing.T, version int64) *fixture {
+func setup(t *testing.T) *fixture {
 	t.Helper()
-	db := testdb.NewAtVersion(t, version)
+	db := testdb.New(t)
 	ctx := context.Background()
 	u, err := db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "owner"})
 	if err != nil {

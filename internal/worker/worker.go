@@ -142,7 +142,6 @@ type Runtime struct {
 func (r *Runtime) Client(concurrency int) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, r)
-	river.AddWorker(workers, &legacyWorker{runtime: r})
 	if r.AddWorkers != nil {
 		r.AddWorkers(workers)
 	}

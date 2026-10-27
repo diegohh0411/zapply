@@ -409,7 +409,7 @@ point of view.
 - Library content goes only to the configured provider, through the gateway,
   on the member's own allowance. Nothing is shared between tenants.
 
-## Schema (migration `00010_matching.sql`)
+## Schema (migration `00011_matching.sql`)
 
 ```
 decision_answer         user_id · model · state_hash · question_hash
@@ -549,9 +549,9 @@ Part 5 shipped a chat-completions path for its diagnostic only. Matching needs:
 
 ## Open questions
 
-1. **Migration number.** Part 7 is being built at the same time. This spec
-   takes `00010`; part 7 should take the next free number, and whichever merges
-   second renumbers if needed.
+1. **Migration number.** Identity email uses `00010`. Matching uses `00011`,
+   followed by shared model naming at `00012`; subsequent migrations must use
+   the next free number.
 2. **System One details to verify before building:** any documented model
    limits (128 is not assumed), the response's `usage` and `id` fields,
    whether provider routing, `max_price` and generation lookup work for these
