@@ -12,7 +12,7 @@ import { ZardButtonComponent } from '@/shared/components/button';
 import { Api, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { EventsService } from '../core/events.service';
-import { blockMessage, usd, usagePercent } from './format';
+import { blockMessage, usagePercent, usageUsd } from './format';
 
 @Component({
   selector: 'app-usage-page',
@@ -142,7 +142,7 @@ export class UsagePage {
   protected readonly error = signal('');
   protected readonly hasMore = signal(false);
   protected readonly windows = [{ days: 7 }, { days: 30 }];
-  protected readonly money = usd;
+  protected readonly money = usageUsd;
   protected readonly percent = usagePercent;
   protected readonly message = blockMessage;
   private timer: ReturnType<typeof setTimeout> | undefined;
