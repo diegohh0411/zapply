@@ -334,6 +334,10 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if reservation.Reason == "existing_attempt" {
 			return river.JobSnooze(time.Minute)
 		}
+		// The member's other calls hold every slot; wait for one without blocking.
+		if reservation.Reason == "in_flight" {
+			return river.JobSnooze(5 * time.Second)
+		}
 		if reservation.Reason == "operation_not_pending" {
 			return nil
 		}

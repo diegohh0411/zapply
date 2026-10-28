@@ -72,7 +72,9 @@ keeps its reservation and cannot automatically trigger another paid call.
 2. **Worker:** `zapply worker` runs pinned River jobs under `zapply_worker`.
    Creating a diagnostic and enqueueing it share one transaction. Rescued/retried
    jobs reuse persisted state, and a periodic scan recovers abandoned operations.
-   Worker concurrency defaults to four, with one unresolved call per member.
+   Worker concurrency defaults to ten, with up to eight unresolved calls per
+   member. A call over that cap waits a few seconds for a slot instead of
+   blocking; held reservations still count against both allowances.
 3. **Gateway and accounting:** `internal/model` and `internal/model/openrouter`
    quote, reserve, invoke once, settle, and reconcile. The ledger supports
    idempotent settlements and append-only corrections. Ambiguous calls keep their

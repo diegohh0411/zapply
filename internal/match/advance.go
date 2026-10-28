@@ -63,11 +63,12 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 			if e != nil {
 				return e
 			}
+			b := &pgx.Batch{}
 			for _, q := range questions {
-				_, e = tx.Exec(ctx, `INSERT INTO match_run_question(user_id,run_id,stage,subject,state_hash,question_hash,state,question) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`, u, id, r.Stage, q.Subject, q.StateHash, q.QuestionHash, q.State, systemone.Raw(q.Question))
-				if e != nil {
-					return e
-				}
+				b.Queue(`INSERT INTO match_run_question(user_id,run_id,stage,subject,state_hash,question_hash,state,question) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`, u, id, r.Stage, q.Subject, q.StateHash, q.QuestionHash, q.State, systemone.Raw(q.Question))
+			}
+			if e = send(ctx, tx, b); e != nil {
+				return e
 			}
 			// Recover answers paid by another/cancelled run before planning any work.
 			pending := []decide.Pending{}
@@ -87,81 +88,56 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 			if e = rows.Err(); e != nil {
 				return e
 			}
+			cached, e := decide.LookupAll(ctx, tx, u, *r.Model, pending)
+			if e != nil {
+				return e
+			}
 			misses := []decide.Pending{}
-			for _, p := range pending {
-				answer, e := decide.Lookup(ctx, tx, u, *r.Model, p)
-				if e != nil {
-					return e
-				}
-				if answer == nil {
+			b = &pgx.Batch{}
+			for i, p := range pending {
+				if cached[i] == nil {
 					misses = append(misses, p)
 					continue
 				}
-				if _, e = tx.Exec(ctx, `UPDATE match_run_question SET status='cached',answer=$5 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, r.Stage, p.Subject, systemone.Raw(answer)); e != nil {
-					return e
-				}
+				b.Queue(`UPDATE match_run_question SET status='cached',answer=$5 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, r.Stage, p.Subject, systemone.Raw(cached[i]))
 			}
-			var op worker.Operation
-			var raw []byte
-			e = tx.QueryRow(ctx, `SELECT to_jsonb(o) FROM match_run_operation m JOIN model_operation o ON o.user_id=m.user_id AND o.id=m.operation_id WHERE m.user_id=$1 AND m.run_id=$2 AND NOT m.ingested ORDER BY o.created_at LIMIT 1`, u, id).Scan(&raw)
-			if e == nil {
-				if e = json.Unmarshal(raw, &op); e != nil {
-					return e
-				}
-				status := "running"
-				if op.Status == "blocked" || op.Status == "needs_review" {
-					status = op.Status
-				}
-				return s.status(ctx, tx, u, r, status, op.BlockedReason, op.NextEligibleAt)
-			}
-			if !errors.Is(e, pgx.ErrNoRows) {
+			if e = send(ctx, tx, b); e != nil {
 				return e
 			}
 			if len(misses) > 0 {
-				maxBytes, maxQuestions := systemone.RequestBudget, 0
-				var quoteRaw []byte
-				qe := tx.QueryRow(ctx, `SELECT quote FROM platform.model_quote WHERE model=$1`, *r.Model).Scan(&quoteRaw)
-				if qe != nil && !errors.Is(qe, pgx.ErrNoRows) {
-					return qe
+				return s.dispatch(ctx, tx, u, r, misses)
+			}
+			// The round ends only when every request sent for it has been ingested.
+			inflight, e := tx.Query(ctx, `SELECT to_jsonb(o) FROM match_run_operation m JOIN model_operation o ON o.user_id=m.user_id AND o.id=m.operation_id WHERE m.user_id=$1 AND m.run_id=$2 AND NOT m.ingested ORDER BY o.created_at`, u, id)
+			if e != nil {
+				return e
+			}
+			var waiting *worker.Operation
+			for inflight.Next() {
+				var raw []byte
+				var op worker.Operation
+				if e = inflight.Scan(&raw); e == nil {
+					e = json.Unmarshal(raw, &op)
 				}
-				if qe == nil {
-					var q modelapi.Quote
-					if e = json.Unmarshal(quoteRaw, &q); e != nil {
-						return e
-					}
-					if q.Decision && q.MaxRequestBytes > 0 {
-						maxBytes = min(maxBytes, q.MaxRequestBytes)
-						maxQuestions = q.MaxQuestions
-					}
-				}
-				packed, e := decide.Pack(*r.Model, misses, maxBytes, maxQuestions)
 				if e != nil {
-					return s.status(ctx, tx, u, r, "failed", "question_too_large", nil)
-				}
-				p := packed[0]
-				opID := uuid.Must(uuid.NewV7())
-				hash, e := systemone.Hash(p.Request)
-				if e != nil {
+					inflight.Close()
 					return e
 				}
-				if _, e = tx.Exec(ctx, `INSERT INTO model_operation(id,user_id,kind,idempotency_key,request_hash) VALUES($1,$2,'decision',$3,$4)`, opID, u, "match:"+id.String()+":"+opID.String(), hash); e != nil {
-					return e
+				// A request needing review or blocked explains the wait better than a running one.
+				if waiting == nil || waitRank[op.Status] > waitRank[waiting.Status] {
+					waiting = &op
 				}
-				if e = decide.Store(ctx, tx, u, opID, p); e != nil {
-					return e
+			}
+			inflight.Close()
+			if e = inflight.Err(); e != nil {
+				return e
+			}
+			if waiting != nil {
+				status := "running"
+				if waiting.Status == "blocked" || waiting.Status == "needs_review" {
+					status = waiting.Status
 				}
-				if _, e = tx.Exec(ctx, `INSERT INTO match_run_operation(user_id,run_id,operation_id) VALUES($1,$2,$3)`, u, id, opID); e != nil {
-					return e
-				}
-				for key, item := range p.Items {
-					if _, e = tx.Exec(ctx, `UPDATE match_run_question SET operation_id=$5,request_key=$6,tries=tries+1 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, r.Stage, item.Subject, opID, key); e != nil {
-						return e
-					}
-				}
-				if e = s.queue.InsertTx(ctx, tx, worker.Args{UserID: u, OperationID: opID}); e != nil {
-					return e
-				}
-				return s.status(ctx, tx, u, r, "running", "", nil)
+				return s.status(ctx, tx, u, r, status, waiting.BlockedReason, waiting.NextEligibleAt)
 			}
 			if r.Stage == "read" {
 				a, e = answers(ctx, tx, u, id)
@@ -185,6 +161,68 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 		}
 		return nil
 	})
+}
+
+// waitRank orders in-flight request states by how well they explain a wait.
+var waitRank = map[string]int{"blocked": 1, "needs_review": 2}
+
+// send runs queued statements in one round trip and returns the first error.
+func send(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
+	if b.Len() == 0 {
+		return nil
+	}
+	return tx.SendBatch(ctx, b).Close()
+}
+
+// dispatch sends every request of the round at once. Each request is its own
+// operation and worker job, so the worker pool runs them in parallel; the
+// gateway still reserves allowance for each one before it is sent.
+func (s *Service) dispatch(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, misses []decide.Pending) error {
+	maxBytes, maxQuestions := systemone.RequestBudget, 0
+	var quoteRaw []byte
+	e := tx.QueryRow(ctx, `SELECT quote FROM platform.model_quote WHERE model=$1`, *r.Model).Scan(&quoteRaw)
+	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+		return e
+	}
+	if e == nil {
+		var q modelapi.Quote
+		if e = json.Unmarshal(quoteRaw, &q); e != nil {
+			return e
+		}
+		if q.Decision && q.MaxRequestBytes > 0 {
+			maxBytes = min(maxBytes, q.MaxRequestBytes)
+			maxQuestions = q.MaxQuestions
+		}
+	}
+	packed, e := decide.Pack(*r.Model, misses, maxBytes, maxQuestions)
+	if e != nil {
+		return s.status(ctx, tx, u, r, "failed", "question_too_large", nil)
+	}
+	for _, p := range packed {
+		opID := uuid.Must(uuid.NewV7())
+		hash, e := systemone.Hash(p.Request)
+		if e != nil {
+			return e
+		}
+		if _, e = tx.Exec(ctx, `INSERT INTO model_operation(id,user_id,kind,idempotency_key,request_hash) VALUES($1,$2,'decision',$3,$4)`, opID, u, "match:"+r.ID.String()+":"+opID.String(), hash); e != nil {
+			return e
+		}
+		if e = decide.Store(ctx, tx, u, opID, p); e != nil {
+			return e
+		}
+		b := &pgx.Batch{}
+		b.Queue(`INSERT INTO match_run_operation(user_id,run_id,operation_id) VALUES($1,$2,$3)`, u, r.ID, opID)
+		for key, item := range p.Items {
+			b.Queue(`UPDATE match_run_question SET operation_id=$5,request_key=$6,tries=tries+1 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, r.ID, r.Stage, item.Subject, opID, key)
+		}
+		if e = send(ctx, tx, b); e != nil {
+			return e
+		}
+		if e = s.queue.InsertTx(ctx, tx, worker.Args{UserID: u, OperationID: opID}); e != nil {
+			return e
+		}
+	}
+	return s.status(ctx, tx, u, r, "running", "", nil)
 }
 func (s *Service) ingest(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
 	type completed struct {
@@ -237,24 +275,23 @@ func (s *Service) ingest(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error 
 		if e = rows.Err(); e != nil {
 			return e
 		}
+		b := &pgx.Batch{}
 		for _, it := range items {
 			if a, ok := valid[it.key]; ok {
-				_, e = tx.Exec(ctx, `UPDATE match_run_question SET status='answered',answer=$5 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, it.stage, it.subject, systemone.Raw(a))
-			} else {
-				status := "pending"
-				if op.Reason == "request_too_large" {
-					it.tries = max(0, it.tries-1)
-				}
-				if it.tries >= 2 {
-					status = "unanswered"
-				}
-				_, e = tx.Exec(ctx, `UPDATE match_run_question SET status=$5,operation_id=NULL,request_key=NULL,tries=$6 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, it.stage, it.subject, status, it.tries)
+				b.Queue(`UPDATE match_run_question SET status='answered',answer=$5 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, it.stage, it.subject, systemone.Raw(a))
+				continue
 			}
-			if e != nil {
-				return e
+			status := "pending"
+			if op.Reason == "request_too_large" {
+				it.tries = max(0, it.tries-1)
 			}
+			if it.tries >= 2 {
+				status = "unanswered"
+			}
+			b.Queue(`UPDATE match_run_question SET status=$5,operation_id=NULL,request_key=NULL,tries=$6 WHERE user_id=$1 AND run_id=$2 AND stage=$3 AND subject=$4`, u, id, it.stage, it.subject, status, it.tries)
 		}
-		if _, e = tx.Exec(ctx, `UPDATE match_run_operation SET ingested=true WHERE user_id=$1 AND run_id=$2 AND operation_id=$3`, u, id, op.ID); e != nil {
+		b.Queue(`UPDATE match_run_operation SET ingested=true WHERE user_id=$1 AND run_id=$2 AND operation_id=$3`, u, id, op.ID)
+		if e = send(ctx, tx, b); e != nil {
 			return e
 		}
 	}
