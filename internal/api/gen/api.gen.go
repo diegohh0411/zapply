@@ -1138,17 +1138,25 @@ type MatchEstimate struct {
 
 // MatchResult defines model for MatchResult.
 type MatchResult struct {
-	Evidence       []EvidenceMatch `json:"evidence"`
-	Insights       []Insight       `json:"insights"`
-	MustMet        int             `json:"must_met"`
-	MustTotal      int             `json:"must_total"`
-	Partial        bool            `json:"partial"`
-	RelevantYears  float32         `json:"relevant_years"`
-	Requirements   []Coverage      `json:"requirements"`
-	Score          *float32        `json:"score"`
-	ScoringVersion int             `json:"scoring_version"`
-	Selection      []Selection     `json:"selection"`
-	Seniority      string          `json:"seniority"`
+	Evidence []EvidenceMatch `json:"evidence"`
+	Insights []Insight       `json:"insights"`
+
+	// MustMet Historical requirement count; zero for whole-posting matching.
+	MustMet int `json:"must_met"`
+
+	// MustTotal Historical requirement count; zero for whole-posting matching.
+	MustTotal     int     `json:"must_total"`
+	Partial       bool    `json:"partial"`
+	RelevantYears float32 `json:"relevant_years"`
+
+	// Requirements Historical requirement analysis; empty for whole-posting matching.
+	Requirements []Coverage `json:"requirements"`
+
+	// Score Historical coverage score; null for whole-posting matching.
+	Score          *float32    `json:"score"`
+	ScoringVersion int         `json:"scoring_version"`
+	Selection      []Selection `json:"selection"`
+	Seniority      string      `json:"seniority"`
 	Skills         []struct {
 		Name      *string `json:"name,omitempty"`
 		Relevance float32 `json:"relevance"`
@@ -1597,7 +1605,7 @@ type ListMatchRunsParams struct {
 
 // CreateMatchRunParams defines parameters for CreateMatchRun.
 type CreateMatchRunParams struct {
-	// Pipeline Matching pipeline. Defaults to 2; 1 runs the earlier per-pair pipeline for comparison.
+	// Pipeline Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis.
 	Pipeline       *int   `form:"pipeline,omitempty" json:"pipeline,omitempty"`
 	IdempotencyKey string `json:"Idempotency-Key"`
 }

@@ -246,7 +246,7 @@ func (f *fixture) run(t *testing.T, id uuid.UUID) match.Run {
 func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
 	// Two rounds, each with a posting-only state and a posting-plus-library state.
 	c := r.Result.Requirements
@@ -256,7 +256,7 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 	}
 	// Completion hook can be lost: Advance itself ingests terminal operations.
 	f.runtime.OnTerminal = nil
-	r = f.start(t)
+	r = f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
 	if f.p.calls != 4 || r.Cached != r.Total {
 		t.Fatalf("warm run called model: %d %#v", f.p.calls, r)
@@ -292,13 +292,13 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	f := setup(t)
 	f.p.discard = true
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
 	// Both read requests are retried once, then their questions are unanswered.
 	if r.Status != "partial" || r.Score != nil || f.p.calls != 4 {
 		t.Fatalf("discard %#v calls %d", r, f.p.calls)
 	}
-	r = f.start(t)
+	r = f.startPipeline(t, match.PipelineV2)
 	if e := f.s.Cancel(context.Background(), f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -648,7 +648,29 @@ func TestPipelineV1RemainsAvailableForComparison(t *testing.T) {
 	if r.Status != "completed" || r.Pipeline != match.PipelineV1 || r.Result.ScoringVersion != 1 || r.Score == nil || *r.Score != 100 || f.p.calls != 2 {
 		t.Fatalf("v1 run: %#v calls %d", r, f.p.calls)
 	}
-	if _, e := match.New(f.db.Store, nil).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), 3); e == nil {
+	if _, e := match.New(f.db.Store, nil).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), 99); e == nil {
 		t.Fatal("unknown pipeline accepted")
+	}
+}
+
+func TestDefaultWholePostingRunAndWarmCache(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	r := f.run(t, f.start(t).ID)
+	if r.Status != "completed" || r.Pipeline != match.PipelineV3 || r.Result.ScoringVersion != 3 || r.Score != nil || r.MustTotal != 0 || r.Stale || r.Truncated || len(r.Result.Requirements) != 0 || len(r.Result.Selection) != 1 || f.p.calls != 1 {
+		t.Fatalf("whole-posting run: %#v calls %d", r, f.p.calls)
+	}
+	var requirements, scoringQuestions int
+	if err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM match_run_requirement WHERE user_id=$1 AND run_id=$2`, f.u, r.ID).Scan(&requirements); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*) FROM match_run_question WHERE user_id=$1 AND run_id=$2 AND stage='score'`, f.u, r.ID).Scan(&scoringQuestions)
+	}); err != nil || requirements != 0 || scoringQuestions != 0 {
+		t.Fatalf("requirement analysis dispatched: requirements %d score questions %d err %v", requirements, scoringQuestions, err)
+	}
+	r = f.run(t, f.start(t).ID)
+	if f.p.calls != 1 || r.Cached != r.Total {
+		t.Fatalf("warm run missed cache: %#v calls %d", r, f.p.calls)
 	}
 }

@@ -1,5 +1,5 @@
 // Package match reads postings using typed decisions and computes deterministic
-// coverage. It never changes library content.
+// rankings. It never changes library content.
 package match
 
 import (

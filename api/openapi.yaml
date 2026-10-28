@@ -1139,8 +1139,8 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 255 }
         - name: pipeline
           in: query
-          description: Matching pipeline. Defaults to 2; 1 runs the earlier per-pair pipeline for comparison.
-          schema: { type: integer, minimum: 1, maximum: 2 }
+          description: Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis.
+          schema: { type: integer, minimum: 1, maximum: 3 }
       responses:
         '202':
           description: Success.
@@ -2373,14 +2373,14 @@ components:
       type: object
       required: [score, must_met, must_total, partial, seniority, relevant_years, scoring_version, requirements, evidence, selection, suggestions, skills, insights]
       properties:
-        score: { type: number, nullable: true }
-        must_met: { type: integer }
-        must_total: { type: integer }
+        score: { type: number, nullable: true, description: "Historical coverage score; null for whole-posting matching." }
+        must_met: { type: integer, description: "Historical requirement count; zero for whole-posting matching." }
+        must_total: { type: integer, description: "Historical requirement count; zero for whole-posting matching." }
         partial: { type: boolean }
         seniority: { type: string }
         relevant_years: { type: number }
         scoring_version: { type: integer }
-        requirements: { type: array, items: { $ref: '#/components/schemas/Coverage' } }
+        requirements: { type: array, description: 'Historical requirement analysis; empty for whole-posting matching.', items: { $ref: '#/components/schemas/Coverage' } }
         evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceMatch' } }
         selection: { type: array, items: { $ref: '#/components/schemas/Selection' } }
         suggestions: { type: array, items: { $ref: '#/components/schemas/Selection' } }

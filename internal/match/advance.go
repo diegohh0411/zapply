@@ -141,6 +141,9 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 				return s.status(ctx, tx, u, r, status, waiting.BlockedReason, waiting.NextEligibleAt)
 			}
 			if r.Stage == "read" {
+				if r.Pipeline == PipelineV3 {
+					return s.finalize(ctx, tx, u, r, true)
+				}
 				a, e = answers(ctx, tx, u, id)
 				if e != nil {
 					return e

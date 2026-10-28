@@ -8,47 +8,20 @@ import {
   signal,
   DestroyRef,
 } from '@angular/core';
-import { DecimalPipe, DatePipe, NgTemplateOutlet, SlicePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
 import { ZardButtonComponent } from '@/shared/components/button';
 import { MatchStore } from './match.store';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideCheck,
-  lucideChevronDown,
-  lucideCircleHelp,
-  lucideSearch,
-  lucideRefreshCw,
-  lucideMinus,
-} from '@ng-icons/lucide';
-import {
-  coverageGroup,
-  coverageLabel,
-  primaryRequirements,
-  requirementClass,
-  type MatchFilter,
-} from './match-presentation';
+import { lucideChevronDown, lucideSearch, lucideRefreshCw } from '@ng-icons/lucide';
+import { relevanceLabel } from './match-presentation';
 @Component({
   selector: 'app-match-tab',
-  imports: [
-    DecimalPipe,
-    DatePipe,
-    NgTemplateOutlet,
-    SlicePipe,
-    FormsModule,
-    RouterLink,
-    ZardButtonComponent,
-    NgIcon,
-  ],
+  imports: [DecimalPipe, DatePipe, SlicePipe, ZardButtonComponent, NgIcon],
   viewProviders: [
     provideIcons({
-      lucideCheck,
       lucideChevronDown,
-      lucideCircleHelp,
       lucideSearch,
       lucideRefreshCw,
-      lucideMinus,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -67,42 +40,8 @@ export class MatchTab {
   protected readonly result = computed(() =>
     ['completed', 'partial'].includes(this.run()?.status ?? '') ? this.run()?.result : undefined,
   );
-  protected readonly requirements = computed(() =>
-    primaryRequirements(this.result()?.requirements ?? []),
-  );
-  protected readonly context = computed(() =>
-    (this.result()?.requirements ?? []).filter(
-      (req) => !['must', 'preferred', 'duty'].includes(req.class),
-    ),
-  );
-  protected readonly supported = computed(
-    () => this.requirements().filter((req) => coverageGroup(req) === 'supported').length,
-  );
-  protected readonly review = computed(
-    () => this.requirements().filter((req) => coverageGroup(req) === 'review').length,
-  );
-  protected readonly gaps = computed(
-    () => this.requirements().filter((req) => coverageGroup(req) === 'gap').length,
-  );
-  protected readonly filter = signal<MatchFilter>('attention');
-  protected readonly limit = signal(6);
-  protected readonly filtered = computed(() =>
-    this.requirements().filter(
-      (req) =>
-        this.filter() === 'all' ||
-        (this.filter() === 'supported'
-          ? coverageGroup(req) === 'supported'
-          : ['gap', 'review'].includes(coverageGroup(req))),
-    ),
-  );
-  protected readonly coverageGroup = coverageGroup;
-  protected readonly coverageLabel = coverageLabel;
-  protected readonly requirementClass = requirementClass;
-  protected readonly filters = ['attention', 'supported', 'all'] as const;
-  protected setFilter(filter: MatchFilter): void {
-    this.filter.set(filter);
-    this.limit.set(6);
-  }
+  protected readonly wholePosting = computed(() => (this.result()?.scoring_version ?? 0) >= 3);
+  protected readonly relevanceLabel = relevanceLabel;
   protected readonly statusLabel = computed(
     () =>
       (
@@ -120,11 +59,6 @@ export class MatchTab {
       )[this.run()?.status ?? ''] ?? 'Match unavailable',
   );
   constructor() {
-    effect(() => {
-      this.jobId();
-      this.filter.set('attention');
-      this.limit.set(6);
-    });
     effect((onCleanup) => {
       const id = this.jobId();
       this.store.watch(id);
@@ -132,14 +66,13 @@ export class MatchTab {
     });
     inject(DestroyRef).onDestroy(() => this.store.unwatch(this.jobId()));
   }
-  protected async action(kind: string, hash = '', value = ''): Promise<void> {
+  protected async action(kind: 'start' | 'cancel'): Promise<void> {
     const id = this.jobId();
     this.busy.set(true);
     this.error.set('');
     try {
       if (kind === 'start') await this.store.start(id);
-      else if (kind === 'cancel') await this.store.cancel(id, this.run()!.id);
-      else await this.store.correct(id, hash, value);
+      else await this.store.cancel(id, this.run()!.id);
     } catch (e) {
       if (id === this.jobId()) this.error.set((e as Error).message);
     } finally {
