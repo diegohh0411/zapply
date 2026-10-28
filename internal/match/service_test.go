@@ -422,7 +422,7 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 	// Settled attempts calibrate the model: the fake bills 10 input tokens.
 	var raw []byte
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT platform.decision_calibration('test/decision')`).Scan(&raw)
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
 	}); e != nil {
 		t.Fatal(e)
 	}
@@ -440,12 +440,25 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT platform.decision_calibration('test/decision')`).Scan(&raw)
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
 	}); e != nil {
 		t.Fatal(e)
 	}
 	if corrected := modelapi.CalibrationOf(raw); corrected.Samples != calibration.Samples {
 		t.Fatalf("corrected settlement dropped from calibration: %s", raw)
+	}
+	// Chat usage names its tokens prompt_tokens/completion_tokens.
+	if _, e = admin.Exec(ctx, `UPDATE platform.model_usage SET usage='{"prompt_tokens":10,"completion_tokens":3}'
+		WHERE attempt_id IN (SELECT id FROM platform.model_attempt WHERE model='test/decision' AND state='settled')`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if chat := modelapi.CalibrationOf(raw); chat.Samples != calibration.Samples || chat.OutputPerQ <= 0 {
+		t.Fatalf("chat usage not calibrated: %s", raw)
 	}
 	old := f.start(t)
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {

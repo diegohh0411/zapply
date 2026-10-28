@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
@@ -44,7 +45,7 @@ func QuoteDecision(ctx context.Context, p DecisionProvider, r systemone.Request,
 	return quote, nil
 }
 
-// CalibrationOf reads platform.decision_calibration's JSON. A missing or
+// CalibrationOf reads platform.model_calibration's JSON. A missing or
 // malformed summary falls back to the sheet's prior.
 func CalibrationOf(raw []byte) billing.Calibration {
 	var c billing.Calibration
@@ -52,4 +53,46 @@ func CalibrationOf(raw []byte) billing.Calibration {
 		return billing.Calibration{}
 	}
 	return c
+}
+
+// ChatPricer describes a chat-completion endpoint's billing. Any provider that
+// implements it gets the same prediction decisions use.
+type ChatPricer interface {
+	ChatSheet(ctx context.Context, model, endpoint string) (billing.Sheet, error)
+}
+
+// ChatRequest is what QuoteChat needs to know about a chat call before it is
+// sent. Messages is measured as JSON; MaxOutput is the max_tokens the call
+// will send, which the reservation holds in full.
+type ChatRequest struct {
+	Model, Endpoint string
+	Messages        any
+	MaxOutput       int
+}
+
+// QuoteChat prices one chat call. The quote's rate strings feed the provider's
+// per-request price ceiling, so routing cannot pick a pricier upstream.
+func QuoteChat(ctx context.Context, p ChatPricer, r ChatRequest, c billing.Calibration) (Quote, error) {
+	if r.Model == "" || r.Endpoint == "" {
+		return Quote{}, &ProviderError{Code: "model_not_configured", Uncharged: true}
+	}
+	if r.MaxOutput <= 0 {
+		return Quote{}, errors.New("chat quote needs max_tokens")
+	}
+	sheet, e := p.ChatSheet(ctx, r.Model, r.Endpoint)
+	if e != nil {
+		return Quote{}, e
+	}
+	raw, e := json.Marshal(r.Messages)
+	if e != nil {
+		return Quote{}, e
+	}
+	shape := billing.Shape{RequestBytes: len(raw), Questions: 1, MaxOutput: r.MaxOutput}
+	prediction, e := billing.Predict(sheet, shape, c)
+	if e != nil {
+		return Quote{}, e
+	}
+	return Quote{Model: r.Model, Endpoint: r.Endpoint, InputRate: USD(sheet.InputRate), OutputRate: USD(sheet.OutputRate), RequestRate: USD(sheet.RequestRate),
+		MaxInput: sheet.Context, MaxOutput: min(sheet.MaxOutput, r.MaxOutput), Reserved: prediction.Reserved, FetchedAt: sheet.FetchedAt,
+		Sheet: &sheet, Shape: &shape, Calibration: &c, Prediction: &prediction}, nil
 }

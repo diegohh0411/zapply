@@ -13,11 +13,11 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -99,21 +99,25 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 	return b, nil
 }
 
-func (c *Client) Quote(ctx context.Context) (modelapi.Quote, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.Model == "" || c.Endpoint == "" {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_not_configured", Uncharged: true}
+// diagnosticMessages is the whole diagnostic chat call.
+var diagnosticMessages = []map[string]string{{"role": "user", "content": DiagnosticPrompt}}
+
+// chatPrior assumes one token per byte, safe for any tokenizer, plus message
+// template overhead, until settlements calibrate a model.
+var chatPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 64, OutputPerQ: 256}
+
+var modelID = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$`)
+
+// ChatSheet describes one provider endpoint of a chat model. Only endpoints
+// that honour max_tokens qualify: it caps output, reasoning included, so
+// output can be priced and reserved at the cap.
+func (c *Client) ChatSheet(ctx context.Context, model, endpoint string) (billing.Sheet, error) {
+	if !modelID.MatchString(model) {
+		return billing.Sheet{}, errors.New("invalid model identifier")
 	}
-	if time.Since(c.cached.FetchedAt) < 15*time.Minute {
-		return c.cached, nil
-	}
-	if !regexp.MustCompile(`^[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$`).MatchString(c.Model) {
-		return modelapi.Quote{}, errors.New("invalid model identifier")
-	}
-	raw, err := c.request(ctx, "GET", "/models/"+c.Model+"/endpoints", "", nil)
+	raw, err := c.request(ctx, "GET", "/models/"+model+"/endpoints", "", nil)
 	if err != nil {
-		return modelapi.Quote{}, err
+		return billing.Sheet{}, err
 	}
 	var metadata struct {
 		Data struct {
@@ -127,63 +131,44 @@ func (c *Client) Quote(ctx context.Context) (modelapi.Quote, error) {
 		} `json:"data"`
 	}
 	if json.Unmarshal(raw, &metadata) != nil {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "invalid_pricing", Uncharged: true}
+		return billing.Sheet{}, &modelapi.ProviderError{Code: "invalid_pricing", Uncharged: true}
 	}
 	for _, e := range metadata.Data.Endpoints {
-		if e.Tag != c.Endpoint {
+		if e.Tag != endpoint || e.Context <= 0 || !slices.Contains(e.Supported, "max_tokens") {
 			continue
 		}
-		if e.Context <= 0 || !slices.Contains(e.Supported, "max_tokens") {
-			continue
-		}
-		rate := func(name string) string {
-			b := e.Pricing[name]
-			if len(b) == 0 {
-				return "0"
-			}
-			return strings.Trim(string(b), `"`)
-		}
-		if len(e.Pricing["prompt"]) == 0 || len(e.Pricing["completion"]) == 0 {
-			continue
-		}
-		in, out, request := rate("prompt"), rate("completion"), rate("request")
-		reasoning, ok := new(big.Rat).SetString(rate("internal_reasoning"))
-		completion, ok2 := new(big.Rat).SetString(out)
-		if !ok || !ok2 {
-			return modelapi.Quote{}, errors.New("invalid reasoning pricing")
-		}
-		if reasoning.Cmp(completion) > 0 {
-			out = rate("internal_reasoning")
-		}
-		// Cache writes must never exceed the input rate used in the reservation.
-		for _, field := range []string{"input_cache_read", "input_cache_write"} {
-			a, ok := new(big.Rat).SetString(rate(field))
-			b, ok2 := new(big.Rat).SetString(in)
-			if !ok || !ok2 {
-				return modelapi.Quote{}, errors.New("invalid cache pricing")
-			}
-			if a.Cmp(b) > 0 {
-				in = rate(field)
-			}
-		}
-		maxOutput := 128
-		if e.MaxOutput != nil && *e.MaxOutput < maxOutput {
-			maxOutput = *e.MaxOutput
+		maxOutput := e.Context
+		if e.MaxOutput != nil {
+			maxOutput = min(maxOutput, *e.MaxOutput)
 		}
 		if maxOutput < 1 {
 			continue
 		}
-		// Reserve for the entire advertised context until model-specific tokenizers
-		// are introduced. This is conservative, including hidden message overhead.
-		cost, err := modelapi.QuoteCost(in, out, request, e.Context, maxOutput)
-		if err != nil {
-			return modelapi.Quote{}, err
+		s := billing.Sheet{Provider: "openrouter", Model: model, Context: e.Context, MaxOutput: maxOutput, OutputEnforced: true,
+			Prior: chatPrior, FetchedAt: time.Now().UTC()}
+		if reason := price(&s, e.Pricing); reason != "" {
+			return billing.Sheet{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
 		}
-		c.cached = modelapi.Quote{Model: c.Model, Endpoint: c.Endpoint, InputRate: in, OutputRate: out, RequestRate: request,
-			MaxInput: e.Context, MaxOutput: maxOutput, Reserved: cost, FetchedAt: time.Now().UTC()}
+		return s, nil
+	}
+	return billing.Sheet{}, &modelapi.ProviderError{Code: "model_endpoint_unavailable", Uncharged: true}
+}
+
+func (c *Client) Quote(ctx context.Context) (modelapi.Quote, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.Model == "" || c.Endpoint == "" {
+		return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_not_configured", Uncharged: true}
+	}
+	if time.Since(c.cached.FetchedAt) < 15*time.Minute {
 		return c.cached, nil
 	}
-	return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_endpoint_unavailable", Uncharged: true}
+	q, err := modelapi.QuoteChat(ctx, c, modelapi.ChatRequest{Model: c.Model, Endpoint: c.Endpoint, Messages: diagnosticMessages, MaxOutput: 128}, billing.Calibration{})
+	if err != nil {
+		return modelapi.Quote{}, err
+	}
+	c.cached = q
+	return q, nil
 }
 
 func million(s string) json.Number {
@@ -196,7 +181,7 @@ func (c *Client) Generate(ctx context.Context, key string, q modelapi.Quote) (mo
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "stale_quote", Uncharged: true}
 	}
 	raw, err := c.request(ctx, "POST", "/chat/completions", key, map[string]any{
-		"model": q.Model, "messages": []map[string]string{{"role": "user", "content": DiagnosticPrompt}}, "stream": false, "max_tokens": q.MaxOutput,
+		"model": q.Model, "messages": diagnosticMessages, "stream": false, "max_tokens": q.MaxOutput,
 		"provider": map[string]any{"only": []string{q.Endpoint}, "allow_fallbacks": false, "require_parameters": true,
 			"max_price": map[string]any{"prompt": million(q.InputRate), "completion": million(q.OutputRate), "request": json.Number(q.RequestRate)}},
 	})

@@ -679,7 +679,7 @@ func (s *Service) Estimate(ctx context.Context, u, job uuid.UUID) (Estimate, err
 			return nil
 		}
 		var calibration []byte
-		if e = tx.QueryRow(ctx, `SELECT platform.decision_calibration($1)`, *model).Scan(&calibration); e != nil {
+		if e = tx.QueryRow(ctx, `SELECT platform.model_calibration($1)`, *model).Scan(&calibration); e != nil {
 			return e
 		}
 		p := pipelineFor(DefaultPipeline)

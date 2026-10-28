@@ -143,8 +143,8 @@ estimate for free. If a provider ever bills in a way a sheet cannot express
 `DecisionSheet` with a reason rather than bending the shared math. Adding an
 optional `Predictor` override is possible later but not needed now.
 
-The diagnostic `Quote`/`Generate` path is out of scope and keeps its own
-full-context reservation.
+Chat LLMs use the same sheet and prediction; see
+[Chat LLMs](#chat-llms) below.
 
 ### OpenRouter sheet
 
@@ -209,7 +209,7 @@ Everything needed is already stored:
 - `platform.model_usage.usage` holds the provider's settled usage
   (`input_tokens`, `output_tokens`, `cost`).
 
-Migration `00015_billing_calibration.sql` adds:
+Migration `00015_model_calibration.sql` adds:
 
 ```sql
 -- One row per settled decision attempt with both shape and usage.
@@ -224,7 +224,7 @@ SELECT a.model, a.dispatched_at,
 FROM platform.llm_attempt a JOIN platform.model_usage u ON u.attempt_id = a.id
 WHERE a.quote ? 'shape' AND u.amount > 0;
 
-CREATE FUNCTION platform.decision_calibration(p_model text) RETURNS jsonb ...
+CREATE FUNCTION platform.model_calibration(p_model text) RETURNS jsonb ...
 -- Last 200 settlements for the model within 30 days: p95 tokens per KB,
 -- p95 output per question, p95 amount/expected, sample count, and whether any
 -- settlement after the latest 20 exceeded its reservation.
@@ -234,7 +234,7 @@ Settlements are cross-tenant, so the function is `SECURITY DEFINER` and only
 returns aggregates. The token keys live in `DecisionUsage` so a provider with
 different field names maps them once.
 
-The worker calls `platform.decision_calibration` in the same transaction that
+The worker calls `platform.model_calibration` in the same transaction that
 reads the attempt history, then passes it to `QuoteDecision`. `Estimate` does
 the same and calls `billing.Predict` per packed request with the stored sheet,
 replacing the inline loop in `service.go`.
@@ -271,7 +271,7 @@ Prediction can be wrong, so the existing safety nets stay and get one more:
    decision side of `Quote` once nothing reads them; `BillingBound` folds
    into the sheet.
 4. **Calibration migration and worker wiring.** Migration 00015, the
-   `decision_calibration` query, and passing it into the quote. sqlc regen.
+   `model_calibration` query, and passing it into the quote. sqlc regen.
 5. **`match-estimate`.** Replace the inline loop with `billing.Predict` per
    packed request; same calibration call.
 6. **Replay test.** Record real d1 settlements (shape + usage + cost) as a
@@ -293,15 +293,70 @@ over-reservation by about 5× on d1. Steps 4–6 add the learned margin.
 - **Unpinned upstream pricing** is accepted. The cost ratio and the ceiling
   fallback correct it after the fact.
 
+## Chat LLMs
+
+OpenRouter chat models, for new features, share the sheet and prediction.
+The one difference from decision models is output, and it follows the pattern
+LLM gateways use (LiteLLM, OpenRouter's own budget holds): reserve output at
+the `max_tokens` the call sends, because the provider enforces it.
+
+- **`Sheet.OutputEnforced`.** True when the endpoint stops billing output at
+  a cap. `Predict` refuses a positive `OutputRate` without it
+  (`billing.ErrUnboundedOutput`). Chat sheets set it; decision sheets don't,
+  so positive output pricing still makes a decision model incompatible.
+- **Output is reserved at the cap.** `Shape.MaxOutput` is the call's
+  `max_tokens`, bounded by the endpoint's `max_completion_tokens`. Input is
+  predicted with the margin; output is held in full, since `max_tokens`
+  bounds it exactly; fees are exact. Expected output (for the estimate and the
+  cost ratio) is the prior or calibrated tokens per call.
+- **Reasoning.** OpenRouter bills reasoning as output and counts it toward
+  `max_tokens`, so `internal_reasoning` is an output component and the output
+  rate is the higher of it and `completion`.
+- **`model.ChatPricer` / `model.QuoteChat`.** A provider implements
+  `ChatSheet(ctx, model, endpoint)`; `QuoteChat` measures the messages, calls
+  `Predict`, and returns rate strings for OpenRouter's `max_price`, which
+  stops routing to a pricier upstream. `openrouter.ChatSheet` only accepts
+  endpoints whose `supported_parameters` include `max_tokens`. The diagnostic
+  `Quote` now goes through it.
+- **One component table.** `openrouter/pricing.go` classifies pricing keys for
+  both endpoint kinds. Audio and image components are unused because calls
+  are text only; a multimodal feature must price them before sending media.
+- **Calibration.** `platform.model_calibration` reads `prompt_tokens` and
+  `completion_tokens` as well as `input_tokens` and `output_tokens`. A new chat
+  feature passes the model's calibration to `QuoteChat`; the diagnostic uses
+  the prior.
+
+### Tokenizers
+
+No tokenizer dependency for now. OpenRouter serves many model families with
+different tokenizers, and it has no pre-request token-count endpoint. Go
+options checked on 2026-10-27:
+
+| Library | Covers | Notes |
+| --- | --- | --- |
+| [`tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) | OpenAI encodings | pure Go, vocabularies embedded; v0.10.0 released 2026-10-21 |
+| [`pkoukk/tiktoken-go`](https://github.com/pkoukk/tiktoken-go) | OpenAI encodings | pure Go, most used; last release v0.1.8 (2025-09) |
+| [`daulet/tokenizers`](https://github.com/daulet/tokenizers) | any Hugging Face `tokenizer.json` | cgo bindings to the Rust library; v1.27.0 (2026-03) |
+| [`sugarme/tokenizer`](https://github.com/sugarme/tokenizer) | Hugging Face formats | pure Go; last release v0.3.0 (2025-09) |
+
+A tokenizer is exact only for its own model family. A Claude, Gemini or Liquid
+model needs its own tokenizer files, or a provider count endpoint such as
+Anthropic's `count_tokens`. The calibrated tokens-per-KB ratio learns each
+model's real rate from OpenRouter's native-tokenizer usage, which covers every
+model. If exact counts are needed later, add an optional counter interface:
+when a provider implements it, `Shape` carries the exact input count and the
+prior is skipped. `tiktoken-go/tokenizer` is the first choice for OpenAI
+models.
+
 ## Implementation record
 
 Implemented in `internal/model/billing`, `internal/model/decision.go`,
 `internal/model/openrouter/decisions.go`, migration
-`00015_billing_calibration.sql`, the worker quote path and `match.Estimate`.
+`00015_model_calibration.sql`, the worker quote path and `match.Estimate`.
 
 Differences from the design above:
 
-- **No `DecisionUsage`.** `platform.decision_calibration` reads `input_tokens`
+- **No `DecisionUsage`.** `platform.model_calibration` reads `input_tokens`
   and `output_tokens` from settled usage directly; OpenRouter's System One
   usage already uses those names. A provider with different keys adds the
   mapping when it arrives.
@@ -312,8 +367,10 @@ Differences from the design above:
   added on top, so small requests stay covered.
 - **The quote stores its calibration**, so `Decide` revalidates against fresh
   catalogue prices with the same calibration the reservation used.
-- **`model.QuoteCost` stays** for the diagnostic chat path, which keeps its
-  full-context reservation.
+- **`model.QuoteCost` is gone**: the diagnostic chat path now uses
+  `QuoteChat`, so nothing called it.
+- **The calibration function is `platform.model_calibration`**, not
+  `decision_calibration`, and reads chat usage keys too.
 - **Request bytes** are the JSON-marshalled request, the same measure as the
   request-size limit.
 - **Positive output pricing is incompatible** (from the independent review).
@@ -335,6 +392,6 @@ once calibrated; 1.35× in practice). `internal/model/openrouter` has the #20
 fixtures: cache read pricier than prompt, missing prompt, audio components
 accepted, and `completion`, `internal_reasoning`, `web_search`, unknown and
 unparsable components rejected. `internal/match` checks that settled attempts
-feed `platform.decision_calibration`, including one corrected after a
+feed `platform.model_calibration`, including one corrected after a
 settlement that lacked token counts. Only one recorded live settlement exists
 so far; the replay fixture should grow as more are collected.

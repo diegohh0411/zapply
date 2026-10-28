@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -30,28 +29,6 @@ var ownerSelectedBound = BillingBound{MaxRequestBytes: systemone.RequestBudget}
 // tokens) and the request fee once per question. The priors assume one token
 // per byte, about 5× the observed rate, until settlements calibrate a model.
 var decisionPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 1024, OutputPerQ: 16}
-
-// componentRoles classifies the catalogue's pricing keys. The input rate is the
-// highest of its components. Decision calls send text and return JSON, so audio
-// and image charges never apply. Output is unbounded: System One takes no
-// output-token limit, and answers are only size-checked after they are billed,
-// so a positive output rate makes the model incompatible. Any other positive
-// component, web_search included, is a charge the reservation cannot bound.
-var componentRoles = map[string]string{
-	"prompt":             billing.RoleInput,
-	"input_cache_read":   billing.RoleInput,
-	"input_cache_write":  billing.RoleInput,
-	"completion":         billing.RoleOutput,
-	"internal_reasoning": billing.RoleOutput,
-	"request":            billing.RoleRequest,
-	"audio":              billing.RoleUnused,
-	"input_audio":        billing.RoleUnused,
-	"input_audio_cache":  billing.RoleUnused,
-	"output_audio":       billing.RoleUnused,
-	"image":              billing.RoleUnused,
-	"image_output":       billing.RoleUnused,
-	"discount":           billing.RoleDiscount,
-}
 
 type DecisionModel struct {
 	FetchedAt    time.Time                  `json:"-"`
@@ -130,33 +107,10 @@ func (c *Client) sheet(m DecisionModel) (billing.Sheet, string) {
 	s := billing.Sheet{Provider: "openrouter", Model: m.ID, RequestPerQuestion: true, Context: m.Context,
 		MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget),
 		MaxQuestions:    b.MaxQuestions, Prior: decisionPrior, FetchedAt: m.FetchedAt, Components: []billing.Component{}}
-	names := slices.Sorted(maps.Keys(m.Pricing))
-	for _, name := range names {
-		value := strings.Trim(string(m.Pricing[name]), `"`)
-		role, known := componentRoles[name]
-		if role == billing.RoleDiscount {
-			// A discount never lowers a rate the reservation relies on.
-			s.Components = append(s.Components, billing.Component{Name: name, Rate: value, Role: role})
-			continue
-		}
-		rate, e := modelapi.ParseUSD(value)
-		if e != nil {
-			return billing.Sheet{}, "invalid_pricing_" + name
-		}
-		if rate == 0 {
-			role = billing.RoleZero
-		} else if !known {
-			return billing.Sheet{}, "unbounded_pricing_" + name
-		}
-		switch role {
-		case billing.RoleInput:
-			s.InputRate = max(s.InputRate, rate)
-		case billing.RoleOutput:
-			return billing.Sheet{}, "unbounded_pricing_" + name
-		case billing.RoleRequest:
-			s.RequestRate = rate
-		}
-		s.Components = append(s.Components, billing.Component{Name: name, Rate: value, Role: role})
+	// System One takes no output-token limit, and answers are only
+	// size-checked after they are billed, so output cannot be bounded.
+	if reason := price(&s, m.Pricing); reason != "" {
+		return billing.Sheet{}, reason
 	}
 	return s, ""
 }

@@ -159,10 +159,10 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
   registry starts empty pending the part 6 live verification. Decision IDs use
   automatic accounting lookup only when the adapter confirms support; otherwise
   uncertain reservations remain for owner reconciliation.
-- Diagnostic reservations conservatively cover the selected endpoint's full
-  context plus bounded output. Decision reservations predict cost from request
-  size, calibrated per model from settlements, and never exceed the full-context
-  bound. A request can still pause when its actual charge would fit.
+- Reservations predict input cost from request size, calibrated per model from
+  settlements, and never exceed the full-context bound. Chat calls also hold
+  output at their `max_tokens`. A request can still pause when its actual
+  charge would fit.
   Quotes expire after 15 minutes; routing is restricted by endpoint and prices.
 - Paused work is rechecked at least once per minute (provider backoff can be
   longer). Usage expiry is a hint, not a promise that a particular request fits.

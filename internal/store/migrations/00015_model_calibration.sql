@@ -1,11 +1,13 @@
--- Decision reservations predict cost from request size. This summarises how a
--- model's recent settlements compared with their quotes so the prediction
--- learns per model. Settlements are cross-tenant; only aggregates leave here.
--- Attempts quoted before shapes were recorded cannot calibrate and are skipped.
+-- Reservations predict cost from request size. This summarises how a model's
+-- recent settlements compared with their quotes so the prediction learns per
+-- model. Settlements are cross-tenant; only aggregates leave here. Attempts
+-- quoted before shapes were recorded cannot calibrate and are skipped. Decision
+-- usage reports input_tokens/output_tokens; chat usage reports
+-- prompt_tokens/completion_tokens.
 -- +goose Up
 -- +goose StatementBegin
 SET LOCAL ROLE zapply_platform;
-CREATE FUNCTION platform.decision_calibration(p_model text) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER
+CREATE FUNCTION platform.model_calibration(p_model text) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, platform, pg_temp AS $$
  WITH recent AS (
   SELECT a.dispatched_at,a.reserved,
@@ -15,14 +17,15 @@ SET search_path = pg_catalog, platform, pg_temp AS $$
    sum(u.amount) AS amount,
    -- Corrections append deltas with a fresh payload: sum the money, and read
    -- tokens from the latest payload that reports them.
-   (array_agg(u.usage ORDER BY u.id DESC) FILTER (WHERE jsonb_typeof(u.usage->'input_tokens')='number'))[1] AS usage
+   (array_agg(u.usage ORDER BY u.id DESC) FILTER (WHERE jsonb_typeof(COALESCE(u.usage->'input_tokens',u.usage->'prompt_tokens'))='number'))[1] AS usage
   FROM platform.model_attempt a JOIN platform.model_usage u ON u.attempt_id=a.id
   WHERE a.model=p_model AND a.state='settled' AND jsonb_typeof(a.quote->'shape')='object'
    AND a.dispatched_at>now()-interval '30 days'
   GROUP BY a.id ORDER BY a.dispatched_at DESC LIMIT 200
  ), samples AS (
-  SELECT bytes,questions,expected,amount,(usage->>'input_tokens')::numeric AS input,
-   CASE WHEN jsonb_typeof(usage->'output_tokens')='number' THEN (usage->>'output_tokens')::numeric END AS output
+  SELECT bytes,questions,expected,amount,COALESCE(usage->'input_tokens',usage->'prompt_tokens')::text::numeric AS input,
+   CASE WHEN jsonb_typeof(COALESCE(usage->'output_tokens',usage->'completion_tokens'))='number'
+    THEN COALESCE(usage->'output_tokens',usage->'completion_tokens')::text::numeric END AS output
   FROM recent
   WHERE bytes>0 AND questions>0 AND expected>0 AND amount>0 AND usage IS NOT NULL
  )
@@ -34,12 +37,12 @@ SET search_path = pg_catalog, platform, pg_temp AS $$
   -- Any overrun among the latest 20 settlements forces the context ceiling.
   'exceeded',(SELECT COALESCE(bool_or(amount>reserved),false) FROM (SELECT amount,reserved FROM recent ORDER BY dispatched_at DESC LIMIT 20) latest))
 $$;
-REVOKE EXECUTE ON FUNCTION platform.decision_calibration(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION platform.decision_calibration(text) TO zapply_app,zapply_worker;
+REVOKE EXECUTE ON FUNCTION platform.model_calibration(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.model_calibration(text) TO zapply_app,zapply_worker;
 RESET ROLE;
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-DROP FUNCTION platform.decision_calibration(text);
+DROP FUNCTION platform.model_calibration(text);
 -- +goose StatementEnd

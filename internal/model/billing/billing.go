@@ -4,6 +4,11 @@
 // the limits that bound a call. Predict turns a request's Shape into tokens and
 // tokens into picodollars, widened by a margin learned from recent settlements.
 // The prediction never exceeds the ceiling the sheet's limits imply.
+//
+// The same sheet describes chat LLMs and decision models. The difference is
+// output: a chat endpoint enforces max_tokens (reasoning included), so output
+// is reserved at that cap; a decision endpoint takes no output limit, so its
+// sheet must not price output at all.
 package billing
 
 import (
@@ -29,6 +34,11 @@ type Sheet struct {
 
 	Context   int `json:"context"`    // billable input tokens per evaluation, at most
 	MaxOutput int `json:"max_output"` // billable output tokens per call, at most
+
+	// OutputEnforced means the provider stops billing output at MaxOutput (or
+	// at the call's own max_tokens). Without it a positive OutputRate cannot
+	// be bounded and Predict refuses the sheet.
+	OutputEnforced bool `json:"output_enforced,omitempty"`
 
 	MaxRequestBytes int `json:"max_request_bytes"`
 	MaxQuestions    int `json:"max_questions,omitempty"` // zero means no count limit
@@ -62,10 +72,12 @@ type Component struct {
 	Role string `json:"role"`
 }
 
-// Shape is what is known about a call before it is sent.
+// Shape is what is known about a call before it is sent. A chat call is one
+// question.
 type Shape struct {
 	RequestBytes int `json:"request_bytes"`
 	Questions    int `json:"questions"`
+	MaxOutput    int `json:"max_output,omitempty"` // the call's max_tokens; zero means the sheet's
 }
 
 // Calibration summarises recent settlements for one model.
@@ -103,15 +115,26 @@ type Prediction struct {
 	Basis        string `json:"basis"`
 }
 
-var errOverflow = errors.New("quote overflow")
+var (
+	errOverflow        = errors.New("quote overflow")
+	ErrUnboundedOutput = errors.New("output is priced but not capped")
+)
 
-// Predict sizes a reservation for one call. Request fees are exact and skip the
-// margin; token charges get it. The result is never above the ceiling, never
-// below the expected cost, and positive whenever any rate is.
+// Predict sizes a reservation for one call. Input is predicted and gets the
+// margin; output is reserved at the enforced cap, as max_tokens bounds it
+// exactly; request fees are exact. The result is never above the ceiling,
+// never below the expected cost, and positive whenever any rate is.
 func Predict(s Sheet, shape Shape, c Calibration) (Prediction, error) {
-	if s.Context <= 0 || s.MaxOutput < 0 || shape.RequestBytes < 0 || shape.Questions <= 0 ||
+	if s.Context <= 0 || s.MaxOutput < 0 || shape.RequestBytes < 0 || shape.Questions <= 0 || shape.MaxOutput < 0 ||
 		s.InputRate < 0 || s.OutputRate < 0 || s.RequestRate < 0 {
 		return Prediction{}, errors.New("invalid quote")
+	}
+	if s.OutputRate > 0 && !s.OutputEnforced {
+		return Prediction{}, ErrUnboundedOutput
+	}
+	outputCap := s.MaxOutput
+	if shape.MaxOutput > 0 {
+		outputCap = min(outputCap, shape.MaxOutput)
 	}
 	t := s.Prior
 	basis := BasisPrior
@@ -133,23 +156,27 @@ func Predict(s Sheet, shape Shape, c Calibration) (Prediction, error) {
 	input = ceilDiv(input, big.NewInt(1000))
 	input.Add(input, big.NewInt(int64(t.OverheadTokens)))
 	input = minInt(input, big.NewInt(int64(s.Context)))
-	output := minInt(new(big.Int).Mul(big.NewInt(int64(t.OutputPerQ)), big.NewInt(int64(shape.Questions))), big.NewInt(int64(s.MaxOutput)))
+	capTokens := big.NewInt(int64(outputCap))
+	output := minInt(new(big.Int).Mul(big.NewInt(int64(t.OutputPerQ)), big.NewInt(int64(shape.Questions))), capTokens)
 
 	fee := new(big.Int).Mul(big.NewInt(s.RequestRate), big.NewInt(fees))
-	tokens := func(in, out *big.Int) *big.Int {
+	inputCost := func(in *big.Int) *big.Int {
 		n := new(big.Int).Mul(in, big.NewInt(s.InputRate))
-		n.Mul(n, big.NewInt(evals))
-		return n.Add(n, new(big.Int).Mul(out, big.NewInt(s.OutputRate)))
+		return n.Mul(n, big.NewInt(evals))
 	}
-	variable := tokens(input, output)
-	expected := new(big.Int).Add(variable, fee)
-	ceiling := new(big.Int).Add(tokens(big.NewInt(int64(s.Context)), big.NewInt(int64(s.MaxOutput))), fee)
+	outputCost := func(out *big.Int) *big.Int { return new(big.Int).Mul(out, big.NewInt(s.OutputRate)) }
+	expected := new(big.Int).Add(inputCost(input), outputCost(output))
+	expected.Add(expected, fee)
+	outputCeiling := outputCost(capTokens)
+	ceiling := new(big.Int).Add(inputCost(big.NewInt(int64(s.Context))), outputCeiling)
+	ceiling.Add(ceiling, fee)
 
 	margin := int64(minMarginPermil)
 	if c.Samples >= MinSamples {
 		margin = max(margin, int64(c.CostPermil)*ratioMarginPermil/1000)
 	}
-	reserved := ceilDiv(new(big.Int).Mul(variable, big.NewInt(margin)), big.NewInt(1000))
+	reserved := ceilDiv(new(big.Int).Mul(inputCost(input), big.NewInt(margin)), big.NewInt(1000))
+	reserved.Add(reserved, outputCeiling)
 	reserved.Add(reserved, fee)
 	// An overrun, or a prediction that prices a paid call at nothing, falls
 	// back to the ceiling.

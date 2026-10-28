@@ -216,7 +216,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				return err
 			}
 			decision = &req
-			if err := tx.QueryRow(ctx, "SELECT platform.decision_calibration($1)", req.Model).Scan(&calibration); err != nil {
+			if err := tx.QueryRow(ctx, "SELECT platform.model_calibration($1)", req.Model).Scan(&calibration); err != nil {
 				return err
 			}
 		}

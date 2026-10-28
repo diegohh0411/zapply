@@ -11,6 +11,7 @@ import (
 	"time"
 
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 )
 
 const catalog = `{"data":{"endpoints":[{"tag":"test","context_length":1000,"max_completion_tokens":1024,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","completion":"0.0000016","request":"0"}}]}}`
@@ -59,9 +60,12 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := modelapi.ParseUSD("0.0006048")
-	if q.Reserved != want {
-		t.Fatalf("reserved %s", modelapi.USD(q.Reserved))
+	// Input is predicted; output is held at the 128-token cap; the full
+	// context is the ceiling.
+	output, _ := modelapi.ParseUSD("0.0002048")
+	ceiling, _ := modelapi.ParseUSD("0.0006048")
+	if q.Reserved <= output || q.Reserved >= ceiling || q.Prediction == nil || q.Prediction.Ceiling != ceiling || q.MaxOutput != 128 {
+		t.Fatalf("reserved %s, prediction %+v", modelapi.USD(q.Reserved), q.Prediction)
 	}
 	_, err = c.Quote(context.Background())
 	if err != nil || metadata.Load() != 1 {
@@ -148,5 +152,35 @@ func TestErrorResponsesPreserveBillingEvidence(t *testing.T) {
 				t.Fatalf("result=%+v error=%+v", result, pe)
 			}
 		})
+	}
+}
+
+func chatSheet(t *testing.T, endpoint string) (billing.Sheet, error) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"endpoints":[` + endpoint + `]}}`))
+	}))
+	defer server.Close()
+	c := New("test/model", "test")
+	c.BaseURL = server.URL
+	c.HTTP = server.Client()
+	return c.ChatSheet(context.Background(), "test/model", "test")
+}
+
+func TestChatSheetPricesOutputUnderMaxTokens(t *testing.T) {
+	// Reasoning bills as output and counts toward max_tokens: the higher rate wins.
+	s, e := chatSheet(t, `{"tag":"test","context_length":1000,"max_completion_tokens":64,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","input_cache_write":"0.0000005","completion":"0.0000016","internal_reasoning":"0.000002","image":"0.01"}}`)
+	if e != nil || !s.OutputEnforced || s.InputRate != 500_000 || s.OutputRate != 2_000_000 || s.MaxOutput != 64 {
+		t.Fatalf("sheet %+v %v", s, e)
+	}
+	// No max_tokens support means no output cap: the endpoint does not qualify.
+	_, e = chatSheet(t, `{"tag":"test","context_length":1000,"supported_parameters":[],"pricing":{"prompt":"0.0000004","completion":"0.0000016"}}`)
+	var pe *modelapi.ProviderError
+	if !errors.As(e, &pe) || pe.Code != "model_endpoint_unavailable" {
+		t.Fatalf("uncapped endpoint accepted: %v", e)
+	}
+	_, e = chatSheet(t, `{"tag":"test","context_length":1000,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","web_search":"0.004"}}`)
+	if !errors.As(e, &pe) || pe.Code != "unbounded_pricing_web_search" {
+		t.Fatalf("web search accepted: %v", e)
 	}
 }
