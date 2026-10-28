@@ -1,13 +1,9 @@
 # Part 6: Matching pipeline
 
-Status: implemented with fake-provider integration coverage. The
-[implementation plan](06-matching-plan.md) records the design and verification.
-Live decision dispatch remains disabled until a model adapter has documented
-billing and input bounds and the owner completes the live probe. The model
-catalogue and owner selection work independently of that dispatch gate.
-
-New runs use pipeline 2, described in [06-matching-v2.md](06-matching-v2.md).
-This document describes pipeline 1, which remains available for comparison.
+Status: historical pipeline 1 reference. New runs use CVD-style whole-posting
+matching in [06-matching-v3.md](06-matching-v3.md), without requirement
+extraction or gap analysis. Stored pipeline 1 and 2 runs retain their original
+rules; the UI prompts a re-run to produce current rankings.
 
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:

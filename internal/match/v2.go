@@ -20,8 +20,9 @@ import (
 const (
 	PipelineV1 = 1
 	PipelineV2 = 2
+	PipelineV3 = 3
 	// DefaultPipeline is used for new runs unless one is requested.
-	DefaultPipeline = PipelineV2
+	DefaultPipeline = PipelineV3
 )
 
 type pipeline struct {
@@ -34,6 +35,7 @@ type pipeline struct {
 var pipelines = map[int]pipeline{
 	PipelineV1: {ReadQuestions, Requirements, ScoreQuestions, Compute},
 	PipelineV2: {ReadQuestionsV2, RequirementsV2, CoverQuestionsV2, ComputeV2},
+	PipelineV3: {ReadQuestionsV3, noRequirements, noCoverageQuestions, ComputeV3},
 }
 
 func pipelineFor(version int) pipeline {

@@ -1,6 +1,7 @@
 # Part 6, v2: linear matching
 
-Status: implemented as pipeline 2, the default for new runs. Pipeline 1
+Status: historical pipeline 2 reference. New runs use
+[whole-posting matching](06-matching-v3.md). Pipeline 1
 ([06-matching.md](06-matching.md)) remains available so the two can be
 compared on the same job, and so runs it produced keep recomputing with the
 rules that asked them.

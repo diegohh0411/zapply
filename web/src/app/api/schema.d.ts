@@ -1633,13 +1633,17 @@ export interface components {
             evidence_id?: string;
         };
         MatchResult: {
+            /** @description Historical coverage score; null for whole-posting matching. */
             score: number | null;
+            /** @description Historical requirement count; zero for whole-posting matching. */
             must_met: number;
+            /** @description Historical requirement count; zero for whole-posting matching. */
             must_total: number;
             partial: boolean;
             seniority: string;
             relevant_years: number;
             scoring_version: number;
+            /** @description Historical requirement analysis; empty for whole-posting matching. */
             requirements: components["schemas"]["Coverage"][];
             evidence: components["schemas"]["EvidenceMatch"][];
             selection: components["schemas"]["Selection"][];
@@ -3311,7 +3315,7 @@ export interface operations {
     createMatchRun: {
         parameters: {
             query?: {
-                /** @description Matching pipeline. Defaults to 2; 1 runs the earlier per-pair pipeline for comparison. */
+                /** @description Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis. */
                 pipeline?: number;
             };
             header: {

@@ -13,48 +13,13 @@ const code = ts.transpileModule(source, {
 }).outputText;
 const compiled = { exports: {} };
 vm.runInNewContext(code, { module: compiled, exports: compiled.exports });
-const { coverageGroup, coverageLabel, primaryRequirements } = compiled.exports;
-const req = (text_hash, overrides = {}) => ({
-  text_hash,
-  class: 'must',
-  status: 'met',
-  provisional: false,
-  review: false,
-  ...overrides,
-});
+const { relevanceLabel } = compiled.exports;
 
-test('uncertain and unfinished matches are never presented as supported or definitive gaps', () => {
-  for (const item of [
-    req('a', { review: true }),
-    req('b', { provisional: true }),
-    req('c', { status: 'unknown' }),
-    req('d', { status: 'gap', provisional: true }),
-  ]) {
-    assert.equal(coverageGroup(item), 'review');
-    assert.equal(coverageLabel(item), 'Needs review');
-  }
-  assert.equal(coverageGroup(req('e', { status: 'partial' })), 'review');
-  assert.equal(coverageLabel(req('f', { status: 'adjacent' })), 'Some evidence');
-  assert.equal(coverageLabel(req('g', { status: 'gap' })), 'No evidence found');
-});
-
-test('posting context is separated and must-have gaps appear before strengths without mutating results', () => {
-  const items = [
-    req('context', { class: 'trait' }),
-    req('supported'),
-    req('nice-gap', { class: 'preferred', status: 'gap' }),
-    req('must-gap', { status: 'gap' }),
-    req('ignored', { class: 'ignore', status: 'ignored' }),
-    req('duty', { class: 'duty' }),
-  ];
-  assert.deepEqual(
-    Array.from(primaryRequirements(items), (item) => item.text_hash),
-    ['must-gap', 'supported', 'nice-gap', 'duty'],
-  );
-  assert.equal(items[0].text_hash, 'context');
-  assert.equal(coverageGroup(items[4]), 'ignored');
-  assert.equal(
-    primaryRequirements(items.filter((item) => ['trait', 'ignore'].includes(item.class))).length,
-    0,
-  );
+test('experience relevance uses the selection threshold and whole-posting scale', () => {
+  assert.equal(relevanceLabel(1), 'Strongly relevant');
+  assert.equal(relevanceLabel(0.75), 'Strongly relevant');
+  assert.equal(relevanceLabel(0.5), 'Relevant');
+  assert.equal(relevanceLabel(0.375), 'Relevant');
+  assert.equal(relevanceLabel(0.374), 'Less relevant');
+  assert.equal(relevanceLabel(0), 'Less relevant');
 });
