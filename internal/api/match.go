@@ -22,7 +22,11 @@ func convertMatch[T any](value any, err error) (T, error) {
 	return decodePlatform[T](raw, e)
 }
 func (s *server) CreateMatchRun(ctx context.Context, req gen.CreateMatchRunRequestObject) (gen.CreateMatchRunResponseObject, error) {
-	return convertMatch[gen.CreateMatchRun202JSONResponse](s.matcher.Start(ctx, uid(ctx), req.Id, req.Params.IdempotencyKey))
+	version := 0
+	if req.Params.Pipeline != nil {
+		version = *req.Params.Pipeline
+	}
+	return convertMatch[gen.CreateMatchRun202JSONResponse](s.matcher.Start(ctx, uid(ctx), req.Id, req.Params.IdempotencyKey, version))
 }
 func (s *server) ListMatchRuns(ctx context.Context, req gen.ListMatchRunsRequestObject) (gen.ListMatchRunsResponseObject, error) {
 	runs, e := s.matcher.List(ctx, uid(ctx), req.Id, req.Params.Before, pageLimit(req.Params.Limit))

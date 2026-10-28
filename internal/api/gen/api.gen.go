@@ -519,6 +519,7 @@ const (
 	Ignore    PutMatchOverrideJSONBodyClass = "ignore"
 	Must      PutMatchOverrideJSONBodyClass = "must"
 	Preferred PutMatchOverrideJSONBodyClass = "preferred"
+	Trait     PutMatchOverrideJSONBodyClass = "trait"
 )
 
 // Valid indicates whether the value is a known member of the PutMatchOverrideJSONBodyClass enum.
@@ -531,6 +532,8 @@ func (e PutMatchOverrideJSONBodyClass) Valid() bool {
 	case Must:
 		return true
 	case Preferred:
+		return true
+	case Trait:
 		return true
 	default:
 		return false
@@ -1035,6 +1038,7 @@ type MatchRun struct {
 	MustTotal         *int               `json:"must_total,omitempty"`
 	NextEligibleAt    *time.Time         `json:"next_eligible_at,omitempty"`
 	ObsoleteOverrides *[]string          `json:"obsolete_overrides,omitempty"`
+	Pipeline          *int               `json:"pipeline,omitempty"`
 	Removed           int                `json:"removed"`
 	Result            *MatchResult       `json:"result,omitempty"`
 	Score             *float32           `json:"score,omitempty"`
@@ -1445,6 +1449,8 @@ type ListMatchRunsParams struct {
 
 // CreateMatchRunParams defines parameters for CreateMatchRun.
 type CreateMatchRunParams struct {
+	// Pipeline Matching pipeline. Defaults to 2; 1 runs the earlier per-pair pipeline for comparison.
+	Pipeline       *int   `form:"pipeline,omitempty" json:"pipeline,omitempty"`
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
@@ -3377,6 +3383,19 @@ func (siw *ServerInterfaceWrapper) CreateMatchRun(w http.ResponseWriter, r *http
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateMatchRunParams
+
+	// ------------- Optional query parameter "pipeline" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pipeline", r.URL.Query(), &params.Pipeline, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pipeline"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pipeline", Err: err})
+		}
+		return
+	}
 
 	headers := r.Header
 

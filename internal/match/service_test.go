@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -70,11 +71,22 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "choice":
 			var options map[string]string
 			json.Unmarshal(q.Criteria, &options)
-			chosen := "not_specified"
-			if _, ok := options["must"]; ok {
-				chosen = "must"
-			} else if _, ok := options["skill"]; ok {
-				chosen = "skill"
+			// Prefer a qualifying reading, then the first library option.
+			chosen := ""
+			for _, want := range []string{"must", "skill", "other", "not_specified"} {
+				if _, ok := options[want]; ok && chosen == "" {
+					chosen = want
+				}
+			}
+			if chosen == "" {
+				keys := []string{}
+				for key := range options {
+					if key != "none" {
+						keys = append(keys, key)
+					}
+				}
+				sort.Strings(keys)
+				chosen = keys[0]
 			}
 			a.Choice = chosen
 			a.Probabilities = map[string]float64{}
@@ -85,13 +97,15 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "score":
 			var criteria []json.RawMessage
 			json.Unmarshal(q.Criteria, &criteria)
-			score := 3.
+			score := float64(len(criteria) - 1)
 			a.Score = &score
 			a.Legend = map[string]json.RawMessage{}
-			a.Probabilities = map[string]float64{"0": 0, "1": 0, "2": 0, "3": 1}
+			a.Probabilities = map[string]float64{}
 			for i, c := range criteria {
 				a.Legend[string(rune('0'+i))] = c
+				a.Probabilities[string(rune('0'+i))] = 0
 			}
+			a.Probabilities[string(rune('0'+len(criteria)-1))] = 1
 		}
 		if !p.discard {
 			answers[k] = a
@@ -175,11 +189,15 @@ func setup(t *testing.T) *fixture {
 }
 func (f *fixture) start(t *testing.T) match.Run {
 	t.Helper()
+	return f.startPipeline(t, 0)
+}
+func (f *fixture) startPipeline(t *testing.T, version int) match.Run {
+	t.Helper()
 	q, e := worker.NewQueue(f.db.Store)
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString())
+	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), version)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -232,14 +250,17 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 	ctx := context.Background()
 	r := f.start(t)
 	r = f.run(t, r.ID)
-	if r.Status != "completed" || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 2 {
+	// Two rounds, each with a posting-only state and a posting-plus-library state.
+	c := r.Result.Requirements
+	if r.Status != "completed" || r.Pipeline != match.PipelineV2 || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 4 ||
+		len(c) != 1 || c[0].Status != "met" || c[0].EvidenceID != f.evidence.ID.String() || len(c[0].Citations) != 1 {
 		t.Fatalf("cold run: %#v, calls %d", r, f.p.calls)
 	}
 	// Completion hook can be lost: Advance itself ingests terminal operations.
 	f.runtime.OnTerminal = nil
 	r = f.start(t)
 	r = f.run(t, r.ID)
-	if f.p.calls != 2 || r.Cached != r.Total {
+	if f.p.calls != 4 || r.Cached != r.Total {
 		t.Fatalf("warm run called model: %d %#v", f.p.calls, r)
 	}
 	ignore := "ignore"
@@ -275,7 +296,8 @@ func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	f.p.discard = true
 	r := f.start(t)
 	r = f.run(t, r.ID)
-	if r.Status != "partial" || r.Score != nil || f.p.calls != 2 {
+	// Both read requests are retried once, then their questions are unanswered.
+	if r.Status != "partial" || r.Score != nil || f.p.calls != 4 {
 		t.Fatalf("discard %#v calls %d", r, f.p.calls)
 	}
 	r = f.start(t)
@@ -285,7 +307,7 @@ func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	if e := f.s.Advance(context.Background(), f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
-	if f.p.calls != 2 {
+	if f.p.calls != 4 {
 		t.Fatal("cancel dispatched")
 	}
 }
@@ -343,7 +365,8 @@ func TestUncertainAccountingResumesWithNewOperation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.p.uncertain = true
-	r := f.start(t)
+	// Pipeline 1 reads in a single request, so one operation carries the round.
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -418,7 +441,7 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 func TestCancelRacesReservation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -576,5 +599,17 @@ func TestMemberHoldsUpToEightCallsInFlight(t *testing.T) {
 	}
 	if reasons[8] != "in_flight" {
 		t.Fatalf("ninth call: %q, want in_flight", reasons[8])
+	}
+}
+
+func TestPipelineV1RemainsAvailableForComparison(t *testing.T) {
+	f := setup(t)
+	r := f.startPipeline(t, match.PipelineV1)
+	r = f.run(t, r.ID)
+	if r.Status != "completed" || r.Pipeline != match.PipelineV1 || r.Result.ScoringVersion != 1 || r.Score == nil || *r.Score != 100 || f.p.calls != 2 {
+		t.Fatalf("v1 run: %#v calls %d", r, f.p.calls)
+	}
+	if _, e := match.New(f.db.Store, nil).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), 3); e == nil {
+		t.Fatal("unknown pipeline accepted")
 	}
 }

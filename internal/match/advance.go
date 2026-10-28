@@ -53,12 +53,13 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 			if e != nil {
 				return e
 			}
-			requirements, _ := Requirements(r.Snapshot, a)
+			p := pipelineFor(r.Pipeline)
+			requirements, _ := p.requirements(r.Snapshot, a)
 			var questions []decide.Pending
 			if r.Stage == "read" {
-				questions, e = ReadQuestions(r.Snapshot)
+				questions, e = p.read(r.Snapshot)
 			} else {
-				questions, e = ScoreQuestions(r.Snapshot, requirements)
+				questions, e = p.score(r.Snapshot, requirements)
 			}
 			if e != nil {
 				return e
@@ -144,7 +145,7 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 				if e != nil {
 					return e
 				}
-				requirements, _ = Requirements(r.Snapshot, a)
+				requirements, _ = p.requirements(r.Snapshot, a)
 				for _, req := range requirements {
 					if _, e = tx.Exec(ctx, `INSERT INTO match_run_requirement(user_id,run_id,text_hash,facts) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, u, id, req.TextHash, systemone.Raw(req)); e != nil {
 						return e
@@ -161,6 +162,17 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 		}
 		return nil
 	})
+}
+
+// requestQuestions caps questions per request so a round splits into several
+// requests that run in parallel. Each request repeats the state, which costs
+// little next to the latency saved.
+func requestQuestions(limit int) int {
+	const parallel = 32
+	if limit > 0 {
+		return min(limit, parallel)
+	}
+	return parallel
 }
 
 // waitRank orders in-flight request states by how well they explain a wait.
@@ -194,7 +206,7 @@ func (s *Service) dispatch(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, m
 			maxQuestions = q.MaxQuestions
 		}
 	}
-	packed, e := decide.Pack(*r.Model, misses, maxBytes, maxQuestions)
+	packed, e := decide.Pack(*r.Model, misses, maxBytes, requestQuestions(maxQuestions))
 	if e != nil {
 		return s.status(ctx, tx, u, r, "failed", "question_too_large", nil)
 	}
@@ -325,8 +337,9 @@ func (s *Service) finalize(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, f
 	} else {
 		asOf = time.Now().UTC()
 	}
-	requirements, incomplete := Requirements(r.Snapshot, a, o)
-	result := Compute(r.Snapshot, requirements, a, o, asOf, incomplete)
+	p := pipelineFor(r.Pipeline)
+	requirements, incomplete := p.requirements(r.Snapshot, a, o)
+	result := p.compute(r.Snapshot, requirements, a, o, asOf, incomplete)
 	status := "completed"
 	if result.Partial {
 		status = "partial"
@@ -338,7 +351,7 @@ func (s *Service) finalize(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, f
 		return e
 	}
 	if followup && r.RerunRequested {
-		_, e = s.create(ctx, tx, u, r.JobID, "auto:"+uuid.NewString(), "auto")
+		_, e = s.create(ctx, tx, u, r.JobID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
 		return e
 	}
 	return nil

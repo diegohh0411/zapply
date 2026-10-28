@@ -6,6 +6,9 @@ Live decision dispatch remains disabled until a model adapter has documented
 billing and input bounds and the owner completes the live probe. The model
 catalogue and owner selection work independently of that dispatch gate.
 
+New runs use pipeline 2, described in [06-matching-v2.md](06-matching-v2.md).
+This document describes pipeline 1, which remains available for comparison.
+
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:
 **what does this job ask for, which of my evidence shows it, what is missing,

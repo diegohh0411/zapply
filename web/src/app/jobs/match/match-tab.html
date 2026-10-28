@@ -29,7 +29,7 @@
         <article class="space-y-2 rounded-lg border p-3">
           <p class="text-sm">{{ req.text }}</p>
           <div class="flex flex-wrap items-center gap-3 text-xs">
-            <label>Classification <select class="rounded border bg-background p-1" [ngModel]="req.class" (ngModelChange)="action('correct',req.text_hash,$event)" [disabled]="busy()"><option value="must">Must have</option><option value="preferred">Preferred</option><option value="duty">Duty</option><option value="ignore">Ignore</option></select></label>
+            <label>Classification <select class="rounded border bg-background p-1" [ngModel]="req.class" (ngModelChange)="action('correct',req.text_hash,$event)" [disabled]="busy()"><option value="must">Must have</option><option value="preferred">Preferred</option><option value="duty">Duty</option><option value="trait">Personal quality</option><option value="ignore">Ignore</option></select></label>
             @if (req.class !== req.original_class) { <button class="underline" (click)="action('correct',req.text_hash,'reset')">Restore model reading</button> }
             <span>{{ req.status }}{{ req.provisional ? ' · provisional' : '' }}</span>
             @if (req.check) { <span>{{ req.check }}</span> }
