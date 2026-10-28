@@ -11,19 +11,10 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideEllipsis,
-  lucidePlus,
-  lucideSearch,
-  lucideSettings2,
-  lucideSquareKanban,
-  lucideTable,
-  lucideX,
-} from '@ng-icons/lucide';
+import { lucidePlus, lucideSearch, lucideSettings2, lucideX } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDialogImports } from '@/shared/components/dialog';
-import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
@@ -42,6 +33,7 @@ import {
   JobsStore,
   STAGES,
 } from './jobs.store';
+import { Database } from '../shared/database';
 import { StatusesDialog } from './statuses-dialog';
 
 type Layout = 'board' | 'table';
@@ -62,22 +54,19 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
     ZardInputComponent,
     ZardSwitchComponent,
     ZardSkeletonComponent,
-    ...ZardDropdownImports,
     ...ZardDialogImports,
     JobBoard,
     JobTable,
     JobSheet,
     StatusesDialog,
+    Database,
   ],
   providers: [
     provideIcons({
       lucidePlus,
       lucideSearch,
       lucideSettings2,
-      lucideSquareKanban,
-      lucideTable,
       lucideX,
-      lucideEllipsis,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -211,6 +200,10 @@ export class JobsPage {
   }
 
   // Views
+
+  protected selectViewId(id: string | null): void {
+    this.selectView(this.store.views().find((v) => v.id === id) ?? null);
+  }
 
   protected selectView(v: JobView | null): void {
     void this.router.navigate([], {

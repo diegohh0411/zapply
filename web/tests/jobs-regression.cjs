@@ -304,3 +304,21 @@ test('resync removes jobs absent from a fresh list after missed events', async (
   await store.load();
   assert.equal(store.jobs().length, 0);
 });
+
+test('database tabs select views and open settings while layout edits stay controlled', () => {
+  const { Database } = load('web/src/app/shared/database.ts');
+  const database = new Database();
+  database.views.set([{ id: 'interviews', name: 'Interviews', layout: 'table' }]);
+  database.activeViewId.set('interviews');
+  database.layout.set('table');
+  const selections = [];
+  database.viewChange = { emit: (id) => selections.push(id) };
+  database.select('interviews');
+  assert.equal(database.activeView().name, 'Interviews');
+  assert.equal(database.viewSettingsOpen(), true);
+  database.viewSettingsOpen.set(false);
+  database.select(null);
+  assert.deepEqual(selections, ['interviews', null]);
+  assert.equal(database.viewSettingsOpen(), true);
+  assert.equal(database.layout(), 'table');
+});
