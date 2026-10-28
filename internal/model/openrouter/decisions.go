@@ -4,36 +4,51 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
-// BillingBound describes how a decision model bills and how large a request
-// it accepts. Quotes use it to size the budget reservation for each call.
+// BillingBound holds the request limits and accounting support a decision
+// model has beyond what the catalogue reports.
 type BillingBound struct {
-	Reference             string
-	PerQuestion           bool
-	RequestFeePerQuestion bool
-	MaxRequestBytes       int
-	MaxQuestions          int // zero means no documented count limit
-	LookupSupported       bool
+	MaxRequestBytes int
+	MaxQuestions    int // zero means no documented count limit
+	LookupSupported bool
 }
 
-// ownerSelectedBound applies to any model the owner selects. It reserves the
-// full context once per request, which bounds the input a request can bill,
-// plus the request fee per question. Decision models bill input tokens
-// (OpenRouter's System One docs), and settled usage reports them once per
-// request: 96 questions on a 62 KB request billed 12,705 input tokens. The
-// worker logs any charge above its reservation.
-var ownerSelectedBound = BillingBound{
-	Reference:             "owner-selected model, full context per request assumed",
-	RequestFeePerQuestion: true,
-	MaxRequestBytes:       systemone.RequestBudget,
+// ownerSelectedBound applies to any model the owner selects.
+var ownerSelectedBound = BillingBound{MaxRequestBytes: systemone.RequestBudget}
+
+// Decision models bill input once per request (OpenRouter's System One docs;
+// settled usage agrees: 96 questions on a 62 KB request billed 12,705 input
+// tokens) and the request fee once per question. The priors assume one token
+// per byte, about 5× the observed rate, until settlements calibrate a model.
+var decisionPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 1024, OutputPerQ: 16}
+
+// componentRoles classifies the catalogue's pricing keys. Input and output
+// rates are the highest of their components. Decision calls send text and
+// return JSON, so audio and image charges never apply. Any other positive
+// component, web_search included, is a charge the reservation cannot bound.
+var componentRoles = map[string]string{
+	"prompt":             billing.RoleInput,
+	"input_cache_read":   billing.RoleInput,
+	"input_cache_write":  billing.RoleInput,
+	"completion":         billing.RoleOutput,
+	"internal_reasoning": billing.RoleOutput,
+	"request":            billing.RoleRequest,
+	"audio":              billing.RoleUnused,
+	"input_audio":        billing.RoleUnused,
+	"input_audio_cache":  billing.RoleUnused,
+	"output_audio":       billing.RoleUnused,
+	"image":              billing.RoleUnused,
+	"image_output":       billing.RoleUnused,
+	"discount":           billing.RoleDiscount,
 }
 
 type DecisionModel struct {
@@ -100,66 +115,67 @@ func (c *Client) bound(model string) BillingBound {
 	return ownerSelectedBound
 }
 func (c *Client) compatibility(m DecisionModel) string {
-	if m.Context <= 0 {
-		return "invalid_context"
-	}
-	return ""
+	_, reason := c.sheet(m)
+	return reason
 }
-func (c *Client) QuoteDecision(ctx context.Context, r systemone.Request) (modelapi.Quote, error) {
-	if r.Model == "" {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_not_configured", Uncharged: true}
+
+// sheet prices every catalogue component or names the one it cannot price.
+func (c *Client) sheet(m DecisionModel) (billing.Sheet, string) {
+	if m.Context <= 0 {
+		return billing.Sheet{}, "invalid_context"
 	}
-	if len(r.Questions) == 0 {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
-	}
-	models, e := c.DecisionModels(ctx, "", false)
-	if e != nil {
-		return modelapi.Quote{}, e
-	}
-	for _, m := range models {
-		if m.ID != r.Model {
+	b := c.bound(m.ID)
+	s := billing.Sheet{Provider: "openrouter", Model: m.ID, RequestPerQuestion: true, Context: m.Context,
+		MaxOutput: systemone.ResultBudget, MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget),
+		MaxQuestions: b.MaxQuestions, Prior: decisionPrior, FetchedAt: m.FetchedAt, Components: []billing.Component{}}
+	names := slices.Sorted(maps.Keys(m.Pricing))
+	for _, name := range names {
+		value := strings.Trim(string(m.Pricing[name]), `"`)
+		role, known := componentRoles[name]
+		if role == billing.RoleDiscount {
+			// A discount never lowers a rate the reservation relies on.
+			s.Components = append(s.Components, billing.Component{Name: name, Rate: value, Role: role})
 			continue
 		}
-		if reason := c.compatibility(m); reason != "" {
-			return modelapi.Quote{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
-		}
-		b := c.bound(m.ID)
-		raw, e := json.Marshal(r)
+		rate, e := modelapi.ParseUSD(value)
 		if e != nil {
-			return modelapi.Quote{}, e
+			return billing.Sheet{}, "invalid_pricing_" + name
 		}
-
-		rate := func(k string) string {
-			if len(m.Pricing[k]) == 0 {
-				return "0"
-			}
-			return strings.Trim(string(m.Pricing[k]), `"`)
+		if rate == 0 {
+			role = billing.RoleZero
+		} else if !known {
+			return billing.Sheet{}, "unbounded_pricing_" + name
 		}
-		evals, fees := 1, 1
-		if b.PerQuestion {
-			evals = len(r.Questions)
+		switch role {
+		case billing.RoleInput:
+			s.InputRate = max(s.InputRate, rate)
+		case billing.RoleOutput:
+			s.OutputRate = max(s.OutputRate, rate)
+		case billing.RoleRequest:
+			s.RequestRate = rate
 		}
-		if b.RequestFeePerQuestion {
-			fees = len(r.Questions)
-		}
-		if m.Context > math.MaxInt/evals {
-			return modelapi.Quote{}, errors.New("quote overflow")
-		}
-		cost, e := modelapi.QuoteCost(rate("prompt"), "0", "0", m.Context*evals, 0)
-		if e != nil {
-			return modelapi.Quote{}, e
-		}
-		fee, e := modelapi.QuoteCost(rate("request"), "0", "0", fees, 0)
-		if e != nil || cost > math.MaxInt64-fee {
-			return modelapi.Quote{}, errors.New("quote overflow")
-		}
-		quote := modelapi.Quote{Decision: true, PerQuestion: b.PerQuestion, RequestFeePerQuestion: b.RequestFeePerQuestion, MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget), MaxQuestions: b.MaxQuestions, BoundReference: b.Reference, Model: r.Model, Endpoint: "systemone", InputRate: rate("prompt"), OutputRate: "0", RequestRate: rate("request"), MaxInput: m.Context, Reserved: cost + fee, FetchedAt: m.FetchedAt}
-		if len(r.Questions) == 0 || len(raw) > min(b.MaxRequestBytes, systemone.RequestBudget) || (b.MaxQuestions > 0 && len(r.Questions) > b.MaxQuestions) {
-			return quote, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
-		}
-		return quote, nil
+		s.Components = append(s.Components, billing.Component{Name: name, Rate: value, Role: role})
 	}
-	return modelapi.Quote{}, &modelapi.ProviderError{Code: "decision_model_unavailable", Uncharged: true}
+	return s, ""
+}
+
+// DecisionSheet describes a catalogue model's billing for the gateway.
+func (c *Client) DecisionSheet(ctx context.Context, model string) (billing.Sheet, error) {
+	models, e := c.DecisionModels(ctx, "", false)
+	if e != nil {
+		return billing.Sheet{}, e
+	}
+	for _, m := range models {
+		if m.ID != model {
+			continue
+		}
+		s, reason := c.sheet(m)
+		if reason != "" {
+			return billing.Sheet{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
+		}
+		return s, nil
+	}
+	return billing.Sheet{}, &modelapi.ProviderError{Code: "decision_model_unavailable", Uncharged: true}
 }
 func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q modelapi.Quote) (modelapi.Result, error) {
 	if q.Model != r.Model || time.Since(q.FetchedAt) > 15*time.Minute {
@@ -167,7 +183,11 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 	}
 	// Revalidate against fresh metadata immediately before dispatch. A changed
 	// bound/price cannot consume more than the reservation captured by the gateway.
-	fresh, e := c.QuoteDecision(ctx, r)
+	var calibration billing.Calibration
+	if q.Calibration != nil {
+		calibration = *q.Calibration
+	}
+	fresh, e := modelapi.QuoteDecision(ctx, c, r, calibration)
 	if e != nil {
 		return modelapi.Result{}, e
 	}

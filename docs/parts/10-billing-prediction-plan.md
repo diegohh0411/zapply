@@ -1,0 +1,328 @@
+# Billing prediction plan
+
+Status: implemented for [#20](https://github.com/diegohh0411/zapply/issues/20).
+See the implementation record at the end for where the build differs from the
+design.
+
+## Problem
+
+A decision reservation today is `context × prompt + request fee × questions`,
+computed in `openrouter.QuoteDecision` and recomputed from the stored quote in
+`match.Service.Estimate`. It is wrong in both directions:
+
+- **Under-reserves.** Since #16, only `prompt` and `request` are read. A model
+  priced through `input_cache_read`, `completion` or anything else reserves
+  little or nothing. `prompt = 0` with a positive `input_cache_read` and no
+  request fee reserves $0. With 8 calls in flight per member (#19), several
+  under-reserved calls can pass `platform.reserve` at once, and the worker only
+  logs the overrun after the money is spent.
+- **Over-reserves.** On `~liquid/d1-ultra-latest` a 62 KB, 96-question request
+  settled 12,705 input tokens for $0.00053. The context bound is a ceiling, not
+  a prediction, so the allowance locks up far more than calls cost.
+
+The formula also lives in two places, so `match-estimate` and the worker can
+drift.
+
+## Design
+
+Split a quote into a **provider-specific price sheet** and a
+**provider-neutral prediction**.
+
+```
+             provider-specific                 provider-neutral
+ catalogue ──► billing.Sheet ──┐
+                                ├─► billing.Predict(sheet, shape, calib) ──► Prediction
+ request ───► billing.Shape ───┤                                             (expected,
+ settlements ► billing.Calibration ┘                                          reserved,
+                                                                               ceiling)
+```
+
+The provider's job is to say what each priced unit costs and how large a call
+can get. Turning a request into tokens and tokens into money, with a margin
+learned from settlements, is the same for every provider and lives in one
+place. The worker and `Estimate` both call `billing.Predict`, so they cannot
+disagree.
+
+### New package `internal/model/billing`
+
+```go
+// Sheet is what a provider knows about a model's billing, captured at quote
+// time and stored in the quote so estimates can predict without the network.
+type Sheet struct {
+	Provider string // "openrouter"
+	Model    string
+
+	// Rates in picodollars. Each is the highest rate among the components
+	// that can apply to that unit, so the sheet never prices below reality.
+	InputRate   int64 // per input token
+	OutputRate  int64 // per output token
+	RequestRate int64 // per call, or per question when RequestPerQuestion
+
+	RequestPerQuestion bool
+	InputPerQuestion   bool // state re-billed for each question
+
+	Context   int // hard cap on billable input tokens per evaluation
+	MaxOutput int // hard cap on billable output tokens per question
+
+	Prior      Tokenization // used until calibration has enough samples
+	Components []Component  // every catalogue component and how it was handled
+	FetchedAt  time.Time
+}
+
+type Tokenization struct {
+	TokensPerKB    int // input tokens per 1,000 request bytes, conservative
+	OverheadTokens int // template and system prompt tokens per call
+	OutputPerQ     int // output tokens per question
+}
+
+type Component struct {
+	Name string // provider key, e.g. "input_cache_read"
+	Rate string // decimal as reported
+	Role string // "input" | "output" | "request" | "unused" | "ignored_zero" | "discount"
+}
+
+// Shape is what is known about a call before it is sent.
+type Shape struct {
+	RequestBytes int
+	Questions    int
+}
+
+// Calibration summarises recent settlements for one model.
+type Calibration struct {
+	Samples        int
+	TokensPerKB    int     // high quantile of settled input tokens per KB
+	OverheadTokens int
+	OutputPerQ     int
+	CostRatio      big.Rat // high quantile of settled / predicted cost
+	Exceeded       bool    // a recent settlement went over its reservation
+}
+
+type Prediction struct {
+	InputTokens  int
+	OutputTokens int
+	Expected     int64  // predicted cost, no margin
+	Reserved     int64  // min(Ceiling, Expected × margin)
+	Ceiling      int64  // Context × InputRate + MaxOutput × OutputRate + fees
+	Basis        string // "prior" | "calibrated" | "ceiling"
+}
+
+func Predict(s Sheet, shape Shape, c Calibration) (Prediction, error)
+```
+
+All arithmetic stays in integer picodollars via `big.Int`/`big.Rat`, as
+`model.QuoteCost` does today. `QuoteCost` and `checkedMul` move into this
+package.
+
+### Provider seam
+
+```go
+// internal/model/provider.go
+type DecisionProvider interface {
+	DecisionSheet(ctx context.Context, model string) (billing.Sheet, error)
+	Decide(context.Context, string, systemone.Request, Quote) (Result, error)
+	DecisionLookupSupported(string) bool
+	DecisionUsage(json.RawMessage) (billing.Usage, error) // input/output tokens from settled usage
+}
+```
+
+`QuoteDecision` becomes a provider-neutral function in `internal/model`:
+
+```go
+func QuoteDecision(ctx context.Context, p DecisionProvider, r systemone.Request, c billing.Calibration) (Quote, error)
+```
+
+It fetches the sheet, measures the shape from `systemone.Canonical(r)`, calls
+`billing.Predict`, enforces the request-size limits, and returns a `Quote`
+that embeds the `Sheet` and `Prediction`. `Decide` keeps revalidating against
+a fresh quote before dispatch, now comparing fresh `Reserved` with the held one.
+
+A future provider (direct Anthropic, a local model) implements
+`DecisionSheet` and `DecisionUsage`; it gets prediction, calibration and the
+estimate for free. If a provider ever bills in a way a sheet cannot express
+(tiered context pricing, per-image charges), it rejects the model from
+`DecisionSheet` with a reason rather than bending the shared math. Adding an
+optional `Predictor` override is possible later but not needed now.
+
+The diagnostic `Quote`/`Generate` path is out of scope and keeps its own
+full-context reservation.
+
+### OpenRouter sheet
+
+`openrouter.DecisionSheet` classifies every key in the catalogue's `pricing`
+object. Each component either feeds a rate or makes the model incompatible:
+
+| Component | Role | Notes |
+| --- | --- | --- |
+| `prompt` | input | missing counts as 0, not an error |
+| `input_cache_read`, `input_cache_write` | input | `InputRate` is the max of all input components |
+| `completion`, `internal_reasoning` | output | `OutputRate` is the max |
+| `request` | request | per question, per `ownerSelectedBound` |
+| `discount` | discount | never lowers a rate; recorded only |
+| `audio`, `input_audio`, `input_audio_cache`, `output_audio`, `image`, `image_output` | unused | decisions send text and return JSON, so these bill nothing; recorded, not priced. Lets audio-capable decision models (e.g. Liquid's newest) load. The cost ratio catches it if one does bill |
+| `web_search` | incompatible if positive | a per-call charge we cannot bound |
+| anything else | incompatible if positive | `unbounded_pricing:<key>` |
+
+Zero-valued components are recorded as `ignored_zero`. An unparsable rate is
+`invalid_pricing`. This narrows #16 deliberately: #16 dropped the allowlist so
+models with harmless extra components would load; the table keeps those
+loading and only rejects positive components the formula cannot price. The
+picker already shows `compatibility_reason`.
+
+Bounds:
+
+- `Context` = catalogue `context_length` (unchanged).
+- `MaxOutput` per question = output tokens that fit in the answer budget,
+  derived from `systemone.ResultBudget` at 1 token per byte, divided across
+  questions. Until a model reports `completion > 0` this is moot; the fixture
+  covers it.
+- `InputPerQuestion` stays false: settled usage bills input once per request.
+
+Priors (no calibration yet) are deliberately pessimistic but far below the
+context ceiling: 1,000 tokens per KB (one token per byte; the d1 sample is
+about 205), 1,024 overhead tokens, 16 output tokens per question.
+
+### Prediction
+
+```
+input   = min(Context, overhead + bytes × tokensPerKB / 1000) × (questions if InputPerQuestion)
+output  = outputPerQ × questions
+expected = input × InputRate + output × OutputRate + RequestRate × (questions or 1)
+ceiling  = Context × InputRate × evals + MaxOutput × OutputRate × questions + fees
+margin   = max(1.25, CostRatio × 1.10)
+reserved = min(ceiling, ceil(expected × margin))
+```
+
+- Request fees are exact, so they skip the margin.
+- `Basis = "ceiling"` and `reserved = ceiling` when the model has fewer than
+  5 samples *and* no prior is configured, or when `Calibration.Exceeded` is
+  set. A model that overran falls back to the ceiling until 20 clean
+  settlements arrive after the overrun.
+- `reserved` is never below `expected`, and never 0 when any component is
+  positive.
+
+### Calibration
+
+Everything needed is already stored:
+
+- `platform.llm_attempt.quote` holds the quote JSON. It gains
+  `shape.request_bytes`, `shape.questions` and the `prediction`.
+- `platform.model_usage.usage` holds the provider's settled usage
+  (`input_tokens`, `output_tokens`, `cost`).
+
+Migration `00015_billing_calibration.sql` adds:
+
+```sql
+-- One row per settled decision attempt with both shape and usage.
+CREATE VIEW platform.decision_settlement AS
+SELECT a.model, a.dispatched_at,
+       (a.quote->'shape'->>'request_bytes')::int AS request_bytes,
+       (a.quote->'shape'->>'questions')::int     AS questions,
+       (a.quote->'prediction'->>'expected')::bigint AS expected,
+       a.reserved, u.amount,
+       (u.usage->>'input_tokens')::int  AS input_tokens,
+       (u.usage->>'output_tokens')::int AS output_tokens
+FROM platform.llm_attempt a JOIN platform.model_usage u ON u.attempt_id = a.id
+WHERE a.quote ? 'shape' AND u.amount > 0;
+
+CREATE FUNCTION platform.decision_calibration(p_model text) RETURNS jsonb ...
+-- Last 200 settlements for the model within 30 days: p95 tokens per KB,
+-- p95 output per question, p95 amount/expected, sample count, and whether any
+-- settlement after the latest 20 exceeded its reservation.
+```
+
+Settlements are cross-tenant, so the function is `SECURITY DEFINER` and only
+returns aggregates. The token keys live in `DecisionUsage` so a provider with
+different field names maps them once.
+
+The worker calls `platform.decision_calibration` in the same transaction that
+reads the attempt history, then passes it to `QuoteDecision`. `Estimate` does
+the same and calls `billing.Predict` per packed request with the stored sheet,
+replacing the inline loop in `service.go`.
+
+Older attempts without `shape` are ignored. Their byte counts were never
+recorded, so they cannot calibrate.
+
+### Overruns
+
+Prediction can be wrong, so the existing safety nets stay and get one more:
+
+- `platform.settle` already writes a `quote.exceeded` audit event, and the
+  worker logs it.
+- `Calibration.Exceeded` forces the ceiling for that model, so a single overrun
+  stops further under-reservation within one quote cycle.
+- Members with 8 calls in flight are each bounded by their own reservation,
+  and every reservation is at least `expected × 1.25`.
+
+## Steps
+
+1. **`internal/model/billing`.** `Sheet`, `Shape`, `Calibration`,
+   `Prediction`, `Predict`, and the moved integer helpers. Table tests for
+   the formula, ceiling cap, margin, zero rates and overflow.
+2. **OpenRouter sheet.** `DecisionSheet` with the component table, and
+   `DecisionUsage`. Fixtures required by #20:
+   - cache read pricier than prompt → `InputRate` = cache read rate;
+   - missing `prompt`, positive `input_cache_read`, no request fee → reserved > 0;
+   - positive `web_search` (or an unknown key) → `unbounded_pricing:web_search`;
+   - positive `completion` → output priced.
+3. **Provider-neutral `QuoteDecision`.** Move quoting out of the OpenRouter
+   client, embed sheet, shape and prediction in `Quote`, and keep the
+   size checks and revalidation in `Decide`. Drop `PerQuestion`,
+   `RequestFeePerQuestion`, `InputRate`, `RequestRate` and `MaxInput` from the
+   decision side of `Quote` once nothing reads them; `BillingBound` folds
+   into the sheet.
+4. **Calibration migration and worker wiring.** Migration 00015, the
+   `decision_calibration` query, and passing it into the quote. sqlc regen.
+5. **`match-estimate`.** Replace the inline loop with `billing.Predict` per
+   packed request; same calibration call.
+6. **Replay test.** Record real d1 settlements (shape + usage + cost) as a
+   fixture and assert, for every sample, `settled ≤ reserved ≤ 3 × settled`
+   once calibrated, and `settled ≤ reserved` under the prior. That is the
+   "stated margin" for #20's acceptance.
+7. **Docs.** Update part 5 and part 6 where they describe the context-bound
+   formula, and the #16 note about unfiltered pricing.
+
+Steps 1–3 can land together without the migration: with zero samples every
+quote uses the prior, which already fixes the $0 reservation and cuts the
+over-reservation by about 5× on d1. Steps 4–6 add the learned margin.
+
+## Decisions
+
+- **Priors** stay conservative (one token per byte). These models are cheap;
+  a reservation that is right most of the time is good enough.
+- **Calibration** is global per model.
+- **Unpinned upstream pricing** is accepted. The cost ratio and the ceiling
+  fallback correct it after the fact.
+
+## Implementation record
+
+Implemented in `internal/model/billing`, `internal/model/decision.go`,
+`internal/model/openrouter/decisions.go`, migration
+`00015_billing_calibration.sql`, the worker quote path and `match.Estimate`.
+
+Differences from the design above:
+
+- **No `DecisionUsage`.** `platform.decision_calibration` reads `input_tokens`
+  and `output_tokens` from settled usage directly; OpenRouter's System One
+  usage already uses those names. A provider with different keys adds the
+  mapping when it arrives.
+- **No `decision_settlement` view.** The calibration function aggregates the
+  attempts and usage directly.
+- **Calibration has no overhead term.** The observed tokens-per-KB ratio
+  already includes template overhead, and the sheet's prior overhead is still
+  added on top, so small requests stay covered.
+- **The quote stores its calibration**, so `Decide` revalidates against fresh
+  catalogue prices with the same calibration the reservation used.
+- **`model.QuoteCost` stays** for the diagnostic chat path, which keeps its
+  full-context reservation.
+- **Request bytes** are the JSON-marshalled request, the same measure as the
+  request-size limit.
+
+Tests: `internal/model/billing` covers the formula, ceiling cap, margin
+widening, the overrun fallback, zero rates and overflow, and replays the
+recorded d1 settlement (reserved ≥ settled under the prior, and within 3×
+once calibrated; 1.35× in practice). `internal/model/openrouter` has the #20
+fixtures: cache read pricier than prompt, missing prompt, positive
+completion, audio components accepted, and `web_search`, unknown and
+unparsable components rejected. `internal/match` checks that settled attempts
+feed `platform.decision_calibration`. Only one recorded live settlement exists
+so far; the replay fixture should grow as more are collected.
