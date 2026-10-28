@@ -317,8 +317,9 @@ Differences from the design above:
 - **Request bytes** are the JSON-marshalled request, the same measure as the
   request-size limit.
 - **Positive output pricing is incompatible** (from the independent review).
-  System One sends no output-token limit, and hidden reasoning need not appear
-  in the answers, so `systemone.ResultBudget` does not bound billable output.
+  System One sends no output-token limit, and `systemone.ResultBudget` only
+  checks answers after they are billed, so it does not bound billable output.
+  (System One models do not reason, so `internal_reasoning` is moot today.)
   OpenRouter sheets have no output rate and `MaxOutput` 0; `billing` keeps
   output support for a provider that can enforce a limit.
 - **Calibrated output never drops below the prior**, and a prediction of zero

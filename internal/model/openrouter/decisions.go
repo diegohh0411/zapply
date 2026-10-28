@@ -34,8 +34,8 @@ var decisionPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 1024
 // componentRoles classifies the catalogue's pricing keys. The input rate is the
 // highest of its components. Decision calls send text and return JSON, so audio
 // and image charges never apply. Output is unbounded: System One takes no
-// output-token limit, and hidden reasoning need not appear in the answers, so a
-// positive output rate makes the model incompatible. Any other positive
+// output-token limit, and answers are only size-checked after they are billed,
+// so a positive output rate makes the model incompatible. Any other positive
 // component, web_search included, is a charge the reservation cannot bound.
 var componentRoles = map[string]string{
 	"prompt":             billing.RoleInput,
