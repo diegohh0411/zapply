@@ -3,26 +3,32 @@ package model
 import (
 	"context"
 	"encoding/json"
-	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"time"
+
+	"github.com/diegohh0411/zapply/internal/model/billing"
+	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
 type Quote struct {
-	Decision              bool      `json:"decision,omitempty"`
-	PerQuestion           bool      `json:"per_question,omitempty"`
-	RequestFeePerQuestion bool      `json:"request_fee_per_question,omitempty"`
-	MaxRequestBytes       int       `json:"max_request_bytes,omitempty"`
-	MaxQuestions          int       `json:"max_questions,omitempty"`
-	BoundReference        string    `json:"bound_reference,omitempty"`
-	Model                 string    `json:"model"`
-	Endpoint              string    `json:"endpoint"`
-	InputRate             string    `json:"input_rate"`
-	OutputRate            string    `json:"output_rate"`
-	RequestRate           string    `json:"request_rate"`
-	MaxInput              int       `json:"max_input"`
-	MaxOutput             int       `json:"max_output"`
-	Reserved              int64     `json:"reserved"`
-	FetchedAt             time.Time `json:"fetched_at"`
+	Decision        bool      `json:"decision,omitempty"`
+	MaxRequestBytes int       `json:"max_request_bytes,omitempty"`
+	MaxQuestions    int       `json:"max_questions,omitempty"`
+	Model           string    `json:"model"`
+	Endpoint        string    `json:"endpoint"`
+	InputRate       string    `json:"input_rate"`
+	OutputRate      string    `json:"output_rate"`
+	RequestRate     string    `json:"request_rate"`
+	MaxInput        int       `json:"max_input"`
+	MaxOutput       int       `json:"max_output"`
+	Reserved        int64     `json:"reserved"`
+	FetchedAt       time.Time `json:"fetched_at"`
+
+	// Decision quotes carry everything the prediction used, so an estimate or
+	// a revalidation can repeat it without the network.
+	Sheet       *billing.Sheet       `json:"sheet,omitempty"`
+	Shape       *billing.Shape       `json:"shape,omitempty"`
+	Calibration *billing.Calibration `json:"calibration,omitempty"`
+	Prediction  *billing.Prediction  `json:"prediction,omitempty"`
 }
 
 type Result struct {
@@ -48,8 +54,9 @@ type Provider interface {
 }
 
 // DecisionProvider extends the gateway without changing diagnostic providers.
+// A provider only describes a model's billing; QuoteDecision predicts from it.
 type DecisionProvider interface {
-	QuoteDecision(context.Context, systemone.Request) (Quote, error)
+	DecisionSheet(ctx context.Context, model string) (billing.Sheet, error)
 	Decide(context.Context, string, systemone.Request, Quote) (Result, error)
 	DecisionLookupSupported(string) bool
 }

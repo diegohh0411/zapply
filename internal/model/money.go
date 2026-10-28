@@ -6,7 +6,6 @@ import (
 	"errors"
 	"math/big"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -44,44 +43,4 @@ func USD(units int64) string {
 func Cost(raw json.RawMessage) (int64, error) {
 	s := strings.Trim(string(raw), `"`)
 	return ParseUSD(s)
-}
-
-func checkedMul(rate int64, tokens int) (int64, error) {
-	if tokens < 0 || rate < 0 {
-		return 0, errors.New("invalid quote")
-	}
-	n := new(big.Int).Mul(big.NewInt(rate), big.NewInt(int64(tokens)))
-	if !n.IsInt64() {
-		return 0, errors.New("quote overflow")
-	}
-	return strconv.ParseInt(n.String(), 10, 64)
-}
-
-func QuoteCost(inputRate, outputRate, requestRate string, input, output int) (int64, error) {
-	a, err := ParseUSD(inputRate)
-	if err != nil {
-		return 0, err
-	}
-	b, err := ParseUSD(outputRate)
-	if err != nil {
-		return 0, err
-	}
-	c, err := ParseUSD(requestRate)
-	if err != nil {
-		return 0, err
-	}
-	x, err := checkedMul(a, input)
-	if err != nil {
-		return 0, err
-	}
-	y, err := checkedMul(b, output)
-	if err != nil {
-		return 0, err
-	}
-	total := new(big.Int).Add(big.NewInt(x), big.NewInt(y))
-	total.Add(total, big.NewInt(c))
-	if !total.IsInt64() {
-		return 0, errors.New("quote overflow")
-	}
-	return total.Int64(), nil
 }

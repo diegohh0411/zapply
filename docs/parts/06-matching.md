@@ -396,8 +396,8 @@ diagnostic's `LLM_MODEL`. Only owners can change it. A run snapshots its model
 when created; an unconfigured run waits as `blocked/model_not_configured` and
 binds the first configured model when resumed. Changing the selection affects
 new runs only. Missing models block calls explicitly; there is no silent model
-fallback. Pricing components are not filtered; the picker explains any
-unavailable option.
+fallback. Pricing components the reservation cannot bound, such as web search,
+make a model unavailable; the picker explains any unavailable option.
 
 ## Untrusted text
 

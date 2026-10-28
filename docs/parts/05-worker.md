@@ -153,14 +153,16 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
   of the diagnostic's `LLM_MODEL`/`LLM_ENDPOINT`.
 - Decision reservations require an explicitly verified model adapter. It bounds
   billable input per request or per question and request-fee multiplicity;
-  unverified bounds block before dispatch. Pricing components are not
-  filtered; only the rates the reservation formula uses are read. The production
+  unverified bounds block before dispatch. Every positive pricing component is
+  either priced into the reservation or makes the model incompatible; see the
+  [billing prediction plan](10-billing-prediction-plan.md). The production
   registry starts empty pending the part 6 live verification. Decision IDs use
   automatic accounting lookup only when the adapter confirms support; otherwise
   uncertain reservations remain for owner reconciliation.
-- Reservations conservatively cover the selected endpoint's full context plus
-  bounded output until model-specific input tokenization is added. A request can
-  therefore pause even when its eventual actual charge would fit the allowance.
+- Reservations predict input cost from request size, calibrated per model from
+  settlements, and never exceed the full-context bound. Chat calls also hold
+  output at their `max_tokens`. A request can still pause when its actual
+  charge would fit.
   Quotes expire after 15 minutes; routing is restricted by endpoint and prices.
 - Paused work is rechecked at least once per minute (provider backoff can be
   longer). Usage expiry is a hint, not a promise that a particular request fits.

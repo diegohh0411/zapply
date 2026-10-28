@@ -197,6 +197,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var op Operation
 	var attempts []Attempt
 	var decision *systemone.Request
+	var calibration []byte
 	if err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
 		var raw []byte
 		if err := tx.QueryRow(ctx, "SELECT to_jsonb(o) FROM model_operation o WHERE id=$1 AND user_id=$2", args.OperationID, args.UserID).Scan(&raw); err != nil {
@@ -215,6 +216,9 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				return err
 			}
 			decision = &req
+			if err := tx.QueryRow(ctx, "SELECT platform.model_calibration($1)", req.Model).Scan(&calibration); err != nil {
+				return err
+			}
 		}
 		if err := tx.QueryRow(ctx, "SELECT platform.attempts_for_operation($1)", args.OperationID).Scan(&raw); err != nil {
 			return err
@@ -278,7 +282,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if !ok {
 			return r.block(ctx, args, "decision_provider_unavailable", nil, 5*time.Minute)
 		}
-		quote, err = dp.QuoteDecision(ctx, *decision)
+		quote, err = modelapi.QuoteDecision(ctx, dp, *decision, modelapi.CalibrationOf(calibration))
 	} else {
 		quote, err = r.Provider.Quote(ctx)
 	}

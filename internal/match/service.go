@@ -12,6 +12,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/store/db"
@@ -622,8 +623,8 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 	}))
 }
 
-// Estimate uses a fresh verified quote and cache hits. Before reading completes,
-// all lines may qualify; scoring reserves for up to 40 longest source lines and
+// Estimate prices each packed request as the gateway will reserve it, after
+// cache hits. Before reading completes, all lines may qualify; scoring reserves for up to 40 longest source lines and
 // deliberately assumes no score-cache hits so an unknown classification cannot
 // make the upper estimate smaller than the requests actually needed.
 type Estimate struct {
@@ -674,8 +675,12 @@ func (s *Service) Estimate(ctx context.Context, u, job uuid.UUID) (Estimate, err
 		if e = json.Unmarshal(raw, &quote); e != nil {
 			return e
 		}
-		if !quote.Decision || quote.BoundReference == "" || quote.MaxInput <= 0 || quote.MaxRequestBytes <= 0 || time.Since(quote.FetchedAt) > 15*time.Minute {
+		if !quote.Decision || quote.Sheet == nil || quote.MaxRequestBytes <= 0 || time.Since(quote.FetchedAt) > 15*time.Minute {
 			return nil
+		}
+		var calibration []byte
+		if e = tx.QueryRow(ctx, `SELECT platform.model_calibration($1)`, *model).Scan(&calibration); e != nil {
+			return e
 		}
 		p := pipelineFor(DefaultPipeline)
 		read, e := p.read(snap)
@@ -737,26 +742,17 @@ func (s *Service) Estimate(ctx context.Context, u, job uuid.UUID) (Estimate, err
 			return nil
 		}
 		var total int64
+		// Each request is priced exactly as the gateway will reserve it.
 		for _, request := range packed {
-			evaluations, fees := 1, 1
-			if quote.PerQuestion {
-				evaluations = len(request.Items)
-			}
-			if quote.RequestFeePerQuestion {
-				fees = len(request.Items)
-			}
-			if quote.MaxInput > math.MaxInt/evaluations {
-				return nil
-			}
-			cost, e := modelapi.QuoteCost(quote.InputRate, "0", "0", quote.MaxInput*evaluations, 0)
+			raw, e := json.Marshal(request.Request)
 			if e != nil {
+				return e
+			}
+			p, e := billing.Predict(*quote.Sheet, billing.Shape{RequestBytes: len(raw), Questions: len(request.Items)}, modelapi.CalibrationOf(calibration))
+			if e != nil || total > math.MaxInt64-p.Reserved {
 				return nil
 			}
-			fee, e := modelapi.QuoteCost(quote.RequestRate, "0", "0", fees, 0)
-			if e != nil || cost > math.MaxInt64-fee || total > math.MaxInt64-cost-fee {
-				return nil
-			}
-			total += cost + fee
+			total += p.Reserved
 		}
 		cost := modelapi.USD(total)
 		out.Available = true

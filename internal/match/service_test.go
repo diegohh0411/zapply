@@ -19,6 +19,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -45,12 +46,9 @@ func (p *provider) Lookup(context.Context, string, string) (modelapi.Result, err
 	return modelapi.Result{}, errors.New("lookup unsupported")
 }
 func (p *provider) DecisionLookupSupported(string) bool { return false }
-func (p *provider) QuoteDecision(_ context.Context, r systemone.Request) (modelapi.Quote, error) {
-	q := modelapi.Quote{Model: r.Model, Reserved: 1000, FetchedAt: time.Now(), Decision: true, InputRate: "0.000000000001", RequestRate: "0", MaxInput: 1000, MaxRequestBytes: systemone.RequestBudget, BoundReference: "fake provider fixture", MaxQuestions: p.maxQuestions}
-	if p.maxQuestions > 0 && len(r.Questions) > p.maxQuestions {
-		return q, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
-	}
-	return q, nil
+func (p *provider) DecisionSheet(_ context.Context, model string) (billing.Sheet, error) {
+	return billing.Sheet{Provider: "fake", Model: model, InputRate: 1, Context: 1000, MaxRequestBytes: systemone.RequestBudget,
+		MaxQuestions: p.maxQuestions, Prior: billing.Tokenization{TokensPerKB: 1000}, FetchedAt: time.Now()}, nil
 }
 func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ modelapi.Quote) (modelapi.Result, error) {
 	p.calls++
@@ -420,6 +418,47 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 	estimate, e := f.s.Estimate(ctx, f.u, f.job.ID)
 	if e != nil || !estimate.Available || estimate.Requests != 0 || estimate.CostUSD == nil || *estimate.CostUSD != "0.000000000000" {
 		t.Fatalf("warm estimate %v %#v", e, estimate)
+	}
+	// Settled attempts calibrate the model: the fake bills 10 input tokens.
+	var raw []byte
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	calibration := modelapi.CalibrationOf(raw)
+	if calibration.Samples == 0 || calibration.TokensPerKB <= 0 || calibration.CostPermil <= 0 || calibration.Exceeded {
+		t.Fatalf("calibration %s", raw)
+	}
+	// A settlement first recorded without tokens and then corrected with them
+	// still calibrates from the corrected payload.
+	admin := f.db.Admin(t)
+	if _, e = admin.Exec(ctx, `WITH a AS (SELECT a.id FROM platform.model_attempt a WHERE a.model='test/decision' AND a.state='settled' LIMIT 1),
+		cleared AS (UPDATE platform.model_usage u SET usage='{}' FROM a WHERE u.attempt_id=a.id RETURNING u.attempt_id,u.user_id)
+		INSERT INTO platform.model_usage(attempt_id,user_id,amount,accounted_at,source,dedup_key,usage)
+		SELECT attempt_id,user_id,0,now(),'generation_lookup','correction:test','{"input_tokens":10}' FROM cleared LIMIT 1`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if corrected := modelapi.CalibrationOf(raw); corrected.Samples != calibration.Samples {
+		t.Fatalf("corrected settlement dropped from calibration: %s", raw)
+	}
+	// Chat usage names its tokens prompt_tokens/completion_tokens.
+	if _, e = admin.Exec(ctx, `UPDATE platform.model_usage SET usage='{"prompt_tokens":10,"completion_tokens":3}'
+		WHERE attempt_id IN (SELECT id FROM platform.model_attempt WHERE model='test/decision' AND state='settled')`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if chat := modelapi.CalibrationOf(raw); chat.Samples != calibration.Samples || chat.OutputPerQ <= 0 {
+		t.Fatalf("chat usage not calibrated: %s", raw)
 	}
 	old := f.start(t)
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {

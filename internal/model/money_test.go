@@ -17,10 +17,4 @@ func TestExactMoney(t *testing.T) {
 			t.Errorf("accepted %q", in)
 		}
 	}
-	if n, err := QuoteCost("0.0000004", "0.0000016", "0", 100, 128); err != nil || n != 244800000 {
-		t.Fatalf("quote=%d,%v", n, err)
-	}
-	if _, err := QuoteCost("9000000", "1", "0", 2, 1); err == nil {
-		t.Fatal("quote overflow accepted")
-	}
 }
