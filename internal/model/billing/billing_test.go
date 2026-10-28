@@ -39,21 +39,26 @@ func TestPredictCapsAtCeiling(t *testing.T) {
 
 func TestPredictCalibrated(t *testing.T) {
 	s := sheet()
+	// Calibration never lowers output below the prior.
+	p, _ := Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 250, OutputPerQ: 1})
+	if p.OutputTokens != 2 {
+		t.Fatalf("%+v", p)
+	}
 	// Too few samples keep the prior.
-	p, _ := Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples - 1, TokensPerKB: 10})
+	p, _ = Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples - 1, TokensPerKB: 10})
 	if p.Basis != BasisPrior {
 		t.Fatalf("%+v", p)
 	}
-	p, _ = Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 250, OutputPerQ: 1, CostPermil: 500})
-	if p.Basis != BasisCalibrated || p.InputTokens != 600 || p.OutputTokens != 1 {
+	p, _ = Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 250, OutputPerQ: 3, CostPermil: 500})
+	if p.Basis != BasisCalibrated || p.InputTokens != 600 || p.OutputTokens != 3 {
 		t.Fatalf("%+v", p)
 	}
-	if want := int64((600*100+1000)*1250/1000 + 7); p.Reserved != want {
+	if want := int64((600*100+3000)*1250/1000 + 7); p.Reserved != want {
 		t.Fatalf("low ratio keeps the minimum margin: %d want %d", p.Reserved, want)
 	}
 	// Settlements at twice the prediction widen the margin to 2.2×.
-	p, _ = Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 250, OutputPerQ: 1, CostPermil: 2000})
-	if want := int64((600*100+1000)*2200/1000 + 7); p.Reserved != want {
+	p, _ = Predict(s, Shape{RequestBytes: 2000, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 250, OutputPerQ: 3, CostPermil: 2000})
+	if want := int64((600*100+3000)*2200/1000 + 7); p.Reserved != want {
 		t.Fatalf("widened margin: %d want %d", p.Reserved, want)
 	}
 }
@@ -121,5 +126,21 @@ func TestPredictRecordedSettlement(t *testing.T) {
 	p, e := Predict(s, shape, c)
 	if e != nil || p.Reserved < settled || p.Reserved > 3*settled || p.Basis != BasisCalibrated {
 		t.Fatalf("calibrated %+v, settled %d: %v", p, settled, e)
+	}
+}
+
+// Five settlements that omitted output telemetry calibrate output to zero.
+// An output-priced model must still reserve.
+func TestPredictMissingOutputTelemetry(t *testing.T) {
+	s := Sheet{OutputRate: 1000, Context: 100, MaxOutput: 500, Prior: Tokenization{TokensPerKB: 1000, OutputPerQ: 2}}
+	p, e := Predict(s, Shape{RequestBytes: 100, Questions: 1}, Calibration{Samples: MinSamples, TokensPerKB: 100, CostPermil: 1000})
+	if e != nil || p.OutputTokens != 2 || p.Reserved <= 0 {
+		t.Fatalf("%+v %v", p, e)
+	}
+	// With no prior to fall back on, a paid call reserves the ceiling.
+	s.Prior.OutputPerQ = 0
+	p, _ = Predict(s, Shape{RequestBytes: 100, Questions: 1}, Calibration{Samples: MinSamples, CostPermil: 1000})
+	if p.Reserved != p.Ceiling || p.Basis != BasisCeiling {
+		t.Fatalf("%+v", p)
 	}
 }

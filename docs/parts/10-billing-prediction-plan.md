@@ -155,7 +155,7 @@ object. Each component either feeds a rate or makes the model incompatible:
 | --- | --- | --- |
 | `prompt` | input | missing counts as 0, not an error |
 | `input_cache_read`, `input_cache_write` | input | `InputRate` is the max of all input components |
-| `completion`, `internal_reasoning` | output | `OutputRate` is the max |
+| `completion`, `internal_reasoning` | incompatible if positive | see the implementation record: System One takes no output limit |
 | `request` | request | per question, per `ownerSelectedBound` |
 | `discount` | discount | never lowers a rate; recorded only |
 | `audio`, `input_audio`, `input_audio_cache`, `output_audio`, `image`, `image_output` | unused | decisions send text and return JSON, so these bill nothing; recorded, not priced. Lets audio-capable decision models (e.g. Liquid's newest) load. The cost ratio catches it if one does bill |
@@ -263,7 +263,7 @@ Prediction can be wrong, so the existing safety nets stay and get one more:
    - cache read pricier than prompt → `InputRate` = cache read rate;
    - missing `prompt`, positive `input_cache_read`, no request fee → reserved > 0;
    - positive `web_search` (or an unknown key) → `unbounded_pricing:web_search`;
-   - positive `completion` → output priced.
+   - positive `completion` → incompatible (changed after review).
 3. **Provider-neutral `QuoteDecision`.** Move quoting out of the OpenRouter
    client, embed sheet, shape and prediction in `Quote`, and keep the
    size checks and revalidation in `Decide`. Drop `PerQuestion`,
@@ -316,13 +316,24 @@ Differences from the design above:
   full-context reservation.
 - **Request bytes** are the JSON-marshalled request, the same measure as the
   request-size limit.
+- **Positive output pricing is incompatible** (from the independent review).
+  System One sends no output-token limit, and hidden reasoning need not appear
+  in the answers, so `systemone.ResultBudget` does not bound billable output.
+  OpenRouter sheets have no output rate and `MaxOutput` 0; `billing` keeps
+  output support for a provider that can enforce a limit.
+- **Calibrated output never drops below the prior**, and a prediction of zero
+  for a sheet with a positive ceiling reserves the ceiling. Settlements that
+  omit `output_tokens` no longer count as zero output.
+- **Corrections:** calibration sums every ledger delta for an attempt and
+  reads tokens from the latest usage payload that reports them.
 
 Tests: `internal/model/billing` covers the formula, ceiling cap, margin
 widening, the overrun fallback, zero rates and overflow, and replays the
 recorded d1 settlement (reserved ≥ settled under the prior, and within 3×
 once calibrated; 1.35× in practice). `internal/model/openrouter` has the #20
-fixtures: cache read pricier than prompt, missing prompt, positive
-completion, audio components accepted, and `web_search`, unknown and
+fixtures: cache read pricier than prompt, missing prompt, audio components
+accepted, and `completion`, `internal_reasoning`, `web_search`, unknown and
 unparsable components rejected. `internal/match` checks that settled attempts
-feed `platform.decision_calibration`. Only one recorded live settlement exists
+feed `platform.decision_calibration`, including one corrected after a
+settlement that lacked token counts. Only one recorded live settlement exists
 so far; the replay fixture should grow as more are collected.

@@ -430,6 +430,23 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 	if calibration.Samples == 0 || calibration.TokensPerKB <= 0 || calibration.CostPermil <= 0 || calibration.Exceeded {
 		t.Fatalf("calibration %s", raw)
 	}
+	// A settlement first recorded without tokens and then corrected with them
+	// still calibrates from the corrected payload.
+	admin := f.db.Admin(t)
+	if _, e = admin.Exec(ctx, `WITH a AS (SELECT a.id FROM platform.model_attempt a WHERE a.model='test/decision' AND a.state='settled' LIMIT 1),
+		cleared AS (UPDATE platform.model_usage u SET usage='{}' FROM a WHERE u.attempt_id=a.id RETURNING u.attempt_id,u.user_id)
+		INSERT INTO platform.model_usage(attempt_id,user_id,amount,accounted_at,source,dedup_key,usage)
+		SELECT attempt_id,user_id,0,now(),'generation_lookup','correction:test','{"input_tokens":10}' FROM cleared LIMIT 1`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.decision_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if corrected := modelapi.CalibrationOf(raw); corrected.Samples != calibration.Samples {
+		t.Fatalf("corrected settlement dropped from calibration: %s", raw)
+	}
 	old := f.start(t)
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
 		_, e := tx.Exec(ctx, `SELECT platform.save_model_settings('test/new-model',2)`)

@@ -116,7 +116,9 @@ func Predict(s Sheet, shape Shape, c Calibration) (Prediction, error) {
 	t := s.Prior
 	basis := BasisPrior
 	if c.Samples >= MinSamples {
-		t.TokensPerKB, t.OutputPerQ = c.TokensPerKB, c.OutputPerQ
+		// Output only widens: settlements that omit output telemetry report
+		// zero, which must not price output away.
+		t.TokensPerKB, t.OutputPerQ = c.TokensPerKB, max(t.OutputPerQ, c.OutputPerQ)
 		basis = BasisCalibrated
 	}
 	evals, fees := int64(1), int64(1)
@@ -149,7 +151,9 @@ func Predict(s Sheet, shape Shape, c Calibration) (Prediction, error) {
 	}
 	reserved := ceilDiv(new(big.Int).Mul(variable, big.NewInt(margin)), big.NewInt(1000))
 	reserved.Add(reserved, fee)
-	if c.Exceeded {
+	// An overrun, or a prediction that prices a paid call at nothing, falls
+	// back to the ceiling.
+	if c.Exceeded || (reserved.Sign() == 0 && ceiling.Sign() > 0) {
 		basis = BasisCeiling
 		reserved.Set(ceiling)
 	}

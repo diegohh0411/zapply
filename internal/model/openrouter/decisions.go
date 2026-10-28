@@ -31,9 +31,11 @@ var ownerSelectedBound = BillingBound{MaxRequestBytes: systemone.RequestBudget}
 // per byte, about 5× the observed rate, until settlements calibrate a model.
 var decisionPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 1024, OutputPerQ: 16}
 
-// componentRoles classifies the catalogue's pricing keys. Input and output
-// rates are the highest of their components. Decision calls send text and
-// return JSON, so audio and image charges never apply. Any other positive
+// componentRoles classifies the catalogue's pricing keys. The input rate is the
+// highest of its components. Decision calls send text and return JSON, so audio
+// and image charges never apply. Output is unbounded: System One takes no
+// output-token limit, and hidden reasoning need not appear in the answers, so a
+// positive output rate makes the model incompatible. Any other positive
 // component, web_search included, is a charge the reservation cannot bound.
 var componentRoles = map[string]string{
 	"prompt":             billing.RoleInput,
@@ -126,8 +128,8 @@ func (c *Client) sheet(m DecisionModel) (billing.Sheet, string) {
 	}
 	b := c.bound(m.ID)
 	s := billing.Sheet{Provider: "openrouter", Model: m.ID, RequestPerQuestion: true, Context: m.Context,
-		MaxOutput: systemone.ResultBudget, MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget),
-		MaxQuestions: b.MaxQuestions, Prior: decisionPrior, FetchedAt: m.FetchedAt, Components: []billing.Component{}}
+		MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget),
+		MaxQuestions:    b.MaxQuestions, Prior: decisionPrior, FetchedAt: m.FetchedAt, Components: []billing.Component{}}
 	names := slices.Sorted(maps.Keys(m.Pricing))
 	for _, name := range names {
 		value := strings.Trim(string(m.Pricing[name]), `"`)
@@ -150,7 +152,7 @@ func (c *Client) sheet(m DecisionModel) (billing.Sheet, string) {
 		case billing.RoleInput:
 			s.InputRate = max(s.InputRate, rate)
 		case billing.RoleOutput:
-			s.OutputRate = max(s.OutputRate, rate)
+			return billing.Sheet{}, "unbounded_pricing_" + name
 		case billing.RoleRequest:
 			s.RequestRate = rate
 		}

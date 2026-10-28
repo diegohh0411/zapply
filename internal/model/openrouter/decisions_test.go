@@ -147,10 +147,10 @@ func TestDecisionSheetPricesEveryComponent(t *testing.T) {
 		t.Fatalf("missing prompt: %+v %v", s, e)
 	}
 
-	// Completion and reasoning are priced as output.
-	s, e = sheetFor(t, `{"prompt":"0","completion":"0.000001","internal_reasoning":"0.000002","request":"0.001"}`)
-	if e != nil || s.OutputRate != 2_000_000 || s.RequestRate != 1_000_000_000 || !s.RequestPerQuestion {
-		t.Fatalf("output pricing: %+v %v", s, e)
+	// The request fee is charged per question.
+	s, e = sheetFor(t, `{"prompt":"0","completion":"0","request":"0.001"}`)
+	if e != nil || s.RequestRate != 1_000_000_000 || !s.RequestPerQuestion {
+		t.Fatalf("request pricing: %+v %v", s, e)
 	}
 
 	// Audio and image charges never apply to decision calls.
@@ -168,9 +168,11 @@ func TestDecisionSheetPricesEveryComponent(t *testing.T) {
 
 	// Per-call charges the reservation cannot bound make the model incompatible.
 	for pricing, reason := range map[string]string{
-		`{"prompt":"0.000000042","web_search":"0.004"}`: "unbounded_pricing_web_search",
-		`{"prompt":"0.000000042","new_thing":"0.1"}`:    "unbounded_pricing_new_thing",
-		`{"prompt":"0.000000042","request":"free"}`:     "invalid_pricing_request",
+		`{"prompt":"0.000000042","web_search":"0.004"}`:            "unbounded_pricing_web_search",
+		`{"prompt":"0.000000042","completion":"0.000001"}`:         "unbounded_pricing_completion",
+		`{"prompt":"0.000000042","internal_reasoning":"0.000002"}`: "unbounded_pricing_internal_reasoning",
+		`{"prompt":"0.000000042","new_thing":"0.1"}`:               "unbounded_pricing_new_thing",
+		`{"prompt":"0.000000042","request":"free"}`:                "invalid_pricing_request",
 	} {
 		_, e = sheetFor(t, pricing)
 		var pe *modelapi.ProviderError
