@@ -101,21 +101,6 @@ func (c *Client) compatibility(m DecisionModel) string {
 	if m.Context <= 0 {
 		return "invalid_context"
 	}
-	if _, ok := m.Pricing["prompt"]; !ok {
-		return "unsupported_pricing"
-	}
-	if _, ok := m.Pricing["completion"]; !ok {
-		return "unsupported_pricing"
-	}
-	for k, v := range m.Pricing {
-		n, e := modelapi.Cost(v)
-		if e != nil {
-			return "unsupported_pricing"
-		}
-		if k != "prompt" && k != "request" && n != 0 {
-			return "unsupported_pricing"
-		}
-	}
 	return ""
 }
 func (c *Client) QuoteDecision(ctx context.Context, r systemone.Request) (modelapi.Quote, error) {
