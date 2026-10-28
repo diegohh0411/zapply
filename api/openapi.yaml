@@ -1348,13 +1348,35 @@ paths:
       tags: [mail]
       description: |
         Begins the Gmail consent flow. Send the browser to `url`; Google returns
-        to the server's `/oauth/google/callback`, which redirects back to the app.
+        to the server's `/oauth/google/callback`, which redirects to the app, which
+        calls `completeGoogleConnect`.
       responses:
         "200":
           description: Where to send the browser.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MailConnect" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/google/complete:
+    post:
+      operationId: completeGoogleConnect
+      tags: [mail]
+      description: |
+        Finishes the consent flow with the `state` and `code` the server's
+        callback passed to the app. The state must belong to the caller, who is
+        the member that started it; 422 on `state` otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailConnectComplete" }
+      responses:
+        "200":
+          description: The connected account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
         default: { $ref: "#/components/responses/Problem" }
 
   /v1/mail/accounts/{id}:
@@ -2560,6 +2582,12 @@ components:
       required: [url]
       properties:
         url: { type: string }
+    MailConnectComplete:
+      type: object
+      required: [state, code]
+      properties:
+        state: { type: string, minLength: 1, maxLength: 512 }
+        code: { type: string, minLength: 1, maxLength: 2048 }
     MailMessage:
       type: object
       required: [id, account_id, category, from, subject, snippet, received_at, classified_at]

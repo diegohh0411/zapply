@@ -178,10 +178,11 @@ worker writes `mail_message`. `refresh_token_enc` is never selectable by
 ## API, events and web
 
 - `GET /v1/mail/accounts`, `POST /v1/mail/accounts/google/start`,
-  `PATCH /v1/mail/accounts/{id}` (pause or resume), `DELETE /v1/mail/accounts/{id}`.
+  `POST /v1/mail/accounts/google/complete`, `PATCH /v1/mail/accounts/{id}` (pause or
+  resume), `DELETE /v1/mail/accounts/{id}`.
 - Outside `/v1`, because neither request carries a bearer token:
-  `GET /oauth/google/callback` (identified by the single-use state) and
-  `POST /hooks/google/pubsub` (identified by Pub/Sub's signed token).
+  `GET /oauth/google/callback` (only redirects to the app with the code and state)
+  and `POST /hooks/google/pubsub` (identified by Pub/Sub's signed token).
 - `GET /v1/mail/messages?category=&job_id=` with cursor pagination; relevant mail
   only.
 - Events: `mail.account.updated`, `mail.message.classified`.
@@ -217,6 +218,9 @@ a Mail tab on the job sheet. Where the build differs from the plan:
 | Plan | Built | Why |
 |---|---|---|
 | Callback and push under `/v1/mail/...` | `/oauth/google/callback` and `/hooks/google/pubsub` | `/v1` requires a bearer token; the browser redirect and Pub/Sub carry none |
+| The callback completes the connection | The callback redirects to `/mail?oauth_state&oauth_code`; the app calls `POST /v1/mail/accounts/google/complete` as the signed-in member | A callback that trusts only the state lets a consent link sent to someone else attach their mailbox to the sender's account. The state now has to belong to the caller |
+| Read as many messages as arrive | At most 100 per run, none older than 30 days; a backlog continues in a follow-up sync, and the cursor only advances over what was read | Keeps a run inside the job timeout and never skips mail |
+| Pending mail is classified | Not while the mailbox is paused; dropped (content cleared) once disconnected; at most 3 open requests per member | A pause or disconnect must stop spend; matching keeps its model slots |
 | Pub/Sub pull subscription for local development | Not built. Use a short `MAIL_RECONCILE_INTERVAL` | Pull needs a service-account client for the Pub/Sub API; reconcile covers development with no new dependency |
 | Content scrubbed from model requests ("scrub snippet/subject/from") | Also blanks the stored request: `platform.scrub_mail_request` | `model_request` is insert-only and held the exact text sent. A restricted platform function blanks `state` for mail operations only, after the answer is recorded |
 | One `classify` step | Two questions: category, then (for relevant mail only) which open job | The job link is a separate, optional answer; failing it keeps the message, unlinked |

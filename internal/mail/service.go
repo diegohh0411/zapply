@@ -129,48 +129,54 @@ func (s *Service) StartConnect(ctx context.Context, u uuid.UUID) (string, error)
 	return s.provider.AuthURL(state, base64.RawURLEncoding.EncodeToString(challenge[:])), nil
 }
 
-// ErrBadState means the OAuth state is unknown, used or expired.
+// ErrBadState means the OAuth state is unknown, used, expired, or was started by
+// someone else.
 var ErrBadState = errors.New("unknown or expired authorization state")
 
-// CompleteConnect finishes the flow the callback received: it trades the code
-// for tokens, stores the refresh token encrypted, and queues the first sync.
-func (s *Service) CompleteConnect(ctx context.Context, state, code string) (uuid.UUID, error) {
+// CompleteConnect finishes a flow for the signed-in member: it trades the code
+// for tokens, stores the refresh token encrypted, and queues the first sync. The
+// state must be one this member started, so a consent link forwarded to someone
+// else cannot attach that person's mailbox to this account.
+func (s *Service) CompleteConnect(ctx context.Context, u uuid.UUID, state, code string) (Account, error) {
 	if !s.Configured() {
-		return uuid.Nil, ErrNotConfigured
+		return Account{}, ErrNotConfigured
 	}
 	var raw []byte
-	if err := s.store.Pool().QueryRow(ctx, "SELECT platform.take_mail_oauth($1)", digest(state)).Scan(&raw); err != nil || raw == nil {
-		return uuid.Nil, ErrBadState
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT platform.take_mail_oauth($1)", digest(state)).Scan(&raw)
+	})
+	if err != nil || raw == nil {
+		return Account{}, errors.Join(ErrBadState, err)
 	}
 	var flow struct {
-		UserID   uuid.UUID `json:"user_id"`
-		Verifier string    `json:"verifier"`
+		Verifier string `json:"verifier"`
 	}
 	if err := json.Unmarshal(raw, &flow); err != nil {
-		return uuid.Nil, err
+		return Account{}, err
 	}
 	tokens, err := s.provider.Exchange(ctx, code, flow.Verifier)
 	if err != nil {
-		return uuid.Nil, err
+		return Account{}, err
 	}
 	profile, err := s.provider.Profile(ctx, tokens.Access)
 	if err != nil {
-		return uuid.Nil, err
+		return Account{}, err
 	}
-	var id uuid.UUID
-	err = s.store.InTenant(ctx, flow.UserID, func(tx pgx.Tx) error {
-		e := tx.QueryRow(ctx, "SELECT id FROM mail_account WHERE user_id=$1 AND provider=$2 AND address=$3", flow.UserID, s.provider.Name(), profile.Address).Scan(&id)
+	var out Account
+	err = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		var id uuid.UUID
+		e := tx.QueryRow(ctx, "SELECT id FROM mail_account WHERE user_id=$1 AND provider=$2 AND address=$3", u, s.provider.Name(), profile.Address).Scan(&id)
 		switch {
 		case errors.Is(e, pgx.ErrNoRows):
 			id = uuid.Must(uuid.NewV7())
-			if _, e = tx.Exec(ctx, "INSERT INTO mail_account(id,user_id,provider,address) VALUES($1,$2,$3,$4)", id, flow.UserID, s.provider.Name(), profile.Address); e != nil {
+			if _, e = tx.Exec(ctx, "INSERT INTO mail_account(id,user_id,provider,address) VALUES($1,$2,$3,$4)", id, u, s.provider.Name(), profile.Address); e != nil {
 				return e
 			}
 		case e != nil:
 			return e
 		default:
 			// Reconnecting keeps the cursor and the messages already read.
-			if _, e = tx.Exec(ctx, "UPDATE mail_account SET status='active',last_error='',version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2", id, flow.UserID); e != nil {
+			if _, e = tx.Exec(ctx, "UPDATE mail_account SET status='active',last_error='',version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2", id, u); e != nil {
 				return e
 			}
 		}
@@ -181,24 +187,28 @@ func (s *Service) CompleteConnect(ctx context.Context, state, code string) (uuid
 		if _, e = tx.Exec(ctx, "SELECT platform.save_mail_credential($1,$2,$3)", id, ct, version); e != nil {
 			return e
 		}
-		if e = emit(ctx, tx, flow.UserID, "mail.account.updated", id); e != nil {
+		if e = emit(ctx, tx, u, "mail.account.updated", id); e != nil {
 			return e
 		}
-		return s.enqueue(ctx, tx, SyncArgs{UserID: flow.UserID, AccountID: id, Tick: "connect:" + uuid.NewString()})
+		if e = s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "connect:" + uuid.NewString()}); e != nil {
+			return e
+		}
+		out, e = s.account(ctx, tx, u, id)
+		return e
 	})
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) && pg.Code == "23505" {
 		// The address belongs to another zapply user. Don't keep a stolen-looking token.
 		_ = s.provider.Revoke(ctx, tokens.Refresh)
-		return uuid.Nil, &library.ConflictError{Message: "that Gmail address is already connected to another zapply account"}
+		return Account{}, &library.ConflictError{Message: "that Gmail address is already connected to another zapply account"}
 	}
 	if err != nil {
-		return uuid.Nil, err
+		return Account{}, err
 	}
 	s.mu.Lock()
-	s.tokens[id] = tokens
+	s.tokens[out.ID] = tokens
 	s.mu.Unlock()
-	return id, nil
+	return out, nil
 }
 
 func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, args river.JobArgs) error {
@@ -263,10 +273,33 @@ func (s *Service) SetPaused(ctx context.Context, u, id uuid.UUID, paused bool) (
 		if e = emit(ctx, tx, u, "mail.account.updated", id); e != nil {
 			return e
 		}
-		if !paused {
-			return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "resume:" + uuid.NewString()})
+		if paused {
+			return nil
 		}
-		return nil
+		// Mail read before the pause is still waiting to be classified.
+		rows, e := tx.Query(ctx, `SELECT id FROM mail_message WHERE user_id=$1 AND account_id=$2 AND state='pending'`, u, id)
+		if e != nil {
+			return e
+		}
+		var waiting []uuid.UUID
+		for rows.Next() {
+			var m uuid.UUID
+			if e = rows.Scan(&m); e != nil {
+				rows.Close()
+				return e
+			}
+			waiting = append(waiting, m)
+		}
+		rows.Close()
+		if e = rows.Err(); e != nil {
+			return e
+		}
+		for _, m := range waiting {
+			if e = s.enqueue(ctx, tx, ClassifyArgs{UserID: u, MessageID: m, Wake: "resume"}); e != nil {
+				return e
+			}
+		}
+		return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "resume:" + uuid.NewString()})
 	})
 	return out, err
 }

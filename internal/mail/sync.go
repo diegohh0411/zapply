@@ -3,11 +3,14 @@ package mail
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/riverqueue/river"
 )
 
@@ -15,10 +18,14 @@ const (
 	// backfillDays and backfillMax bound the first read of a mailbox.
 	backfillDays = 30
 	backfillMax  = 200
-	// syncBatch caps the messages one run reads; a larger backlog is picked up
-	// by the next sync because the cursor only moves past what was read.
-	syncBatch = 500
-	leaseFor  = 5 * time.Minute
+	// syncBatch caps the messages one run reads, so a run finishes well inside the
+	// job timeout. A larger backlog is picked up by a follow-up sync, because the
+	// cursor only moves past what was read.
+	syncBatch = 100
+	// maxAgeDays is how far back mail is ever read, on first connect, after a
+	// lapse or in a backlog.
+	maxAgeDays = backfillDays
+	leaseFor   = 5 * time.Minute
 )
 
 // SyncArgs is unique per trigger (Tick): River keeps a running job unique, so a
@@ -187,6 +194,7 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 	}
 	var cursor string
 	var ids []string
+	var more bool
 	var watch *Watch
 	bootstrap := acc.HistoryID == nil
 	if !bootstrap {
@@ -202,10 +210,17 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 				return e
 			}
 			ids = append(ids, p.MessageIDs...)
-			if p.HistoryID != "" {
-				cursor = p.HistoryID
+			if p.Next == "" {
+				if p.HistoryID != "" {
+					cursor = p.HistoryID
+				}
+				break
 			}
-			if p.Next == "" || len(ids) >= syncBatch {
+			// Not the last page: the mailbox's current position would skip what is
+			// left, so only advance over the changes actually read.
+			cursor = newer(cursor, p.LastID)
+			if len(ids) >= syncBatch {
+				more = true
 				break
 			}
 			page = p.Next
@@ -230,7 +245,7 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 			watch = &w
 		}
 	}
-	ids = unique(ids)
+	ids = unique(storable(ids))
 	known, err := s.known(ctx, u, id, ids)
 	if err != nil {
 		return err
@@ -251,22 +266,14 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 		if strings.Contains(strings.ToLower(m.From), "<"+acc.Address+">") || strings.EqualFold(strings.TrimSpace(m.From), acc.Address) {
 			continue
 		}
+		if m.ReceivedAt.Before(time.Now().AddDate(0, 0, -maxAgeDays)) {
+			continue
+		}
 		msgs = append(msgs, m)
 	}
 	return s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
 		for _, m := range msgs {
-			mid := uuid.Must(uuid.NewV7())
-			var inserted uuid.UUID
-			e := tx.QueryRow(ctx, `INSERT INTO mail_message(id,user_id,account_id,provider_message_id,thread_id,received_at,from_address,subject,snippet)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(account_id,provider_message_id) DO NOTHING RETURNING id`,
-				mid, u, id, m.ID, m.ThreadID, m.ReceivedAt, m.From, m.Subject, m.Snippet).Scan(&inserted)
-			if errors.Is(e, pgx.ErrNoRows) {
-				continue
-			}
-			if e != nil {
-				return e
-			}
-			if e = s.enqueue(ctx, tx, ClassifyArgs{UserID: u, MessageID: inserted}); e != nil {
+			if e := s.store1(ctx, tx, u, id, m); e != nil {
 				return e
 			}
 		}
@@ -279,8 +286,74 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 		if e != nil || tag.RowsAffected() == 0 {
 			return e
 		}
-		return emit(ctx, tx, u, "mail.account.updated", id)
+		if e = emit(ctx, tx, u, "mail.account.updated", id); e != nil {
+			return e
+		}
+		if more {
+			return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "continue:" + cursor})
+		}
+		return nil
 	})
+}
+
+// store1 saves one message and queues its classification. A message Postgres
+// cannot store (a NUL byte, an invalid sequence) is skipped on its own, inside a
+// savepoint: letting it fail the batch would roll the cursor back and make every
+// retry fail on the same message.
+func (s *Service) store1(ctx context.Context, tx pgx.Tx, u, account uuid.UUID, m Message) error {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	var inserted uuid.UUID
+	err = sp.QueryRow(ctx, `INSERT INTO mail_message(id,user_id,account_id,provider_message_id,thread_id,received_at,from_address,subject,snippet)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(account_id,provider_message_id) DO NOTHING RETURNING id`,
+		uuid.Must(uuid.NewV7()), u, account, m.ID, clean(m.ThreadID), m.ReceivedAt, clean(m.From), clean(m.Subject), clean(m.Snippet)).Scan(&inserted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return sp.Commit(ctx) // already stored
+	}
+	if err == nil {
+		err = s.enqueue(ctx, sp, ClassifyArgs{UserID: u, MessageID: inserted})
+	}
+	if err != nil {
+		_ = sp.Rollback(ctx)
+		var pg *pgconn.PgError
+		if errors.As(err, &pg) && (strings.HasPrefix(pg.Code, "22") || strings.HasPrefix(pg.Code, "23")) {
+			s.log.Warn("skipped a message the database would not store", "account_id", account, "code", pg.Code)
+			return nil
+		}
+		return err
+	}
+	return sp.Commit(ctx)
+}
+
+// clean removes what text columns cannot hold. Mail headers are attacker
+// controlled, and a MIME encoded word can decode to a NUL or invalid UTF-8.
+func clean(s string) string { return strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "") }
+
+// newer returns the later of two history IDs, which are unsigned numbers.
+func newer(a, b string) string {
+	x, ea := strconv.ParseUint(a, 10, 64)
+	y, eb := strconv.ParseUint(b, 10, 64)
+	if eb != nil {
+		return a
+	}
+	if ea != nil || y > x {
+		return b
+	}
+	return a
+}
+
+// storable drops IDs Postgres cannot hold in a text column. Real provider IDs
+// are plain ASCII; anything else is not worth a failed query.
+func storable(in []string) []string {
+	out := in[:0]
+	for _, id := range in {
+		if id != "" && utf8.ValidString(id) && !strings.ContainsRune(id, 0) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func unique(in []string) []string {
@@ -379,6 +452,13 @@ func (s *Service) Teardown(ctx context.Context, u, id uuid.UUID) error {
 		}
 		if t, e := s.provider.Refresh(ctx, refresh); e == nil {
 			_ = s.provider.Stop(ctx, t.Access) // best effort: the watch expires on its own
+		}
+		// A reconnect since the first check made this token the live one: leave it.
+		var again string
+		if e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT status FROM mail_account WHERE user_id=$1 AND id=$2`, u, id).Scan(&again)
+		}); e != nil || again != "disconnected" {
+			return e
 		}
 		if e := s.provider.Revoke(ctx, refresh); e != nil {
 			return e

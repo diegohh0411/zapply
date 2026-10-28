@@ -40,15 +40,19 @@ type fakeMail struct {
 	calls    map[string]int
 	stopped  int
 	revokes  []string
+	pageSize int
 }
 
 func newFakeMail(address string) *fakeMail {
 	return &fakeMail{address: address, messages: map[string]mail.Message{}, calls: map[string]int{}}
 }
 func (f *fakeMail) add(id, from, subject, snippet string) {
+	f.addAt(id, from, subject, snippet, time.Now().UTC())
+}
+func (f *fakeMail) addAt(id, from, subject, snippet string, at time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.messages[id] = mail.Message{ID: id, ThreadID: "t" + id, ReceivedAt: time.Now().UTC(), From: from, Subject: subject, Snippet: snippet}
+	f.messages[id] = mail.Message{ID: id, ThreadID: "t" + id, ReceivedAt: at, From: from, Subject: subject, Snippet: snippet}
 	f.added = append(f.added, id)
 }
 func (f *fakeMail) count(name string) int {
@@ -81,7 +85,7 @@ func (f *fakeMail) Profile(context.Context, string) (mail.Profile, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hit("profile")
-	return mail.Profile{Address: f.address, HistoryID: "c" + itoa(len(f.added))}, nil
+	return mail.Profile{Address: f.address, HistoryID: itoa(len(f.added))}, nil
 }
 func (f *fakeMail) Watch(context.Context, string) (mail.Watch, bool, error) {
 	f.mu.Lock()
@@ -101,15 +105,24 @@ func (f *fakeMail) Revoke(_ context.Context, token string) error {
 	f.revokes = append(f.revokes, token)
 	return nil
 }
-func (f *fakeMail) History(_ context.Context, _, start, _ string) (mail.HistoryPage, error) {
+func (f *fakeMail) History(_ context.Context, _, start, page string) (mail.HistoryPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hit("history")
 	if start == "expired" {
 		return mail.HistoryPage{}, mail.ErrHistoryExpired
 	}
-	from := atoi(strings.TrimPrefix(start, "c"))
-	return mail.HistoryPage{MessageIDs: append([]string(nil), f.added[from:]...), HistoryID: "c" + itoa(len(f.added))}, nil
+	from := atoi(start)
+	offset := atoi(page)
+	rest := f.added[from+offset:]
+	out := mail.HistoryPage{HistoryID: itoa(len(f.added))}
+	if f.pageSize > 0 && len(rest) > f.pageSize {
+		rest = rest[:f.pageSize]
+		out.Next = itoa(offset + f.pageSize)
+	}
+	out.MessageIDs = append([]string(nil), rest...)
+	out.LastID = itoa(from + offset + len(rest))
+	return out, nil
 }
 func (f *fakeMail) Recent(context.Context, string, int, int) ([]string, error) {
 	f.mu.Lock()
@@ -128,7 +141,13 @@ func (f *fakeMail) Get(_ context.Context, _, id string) (mail.Message, error) {
 	return m, nil
 }
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
-func atoi(s string) int { var n int; _ = json.Unmarshal([]byte(s), &n); return n }
+func atoi(s string) int {
+	var n int
+	if s != "" {
+		_ = json.Unmarshal([]byte(s), &n)
+	}
+	return n
+}
 
 // model answers mail questions from the subject line.
 type model struct{ calls int }
@@ -270,11 +289,11 @@ func (f *fixture) connect(t *testing.T) uuid.UUID {
 		t.Fatal(e)
 	}
 	state := url[strings.Index(url, "state=")+len("state="):]
-	id, e := f.api.CompleteConnect(ctx, state, "code")
+	a, e := f.api.CompleteConnect(ctx, f.u, state, "code")
 	if e != nil {
 		t.Fatal(e)
 	}
-	return id
+	return a.ID
 }
 
 // drain finishes every open mail request, as the worker would.
@@ -352,7 +371,8 @@ func (f *fixture) classifyAll(t *testing.T, ids map[string]uuid.UUID) {
 	ctx := context.Background()
 	for round := 0; round < 6; round++ {
 		for _, id := range ids {
-			if e := f.ws.Classify(ctx, f.u, id); e != nil {
+			// Over the member's open-request limit a message waits for the next round.
+			if e := f.ws.Classify(ctx, f.u, id); e != nil && !strings.Contains(e.Error(), "JobSnooze") {
 				t.Fatal(e)
 			}
 		}
@@ -379,7 +399,7 @@ func TestSyncClassifyRetentionAndScrub(t *testing.T) {
 		t.Fatalf("messages %v, recent calls %d", ids, f.fake.count("recent"))
 	}
 	var cursor *string
-	if e := f.db.Admin(t).QueryRow(ctx, `SELECT history_id FROM mail_account WHERE id=$1`, acct).Scan(&cursor); e != nil || cursor == nil || *cursor != "c4" {
+	if e := f.db.Admin(t).QueryRow(ctx, `SELECT history_id FROM mail_account WHERE id=$1`, acct).Scan(&cursor); e != nil || cursor == nil || *cursor != "4" {
 		t.Fatalf("cursor %v %v", cursor, e)
 	}
 	// A repeat sync with nothing new reads nothing and adds nothing.
@@ -509,13 +529,19 @@ func TestCredentialsAreSealedAndTenantsIsolated(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = f.api.CompleteConnect(ctx, url[strings.Index(url, "state=")+len("state="):], "code")
+	state := url[strings.Index(url, "state=")+len("state="):]
+	// Someone else's consent link cannot attach a mailbox to this account, and
+	// trying does not use the state up.
+	if _, e = f.api.CompleteConnect(ctx, f.u, state, "code"); !errors.Is(e, mail.ErrBadState) {
+		t.Fatalf("a forwarded consent link was accepted: %v", e)
+	}
+	_, e = f.api.CompleteConnect(ctx, other, state, "code")
 	var conflict *library.ConflictError
 	if !errors.As(e, &conflict) || len(f.fake.revokes) != 1 {
 		t.Fatalf("second connect: %v, revokes %v", e, f.fake.revokes)
 	}
 	// An OAuth state works once.
-	if _, e = f.api.CompleteConnect(ctx, url[strings.Index(url, "state=")+len("state="):], "code"); !errors.Is(e, mail.ErrBadState) {
+	if _, e = f.api.CompleteConnect(ctx, other, state, "code"); !errors.Is(e, mail.ErrBadState) {
 		t.Fatalf("state reused: %v", e)
 	}
 }
@@ -711,5 +737,176 @@ func TestRecoverQueuesDueWorkOnce(t *testing.T) {
 	}
 	if watches = count("mail_watch"); watches != 0 {
 		t.Fatalf("watch queued with push off: %d", watches)
+	}
+}
+
+func TestBacklogIsReadInBatchesWithoutSkipping(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil { // bootstrap: nothing yet
+		t.Fatal(e)
+	}
+	for i := 0; i < 250; i++ {
+		f.fake.add("b"+itoa(i), "x@y.test", "Update "+itoa(i), "preview")
+	}
+	f.fake.pageSize = 60
+	cursor := func() string {
+		var c string
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT history_id FROM mail_account WHERE id=$1`, acct).Scan(&c); e != nil {
+			t.Fatal(e)
+		}
+		return c
+	}
+	syncs := func() int {
+		var n int
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT count(*) FROM river.river_job WHERE kind='mail_sync' AND args->>'tick' LIKE 'continue:%'`).Scan(&n); e != nil {
+			t.Fatal(e)
+		}
+		return n
+	}
+	// 100 messages per run; the cursor stops where the run did, not at the mailbox's end.
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	if n := len(f.messageIDs(t)); n != 120 || cursor() != "120" || syncs() != 1 {
+		t.Fatalf("first run: %d messages, cursor %s, follow-ups %d", n, cursor(), syncs())
+	}
+	for i := 0; i < 2; i++ {
+		if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if n := len(f.messageIDs(t)); n != 250 || cursor() != "250" {
+		t.Fatalf("after catching up: %d messages, cursor %s", n, cursor())
+	}
+}
+
+func TestUnstorableMailDoesNotStopTheSync(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	f.fake.add("bad\x00id", "x@y.test", "cannot store this id", "preview")
+	f.fake.add("nul", "x@y.test", "has a\x00NUL", "bad \xff bytes")
+	f.fake.add("long", "x@y.test", strings.Repeat("s", 1500), "a row the database refuses")
+	f.fake.add("fine", "x@y.test", "Interview", "ok")
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatalf("one bad message stopped the sync: %v", e)
+	}
+	ids := f.messageIDs(t)
+	if len(ids) != 2 || ids["fine"] == uuid.Nil || ids["nul"] == uuid.Nil {
+		t.Fatalf("stored %v", ids)
+	}
+	r := f.row(t, ids["nul"])
+	if r.Subject == nil || *r.Subject != "has aNUL" || r.Snippet == nil || *r.Snippet != "bad  bytes" {
+		t.Fatalf("not cleaned: %+v", r)
+	}
+	var cursor string
+	if e := f.db.Admin(t).QueryRow(ctx, `SELECT history_id FROM mail_account WHERE id=$1`, acct).Scan(&cursor); e != nil || cursor != "4" {
+		t.Fatalf("cursor %q %v: the bad message would be fetched again", cursor, e)
+	}
+}
+
+func TestMailOlderThanThirtyDaysIsNeverRead(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	f.fake.addAt("old", "x@y.test", "Interview long ago", "p", time.Now().AddDate(0, 0, -45))
+	f.fake.addAt("new", "x@y.test", "Interview this week", "p", time.Now().AddDate(0, 0, -3))
+	f.fake.recent = []string{"new", "old"}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	if ids := f.messageIDs(t); len(ids) != 1 || ids["new"] == uuid.Nil {
+		t.Fatalf("stored %v", ids)
+	}
+}
+
+func TestPausedAndDisconnectedMailboxesSendNothingToTheModel(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	f.fake.add("m1", "a@b.test", "Interview with Acme", "p")
+	f.fake.add("m2", "a@b.test", "Offer from Acme", "p")
+	f.fake.recent = []string{"m1", "m2"}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	ids := f.messageIDs(t)
+	ops := func() int {
+		var n int
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT count(*) FROM mail_operation`).Scan(&n); e != nil {
+			t.Fatal(e)
+		}
+		return n
+	}
+	classify := func() int {
+		var n int
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT count(*) FROM river.river_job WHERE kind='mail_classify'`).Scan(&n); e != nil {
+			t.Fatal(e)
+		}
+		return n
+	}
+	// Paused after reading: the waiting mail is not classified.
+	if _, e := f.api.SetPaused(ctx, f.u, acct, true); e != nil {
+		t.Fatal(e)
+	}
+	for _, id := range ids {
+		if e := f.ws.Classify(ctx, f.u, id); e != nil {
+			t.Fatal(e)
+		}
+	}
+	f.drain(t)
+	if ops() != 0 || f.model.calls != 0 {
+		t.Fatalf("paused mailbox sent %d requests, model called %d times", ops(), f.model.calls)
+	}
+	// Resuming wakes the waiting messages.
+	before := classify()
+	if _, e := f.api.SetPaused(ctx, f.u, acct, false); e != nil {
+		t.Fatal(e)
+	}
+	if classify() != before+2 {
+		t.Fatalf("resume queued %d classify jobs, want 2", classify()-before)
+	}
+	// Disconnected: waiting mail is dropped, content included.
+	if e := f.api.Disconnect(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	for _, id := range ids {
+		if e := f.ws.Classify(ctx, f.u, id); e != nil {
+			t.Fatal(e)
+		}
+		if r := f.row(t, id); r.State != "failed" || r.Subject != nil || r.Snippet != nil || r.From != nil {
+			t.Fatalf("disconnected mailbox kept mail: %+v", r)
+		}
+	}
+	if ops() != 0 || f.model.calls != 0 {
+		t.Fatal("a disconnected mailbox reached the model")
+	}
+}
+
+func TestOnlyTheWorkerWritesMessages(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	for table, denied := range map[string][]string{
+		"mail_message":   {"INSERT", "UPDATE", "DELETE"},
+		"mail_operation": {"INSERT", "UPDATE", "DELETE"},
+		"mail_account":   {"DELETE"},
+	} {
+		for _, priv := range denied {
+			var ok bool
+			if e := f.db.Admin(t).QueryRow(ctx, `SELECT has_table_privilege('zapply_app',$1,$2)`, table, priv).Scan(&ok); e != nil || ok {
+				t.Errorf("zapply_app can %s %s (%v)", priv, table, e)
+			}
+		}
+	}
+	for _, c := range []struct{ table, priv string }{{"mail_message", "INSERT"}, {"mail_account", "UPDATE"}} {
+		var ok bool
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT has_table_privilege('zapply_worker',$1,$2)`, c.table, c.priv).Scan(&ok); e != nil || !ok {
+			t.Errorf("zapply_worker cannot %s %s (%v)", c.priv, c.table, e)
+		}
 	}
 }

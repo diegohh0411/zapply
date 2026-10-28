@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -77,32 +78,34 @@ func (s *server) ListMailMessages(ctx context.Context, req gen.ListMailMessagesR
 	return mailValue[gen.ListMailMessages200JSONResponse](page, nil)
 }
 
+// CompleteGoogleConnect finishes the consent flow for the signed-in member. The
+// state must be one this member started, which is what stops a consent link sent
+// to someone else from attaching their mailbox here.
+func (s *server) CompleteGoogleConnect(ctx context.Context, req gen.CompleteGoogleConnectRequestObject) (gen.CompleteGoogleConnectResponseObject, error) {
+	a, err := s.mail.CompleteConnect(ctx, uid(ctx), req.Body.State, req.Body.Code)
+	if errors.Is(err, mail.ErrBadState) {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "state", Message: "this sign-in link expired or belongs to another account; start again"}}}
+	}
+	return mailValue[gen.CompleteGoogleConnect200JSONResponse](a, err)
+}
+
 // googleCallback receives the browser after Google's consent screen. It has no
-// bearer token: the single-use state it carries identifies the member.
+// bearer token, so it only hands the result to the app, which finishes the flow
+// as the signed-in member (CompleteGoogleConnect).
 func (s *server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	back := func(result string) {
-		http.Redirect(w, r, "/mail?"+result, http.StatusSeeOther)
-	}
-	if q.Get("error") != "" {
-		back("error=denied")
-		return
-	}
-	_, err := s.mail.CompleteConnect(r.Context(), q.Get("state"), q.Get("code"))
-	var conflict *library.ConflictError
+	back := url.Values{}
 	switch {
-	case err == nil:
-		back("connected=1")
-	case errors.Is(err, mail.ErrBadState):
-		back("error=expired")
-	case errors.Is(err, mail.ErrNotConfigured):
-		back("error=unavailable")
-	case errors.As(err, &conflict):
-		back("error=in_use")
+	case q.Get("error") != "":
+		back.Set("error", "denied")
+	case q.Get("state") == "" || q.Get("code") == "":
+		back.Set("error", "expired")
 	default:
-		logx.From(r.Context()).Error("gmail connect failed", "err", err)
-		back("error=failed")
+		back.Set("oauth_state", q.Get("state"))
+		back.Set("oauth_code", q.Get("code"))
 	}
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	http.Redirect(w, r, "/mail?"+back.Encode(), http.StatusSeeOther)
 }
 
 // lazyVerifier builds the Google OIDC verifier on first use, so the API starts

@@ -62,6 +62,9 @@ DO $$ DECLARE t text; BEGIN
  END LOOP;
 END $$;
 -- The API reads mail and changes an account's status; only the worker writes messages.
+-- Default privileges gave zapply_app write access to every new table.
+REVOKE INSERT,UPDATE,DELETE ON mail_message,mail_operation FROM zapply_app;
+REVOKE DELETE ON mail_account FROM zapply_app;
 GRANT SELECT,INSERT,UPDATE ON mail_account TO zapply_app;
 GRANT SELECT,UPDATE ON mail_account TO zapply_worker;
 GRANT SELECT ON mail_message TO zapply_app;
@@ -148,13 +151,14 @@ CREATE FUNCTION platform.load_mail_credential(p_account uuid) RETURNS TABLE(ciph
 CREATE FUNCTION platform.delete_mail_credential(p_account uuid) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
  DELETE FROM platform.mail_credential WHERE account_id=p_account AND user_id=public.app_user_id() $$;
 
--- OAuth: the callback arrives without a session, so the state itself is the
--- capability. Only its hash is stored, and taking it deletes it.
+-- OAuth: the state is single-use and only its hash is stored. Taking it needs the
+-- signed-in member who started the flow, so a consent link sent to someone else
+-- cannot attach their mailbox to this account.
 CREATE FUNCTION platform.start_mail_oauth(p_state_hash text,p_verifier text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$ BEGIN
  DELETE FROM platform.mail_oauth_flow WHERE expires_at < now();
  INSERT INTO platform.mail_oauth_flow(state_hash,user_id,verifier,expires_at) VALUES(p_state_hash,public.app_user_id(),p_verifier,now()+interval '10 minutes'); END $$;
 CREATE FUNCTION platform.take_mail_oauth(p_state_hash text) RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
- DELETE FROM platform.mail_oauth_flow WHERE state_hash=p_state_hash AND expires_at >= now() RETURNING jsonb_build_object('user_id',user_id,'verifier',verifier) $$;
+ DELETE FROM platform.mail_oauth_flow WHERE state_hash=p_state_hash AND user_id=public.app_user_id() AND expires_at >= now() RETURNING jsonb_build_object('user_id',user_id,'verifier',verifier) $$;
 
 -- Blanks the content of a finished mail request. Restricted to mail operations
 -- of the current tenant; the model and questions stay so replays still parse.
@@ -163,6 +167,11 @@ CREATE FUNCTION platform.scrub_mail_request(p_operation uuid) RETURNS void LANGU
  WHERE r.operation_id=p_operation AND r.user_id=public.app_user_id()
   AND EXISTS(SELECT FROM public.mail_operation m WHERE m.operation_id=p_operation AND m.user_id=public.app_user_id()) $$;
 
+-- Grant before handing the functions to zapply_platform: afterwards the schema
+-- owner can no longer grant on them (see 00007), so a non-superuser owner fails.
+GRANT EXECUTE ON FUNCTION platform.mail_account_for_address(text,text),platform.start_mail_oauth(text,text),platform.take_mail_oauth(text),platform.save_mail_credential(uuid,bytea,text) TO zapply_app;
+GRANT EXECUTE ON FUNCTION platform.mail_accounts_due(int,timestamptz,timestamptz),platform.mail_pending_messages(int,timestamptz),platform.load_mail_credential(uuid),platform.scrub_mail_request(uuid) TO zapply_worker;
+GRANT EXECUTE ON FUNCTION platform.save_mail_credential(uuid,bytea,text),platform.delete_mail_credential(uuid) TO zapply_worker;
 DO $$ DECLARE f text; BEGIN
  FOREACH f IN ARRAY ARRAY['platform.index_mail_account()','platform.index_mail_message()',
   'platform.mail_account_for_address(text,text)','platform.mail_accounts_due(int,timestamptz,timestamptz)','platform.mail_pending_messages(int,timestamptz)',
@@ -172,9 +181,6 @@ DO $$ DECLARE f text; BEGIN
   EXECUTE format('ALTER FUNCTION %s OWNER TO zapply_platform',f);
  END LOOP;
 END $$;
-GRANT EXECUTE ON FUNCTION platform.mail_account_for_address(text,text),platform.start_mail_oauth(text,text),platform.take_mail_oauth(text),platform.save_mail_credential(uuid,bytea,text) TO zapply_app;
-GRANT EXECUTE ON FUNCTION platform.mail_accounts_due(int,timestamptz,timestamptz),platform.mail_pending_messages(int,timestamptz),platform.load_mail_credential(uuid),platform.scrub_mail_request(uuid) TO zapply_worker;
-GRANT EXECUTE ON FUNCTION platform.save_mail_credential(uuid,bytea,text),platform.delete_mail_credential(uuid) TO zapply_worker;
 -- +goose StatementEnd
 
 -- +goose Down

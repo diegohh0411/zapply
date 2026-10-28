@@ -89,9 +89,10 @@ func TestMailIsOffUntilConfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/mail?error=unavailable" {
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/mail?oauth_code=y&oauth_state=x" {
 		t.Fatalf("callback = %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
+	alice.must(503, "POST", "/v1/mail/accounts/google/complete", map[string]any{"state": "x", "code": "y"})
 }
 
 func TestMailConnectAndPush(t *testing.T) {
@@ -118,20 +119,36 @@ func TestMailConnectAndPush(t *testing.T) {
 		t.Fatalf("messages %v", msgs.Body)
 	}
 
-	// The callback needs a live state, and sends the browser back to the app either way.
+	// The callback only hands the result to the app, which finishes the flow as
+	// the signed-in member.
 	for query, want := range map[string]string{
-		"state=nope&code=c":   "/mail?error=expired",
-		"error=access_denied": "/mail?error=denied",
+		"state=nope&code=c&scope=x": "/mail?oauth_code=c&oauth_state=nope",
+		"error=access_denied":       "/mail?error=denied",
+		"state=only":                "/mail?error=expired",
 	} {
 		res, err := alice.http.Get(base + "/oauth/google/callback?" + query)
 		if err != nil {
 			t.Fatal(err)
 		}
 		res.Body.Close()
-		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != want {
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != want || res.Header.Get("Referrer-Policy") != "no-referrer" {
 			t.Fatalf("callback %s = %d %s, want %s", query, res.StatusCode, res.Header.Get("Location"), want)
 		}
 	}
+	// Finishing needs a state this member started: an unknown one, or one started
+	// by someone else, is refused.
+	done := alice.must(422, "POST", "/v1/mail/accounts/google/complete", map[string]any{"state": "nope", "code": "c"})
+	if !hasFieldError(done, "state") {
+		t.Fatalf("complete: %v", done.Body)
+	}
+	bobStart := bob.must(200, "POST", "/v1/mail/accounts/google/start", nil)
+	bobURL, _ := bobStart.Body["url"].(string)
+	forwarded := bobURL[strings.Index(bobURL, "state=")+len("state="):]
+	if i := strings.Index(forwarded, "&"); i >= 0 {
+		forwarded = forwarded[:i]
+	}
+	alice.must(422, "POST", "/v1/mail/accounts/google/complete", map[string]any{"state": forwarded, "code": "c"})
+	alice.must(422, "POST", "/v1/mail/accounts/google/complete", map[string]any{"code": "c"})
 
 	// Pub/Sub pushes are accepted only from the subscription's service account.
 	endpoint := base + "/hooks/google/pubsub"

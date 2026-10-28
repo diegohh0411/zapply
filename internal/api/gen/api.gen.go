@@ -1234,6 +1234,12 @@ type MailConnect struct {
 	Url string `json:"url"`
 }
 
+// MailConnectComplete defines model for MailConnectComplete.
+type MailConnectComplete struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
 // MailMessage defines model for MailMessage.
 type MailMessage struct {
 	AccountId    openapi_types.UUID  `json:"account_id"`
@@ -1827,6 +1833,9 @@ type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
 // MoveJobJSONRequestBody defines body for MoveJob for application/json ContentType.
 type MoveJobJSONRequestBody = JobMove
 
+// CompleteGoogleConnectJSONRequestBody defines body for CompleteGoogleConnect for application/json ContentType.
+type CompleteGoogleConnectJSONRequestBody = MailConnectComplete
+
 // UpdateMailAccountJSONRequestBody defines body for UpdateMailAccount for application/json ContentType.
 type UpdateMailAccountJSONRequestBody = MailAccountUpdate
 
@@ -2024,6 +2033,9 @@ type ServerInterface interface {
 
 	// (GET /v1/mail/accounts)
 	ListMailAccounts(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/mail/accounts/google/complete)
+	CompleteGoogleConnect(w http.ResponseWriter, r *http.Request)
 
 	// (POST /v1/mail/accounts/google/start)
 	StartGoogleConnect(w http.ResponseWriter, r *http.Request)
@@ -4072,6 +4084,20 @@ func (siw *ServerInterfaceWrapper) ListMailAccounts(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// CompleteGoogleConnect operation middleware
+func (siw *ServerInterfaceWrapper) CompleteGoogleConnect(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteGoogleConnect(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartGoogleConnect operation middleware
 func (siw *ServerInterfaceWrapper) StartGoogleConnect(w http.ResponseWriter, r *http.Request) {
 
@@ -4803,6 +4829,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}/pdf", wrapper.GetCvExportPdf)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/accounts", wrapper.ListMailAccounts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/start", wrapper.StartGoogleConnect)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/complete", wrapper.CompleteGoogleConnect)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.DisconnectMailAccount)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
@@ -7239,6 +7266,45 @@ func (response ListMailAccountsdefaultApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type CompleteGoogleConnectRequestObject struct {
+	Body *CompleteGoogleConnectJSONRequestBody
+}
+
+type CompleteGoogleConnectResponseObject interface {
+	VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error
+}
+
+type CompleteGoogleConnect200JSONResponse MailAccount
+
+func (response CompleteGoogleConnect200JSONResponse) VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteGoogleConnectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CompleteGoogleConnectdefaultApplicationProblemPlusJSONResponse) VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartGoogleConnectRequestObject struct {
 }
 
@@ -8229,6 +8295,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/mail/accounts)
 	ListMailAccounts(ctx context.Context, request ListMailAccountsRequestObject) (ListMailAccountsResponseObject, error)
+
+	// (POST /v1/mail/accounts/google/complete)
+	CompleteGoogleConnect(ctx context.Context, request CompleteGoogleConnectRequestObject) (CompleteGoogleConnectResponseObject, error)
 
 	// (POST /v1/mail/accounts/google/start)
 	StartGoogleConnect(ctx context.Context, request StartGoogleConnectRequestObject) (StartGoogleConnectResponseObject, error)
@@ -9983,6 +10052,37 @@ func (sh *strictHandler) ListMailAccounts(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMailAccountsResponseObject); ok {
 		if err := validResponse.VisitListMailAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteGoogleConnect operation middleware
+func (sh *strictHandler) CompleteGoogleConnect(w http.ResponseWriter, r *http.Request) {
+	var request CompleteGoogleConnectRequestObject
+
+	var body CompleteGoogleConnectJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteGoogleConnect(ctx, request.(CompleteGoogleConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteGoogleConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteGoogleConnectResponseObject); ok {
+		if err := validResponse.VisitCompleteGoogleConnectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

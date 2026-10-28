@@ -20,8 +20,9 @@ const (
 	categoryAttempts = 3
 	jobAttempts      = 2
 	// maxInFlight bounds a member's open mail requests, so a backfill (or a
-	// member without allowance) does not park hundreds of blocked operations.
-	maxInFlight = 8
+	// member without allowance) does not park hundreds of blocked operations. It
+	// stays well under the gateway's per-member limit so matching keeps its slots.
+	maxInFlight = 3
 	// maxJobOptions bounds the job-link question's choices.
 	maxJobOptions = 40
 )
@@ -73,6 +74,18 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 		}
 		if m.State != "pending" {
 			return nil
+		}
+		// A paused mailbox sends nothing to the model, including mail already read;
+		// resuming picks the waiting messages up again. A disconnected one drops them.
+		var account string
+		if e = tx.QueryRow(ctx, `SELECT a.status FROM mail_message m JOIN mail_account a ON a.user_id=m.user_id AND a.id=m.account_id WHERE m.user_id=$1 AND m.id=$2`, u, id).Scan(&account); e != nil {
+			return e
+		}
+		switch account {
+		case "paused":
+			return nil
+		case "disconnected":
+			return s.giveUp(ctx, tx, u, m)
 		}
 		var open, inFlight int
 		if e = tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE message_id=$2),count(*) FROM mail_operation WHERE user_id=$1 AND NOT ingested`, u, id).Scan(&open, &inFlight); e != nil {

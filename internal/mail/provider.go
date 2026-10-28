@@ -49,8 +49,12 @@ type Message struct {
 type HistoryPage struct {
 	MessageIDs []string
 	Next       string
-	// HistoryID is the cursor to store once the last page has been read.
+	// HistoryID is the mailbox's current position. Store it only after the last
+	// page (Next empty); it is ahead of anything an earlier page covered.
 	HistoryID string
+	// LastID is the newest change record on this page. Stopping before the last
+	// page, resume from here.
+	LastID string
 }
 
 type Provider interface {

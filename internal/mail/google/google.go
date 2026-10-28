@@ -225,12 +225,13 @@ func (c *Client) Stop(ctx context.Context, access string) error {
 }
 
 func (c *Client) History(ctx context.Context, access, start, page string) (mail.HistoryPage, error) {
-	q := url.Values{"startHistoryId": {start}, "historyTypes": {"messageAdded"}, "labelId": {"INBOX"}, "maxResults": {"500"}}
+	q := url.Values{"startHistoryId": {start}, "historyTypes": {"messageAdded"}, "labelId": {"INBOX"}, "maxResults": {"100"}}
 	if page != "" {
 		q.Set("pageToken", page)
 	}
 	var r struct {
 		History []struct {
+			ID            string `json:"id"`
 			MessagesAdded []struct {
 				Message struct {
 					ID       string   `json:"id"`
@@ -249,6 +250,7 @@ func (c *Client) History(ctx context.Context, access, start, page string) (mail.
 	}
 	out := mail.HistoryPage{Next: r.NextPageToken, HistoryID: r.HistoryID}
 	for _, h := range r.History {
+		out.LastID = h.ID
 		for _, a := range h.MessagesAdded {
 			if hasLabel(a.Message.LabelIDs, "INBOX") {
 				out.MessageIDs = append(out.MessageIDs, a.Message.ID)

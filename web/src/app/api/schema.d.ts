@@ -965,9 +965,31 @@ export interface paths {
         put?: never;
         /**
          * @description Begins the Gmail consent flow. Send the browser to `url`; Google returns
-         *     to the server's `/oauth/google/callback`, which redirects back to the app.
+         *     to the server's `/oauth/google/callback`, which redirects to the app, which
+         *     calls `completeGoogleConnect`.
          */
         post: operations["startGoogleConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/google/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Finishes the consent flow with the `state` and `code` the server's
+         *     callback passed to the app. The state must belong to the caller, who is
+         *     the member that started it; 422 on `state` otherwise.
+         */
+        post: operations["completeGoogleConnect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1805,6 +1827,10 @@ export interface components {
         };
         MailConnect: {
             url: string;
+        };
+        MailConnectComplete: {
+            state: string;
+            code: string;
         };
         MailMessage: {
             /** Format: uuid */
@@ -3774,6 +3800,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailConnect"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeGoogleConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailConnectComplete"];
+            };
+        };
+        responses: {
+            /** @description The connected account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
                 };
             };
             default: components["responses"]["Problem"];

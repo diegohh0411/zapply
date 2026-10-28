@@ -7,10 +7,10 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { ZardButtonComponent } from '@/shared/components/button';
-import { Api, type Schemas } from '../core/api';
+import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { ConfirmService } from '../core/confirm.service';
 import { EventsService } from '../core/events.service';
@@ -182,6 +182,7 @@ export class MailPage {
   private readonly events = inject(EventsService);
   private readonly confirm = inject(ConfirmService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly categories = categories;
   protected readonly label = categoryLabel;
@@ -202,6 +203,8 @@ export class MailPage {
   private generation = 0;
 
   constructor() {
+    const q = this.route.snapshot.queryParams as Record<string, string | undefined>;
+    if (q['oauth_state'] && q['oauth_code']) void this.complete(q['oauth_state'], q['oauth_code']);
     effect(() => {
       this.auth.identity();
       this.accounts.set([]);
@@ -300,6 +303,36 @@ export class MailPage {
 
   older(): void {
     void this.loadMessages(true);
+  }
+
+  /**
+   * Google returned here with a code. The server finishes the flow as the
+   * signed-in member, so a link forwarded to someone else cannot attach their
+   * mailbox to this account. The code leaves the address bar at once.
+   */
+  private async complete(state: string, code: string): Promise<void> {
+    void this.router.navigate([], { queryParams: {}, replaceUrl: true });
+    this.busy.set(true);
+    try {
+      Api.ok(
+        await this.api.client.POST('/v1/mail/accounts/google/complete', { body: { state, code } }),
+      );
+      this.notice.set(connectNotice({ connected: '1' }));
+      await this.loadAccounts();
+    } catch (e) {
+      this.notice.set(
+        connectNotice({
+          error:
+            e instanceof ApiError && e.status === 422
+              ? 'expired'
+              : e instanceof ApiError && e.status === 409
+                ? 'in_use'
+                : 'failed',
+        }),
+      );
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   async connect(): Promise<void> {
