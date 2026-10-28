@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -70,11 +71,22 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "choice":
 			var options map[string]string
 			json.Unmarshal(q.Criteria, &options)
-			chosen := "not_specified"
-			if _, ok := options["must"]; ok {
-				chosen = "must"
-			} else if _, ok := options["skill"]; ok {
-				chosen = "skill"
+			// Prefer a qualifying reading, then the first library option.
+			chosen := ""
+			for _, want := range []string{"must", "skill", "other", "not_specified"} {
+				if _, ok := options[want]; ok && chosen == "" {
+					chosen = want
+				}
+			}
+			if chosen == "" {
+				keys := []string{}
+				for key := range options {
+					if key != "none" {
+						keys = append(keys, key)
+					}
+				}
+				sort.Strings(keys)
+				chosen = keys[0]
 			}
 			a.Choice = chosen
 			a.Probabilities = map[string]float64{}
@@ -85,13 +97,15 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "score":
 			var criteria []json.RawMessage
 			json.Unmarshal(q.Criteria, &criteria)
-			score := 3.
+			score := float64(len(criteria) - 1)
 			a.Score = &score
 			a.Legend = map[string]json.RawMessage{}
-			a.Probabilities = map[string]float64{"0": 0, "1": 0, "2": 0, "3": 1}
+			a.Probabilities = map[string]float64{}
 			for i, c := range criteria {
 				a.Legend[string(rune('0'+i))] = c
+				a.Probabilities[string(rune('0'+i))] = 0
 			}
+			a.Probabilities[string(rune('0'+len(criteria)-1))] = 1
 		}
 		if !p.discard {
 			answers[k] = a
@@ -175,11 +189,15 @@ func setup(t *testing.T) *fixture {
 }
 func (f *fixture) start(t *testing.T) match.Run {
 	t.Helper()
+	return f.startPipeline(t, 0)
+}
+func (f *fixture) startPipeline(t *testing.T, version int) match.Run {
+	t.Helper()
 	q, e := worker.NewQueue(f.db.Store)
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString())
+	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), version)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -232,14 +250,17 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 	ctx := context.Background()
 	r := f.start(t)
 	r = f.run(t, r.ID)
-	if r.Status != "completed" || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 2 {
+	// Two rounds, each with a posting-only state and a posting-plus-library state.
+	c := r.Result.Requirements
+	if r.Status != "completed" || r.Pipeline != match.PipelineV2 || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 4 ||
+		len(c) != 1 || c[0].Status != "met" || c[0].EvidenceID != f.evidence.ID.String() || len(c[0].Citations) != 1 {
 		t.Fatalf("cold run: %#v, calls %d", r, f.p.calls)
 	}
 	// Completion hook can be lost: Advance itself ingests terminal operations.
 	f.runtime.OnTerminal = nil
 	r = f.start(t)
 	r = f.run(t, r.ID)
-	if f.p.calls != 2 || r.Cached != r.Total {
+	if f.p.calls != 4 || r.Cached != r.Total {
 		t.Fatalf("warm run called model: %d %#v", f.p.calls, r)
 	}
 	ignore := "ignore"
@@ -275,7 +296,8 @@ func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	f.p.discard = true
 	r := f.start(t)
 	r = f.run(t, r.ID)
-	if r.Status != "partial" || r.Score != nil || f.p.calls != 2 {
+	// Both read requests are retried once, then their questions are unanswered.
+	if r.Status != "partial" || r.Score != nil || f.p.calls != 4 {
 		t.Fatalf("discard %#v calls %d", r, f.p.calls)
 	}
 	r = f.start(t)
@@ -285,7 +307,7 @@ func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	if e := f.s.Advance(context.Background(), f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
-	if f.p.calls != 2 {
+	if f.p.calls != 4 {
 		t.Fatal("cancel dispatched")
 	}
 }
@@ -343,7 +365,8 @@ func TestUncertainAccountingResumesWithNewOperation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.p.uncertain = true
-	r := f.start(t)
+	// Pipeline 1 reads in a single request, so one operation carries the round.
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -418,7 +441,7 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 func TestCancelRacesReservation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -463,8 +486,52 @@ func TestCancelRacesReservation(t *testing.T) {
 }
 func TestVerifiedPackingLimitsSplitBeforeDispatch(t *testing.T) {
 	f := setup(t)
+	ctx := context.Background()
 	f.p.maxQuestions = 1
 	r := f.start(t)
+	// The first request learns the question limit from the quote; once known,
+	// every request of the round is sent at once, not one per Advance.
+	var ops []uuid.UUID
+	inFlight := func() {
+		ops = nil
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			rows, e := tx.Query(ctx, `SELECT operation_id FROM match_run_operation WHERE user_id=$1 AND run_id=$2 AND NOT ingested`, f.u, r.ID)
+			if e != nil {
+				return e
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var op uuid.UUID
+				if e = rows.Scan(&op); e != nil {
+					return e
+				}
+				ops = append(ops, op)
+			}
+			return rows.Err()
+		}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	for _, op := range ops {
+		if e := f.runtime.Process(ctx, worker.Args{UserID: f.u, OperationID: op}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	r, e := f.s.Detail(ctx, f.u, r.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	if r.Status != "running" || r.Total < 2 || len(ops) != r.Total {
+		t.Fatalf("round not dispatched in parallel: %d requests for %d questions, status %s", len(ops), r.Total, r.Status)
+	}
 	r = f.run(t, r.ID)
 	if r.Status != "completed" || f.p.calls != r.Total || r.Unanswered != 0 {
 		t.Fatalf("packing limits not applied: %#v calls %d", r, f.p.calls)
@@ -496,5 +563,53 @@ func TestDisplayFlagsReuseAnswersAndNewSkillsOnlyAskNewQuestion(t *testing.T) {
 	r = f.run(t, r.ID)
 	if f.p.calls != calls+1 || r.Total-r.Cached != 1 {
 		t.Fatalf("new skill invalidated existing questions: %#v calls %d", r, f.p.calls)
+	}
+}
+
+func TestMemberHoldsUpToEightCallsInFlight(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	reasons := []string{}
+	for i := range 9 {
+		op := uuid.Must(uuid.NewV7())
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `INSERT INTO model_operation(id,user_id,kind,idempotency_key,request_hash) VALUES($1,$2,'decision',$3,'hash')`, op, f.u, "in-flight:"+op.String())
+			return e
+		}); e != nil {
+			t.Fatal(e)
+		}
+		var reservation struct {
+			Reason string `json:"reason"`
+		}
+		if e := f.runtime.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			var raw []byte
+			if e := tx.QueryRow(ctx, `SELECT platform.reserve($1,$2,$3,$4,$5,$6,$7)`, uuid.New(), op, "test/decision", "request-hash", json.RawMessage(`{}`), int64(1000), time.Now().Add(time.Minute)).Scan(&raw); e != nil {
+				return e
+			}
+			return json.Unmarshal(raw, &reservation)
+		}); e != nil {
+			t.Fatalf("reserve %d: %v", i, e)
+		}
+		reasons = append(reasons, reservation.Reason)
+	}
+	for i, reason := range reasons[:8] {
+		if reason != "" {
+			t.Fatalf("call %d refused with %q while under the cap", i, reason)
+		}
+	}
+	if reasons[8] != "in_flight" {
+		t.Fatalf("ninth call: %q, want in_flight", reasons[8])
+	}
+}
+
+func TestPipelineV1RemainsAvailableForComparison(t *testing.T) {
+	f := setup(t)
+	r := f.startPipeline(t, match.PipelineV1)
+	r = f.run(t, r.ID)
+	if r.Status != "completed" || r.Pipeline != match.PipelineV1 || r.Result.ScoringVersion != 1 || r.Score == nil || *r.Score != 100 || f.p.calls != 2 {
+		t.Fatalf("v1 run: %#v calls %d", r, f.p.calls)
+	}
+	if _, e := match.New(f.db.Store, nil).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), 3); e == nil {
+		t.Fatal("unknown pipeline accepted")
 	}
 }

@@ -24,9 +24,14 @@ import (
 	"sort"
 )
 
+// AdvanceArgs is unique per run and triggering operation. River keeps a running
+// job unique, so a run-only key would drop the wake-up from a request that
+// finishes while another request's Advance is running. Jobs for one run
+// serialize on the job lock.
 type AdvanceArgs struct {
-	UserID uuid.UUID `json:"user_id" river:"unique"`
-	RunID  uuid.UUID `json:"run_id" river:"unique"`
+	UserID      uuid.UUID `json:"user_id" river:"unique"`
+	RunID       uuid.UUID `json:"run_id" river:"unique"`
+	OperationID uuid.UUID `json:"operation_id" river:"unique"`
 }
 
 func (AdvanceArgs) Kind() string { return "match_advance" }
@@ -48,6 +53,7 @@ type Run struct {
 	Status             string     `json:"status"`
 	Stage              string     `json:"stage"`
 	Model              *string    `json:"model"`
+	Pipeline           int        `json:"pipeline"`
 	Trigger            string     `json:"trigger"`
 	BlockedReason      string     `json:"blocked_reason"`
 	NextEligibleAt     *time.Time `json:"next_eligible_at"`
@@ -146,12 +152,17 @@ func emitRun(ctx context.Context, tx pgx.Tx, u, id, job uuid.UUID) error {
 	return e
 }
 func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
+	return s.wake(ctx, tx, u, id, uuid.Nil)
+}
+
+// wake enqueues an Advance for the run, keyed by the operation that triggered it.
+func (s *Service) wake(ctx context.Context, tx pgx.Tx, u, id, op uuid.UUID) error {
 	if s.queue == nil {
 		return errors.New("matching queue unavailable")
 	}
-	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id})
+	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id, op})
 }
-func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, trigger string) (Run, error) {
+func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, trigger string, version int) (Run, error) {
 	if key == "" || len(key) > 255 || strings.ContainsAny(key, "\x00\r\n") {
 		return Run{}, &library.ValidationError{Fields: []library.FieldError{{Field: "Idempotency-Key", Message: "must be 1 to 255 characters"}}}
 	}
@@ -192,7 +203,7 @@ func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, 
 	if e = tx.QueryRow(ctx, `SELECT platform.selected_decision_model()`).Scan(&model); e != nil {
 		return Run{}, e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO match_run(id,user_id,job_id,idempotency_key,trigger,model,job_hash,skills_hash,library_fingerprint,snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, u, job, key, trigger, model, jh, sh, fp, systemone.Raw(snap))
+	_, e = tx.Exec(ctx, `INSERT INTO match_run(id,user_id,job_id,idempotency_key,trigger,model,job_hash,skills_hash,library_fingerprint,snapshot,pipeline) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, u, job, key, trigger, model, jh, sh, fp, systemone.Raw(snap), version)
 	if e != nil {
 		return Run{}, e
 	}
@@ -219,9 +230,22 @@ func translate(e error) error {
 	}
 	return membership.Translate(e)
 }
-func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string) (Run, error) {
+
+// Start queues a manual run. A zero version selects DefaultPipeline; version 1
+// remains available to compare the pipelines on the same job.
+func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string, version int) (Run, error) {
+	if version == 0 {
+		version = DefaultPipeline
+	}
+	if _, ok := pipelines[version]; !ok {
+		return Run{}, &library.ValidationError{Fields: []library.FieldError{{Field: "pipeline", Message: "must be 1 or 2"}}}
+	}
 	r := Run{Result: emptyResult()}
-	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error { var e error; r, e = s.create(ctx, tx, u, job, key, "manual"); return e })
+	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		var e error
+		r, e = s.create(ctx, tx, u, job, key, "manual", version)
+		return e
+	})
 	return r, translate(e)
 }
 func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job, created, hashChanged bool) error {
@@ -256,7 +280,7 @@ func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.J
 			return e
 		}
 	}
-	_, e = s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto")
+	_, e = s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
 	return e
 }
 func (s *Service) cancelTx(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
@@ -333,8 +357,9 @@ func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 			if out.FinishedAt != nil {
 				asOf = *out.FinishedAt
 			}
-			req, incomplete := Requirements(out.Snapshot, a, corrections)
-			out.Result = Compute(out.Snapshot, req, a, corrections, asOf, incomplete)
+			p := pipelineFor(out.Pipeline)
+			req, incomplete := p.requirements(out.Snapshot, a, corrections)
+			out.Result = p.compute(out.Snapshot, req, a, corrections, asOf, incomplete)
 			out.Score = out.Result.Score
 			out.MustMet = out.Result.MustMet
 			out.MustTotal = out.Result.MustTotal
@@ -488,7 +513,7 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		return e
 	}
 	for _, id := range ids {
-		if e = s.enqueue(ctx, tx, op.UserID, id); e != nil {
+		if e = s.wake(ctx, tx, op.UserID, id, op.ID); e != nil {
 			return e
 		}
 	}
@@ -564,8 +589,8 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 	if _, e := hex.DecodeString(hash); e != nil {
 		return &library.ValidationError{Fields: []library.FieldError{{Field: "text_hash", Message: "invalid requirement hash"}}}
 	}
-	if class != nil && *class != "must" && *class != "preferred" && *class != "duty" && *class != "ignore" {
-		return &library.ValidationError{Fields: []library.FieldError{{Field: "class", Message: "must be must, preferred, duty or ignore"}}}
+	if class != nil && *class != "must" && *class != "preferred" && *class != "duty" && *class != "trait" && *class != "ignore" {
+		return &library.ValidationError{Fields: []library.FieldError{{Field: "class", Message: "must be must, preferred, duty, trait or ignore"}}}
 	}
 	return translate(s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
 		var exists uuid.UUID
@@ -652,53 +677,62 @@ func (s *Service) Estimate(ctx context.Context, u, job uuid.UUID) (Estimate, err
 		if !quote.Decision || quote.BoundReference == "" || quote.MaxInput <= 0 || quote.MaxRequestBytes <= 0 || time.Since(quote.FetchedAt) > 15*time.Minute {
 			return nil
 		}
-		read, e := ReadQuestions(snap)
+		p := pipelineFor(DefaultPipeline)
+		read, e := p.read(snap)
+		if e != nil {
+			return e
+		}
+		found, e := decide.LookupAll(ctx, tx, u, *model, read)
 		if e != nil {
 			return e
 		}
 		cached := map[string]systemone.Answer{}
 		pending := []decide.Pending{}
-		for _, p := range read {
-			a, e := decide.Lookup(ctx, tx, u, *model, p)
-			if e != nil {
-				return e
-			}
-			if a == nil {
-				pending = append(pending, p)
+		for i, q := range read {
+			if found[i] == nil {
+				pending = append(pending, q)
 			} else {
-				cached[p.Subject] = *a
+				cached[q.Subject] = *found[i]
 			}
 		}
-		requirements, incomplete := Requirements(snap, cached)
+		requirements, incomplete := p.requirements(snap, cached)
 		if incomplete {
-			lines := append([]Line{}, snap.Lines...)
+			type line struct {
+				Line
+				index int
+			}
+			lines := []line{}
+			for i, l := range snap.Lines {
+				lines = append(lines, line{l, i})
+			}
 			sort.SliceStable(lines, func(i, j int) bool { return len(lines[i].Text) > len(lines[j].Text) })
 			if len(lines) > 40 {
 				lines = lines[:40]
 			}
 			requirements = []Requirement{}
-			for i, l := range lines {
+			for _, l := range lines {
 				h, _ := systemone.Hash(strings.ToLower(strings.Join(strings.Fields(l.Text), " ")))
-				requirements = append(requirements, Requirement{Text: l.Text, TextHash: h, Line: i, Class: "must"})
+				requirements = append(requirements, Requirement{Text: l.Text, TextHash: h, Line: l.index, Class: "must"})
 			}
 		}
-		scores, e := ScoreQuestions(snap, requirements)
+		scores, e := p.score(snap, requirements)
 		if e != nil {
 			return e
 		}
-		for _, p := range scores {
-			if !incomplete {
-				a, e := decide.Lookup(ctx, tx, u, *model, p)
-				if e != nil {
-					return e
-				}
-				if a != nil {
-					continue
+		if incomplete {
+			pending = append(pending, scores...)
+		} else {
+			found, e = decide.LookupAll(ctx, tx, u, *model, scores)
+			if e != nil {
+				return e
+			}
+			for i, q := range scores {
+				if found[i] == nil {
+					pending = append(pending, q)
 				}
 			}
-			pending = append(pending, p)
 		}
-		packed, e := decide.Pack(*model, pending, quote.MaxRequestBytes, quote.MaxQuestions)
+		packed, e := decide.Pack(*model, pending, quote.MaxRequestBytes, requestQuestions(quote.MaxQuestions))
 		if e != nil {
 			return nil
 		}

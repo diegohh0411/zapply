@@ -874,6 +874,7 @@ type MatchRun struct {
 	Unanswered         int32
 	CreatedAt          time.Time
 	FinishedAt         *time.Time
+	Pipeline           int16
 }
 
 type MatchRunItem struct {

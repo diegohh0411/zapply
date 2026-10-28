@@ -6,6 +6,9 @@ Live decision dispatch remains disabled until a model adapter has documented
 billing and input bounds and the owner completes the live probe. The model
 catalogue and owner selection work independently of that dispatch gate.
 
+New runs use pipeline 2, described in [06-matching-v2.md](06-matching-v2.md).
+This document describes pipeline 1, which remains available for comparison.
+
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:
 **what does this job ask for, which of my evidence shows it, what is missing,
@@ -90,9 +93,11 @@ creates the requirements used by scoring: that is a real dependency.
 Within each phase, independent questions sharing a state go into one request
 when they fit. Degree/language questions are asked speculatively with line
 classification; highlight questions accompany evidence questions. Go ignores
-speculative answers that do not apply. Requests run one at a time under the
-part 5 gateway. Packing follows verified model/context and local payload
-budgets; there is no assumed API limit of 128 questions.
+speculative answers that do not apply. Every request of a phase is sent at
+once, each as its own operation and worker job, and the phase ends when all of
+them are ingested. The part 5 gateway still reserves each request before it is
+sent. Packing follows verified model/context and local payload budgets; there
+is no assumed API limit of 128 questions.
 
 A phase with every answer cached sends nothing. A fully cached run finishes
 without a provider call.

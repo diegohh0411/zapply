@@ -1450,6 +1450,7 @@ export interface components {
             status: string;
             stage: string;
             model: string | null;
+            pipeline?: number;
             trigger: string;
             blocked_reason: string;
             /** Format: date-time */
@@ -3100,7 +3101,10 @@ export interface operations {
     };
     createMatchRun: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Matching pipeline. Defaults to 2; 1 runs the earlier per-pair pipeline for comparison. */
+                pipeline?: number;
+            };
             header: {
                 "Idempotency-Key": string;
             };
@@ -3181,7 +3185,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    class: "must" | "preferred" | "duty" | "ignore";
+                    class: "must" | "preferred" | "duty" | "trait" | "ignore";
                 };
             };
         };

@@ -24,12 +24,14 @@ type BillingBound struct {
 	LookupSupported       bool
 }
 
-// ownerSelectedBound applies to any model the owner selects. It assumes the
-// full context and request fee charged per question to size a conservative
-// reservation. These billing assumptions are not provider-verified.
+// ownerSelectedBound applies to any model the owner selects. It reserves the
+// full context once per request, which bounds the input a request can bill,
+// plus the request fee per question. Decision models bill input tokens
+// (OpenRouter's System One docs), and settled usage reports them once per
+// request: 96 questions on a 62 KB request billed 12,705 input tokens. The
+// worker logs any charge above its reservation.
 var ownerSelectedBound = BillingBound{
-	Reference:             "owner-selected model, worst-case billing assumed",
-	PerQuestion:           true,
+	Reference:             "owner-selected model, full context per request assumed",
 	RequestFeePerQuestion: true,
 	MaxRequestBytes:       systemone.RequestBudget,
 }
