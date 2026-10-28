@@ -65,6 +65,51 @@ func ReencryptCredentials(ctx context.Context, url string, ring *secrets.Ring) e
 				return err
 			}
 		}
-		return nil
+		return reencryptMail(ctx, tx, ring)
 	})
+}
+
+// reencryptMail does the same for connected mailboxes' refresh tokens, which
+// are sealed with the same ring (part 10).
+func reencryptMail(ctx context.Context, tx pgx.Tx, ring *secrets.Ring) error {
+	rows, err := tx.Query(ctx, "SELECT account_id,ciphertext,encryption_version FROM platform.mail_credential ORDER BY account_id FOR UPDATE")
+	if err != nil {
+		return err
+	}
+	type credential struct {
+		id        uuid.UUID
+		encrypted []byte
+		version   string
+	}
+	var tokens []credential
+	for rows.Next() {
+		var k credential
+		if err := rows.Scan(&k.id, &k.encrypted, &k.version); err != nil {
+			rows.Close()
+			return err
+		}
+		tokens = append(tokens, k)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, k := range tokens {
+		plaintext, err := ring.Decrypt(k.id.String(), k.version, k.encrypted)
+		if err != nil {
+			return err
+		}
+		cipher, version, err := ring.Encrypt(k.id.String(), plaintext)
+		if err != nil {
+			return err
+		}
+		if version == k.version {
+			continue
+		}
+		if _, err := tx.Exec(ctx, "UPDATE platform.mail_credential SET ciphertext=$1,encryption_version=$2,updated_at=now() WHERE account_id=$3", cipher, version, k.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }

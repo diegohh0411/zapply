@@ -76,6 +76,16 @@ Setup, accounting rules, conservative reservations, and recovery commands are in
 [`docs/parts/05-worker.md`](docs/parts/05-worker.md). Optional tracing uses standard
 `OTEL_EXPORTER_OTLP_*` configuration and exports only when an endpoint is set.
 
+## Mail
+
+Part 10 connects a Gmail account, finds the mail about your applications (received,
+assessment, interview, rejection, offer) and links it to the matching job. It uses
+`gmail.readonly` through Google OAuth, Pub/Sub push notifications and a periodic
+reconcile scan. Mail not about an application is discarded after classification;
+only its identifier is kept. Setup, environment variables and design:
+[`docs/parts/10-mail-plan.md`](docs/parts/10-mail-plan.md). Set the Google variables in
+`.env.example` to enable it; without them the Mail page says it is not configured.
+
 ## Matching
 
 Part 6 adds automatic matching when saved jobs change, reusable decision-answer

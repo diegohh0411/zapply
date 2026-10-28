@@ -115,6 +115,8 @@ const (
 	JobViewCreated        EventTopic = "job_view.created"
 	JobViewDeleted        EventTopic = "job_view.deleted"
 	JobViewUpdated        EventTopic = "job_view.updated"
+	MailAccountUpdated    EventTopic = "mail.account.updated"
+	MailMessageClassified EventTopic = "mail.message.classified"
 	MatchRunChanged       EventTopic = "match_run.changed"
 	MembershipChanged     EventTopic = "membership.changed"
 	ModelOperationChanged EventTopic = "model_operation.changed"
@@ -175,6 +177,10 @@ func (e EventTopic) Valid() bool {
 	case JobViewDeleted:
 		return true
 	case JobViewUpdated:
+		return true
+	case MailAccountUpdated:
+		return true
+	case MailMessageClassified:
 		return true
 	case MatchRunChanged:
 		return true
@@ -346,6 +352,72 @@ func (e JobViewLayout) Valid() bool {
 	case Board:
 		return true
 	case Table:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailAccountProvider.
+const (
+	Google MailAccountProvider = "google"
+)
+
+// Valid indicates whether the value is a known member of the MailAccountProvider enum.
+func (e MailAccountProvider) Valid() bool {
+	switch e {
+	case Google:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailAccountStatus.
+const (
+	MailAccountStatusActive         MailAccountStatus = "active"
+	MailAccountStatusDisconnected   MailAccountStatus = "disconnected"
+	MailAccountStatusNeedsReconnect MailAccountStatus = "needs_reconnect"
+	MailAccountStatusPaused         MailAccountStatus = "paused"
+)
+
+// Valid indicates whether the value is a known member of the MailAccountStatus enum.
+func (e MailAccountStatus) Valid() bool {
+	switch e {
+	case MailAccountStatusActive:
+		return true
+	case MailAccountStatusDisconnected:
+		return true
+	case MailAccountStatusNeedsReconnect:
+		return true
+	case MailAccountStatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailCategory.
+const (
+	MailCategoryAssessment MailCategory = "assessment"
+	MailCategoryInterview  MailCategory = "interview"
+	MailCategoryOffer      MailCategory = "offer"
+	MailCategoryReceived   MailCategory = "received"
+	MailCategoryRejection  MailCategory = "rejection"
+)
+
+// Valid indicates whether the value is a known member of the MailCategory enum.
+func (e MailCategory) Valid() bool {
+	switch e {
+	case MailCategoryAssessment:
+		return true
+	case MailCategoryInterview:
+		return true
+	case MailCategoryOffer:
+		return true
+	case MailCategoryReceived:
+		return true
+	case MailCategoryRejection:
 		return true
 	default:
 		return false
@@ -1125,6 +1197,62 @@ type Link struct {
 	Url   string `json:"url"`
 }
 
+// MailAccount defines model for MailAccount.
+type MailAccount struct {
+	Address      string              `json:"address"`
+	CreatedAt    time.Time           `json:"created_at"`
+	Id           openapi_types.UUID  `json:"id"`
+	LastError    string              `json:"last_error"`
+	LastSyncedAt *time.Time          `json:"last_synced_at,omitempty"`
+	Provider     MailAccountProvider `json:"provider"`
+	Status       MailAccountStatus   `json:"status"`
+	Version      int                 `json:"version"`
+}
+
+// MailAccountProvider defines model for MailAccount.Provider.
+type MailAccountProvider string
+
+// MailAccountStatus defines model for MailAccount.Status.
+type MailAccountStatus string
+
+// MailAccountList defines model for MailAccountList.
+type MailAccountList struct {
+	Configured bool          `json:"configured"`
+	Items      []MailAccount `json:"items"`
+}
+
+// MailAccountUpdate defines model for MailAccountUpdate.
+type MailAccountUpdate struct {
+	Paused bool `json:"paused"`
+}
+
+// MailCategory defines model for MailCategory.
+type MailCategory string
+
+// MailConnect defines model for MailConnect.
+type MailConnect struct {
+	Url string `json:"url"`
+}
+
+// MailMessage defines model for MailMessage.
+type MailMessage struct {
+	AccountId    openapi_types.UUID  `json:"account_id"`
+	Category     MailCategory        `json:"category"`
+	ClassifiedAt time.Time           `json:"classified_at"`
+	From         string              `json:"from"`
+	Id           openapi_types.UUID  `json:"id"`
+	JobId        *openapi_types.UUID `json:"job_id,omitempty"`
+	ReceivedAt   time.Time           `json:"received_at"`
+	Snippet      string              `json:"snippet"`
+	Subject      string              `json:"subject"`
+}
+
+// MailMessagePage defines model for MailMessagePage.
+type MailMessagePage struct {
+	Items      []MailMessage       `json:"items"`
+	NextCursor *openapi_types.UUID `json:"next_cursor,omitempty"`
+}
+
 // MatchEstimate defines model for MatchEstimate.
 type MatchEstimate struct {
 	Available       bool    `json:"available"`
@@ -1610,6 +1738,14 @@ type CreateMatchRunParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
+// ListMailMessagesParams defines parameters for ListMailMessages.
+type ListMailMessagesParams struct {
+	Category *MailCategory       `form:"category,omitempty" json:"category,omitempty"`
+	JobId    *openapi_types.UUID `form:"job_id,omitempty" json:"job_id,omitempty"`
+	Before   *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit    *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // PutProfileParams defines parameters for PutProfile.
 type PutProfileParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
@@ -1690,6 +1826,9 @@ type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
 
 // MoveJobJSONRequestBody defines body for MoveJob for application/json ContentType.
 type MoveJobJSONRequestBody = JobMove
+
+// UpdateMailAccountJSONRequestBody defines body for UpdateMailAccount for application/json ContentType.
+type UpdateMailAccountJSONRequestBody = MailAccountUpdate
 
 // CreateOrganizationJSONRequestBody defines body for CreateOrganization for application/json ContentType.
 type CreateOrganizationJSONRequestBody = OrganizationInput
@@ -1882,6 +2021,21 @@ type ServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/mail/accounts)
+	ListMailAccounts(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/mail/accounts/google/start)
+	StartGoogleConnect(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /v1/mail/accounts/{id})
+	DisconnectMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (PATCH /v1/mail/accounts/{id})
+	UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/mail/messages)
+	ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -3904,6 +4058,158 @@ func (siw *ServerInterfaceWrapper) ListKinds(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListMailAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListMailAccounts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMailAccounts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartGoogleConnect operation middleware
+func (siw *ServerInterfaceWrapper) StartGoogleConnect(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartGoogleConnect(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMailMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListMailMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMailMessagesParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "job_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "job_id", r.URL.Query(), &params.JobId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "job_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "job_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMailMessages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMatchRun operation middleware
 func (siw *ServerInterfaceWrapper) GetMatchRun(w http.ResponseWriter, r *http.Request) {
 
@@ -4495,6 +4801,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.CreateCvExport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}", wrapper.GetCvExport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}/pdf", wrapper.GetCvExportPdf)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/accounts", wrapper.ListMailAccounts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/start", wrapper.StartGoogleConnect)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.DisconnectMailAccount)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
 
 	return m
 }
@@ -6890,6 +7201,194 @@ func (response ListKindsdefaultApplicationProblemPlusJSONResponse) VisitListKind
 	return err
 }
 
+type ListMailAccountsRequestObject struct {
+}
+
+type ListMailAccountsResponseObject interface {
+	VisitListMailAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListMailAccounts200JSONResponse MailAccountList
+
+func (response ListMailAccounts200JSONResponse) VisitListMailAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailAccountsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMailAccountsdefaultApplicationProblemPlusJSONResponse) VisitListMailAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartGoogleConnectRequestObject struct {
+}
+
+type StartGoogleConnectResponseObject interface {
+	VisitStartGoogleConnectResponse(w http.ResponseWriter) error
+}
+
+type StartGoogleConnect200JSONResponse MailConnect
+
+func (response StartGoogleConnect200JSONResponse) VisitStartGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartGoogleConnectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartGoogleConnectdefaultApplicationProblemPlusJSONResponse) VisitStartGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectMailAccountRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type DisconnectMailAccountResponseObject interface {
+	VisitDisconnectMailAccountResponse(w http.ResponseWriter) error
+}
+
+type DisconnectMailAccount204Response struct {
+}
+
+func (response DisconnectMailAccount204Response) VisitDisconnectMailAccountResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisconnectMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectMailAccountdefaultApplicationProblemPlusJSONResponse) VisitDisconnectMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMailAccountRequestObject struct {
+	Id   ID `json:"id"`
+	Body *UpdateMailAccountJSONRequestBody
+}
+
+type UpdateMailAccountResponseObject interface {
+	VisitUpdateMailAccountResponse(w http.ResponseWriter) error
+}
+
+type UpdateMailAccount200JSONResponse MailAccount
+
+func (response UpdateMailAccount200JSONResponse) VisitUpdateMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMailAccountdefaultApplicationProblemPlusJSONResponse) VisitUpdateMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailMessagesRequestObject struct {
+	Params ListMailMessagesParams
+}
+
+type ListMailMessagesResponseObject interface {
+	VisitListMailMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListMailMessages200JSONResponse MailMessagePage
+
+func (response ListMailMessages200JSONResponse) VisitListMailMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailMessagesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMailMessagesdefaultApplicationProblemPlusJSONResponse) VisitListMailMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMatchRunRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -7727,6 +8226,21 @@ type StrictServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(ctx context.Context, request ListKindsRequestObject) (ListKindsResponseObject, error)
+
+	// (GET /v1/mail/accounts)
+	ListMailAccounts(ctx context.Context, request ListMailAccountsRequestObject) (ListMailAccountsResponseObject, error)
+
+	// (POST /v1/mail/accounts/google/start)
+	StartGoogleConnect(ctx context.Context, request StartGoogleConnectRequestObject) (StartGoogleConnectResponseObject, error)
+
+	// (DELETE /v1/mail/accounts/{id})
+	DisconnectMailAccount(ctx context.Context, request DisconnectMailAccountRequestObject) (DisconnectMailAccountResponseObject, error)
+
+	// (PATCH /v1/mail/accounts/{id})
+	UpdateMailAccount(ctx context.Context, request UpdateMailAccountRequestObject) (UpdateMailAccountResponseObject, error)
+
+	// (GET /v1/mail/messages)
+	ListMailMessages(ctx context.Context, request ListMailMessagesRequestObject) (ListMailMessagesResponseObject, error)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(ctx context.Context, request GetMatchRunRequestObject) (GetMatchRunResponseObject, error)
@@ -9445,6 +9959,139 @@ func (sh *strictHandler) ListKinds(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListKindsResponseObject); ok {
 		if err := validResponse.VisitListKindsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMailAccounts operation middleware
+func (sh *strictHandler) ListMailAccounts(w http.ResponseWriter, r *http.Request) {
+	var request ListMailAccountsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMailAccounts(ctx, request.(ListMailAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMailAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMailAccountsResponseObject); ok {
+		if err := validResponse.VisitListMailAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartGoogleConnect operation middleware
+func (sh *strictHandler) StartGoogleConnect(w http.ResponseWriter, r *http.Request) {
+	var request StartGoogleConnectRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartGoogleConnect(ctx, request.(StartGoogleConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartGoogleConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartGoogleConnectResponseObject); ok {
+		if err := validResponse.VisitStartGoogleConnectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectMailAccount operation middleware
+func (sh *strictHandler) DisconnectMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request DisconnectMailAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectMailAccount(ctx, request.(DisconnectMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectMailAccountResponseObject); ok {
+		if err := validResponse.VisitDisconnectMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMailAccount operation middleware
+func (sh *strictHandler) UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request UpdateMailAccountRequestObject
+
+	request.Id = id
+
+	var body UpdateMailAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMailAccount(ctx, request.(UpdateMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMailAccountResponseObject); ok {
+		if err := validResponse.VisitUpdateMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMailMessages operation middleware
+func (sh *strictHandler) ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams) {
+	var request ListMailMessagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMailMessages(ctx, request.(ListMailMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMailMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMailMessagesResponseObject); ok {
+		if err := validResponse.VisitListMailMessagesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
