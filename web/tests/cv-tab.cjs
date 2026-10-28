@@ -189,3 +189,24 @@ test('destroying a CV tab prevents a pending compile from restoring its PDF', as
   await fitting;
   assert.equal(f.tab.fitted(), undefined);
 });
+
+test('a delayed CV save cannot replace a newer preview received during the save', async () => {
+  const pending = deferred();
+  const f = fixture({ GET: async () => ok(preview(3)), PUT: () => pending.promise });
+  f.tab.preview.set(preview(1));
+  const versions = [];
+  const set = f.tab.preview.set;
+  f.tab.preview.set = next => { versions.push(next.draft.version); set(next); };
+  const saving = f.tab.save({ page_budget: 2 });
+  // Another tab's save has committed and its change event reloads version 3
+  // before this tab receives the delayed version-2 PUT response.
+  await f.tab.load('job');
+  assert.equal(f.tab.preview().draft.version, 3);
+  pending.resolve(ok(preview(2)));
+  await saving;
+  assert.equal(f.tab.preview().draft.version, 3);
+  assert.ok(!versions.includes(2), 'the old response must never reach the view');
+  assert.equal(f.tab.busy(), false);
+  assert.ok(f.tab.fitted());
+  f.destroy();
+});

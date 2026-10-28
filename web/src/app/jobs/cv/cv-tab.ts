@@ -268,7 +268,7 @@ export class CvTab {
     const id = this.jobId();
     const scope = this.scope();
     const d = p.draft;
-    ++this.loadVersion;
+    const version = ++this.loadVersion;
     ++this.generation;
     this.setPdf(undefined);
     this.busy.set(true);
@@ -289,6 +289,11 @@ export class CvTab {
         }),
       );
       if (!this.current(scope)) return;
+      if (version !== this.loadVersion || (this.preview()?.draft.version ?? 0) > next.draft.version) {
+        this.notice.set('This CV changed while saving. The latest version is shown.');
+        await this.load(id);
+        return;
+      }
       ++this.loadVersion;
       this.preview.set(next);
       await this.refit();

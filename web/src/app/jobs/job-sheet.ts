@@ -137,6 +137,7 @@ export class JobSheet {
   protected readonly job = signal<Job | null>(null);
   protected readonly isNew = signal(false);
   protected readonly loading = signal(false);
+  protected readonly cvActive = signal(false);
   protected readonly saving = signal(false);
   protected readonly dirty = signal(false);
   protected readonly errors = signal<Record<string, string>>({});
@@ -164,6 +165,7 @@ export class JobSheet {
         this.dirty.set(false);
         this.saving.set(false);
         this.loading.set(false);
+        this.cvActive.set(false);
         this.isNew.set(false);
         this.editingNote.set(null);
         this.note = '';
@@ -193,6 +195,7 @@ export class JobSheet {
     const generation = ++this.generation;
     this.activitiesRequest++;
     if (!quiet) {
+      this.cvActive.set(false);
       this.errors.set({});
       this.dirty.set(false);
       this.editingNote.set(null);

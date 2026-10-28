@@ -42,13 +42,17 @@
         <z-skeleton class="h-40 w-full" />
       </div>
     } @else {
-      <z-tab-group>
+      <z-tab-group (zTabChange)="cvActive.set($event.label === 'CV')">
         <z-tab label="Details">
           <ng-container *ngTemplateOutlet="details" />
         </z-tab>
         @if (!isNew()) {
           <z-tab label="Match"><app-match-tab [jobId]="job()!.id" /></z-tab>
-          <z-tab label="CV"><app-cv-tab [jobId]="job()!.id" [company]="job()!.company" /></z-tab>
+          <z-tab label="CV">
+            @if (cvActive()) {
+              <app-cv-tab [jobId]="job()!.id" [company]="job()!.company" />
+            }
+          </z-tab>
           <z-tab [label]="'Activity (' + activities().length + ')'">
             <ng-container *ngTemplateOutlet="timeline" />
           </z-tab>

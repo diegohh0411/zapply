@@ -236,6 +236,7 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 	// Which evidence appears, and how relevant each is.
 	relevance := map[string]float64{}
 	ranked := map[string][]string{} // evidence → highlight IDs, most relevant first
+	matched := map[string]bool{}
 	selected := map[string]bool{}
 	suggested := map[string]bool{}
 	supports := map[string]bool{}
@@ -245,7 +246,7 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 			ranked[s.EvidenceID] = s.HighlightIDs
 		}
 		for _, s := range ranking.Selection {
-			selected[s.EvidenceID] = true
+			matched[s.EvidenceID] = true
 		}
 		for _, s := range ranking.Suggestions {
 			suggested[s.EvidenceID] = true
@@ -264,7 +265,7 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 		if ranking != nil {
 			// A CV without its degrees reads as an error, so they stay even
 			// when matching found them irrelevant. They can still be trimmed.
-			baseline = selected[e.ID] || baseline && e.Kind == "degree_program" && e.ParentID == nil
+			baseline = matched[e.ID] || baseline && e.Kind == "degree_program" && e.ParentID == nil
 		}
 		if e.Kind == "career_break" {
 			baseline = false

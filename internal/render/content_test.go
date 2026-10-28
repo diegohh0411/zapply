@@ -216,3 +216,23 @@ func TestIncludeHighlightSelectsEntryAndCareerBreakNeedsPick(t *testing.T) {
 		t.Fatal("a match must not include a career break without a pick")
 	}
 }
+
+func TestStaleMatchParentDoesNotHideActiveChild(t *testing.T) {
+	lib := sample()
+	child := lib.Evidence[1]
+	child.Highlights = []Highlight{{"child-highlight", "Still active", true}}
+	// An archived parent is absent from loadLibrary, but remains in the
+	// completed match's selection. Its active child must stand alone.
+	lib.Evidence = []Evidence{child}
+	ranking := &match.Result{Selection: []match.Selection{{EvidenceID: "job"}, {EvidenceID: "proj"}}}
+	for _, pins := range [][]string{{}, {"proj"}, {"child-highlight"}} {
+		b := Build(lib, ranking, Picks{Include: pins}, "en", today)
+		projects := section(b.Content, "projects")
+		if projects == nil || !slices.Equal(ids(projects.Entries), []string{"proj"}) {
+			t.Fatalf("pins %v: active child disappeared under an archived parent: %+v", pins, b.Content)
+		}
+		if len(pins) > 0 && slices.Contains(b.Trim, "proj") {
+			t.Fatalf("pins %v: pinned child can be trimmed", pins)
+		}
+	}
+}
