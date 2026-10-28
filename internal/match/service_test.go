@@ -463,8 +463,52 @@ func TestCancelRacesReservation(t *testing.T) {
 }
 func TestVerifiedPackingLimitsSplitBeforeDispatch(t *testing.T) {
 	f := setup(t)
+	ctx := context.Background()
 	f.p.maxQuestions = 1
 	r := f.start(t)
+	// The first request learns the question limit from the quote; once known,
+	// every request of the round is sent at once, not one per Advance.
+	var ops []uuid.UUID
+	inFlight := func() {
+		ops = nil
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			rows, e := tx.Query(ctx, `SELECT operation_id FROM match_run_operation WHERE user_id=$1 AND run_id=$2 AND NOT ingested`, f.u, r.ID)
+			if e != nil {
+				return e
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var op uuid.UUID
+				if e = rows.Scan(&op); e != nil {
+					return e
+				}
+				ops = append(ops, op)
+			}
+			return rows.Err()
+		}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	for _, op := range ops {
+		if e := f.runtime.Process(ctx, worker.Args{UserID: f.u, OperationID: op}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	r, e := f.s.Detail(ctx, f.u, r.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	if r.Status != "running" || r.Total < 2 || len(ops) != r.Total {
+		t.Fatalf("round not dispatched in parallel: %d requests for %d questions, status %s", len(ops), r.Total, r.Status)
+	}
 	r = f.run(t, r.ID)
 	if r.Status != "completed" || f.p.calls != r.Total || r.Unanswered != 0 {
 		t.Fatalf("packing limits not applied: %#v calls %d", r, f.p.calls)
@@ -496,5 +540,41 @@ func TestDisplayFlagsReuseAnswersAndNewSkillsOnlyAskNewQuestion(t *testing.T) {
 	r = f.run(t, r.ID)
 	if f.p.calls != calls+1 || r.Total-r.Cached != 1 {
 		t.Fatalf("new skill invalidated existing questions: %#v calls %d", r, f.p.calls)
+	}
+}
+
+func TestMemberHoldsUpToEightCallsInFlight(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	reasons := []string{}
+	for i := range 9 {
+		op := uuid.Must(uuid.NewV7())
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `INSERT INTO model_operation(id,user_id,kind,idempotency_key,request_hash) VALUES($1,$2,'decision',$3,'hash')`, op, f.u, "in-flight:"+op.String())
+			return e
+		}); e != nil {
+			t.Fatal(e)
+		}
+		var reservation struct {
+			Reason string `json:"reason"`
+		}
+		if e := f.runtime.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			var raw []byte
+			if e := tx.QueryRow(ctx, `SELECT platform.reserve($1,$2,$3,$4,$5,$6,$7)`, uuid.New(), op, "test/decision", "request-hash", json.RawMessage(`{}`), int64(1000), time.Now().Add(time.Minute)).Scan(&raw); e != nil {
+				return e
+			}
+			return json.Unmarshal(raw, &reservation)
+		}); e != nil {
+			t.Fatalf("reserve %d: %v", i, e)
+		}
+		reasons = append(reasons, reservation.Reason)
+	}
+	for i, reason := range reasons[:8] {
+		if reason != "" {
+			t.Fatalf("call %d refused with %q while under the cap", i, reason)
+		}
+	}
+	if reasons[8] != "in_flight" {
+		t.Fatalf("ninth call: %q, want in_flight", reasons[8])
 	}
 }

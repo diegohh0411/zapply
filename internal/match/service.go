@@ -24,9 +24,14 @@ import (
 	"sort"
 )
 
+// AdvanceArgs is unique per run and triggering operation. River keeps a running
+// job unique, so a run-only key would drop the wake-up from a request that
+// finishes while another request's Advance is running. Jobs for one run
+// serialize on the job lock.
 type AdvanceArgs struct {
-	UserID uuid.UUID `json:"user_id" river:"unique"`
-	RunID  uuid.UUID `json:"run_id" river:"unique"`
+	UserID      uuid.UUID `json:"user_id" river:"unique"`
+	RunID       uuid.UUID `json:"run_id" river:"unique"`
+	OperationID uuid.UUID `json:"operation_id" river:"unique"`
 }
 
 func (AdvanceArgs) Kind() string { return "match_advance" }
@@ -146,10 +151,15 @@ func emitRun(ctx context.Context, tx pgx.Tx, u, id, job uuid.UUID) error {
 	return e
 }
 func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
+	return s.wake(ctx, tx, u, id, uuid.Nil)
+}
+
+// wake enqueues an Advance for the run, keyed by the operation that triggered it.
+func (s *Service) wake(ctx context.Context, tx pgx.Tx, u, id, op uuid.UUID) error {
 	if s.queue == nil {
 		return errors.New("matching queue unavailable")
 	}
-	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id})
+	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id, op})
 }
 func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, trigger string) (Run, error) {
 	if key == "" || len(key) > 255 || strings.ContainsAny(key, "\x00\r\n") {
@@ -488,7 +498,7 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		return e
 	}
 	for _, id := range ids {
-		if e = s.enqueue(ctx, tx, op.UserID, id); e != nil {
+		if e = s.wake(ctx, tx, op.UserID, id, op.ID); e != nil {
 			return e
 		}
 	}

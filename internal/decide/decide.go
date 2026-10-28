@@ -45,11 +45,40 @@ func Lookup(ctx context.Context, tx pgx.Tx, u uuid.UUID, model string, p Pending
 	if e != nil {
 		return nil, e
 	}
+	return valid(p, raw)
+}
+
+// LookupAll looks up every question in one round trip. Misses are nil.
+func LookupAll(ctx context.Context, tx pgx.Tx, u uuid.UUID, model string, pending []Pending) ([]*systemone.Answer, error) {
+	out := make([]*systemone.Answer, len(pending))
+	if len(pending) == 0 {
+		return out, nil
+	}
+	b := &pgx.Batch{}
+	for i, p := range pending {
+		b.Queue(`SELECT answer FROM decision_answer WHERE user_id=$1 AND model=$2 AND state_hash=$3 AND question_hash=$4`, u, model, p.StateHash, p.QuestionHash).QueryRow(func(row pgx.Row) error {
+			var raw []byte
+			e := row.Scan(&raw)
+			if errors.Is(e, pgx.ErrNoRows) {
+				return nil
+			}
+			if e != nil {
+				return e
+			}
+			out[i], e = valid(p, raw)
+			return e
+		})
+	}
+	return out, tx.SendBatch(ctx, b).Close()
+}
+
+// valid drops a cached answer that no longer validates against its question.
+func valid(p Pending, raw []byte) (*systemone.Answer, error) {
 	var a systemone.Answer
-	if e = json.Unmarshal(raw, &a); e != nil {
+	if e := json.Unmarshal(raw, &a); e != nil {
 		return nil, e
 	}
-	if e = systemone.Validate(p.Question, a); e != nil {
+	if systemone.Validate(p.Question, a) != nil {
 		return nil, nil
 	}
 	return &a, nil
@@ -120,15 +149,12 @@ func Store(ctx context.Context, tx pgx.Tx, u, op uuid.UUID, p Packed) error {
 	if e != nil {
 		return e
 	}
-	if _, e = tx.Exec(ctx, `INSERT INTO model_request(user_id,operation_id,body) VALUES($1,$2,$3)`, u, op, json.RawMessage(raw)); e != nil {
-		return e
-	}
+	b := &pgx.Batch{}
+	b.Queue(`INSERT INTO model_request(user_id,operation_id,body) VALUES($1,$2,$3)`, u, op, json.RawMessage(raw))
 	for key, item := range p.Items {
-		if _, e = tx.Exec(ctx, `INSERT INTO decision_request_item(user_id,operation_id,request_key,model,state_hash,question_hash) VALUES($1,$2,$3,$4,$5,$6)`, u, op, key, p.Request.Model, item.StateHash, item.QuestionHash); e != nil {
-			return e
-		}
+		b.Queue(`INSERT INTO decision_request_item(user_id,operation_id,request_key,model,state_hash,question_hash) VALUES($1,$2,$3,$4,$5,$6)`, u, op, key, p.Request.Model, item.StateHash, item.QuestionHash)
 	}
-	return nil
+	return tx.SendBatch(ctx, b).Close()
 }
 
 // Ingest returns only validated answers. Unexpected keys invalidate the envelope;
@@ -156,6 +182,7 @@ func Ingest(ctx context.Context, tx pgx.Tx, u, op uuid.UUID, result string) (map
 	if e != nil {
 		return nil, e
 	}
+	b := &pgx.Batch{}
 	for key, q := range request.Questions {
 		var a systemone.Answer
 		if json.Unmarshal(answers[key], &a) != nil || systemone.Validate(q, a) != nil {
@@ -165,10 +192,11 @@ func Ingest(ctx context.Context, tx pgx.Tx, u, op uuid.UUID, result string) (map
 		if e != nil {
 			return nil, e
 		}
-		if _, e = tx.Exec(ctx, `INSERT INTO decision_answer(user_id,model,state_hash,question_hash,answer) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, u, request.Model, sh, qh, systemone.Raw(a)); e != nil {
-			return nil, e
-		}
+		b.Queue(`INSERT INTO decision_answer(user_id,model,state_hash,question_hash,answer) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, u, request.Model, sh, qh, systemone.Raw(a))
 		valid[key] = a
 	}
-	return valid, nil
+	if b.Len() == 0 {
+		return valid, nil
+	}
+	return valid, tx.SendBatch(ctx, b).Close()
 }

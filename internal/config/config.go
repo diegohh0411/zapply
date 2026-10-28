@@ -110,7 +110,7 @@ func Load() (Config, error) {
 
 	var errs []error
 	var workerErr error
-	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "4")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
+	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "10")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
 		errs = append(errs, errors.New("WORKER_CONCURRENCY must be between 1 and 64"))
 	}
 	if c.Env != Development && c.Env != Production {

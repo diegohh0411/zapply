@@ -18,9 +18,11 @@ stable `/api/v1/systemone` route, response accounting, JSON-only decoding,
 per-question billing expansion and request rejection before sending. It is a
 fixture contract, not proof of OpenRouter's live billing behavior. Any catalogue
 model the owner selects can dispatch. Without a known bound it gets
-`ownerSelectedBound`, which conservatively assumes full context and the
-request fee charged once per question. These billing assumptions are not
-provider-verified. Generation lookup is off for these models, so an uncertain attempt
+`ownerSelectedBound`, which reserves the full context once per request and
+the request fee once per question. Settled usage showed input billed once per
+request (96 questions on a 62 KB request billed 12,705 input tokens), so the
+earlier per-question context multiplier over-reserved about 250 times. The
+worker logs any charge above its reservation. Generation lookup is off for these models, so an uncertain attempt
 waits for the owner to resolve it.
 
 `internal/match/service_test.go` covers cold and fully cached runs, discarded
