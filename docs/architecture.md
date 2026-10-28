@@ -29,7 +29,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
               │ data · outbox · │      └───────────────┘
               │ River jobs      │      ┌───────────────┐
               │                 │◀────▶│ zapply worker │──▶ model providers, Exa,
-              └─────────────────┘      │      ×M       │    Typst, object storage
+              └─────────────────┘      │      ×M       │    mail providers
                                        └───────────────┘
 ```
 
@@ -46,7 +46,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | Company profiles stored per user | A **global** `company` table, with user-only fields kept separate. Research is deduplicated by a unique job per domain | One research run serves every user who applies to that company |
 | Secrets in a `secrets` table | Encrypted system-owned OpenRouter keys in the MVP; key management is specified in part 5. User-owned credentials arrive with later features | Database dumps must not leak provider keys or future IMAP passwords |
 | Local llama.cpp on loopback | A **model gateway** module: system-owned OpenRouter keys, owner-assigned plans, rolling 7-day and 30-day cost allowances, usage metering. BYOK follows a successful MVP | Hosted inference is shared and costs money |
-| Typst compiled in-process in a greedy loop | A render worker with the Typst CLI in the image; PDFs stored in S3-compatible storage behind signed URLs | Isolates CPU-heavy work; PDFs leave the database |
+| Typst compiled in-process in a greedy loop | Typst WASM in a browser worker, fitted from immutable snapshots in Postgres; on-demand native fallback | No PDF storage; snapshots rebuild the same bytes |
 | IMAP IDLE task per desktop app | A **mail watcher** fleet: per-account leases in Postgres, sharded, with reconnect and backoff (part 10) | Long-lived connections need owners, not stateless workers |
 | `cvd-mcp` over stdio | A remote MCP server (streamable HTTP + OAuth) on the API (part 11) | Works for hosted users |
 | Auto-apply via a Tauri browser window | A browser extension that calls the API (later) | A server cannot drive the user's browser |
@@ -60,7 +60,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 
 ## Async work
 
-- **River** (a job queue in Postgres) is used for matching stages, renders, company research and mail scans. Jobs are enqueued in the same transaction as the row that triggers them, so nothing is lost and nothing is enqueued for a rolled-back write.
+- **River** (a job queue in Postgres) is used for matching stages, company research and mail scans. Jobs are enqueued in the same transaction as the row that triggers them, so nothing is lost and nothing is enqueued for a rolled-back write. CVs compile in a browser worker or synchronously on demand on the API.
 - Per-user fairness: queue concurrency limits plus a per-user in-flight cap enforced by the model gateway.
 
 ## Events
@@ -85,7 +85,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | 4 | Jobs and application tracking: postings, statuses, activity, views. See `docs/parts/04-jobs.md` |
 | 5 | Worker runtime + model gateway: River, system OpenRouter keys, platform owner UI, owner-assigned plans, rolling 7-day and 30-day cost allowances. See `docs/parts/05-worker.md` |
 | 6 | Matching pipeline: staged jobs, score cache keyed by content hash, explainability. See `docs/parts/06-matching.md` |
-| 7 | Rendering: Typst templates, page fitting, object storage, exports |
+| 7 | Rendering: versioned Typst templates, page fitting, CVs compiled in the browser (WASM) from immutable snapshots in Postgres, with no stored files. See `docs/parts/07-rendering.md` |
 | 8 | Company research: global cache, one research run per company, agent budget |
 | 9 | Angular + ZardUI web app, using the generated client. Started with part 4: shell, sign-in, live updates, jobs and library screens. See `docs/parts/09-web.md` |
 | 10 | Mail watcher fleet and inbox |

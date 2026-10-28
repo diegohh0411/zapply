@@ -1,0 +1,8 @@
+{
+  "name": "classic",
+  "version": 1,
+  "typst": "0.14.2",
+  "fonts": "source-sans-3/3.052",
+  "locales": ["en", "es"],
+  "published": true
+}

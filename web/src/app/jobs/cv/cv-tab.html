@@ -1,0 +1,298 @@
+<section class="space-y-5 py-4" aria-label="CV">
+  <header class="flex items-start justify-between gap-3">
+    <div>
+      <h2 class="font-semibold">CV for this job</h2>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Built only from your library. Nothing is rewritten.
+      </p>
+    </div>
+    <button
+      z-button
+      zSize="sm"
+      class="shrink-0"
+      [zDisabled]="busy() || fitting() || !fitted()"
+      [zLoading]="busy()"
+      (click)="export()"
+    >
+      <ng-icon name="lucideDownload" /> Export PDF
+    </button>
+  </header>
+
+  @if (error()) {
+    <p
+      role="alert"
+      class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+    >
+      {{ error() }}
+    </p>
+  }
+  @if (notice()) {
+    <p role="status" class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+      {{ notice() }}
+    </p>
+  }
+
+  @if (preview(); as p) {
+    @if (!p.match) {
+      <p class="text-xs text-muted-foreground">
+        No completed match for this job yet, so the CV shows your auto-included items, most recent
+        first. Run a match to rank them for this posting.
+      </p>
+    } @else if (p.match.stale) {
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        Your library or this posting changed since the last match. Re-run it to rank the CV again.
+      </p>
+    }
+
+    <div class="flex flex-wrap items-end gap-3 text-xs">
+      <p class="self-center text-muted-foreground">
+        Template: {{ p.template.name }} v{{ p.template.version }}
+      </p>
+      <label class="space-y-1">
+        <span class="block text-muted-foreground">Language</span>
+        <select
+          class="rounded-md border bg-background px-2 py-1.5"
+          [ngModel]="p.draft.locale"
+          (ngModelChange)="save({ locale: $event })"
+          [disabled]="busy()"
+        >
+          @for (l of p.template.locales; track l) {
+            <option [value]="l">{{ l === 'es' ? 'Español' : l === 'en' ? 'English' : l }}</option>
+          }
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="block text-muted-foreground">Length</span>
+        <select
+          class="rounded-md border bg-background px-2 py-1.5"
+          [ngModel]="p.draft.page_budget"
+          (ngModelChange)="save({ page_budget: +$event })"
+          [disabled]="busy()"
+        >
+          @for (n of [1, 2, 3]; track n) {
+            <option [ngValue]="n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</option>
+          }
+        </select>
+      </label>
+      <p class="ml-auto text-muted-foreground" aria-live="polite">
+        @if (fitting()) {
+          Fitting…
+        } @else if (fitted(); as f) {
+          {{ f.pages }} {{ f.pages === 1 ? 'page' : 'pages' }}
+          @if (trimmedCount()) {
+            · {{ trimmedCount() }} {{ trimmedCount() === 1 ? 'item' : 'items' }} trimmed to fit
+          }
+        }
+      </p>
+    </div>
+    @if (overflow()) {
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        The CV is longer than {{ p.draft.page_budget }}
+        {{ p.draft.page_budget === 1 ? 'page' : 'pages' }} even with every optional item trimmed.
+        Unpin or remove items, or allow more pages.
+      </p>
+    }
+
+    <div class="overflow-hidden rounded-xl border bg-muted/30">
+      @if (fitted(); as f) {
+        <iframe class="h-[70vh] w-full bg-white" [src]="f.url" title="CV preview"></iframe>
+      } @else {
+        <div class="flex h-48 items-center justify-center text-sm text-muted-foreground">
+          {{ fitting() ? 'Compiling your CV…' : 'Preview unavailable' }}
+        </div>
+      }
+    </div>
+
+    <details class="group rounded-xl border" open>
+      <summary
+        class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium"
+      >
+        What's in this CV
+        <ng-icon
+          name="lucideChevronDown"
+          class="shrink-0 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div class="space-y-4 border-t p-4">
+        <p class="text-xs text-muted-foreground">
+          Pinned items are never trimmed. Removing an item only affects this job's CV.
+        </p>
+        @for (section of rows(); track section.key) {
+          <div>
+            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {{ section.label }}
+            </h3>
+            <ul class="divide-y">
+              @for (row of section.rows; track row.id) {
+                <li
+                  class="flex items-start gap-2 py-1.5 text-sm"
+                  [style.padding-left.rem]="row.depth"
+                >
+                  <span
+                    class="min-w-0 flex-1"
+                    [class.text-muted-foreground]="row.state === 'trimmed'"
+                    [class.line-through]="row.state === 'trimmed'"
+                    [class.font-medium]="!row.highlight"
+                    >{{ row.highlight ? '• ' : '' }}{{ row.label }}</span
+                  >
+                  @if (row.state === 'trimmed') {
+                    <span class="shrink-0 text-[11px] text-muted-foreground">Trimmed to fit</span>
+                  }
+                  @if (row.state === 'pinned') {
+                    <button
+                      type="button"
+                      class="shrink-0 rounded px-1.5 text-[11px] text-brand hover:underline"
+                      [disabled]="busy()"
+                      (click)="pick(row.id, 'reset')"
+                      [attr.aria-label]="'Unpin ' + row.label"
+                    >
+                      <ng-icon name="lucidePin" /> Pinned
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                      [disabled]="busy()"
+                      (click)="pick(row.id, 'include')"
+                      [attr.aria-label]="'Pin ' + row.label"
+                    >
+                      <ng-icon name="lucidePin" />
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                    [disabled]="busy()"
+                    (click)="pick(row.id, 'exclude')"
+                    [attr.aria-label]="'Remove ' + row.label"
+                  >
+                    <ng-icon name="lucideX" />
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        } @empty {
+          <p class="text-sm text-muted-foreground">Nothing from your library is selected yet.</p>
+        }
+        @if (content()?.skills?.length) {
+          <div>
+            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Skills and languages
+            </h3>
+            <ul class="flex flex-wrap gap-2 text-xs">
+              @for (skill of content()!.skills; track skill.id) {
+                <li
+                  class="rounded border px-2 py-1"
+                  [class.line-through]="dropped().has(skill.id)"
+                  [class.text-muted-foreground]="dropped().has(skill.id)"
+                >
+                  {{ skill.name }}
+                  @if (dropped().has(skill.id)) {
+                    · Trimmed to fit
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    </details>
+
+    @if (p.available.entries.length || p.available.highlights.length) {
+      <details class="group rounded-xl border">
+        <summary
+          class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm text-muted-foreground"
+        >
+          Left out ({{ p.available.entries.length + p.available.highlights.length }})
+          <ng-icon
+            name="lucideChevronDown"
+            class="shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <ul class="divide-y border-t px-4">
+          @for (e of p.available.entries; track e.id) {
+            <li class="flex items-start gap-2 py-2 text-sm">
+              <span class="min-w-0 flex-1"
+                ><span class="font-medium">{{ e.title }}</span>
+                <span class="text-xs text-muted-foreground">· {{ reasons[e.reason] }}</span></span
+              >
+              <button
+                type="button"
+                class="shrink-0 text-xs text-brand hover:underline"
+                [disabled]="busy()"
+                (click)="pick(e.id, 'include')"
+              >
+                <ng-icon name="lucidePlus" /> Add
+              </button>
+            </li>
+          }
+          @for (h of p.available.highlights; track h.id) {
+            <li class="flex items-start gap-2 py-2 text-sm">
+              <span class="min-w-0 flex-1"
+                >• {{ h.text }}
+                @if (h.excluded) {
+                  <span class="text-xs text-muted-foreground">· Removed by you</span>
+                }
+              </span>
+              <button
+                type="button"
+                class="shrink-0 text-xs text-brand hover:underline"
+                [disabled]="busy()"
+                (click)="pick(h.id, 'include')"
+              >
+                <ng-icon name="lucidePlus" /> Add
+              </button>
+            </li>
+          }
+        </ul>
+      </details>
+    }
+
+    @if (exports().length) {
+      <details class="group rounded-xl border">
+        <summary
+          class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm text-muted-foreground"
+        >
+          Exported CVs ({{ exports().length }})
+          <ng-icon
+            name="lucideChevronDown"
+            class="shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <ul class="divide-y border-t px-4">
+          @for (x of exports(); track x.id) {
+            <li class="flex items-center gap-2 py-2 text-sm">
+              <span class="min-w-0 flex-1"
+                >{{ x.created_at | date: 'medium' }}
+                <span class="text-xs text-muted-foreground"
+                  >· {{ x.pages }} {{ x.pages === 1 ? 'page' : 'pages' }} ·
+                  {{ x.locale === 'es' ? 'Español' : 'English' }}
+                  @if (x.overflow) {
+                    · over length
+                  }
+                </span></span
+              >
+              <button
+                type="button"
+                class="shrink-0 text-xs text-brand hover:underline"
+                [disabled]="busy()"
+                (click)="download(x)"
+              >
+                <ng-icon name="lucideDownload" /> Download
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="border-t px-4 py-2 text-[11px] text-muted-foreground">
+          Each export is rebuilt from a saved snapshot and downloads identically every time.
+        </p>
+      </details>
+    }
+  } @else if (!error()) {
+    <div class="space-y-2" aria-busy="true">
+      <div class="h-9 animate-pulse rounded bg-muted"></div>
+      <div class="h-48 animate-pulse rounded bg-muted"></div>
+    </div>
+  }
+</section>

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -33,6 +34,27 @@ func (e Category) Valid() bool {
 	case CategoryPaid:
 		return true
 	case CategoryUnpaid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CvPreviewAvailableEntriesReason.
+const (
+	Excluded    CvPreviewAvailableEntriesReason = "excluded"
+	NotSelected CvPreviewAvailableEntriesReason = "not_selected"
+	Suggested   CvPreviewAvailableEntriesReason = "suggested"
+)
+
+// Valid indicates whether the value is a known member of the CvPreviewAvailableEntriesReason enum.
+func (e CvPreviewAvailableEntriesReason) Valid() bool {
+	switch e {
+	case Excluded:
+		return true
+	case NotSelected:
+		return true
+	case Suggested:
 		return true
 	default:
 		return false
@@ -603,6 +625,120 @@ type Coverage struct {
 	Text          string   `json:"text"`
 	TextHash      string   `json:"text_hash"`
 	Type          string   `json:"type"`
+}
+
+// CvDraft defines model for CvDraft.
+type CvDraft struct {
+	JobId      openapi_types.UUID `json:"job_id"`
+	Locale     string             `json:"locale"`
+	PageBudget int                `json:"page_budget"`
+	Picks      CvPicks            `json:"picks"`
+	Template   string             `json:"template"`
+
+	// TemplateVersion Null follows the latest version.
+	TemplateVersion *int      `json:"template_version"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Version         int       `json:"version"`
+}
+
+// CvDraftInput defines model for CvDraftInput.
+type CvDraftInput struct {
+	Locale          string  `json:"locale"`
+	PageBudget      int     `json:"page_budget"`
+	Picks           CvPicks `json:"picks"`
+	Template        string  `json:"template"`
+	TemplateVersion *int    `json:"template_version,omitempty"`
+}
+
+// CvExport defines model for CvExport.
+type CvExport struct {
+	ClientSha256    *string                 `json:"client_sha256,omitempty"`
+	Content         *map[string]interface{} `json:"content,omitempty"`
+	ContentHash     string                  `json:"content_hash"`
+	CreatedAt       time.Time               `json:"created_at"`
+	DocumentDate    openapi_types.Date      `json:"document_date"`
+	Dropped         []string                `json:"dropped"`
+	Id              openapi_types.UUID      `json:"id"`
+	JobId           openapi_types.UUID      `json:"job_id"`
+	Locale          string                  `json:"locale"`
+	MatchRunId      *openapi_types.UUID     `json:"match_run_id"`
+	Overflow        bool                    `json:"overflow"`
+	PageBudget      int                     `json:"page_budget"`
+	Pages           int                     `json:"pages"`
+	Template        string                  `json:"template"`
+	TemplateVersion int                     `json:"template_version"`
+}
+
+// CvExportInput defines model for CvExportInput.
+type CvExportInput struct {
+	ClientSha256 *string  `json:"client_sha256,omitempty"`
+	ContentHash  string   `json:"content_hash"`
+	DraftVersion int      `json:"draft_version"`
+	Dropped      []string `json:"dropped"`
+	Pages        int      `json:"pages"`
+}
+
+// CvExportPage defines model for CvExportPage.
+type CvExportPage struct {
+	Items []CvExport `json:"items"`
+}
+
+// CvPicks defines model for CvPicks.
+type CvPicks struct {
+	Exclude []openapi_types.UUID `json:"exclude"`
+
+	// Include Evidence or highlight IDs
+	Include []openapi_types.UUID `json:"include"`
+}
+
+// CvPreview defines model for CvPreview.
+type CvPreview struct {
+	Available struct {
+		Entries []struct {
+			Id     string                          `json:"id"`
+			Kind   string                          `json:"kind"`
+			Reason CvPreviewAvailableEntriesReason `json:"reason"`
+			Title  string                          `json:"title"`
+		} `json:"entries"`
+		Highlights []struct {
+			EvidenceId string `json:"evidence_id"`
+			Excluded   bool   `json:"excluded"`
+			Id         string `json:"id"`
+			Text       string `json:"text"`
+		} `json:"highlights"`
+	} `json:"available"`
+
+	// Content The template's content (templates/README.md).
+	Content     map[string]interface{} `json:"content"`
+	ContentHash string                 `json:"content_hash"`
+	Draft       CvDraft                `json:"draft"`
+	Match       *struct {
+		RunId openapi_types.UUID `json:"run_id"`
+		Stale bool               `json:"stale"`
+	} `json:"match"`
+	Template CvTemplate `json:"template"`
+
+	// Trim Optional item IDs
+	Trim []string `json:"trim"`
+}
+
+// CvPreviewAvailableEntriesReason defines model for CvPreview.Available.Entries.Reason.
+type CvPreviewAvailableEntriesReason string
+
+// CvTemplate defines model for CvTemplate.
+type CvTemplate struct {
+	Assets struct {
+		Fonts   []string `json:"fonts"`
+		Main    string   `json:"main"`
+		Strings string   `json:"strings"`
+	} `json:"assets"`
+	Locales   []string `json:"locales"`
+	Name      string   `json:"name"`
+	Published bool     `json:"published"`
+
+	// Typst The Typst version the template compiles with.
+	Typst   string `json:"typst"`
+	Version int    `json:"version"`
 }
 
 // DecisionModel defines model for DecisionModel.
@@ -1433,6 +1569,18 @@ type PutJobParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// PutCvParams defines parameters for PutCv.
+type PutCvParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// CreateCvExportParams defines parameters for CreateCvExport.
+type CreateCvExportParams struct {
+	// IdempotencyKey Retrying with the same key and body returns the original result.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // PutMatchOverrideJSONBody defines parameters for PutMatchOverride.
 type PutMatchOverrideJSONBody struct {
 	Class PutMatchOverrideJSONBodyClass `json:"class"`
@@ -1523,6 +1671,12 @@ type CreateJobNoteJSONRequestBody = JobNoteInput
 // UpdateJobNoteJSONRequestBody defines body for UpdateJobNote for application/json ContentType.
 type UpdateJobNoteJSONRequestBody = JobNoteInput
 
+// PutCvJSONRequestBody defines body for PutCv for application/json ContentType.
+type PutCvJSONRequestBody = CvDraftInput
+
+// CreateCvExportJSONRequestBody defines body for CreateCvExport for application/json ContentType.
+type CreateCvExportJSONRequestBody = CvExportInput
+
 // PutMatchOverrideJSONRequestBody defines body for PutMatchOverride for application/json ContentType.
 type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
 
@@ -1594,6 +1748,15 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(w http.ResponseWriter, r *http.Request, id ID, params ActivateSystemKeyParams)
+
+	// (GET /v1/cv-exports/{id})
+	GetCvExport(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/cv-exports/{id}/pdf)
+	GetCvExportPdf(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/cv-templates)
+	ListCvTemplates(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/evidences)
 	ListEvidences(w http.ResponseWriter, r *http.Request, params ListEvidencesParams)
@@ -1675,6 +1838,18 @@ type ServerInterface interface {
 
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/jobs/{id}/cv)
+	GetCv(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (PUT /v1/jobs/{id}/cv)
+	PutCv(w http.ResponseWriter, r *http.Request, id ID, params PutCvParams)
+
+	// (GET /v1/jobs/{id}/cv/exports)
+	ListCvExports(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/jobs/{id}/cv/exports)
+	CreateCvExport(w http.ResponseWriter, r *http.Request, id ID, params CreateCvExportParams)
 
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -2260,6 +2435,72 @@ func (siw *ServerInterfaceWrapper) ActivateSystemKey(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ActivateSystemKey(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCvExport operation middleware
+func (siw *ServerInterfaceWrapper) GetCvExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCvExport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCvExportPdf operation middleware
+func (siw *ServerInterfaceWrapper) GetCvExportPdf(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCvExportPdf(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCvTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListCvTemplates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCvTemplates(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3215,6 +3456,162 @@ func (siw *ServerInterfaceWrapper) ArchiveJob(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetCv operation middleware
+func (siw *ServerInterfaceWrapper) GetCv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCv(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutCv operation middleware
+func (siw *ServerInterfaceWrapper) PutCv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutCvParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutCv(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCvExports operation middleware
+func (siw *ServerInterfaceWrapper) ListCvExports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCvExports(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCvExport operation middleware
+func (siw *ServerInterfaceWrapper) CreateCvExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCvExportParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCvExport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMatchEstimate operation middleware
 func (siw *ServerInterfaceWrapper) GetMatchEstimate(w http.ResponseWriter, r *http.Request) {
 
@@ -4083,6 +4480,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/match-runs/{id}/cancel", wrapper.CancelMatchRun)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.DeleteMatchOverride)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.PutMatchOverride)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-templates", wrapper.ListCvTemplates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.GetCv)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.PutCv)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.ListCvExports)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.CreateCvExport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}", wrapper.GetCvExport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}/pdf", wrapper.GetCvExportPdf)
 
 	return m
 }
@@ -4696,6 +5100,136 @@ type ActivateSystemKeydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ActivateSystemKeydefaultApplicationProblemPlusJSONResponse) VisitActivateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvExportResponseObject interface {
+	VisitGetCvExportResponse(w http.ResponseWriter) error
+}
+
+type GetCvExport200JSONResponse CvExport
+
+func (response GetCvExport200JSONResponse) VisitGetCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvExportdefaultApplicationProblemPlusJSONResponse) VisitGetCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportPdfRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvExportPdfResponseObject interface {
+	VisitGetCvExportPdfResponse(w http.ResponseWriter) error
+}
+
+type GetCvExportPdf200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type GetCvExportPdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	Headers       GetCvExportPdf200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetCvExportPdf200ApplicationpdfResponse) VisitGetCvExportPdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetCvExportPdfdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvExportPdfdefaultApplicationProblemPlusJSONResponse) VisitGetCvExportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvTemplatesRequestObject struct {
+}
+
+type ListCvTemplatesResponseObject interface {
+	VisitListCvTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListCvTemplates200JSONResponse []CvTemplate
+
+func (response ListCvTemplates200JSONResponse) VisitListCvTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvTemplatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCvTemplatesdefaultApplicationProblemPlusJSONResponse) VisitListCvTemplatesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5843,6 +6377,186 @@ func (response ArchiveJobdefaultApplicationProblemPlusJSONResponse) VisitArchive
 	return err
 }
 
+type GetCvRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvResponseObject interface {
+	VisitGetCvResponse(w http.ResponseWriter) error
+}
+
+type GetCv200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetCv200JSONResponse struct {
+	Body    CvPreview
+	Headers GetCv200ResponseHeaders
+}
+
+func (response GetCv200JSONResponse) VisitGetCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvdefaultApplicationProblemPlusJSONResponse) VisitGetCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutCvRequestObject struct {
+	Id     ID `json:"id"`
+	Params PutCvParams
+	Body   *PutCvJSONRequestBody
+}
+
+type PutCvResponseObject interface {
+	VisitPutCvResponse(w http.ResponseWriter) error
+}
+
+type PutCv200ResponseHeaders struct {
+	ETag *string
+}
+
+type PutCv200JSONResponse struct {
+	Body    CvPreview
+	Headers PutCv200ResponseHeaders
+}
+
+func (response PutCv200JSONResponse) VisitPutCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutCvdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutCvdefaultApplicationProblemPlusJSONResponse) VisitPutCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvExportsRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type ListCvExportsResponseObject interface {
+	VisitListCvExportsResponse(w http.ResponseWriter) error
+}
+
+type ListCvExports200JSONResponse CvExportPage
+
+func (response ListCvExports200JSONResponse) VisitListCvExportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvExportsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCvExportsdefaultApplicationProblemPlusJSONResponse) VisitListCvExportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCvExportRequestObject struct {
+	Id     ID `json:"id"`
+	Params CreateCvExportParams
+	Body   *CreateCvExportJSONRequestBody
+}
+
+type CreateCvExportResponseObject interface {
+	VisitCreateCvExportResponse(w http.ResponseWriter) error
+}
+
+type CreateCvExport201JSONResponse CvExport
+
+func (response CreateCvExport201JSONResponse) VisitCreateCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCvExportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCvExportdefaultApplicationProblemPlusJSONResponse) VisitCreateCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMatchEstimateRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -6880,6 +7594,15 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(ctx context.Context, request ActivateSystemKeyRequestObject) (ActivateSystemKeyResponseObject, error)
 
+	// (GET /v1/cv-exports/{id})
+	GetCvExport(ctx context.Context, request GetCvExportRequestObject) (GetCvExportResponseObject, error)
+
+	// (GET /v1/cv-exports/{id}/pdf)
+	GetCvExportPdf(ctx context.Context, request GetCvExportPdfRequestObject) (GetCvExportPdfResponseObject, error)
+
+	// (GET /v1/cv-templates)
+	ListCvTemplates(ctx context.Context, request ListCvTemplatesRequestObject) (ListCvTemplatesResponseObject, error)
+
 	// (GET /v1/evidences)
 	ListEvidences(ctx context.Context, request ListEvidencesRequestObject) (ListEvidencesResponseObject, error)
 
@@ -6960,6 +7683,18 @@ type StrictServerInterface interface {
 
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(ctx context.Context, request ArchiveJobRequestObject) (ArchiveJobResponseObject, error)
+
+	// (GET /v1/jobs/{id}/cv)
+	GetCv(ctx context.Context, request GetCvRequestObject) (GetCvResponseObject, error)
+
+	// (PUT /v1/jobs/{id}/cv)
+	PutCv(ctx context.Context, request PutCvRequestObject) (PutCvResponseObject, error)
+
+	// (GET /v1/jobs/{id}/cv/exports)
+	ListCvExports(ctx context.Context, request ListCvExportsRequestObject) (ListCvExportsResponseObject, error)
+
+	// (POST /v1/jobs/{id}/cv/exports)
+	CreateCvExport(ctx context.Context, request CreateCvExportRequestObject) (CreateCvExportResponseObject, error)
 
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(ctx context.Context, request GetMatchEstimateRequestObject) (GetMatchEstimateResponseObject, error)
@@ -7500,6 +8235,82 @@ func (sh *strictHandler) ActivateSystemKey(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ActivateSystemKeyResponseObject); ok {
 		if err := validResponse.VisitActivateSystemKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCvExport operation middleware
+func (sh *strictHandler) GetCvExport(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvExportRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCvExport(ctx, request.(GetCvExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCvExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvExportResponseObject); ok {
+		if err := validResponse.VisitGetCvExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCvExportPdf operation middleware
+func (sh *strictHandler) GetCvExportPdf(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvExportPdfRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCvExportPdf(ctx, request.(GetCvExportPdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCvExportPdf")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvExportPdfResponseObject); ok {
+		if err := validResponse.VisitGetCvExportPdfResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCvTemplates operation middleware
+func (sh *strictHandler) ListCvTemplates(w http.ResponseWriter, r *http.Request) {
+	var request ListCvTemplatesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCvTemplates(ctx, request.(ListCvTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCvTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCvTemplatesResponseObject); ok {
+		if err := validResponse.VisitListCvTemplatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8282,6 +9093,126 @@ func (sh *strictHandler) ArchiveJob(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ArchiveJobResponseObject); ok {
 		if err := validResponse.VisitArchiveJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCv operation middleware
+func (sh *strictHandler) GetCv(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCv(ctx, request.(GetCvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCv")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvResponseObject); ok {
+		if err := validResponse.VisitGetCvResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutCv operation middleware
+func (sh *strictHandler) PutCv(w http.ResponseWriter, r *http.Request, id ID, params PutCvParams) {
+	var request PutCvRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body PutCvJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutCv(ctx, request.(PutCvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutCv")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutCvResponseObject); ok {
+		if err := validResponse.VisitPutCvResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCvExports operation middleware
+func (sh *strictHandler) ListCvExports(w http.ResponseWriter, r *http.Request, id ID) {
+	var request ListCvExportsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCvExports(ctx, request.(ListCvExportsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCvExports")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCvExportsResponseObject); ok {
+		if err := validResponse.VisitListCvExportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCvExport operation middleware
+func (sh *strictHandler) CreateCvExport(w http.ResponseWriter, r *http.Request, id ID, params CreateCvExportParams) {
+	var request CreateCvExportRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body CreateCvExportJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCvExport(ctx, request.(CreateCvExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCvExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCvExportResponseObject); ok {
+		if err := validResponse.VisitCreateCvExportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

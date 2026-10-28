@@ -1,0 +1,78 @@
+{
+  "en": {
+    "paper": "us-letter",
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "present": "Present",
+    "expires": "Expires",
+    "grade": "Grade",
+    "number": "No.",
+    "credential_id": "ID",
+    "native": "Native",
+    "thousands": ",",
+    "sections": {
+      "summary": "Summary",
+      "experience": "Experience",
+      "education": "Education",
+      "unpaid": "Volunteering and other experience",
+      "credentials": "Licenses and certifications",
+      "projects": "Projects",
+      "publications": "Publications",
+      "presentations": "Presentations",
+      "patents": "Patents",
+      "creative": "Creative work",
+      "awards": "Awards",
+      "funding": "Grants and funding",
+      "skills": "Skills",
+      "languages": "Languages"
+    },
+    "skill_types": { "hard": "Technical", "tool": "Tools", "soft": "Strengths" },
+    "enums": {
+      "degree_status": { "in_progress": "In progress", "incomplete": "Not completed" },
+      "employment_type": { "part_time": "Part-time", "temporary": "Temporary", "seasonal": "Seasonal" },
+      "business_role": { "founder": "Founder", "co_founder": "Co-founder", "owner": "Owner", "partner": "Partner" },
+      "membership_role": { "officer": "Officer", "board": "Board member", "chair": "Chair" },
+      "presentation_format": { "talk": "Talk", "poster": "Poster", "workshop": "Workshop", "panel": "Panel" },
+      "patent_status": { "filed": "Filed", "granted": "Granted" },
+      "funding_type": { "grant": "Grant", "scholarship": "Scholarship", "fellowship": "Fellowship" },
+      "creative_medium": { "exhibition": "Exhibition", "performance": "Performance", "film": "Film", "recording": "Recording", "portfolio": "Portfolio" }
+    }
+  },
+  "es": {
+    "paper": "a4",
+    "months": ["ene.", "feb.", "mar.", "abr.", "may.", "jun.", "jul.", "ago.", "sept.", "oct.", "nov.", "dic."],
+    "present": "actualidad",
+    "expires": "Vence",
+    "grade": "Promedio",
+    "number": "Núm.",
+    "credential_id": "ID",
+    "native": "nativo",
+    "thousands": " ",
+    "sections": {
+      "summary": "Perfil",
+      "experience": "Experiencia",
+      "education": "Formación",
+      "unpaid": "Voluntariado y otras experiencias",
+      "credentials": "Licencias y certificaciones",
+      "projects": "Proyectos",
+      "publications": "Publicaciones",
+      "presentations": "Presentaciones",
+      "patents": "Patentes",
+      "creative": "Obra creativa",
+      "awards": "Premios",
+      "funding": "Becas y financiamiento",
+      "skills": "Habilidades",
+      "languages": "Idiomas"
+    },
+    "skill_types": { "hard": "Técnicas", "tool": "Herramientas", "soft": "Fortalezas" },
+    "enums": {
+      "degree_status": { "in_progress": "En curso", "incomplete": "No concluido" },
+      "employment_type": { "part_time": "Medio tiempo", "temporary": "Temporal", "seasonal": "Por temporada" },
+      "business_role": { "founder": "Fundador", "co_founder": "Cofundador", "owner": "Propietario", "partner": "Socio" },
+      "membership_role": { "officer": "Directivo", "board": "Miembro del consejo", "chair": "Presidente" },
+      "presentation_format": { "talk": "Ponencia", "poster": "Póster", "workshop": "Taller", "panel": "Panel" },
+      "patent_status": { "filed": "Solicitada", "granted": "Otorgada" },
+      "funding_type": { "grant": "Subvención", "scholarship": "Beca", "fellowship": "Beca de investigación" },
+      "creative_medium": { "exhibition": "Exposición", "performance": "Presentación", "film": "Cine", "recording": "Grabación", "portfolio": "Portafolio" }
+    }
+  }
+}

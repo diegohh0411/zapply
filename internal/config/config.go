@@ -43,6 +43,9 @@ type Config struct {
 	Worker                 Worker
 	SystemKeyRing          string
 	SystemKeyActiveVersion string
+	// TypstDir holds a Typst CLI per version, TypstDir/<version>/typst, for
+	// server-side CV compiles. Empty uses typst on PATH.
+	TypstDir string
 }
 
 type Worker struct {
@@ -91,6 +94,7 @@ func Load() (Config, error) {
 		NATSURL:                get("NATS_URL", "nats://127.0.0.1:4222"),
 		SystemKeyRing:          os.Getenv("SYSTEM_KEY_RING"),
 		SystemKeyActiveVersion: os.Getenv("SYSTEM_KEY_ACTIVE_VERSION"),
+		TypstDir:               os.Getenv("TYPST_DIR"),
 		Worker:                 Worker{DatabaseURL: os.Getenv("WORKER_DATABASE_URL"), AdminAddr: get("WORKER_ADMIN_ADDR", ":8082"), Model: os.Getenv("LLM_MODEL"), Endpoint: os.Getenv("LLM_ENDPOINT")},
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),

@@ -171,6 +171,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		Drain:    srv.DrainC(),
 		Web:      webui.Handler(webCfg),
 		DevToken: devToken,
+		TypstDir: cfg.TypstDir,
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }

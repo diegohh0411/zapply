@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "locale": "en",
+  "date": "2026-10-28",
+  "profile": {
+    "name": "#panic(\"name\") Eve",
+    "headline": "]) #set text(red) *bold* _em_",
+    "links": [{ "label": "x", "url": "https://example.com/#hash" }]
+  },
+  "sections": [
+    {
+      "key": "experience",
+      "entries": [
+        {
+          "id": "e1", "kind": "job", "form": "engagement", "title": "$x^2$ engineer <label> @ref",
+          "organization": "\\escaped // not a comment",
+          "start": { "date": "2020", "precision": "year" },
+          "highlights": [
+            { "id": "h1", "text": "#read(\"/content.json\") literal" },
+            { "id": "h2", "text": "= Not a heading" },
+            { "id": "h3", "text": "```raw``` and `code`" }
+          ]
+        }
+      ]
+    }
+  ],
+  "skills": [{ "name": "#eval(\"1+1\")", "type": "hard" }]
+}

@@ -1,0 +1,12 @@
+{
+  "classic/1": {
+    "classic/1/main.typ": "bcac2fd85b6b812e2d59d8baef106a35173d3576fa7896b4dd8d31dc61178707",
+    "classic/1/manifest.json": "a4f8010f4ec9b831ddec5ec54bd1668e545c01f8306ab639f52e3e8f21fa7877",
+    "classic/1/strings.json": "c5f8a67765301417a35257f3b74e472b7961bf3174c756ad8c0bfb5e7610f43c",
+    "fonts/source-sans-3/3.052/LICENSE.md": "56af9b9c6715597e458284a474dc118a50a4150e9d547c70f7b4a33c3e6a9328",
+    "fonts/source-sans-3/3.052/SourceSans3-It.ttf": "192afd78f0f54a3c69eaf02d43f4d9a821e9d6110e41d3d25d61a7385cd580e4",
+    "fonts/source-sans-3/3.052/SourceSans3-Regular.ttf": "4644c81b86ec9caaa76b634889968ed3c4f4f52f054855933acc7c2b21e53b0f",
+    "fonts/source-sans-3/3.052/SourceSans3-Semibold.ttf": "a3f4f8dcf343a8f24dc61951de93f3ba1558b15cd250ba24af8a40e957081b7d",
+    "fonts/source-sans-3/3.052/SourceSans3-SemiboldIt.ttf": "8221d5e4bd3cf249e8023a5f8fad024d37c2def0f3d3aa7fd1f5830afda51f34"
+  }
+}
