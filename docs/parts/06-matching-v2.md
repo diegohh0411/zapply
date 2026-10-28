@@ -18,7 +18,7 @@ one shared state and scoring each entry once against the whole posting. It
 could not say what was missing, which is why pipeline 1 added requirements.
 
 Pipeline 2 keeps the requirements and their gaps, citations and checks, and
-returns to cvd's shape. It asks about 220 questions for that run, in two
+returns to cvd's shape. It asks about 230 questions for that run, in two
 rounds of parallel requests.
 
 ## Shape
@@ -40,7 +40,6 @@ questions, which is intended: each run should rank the current library.
 |---|---|---|---|---|
 | 1 | `line:i:class`: must, preferred, duty, **trait** or other | choice | posting | lines |
 | 1 | `seniority` | choice | posting | 1 |
-| 1 | `degree`: minimum degree the posting requires | choice | posting | 1 |
 | 1 | `language:<skill>`: minimum level for each library language skill | choice | posting | language skills |
 | 1 | `skill:<skill>`: does the posting value it | noul | posting | skills |
 | 1 | `relevance:<entry>`: cvd's relevance to the whole posting, 0–4 | score | library | entries |
@@ -49,6 +48,7 @@ questions, which is intended: each run should rank the current library.
 | 2 | `cover:<req>`: which entry shows it best, or none | choice | library | requirements |
 | 2 | `cite:<req>`: which highlight shows it best, or none | choice | library | requirements |
 | 2 | `check:<req>`: degree, language or other | choice | posting | requirements |
+| 2 | `degree:<req>`: minimum degree the line requires | choice | posting | requirements |
 
 Round two needs the requirement list, so it waits for round one. Within a
 round every request is sent at once (see the parallel dispatch notes in
@@ -76,11 +76,12 @@ The model judges, Go decides, as before.
   strength, for ranking. This fills the entry × requirement table from one
   question per requirement.
 - **Checks.** Years use the union of dates of entries with cover probability
-  of at least 0.2. A `degree` requirement uses the posting's `degree` answer
-  and is met by the entry with a completed degree at that level (preferring
+  of at least 0.2. A `degree` requirement uses its own line's `degree:<req>`
+  level ("bachelor required" and "master preferred" differ) and is met by the entry with a completed degree at that level (preferring
   the more probable cover); otherwise strength is capped at 0.6. A `language`
   requirement uses the posting's level for each library language named in the
-  line; if none meets it, strength is capped at 0.6.
+  line; every named language must meet its level ("C1 English and C1
+  Spanish"), or strength is capped at 0.6.
 - **Citations.** Up to three highlights with `cite:<req>` probability of at
   least 0.25, when strength is at least 0.4.
 - **Status, must-haves met and job score** use the pipeline 1 thresholds and

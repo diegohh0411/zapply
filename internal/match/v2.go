@@ -54,6 +54,8 @@ const (
 	selectFloor = .375
 )
 
+var degreeLevels = map[string]string{"not_specified": "No minimum degree level is stated.", "secondary": "Secondary school completion is required.", "associate": "An associate degree is required.", "bachelor": "A bachelor degree is required.", "master": "A master degree is required.", "doctorate": "A doctoral degree is required."}
+
 var classWeight = map[string]float64{"must": 2, "preferred": 1, "duty": 1, "trait": .5}
 
 var relevanceCriteria = []string{
@@ -161,9 +163,6 @@ func ReadQuestionsV2(s Snapshot) ([]decide.Pending, error) {
 	if e := add("seniority", p, choice("What seniority does `posting` require?", map[string]string{"not_specified": "No seniority level is stated.", "entry": "An entry level role requiring no prior professional experience.", "junior": "A junior role working under guidance.", "mid": "An independently contributing professional role.", "senior": "A senior role requiring substantial expertise.", "lead": "A lead or management role directing a team.", "executive": "An executive role setting organization strategy."})); e != nil {
 		return nil, e
 	}
-	if e := add("degree", p, choice("What minimum completed degree level does `posting` explicitly require?", map[string]string{"not_specified": "No minimum degree level is stated.", "secondary": "Secondary school completion is required.", "associate": "An associate degree is required.", "bachelor": "A bachelor degree is required.", "master": "A master degree is required.", "doctorate": "A doctoral degree is required."})); e != nil {
-		return nil, e
-	}
 	for _, sk := range s.Skills {
 		if sk.Type == "language" {
 			q := systemone.Question{Type: "choice", Instructions: systemone.Raw(map[string]string{"question": "What minimum proficiency in `language` does `posting` explicitly require?", "language": sk.Name}), Criteria: systemone.Raw(map[string]string{"not_specified": "No minimum proficiency in this language is stated.", "A1": "Beginner CEFR A1 proficiency is required.", "A2": "Elementary CEFR A2 proficiency is required.", "B1": "Intermediate CEFR B1 proficiency is required.", "B2": "Upper intermediate CEFR B2 proficiency is required.", "C1": "Advanced CEFR C1 proficiency is required.", "C2": "Proficient CEFR C2 proficiency is required.", "native": "Native proficiency is required."})}
@@ -263,6 +262,10 @@ func CoverQuestionsV2(s Snapshot, requirements []Requirement) ([]decide.Pending,
 			if e := add("cite:"+r.TextHash, l, choice("Which highlight in `library.evidence` best demonstrates the requirement in "+path+"?", highlights)); e != nil {
 				return nil, e
 			}
+		}
+		// Each line states its own level: "bachelor required" and "master preferred" differ.
+		if e := add("degree:"+r.TextHash, p, choice("What minimum completed degree level does "+path+" explicitly require?", degreeLevels)); e != nil {
+			return nil, e
 		}
 		if e := add("check:"+r.TextHash, p, choice("What does "+path+" ask for?", map[string]string{"degree": "A degree or other formal education.", "language": "Ability in a human language.", "other": "Anything other than a degree, formal education or human language ability."})); e != nil {
 			return nil, e
@@ -378,7 +381,7 @@ func ComputeV2(s Snapshot, requirements []Requirement, a map[string]systemone.An
 		switch check.Choice {
 		case "degree":
 			r.Type = "education"
-			degree, ok := a["degree"]
+			degree, ok := a["degree:"+r.TextHash]
 			if !ok {
 				out.Partial = true
 			}
@@ -410,7 +413,8 @@ func ComputeV2(s Snapshot, requirements []Requirement, a map[string]systemone.An
 			}
 		case "language":
 			r.Type = "language"
-			required, met, named := "", false, false
+			// Every language the line names must meet its level ("C1 English and C1 Spanish").
+			required, met, named := "", true, false
 			for _, sk := range s.Skills {
 				if sk.Type != "language" || !strings.Contains(strings.ToLower(r.Text), strings.ToLower(sk.Name)) {
 					continue
@@ -427,8 +431,8 @@ func ComputeV2(s Snapshot, requirements []Requirement, a map[string]systemone.An
 				if level(want.Choice, languages) > level(required, languages) {
 					required = want.Choice
 				}
-				if level(sk.Proficiency, languages) >= level(want.Choice, languages) {
-					met = true
+				if level(sk.Proficiency, languages) < level(want.Choice, languages) {
+					met = false
 				}
 			}
 			if named {
