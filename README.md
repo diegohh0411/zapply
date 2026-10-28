@@ -111,3 +111,7 @@ set `TYPST_DIR` to a directory containing `0.14.2/typst`. Browser rendering
 needs no local CLI. The native determinism tests also need `pdftotext`
 (poppler); run them with `ZAPPLY_REQUIRE_TYPST=1 make test-integration`.
 Details: [Part 7](docs/parts/07-rendering.md).
+
+Heroku deployments can show their source commit in the sidebar by enabling both
+`runtime-dyno-metadata` and `runtime-dyno-build-metadata` labs features on the app.
+The build time is embedded in the image and shown in the browser’s local time.

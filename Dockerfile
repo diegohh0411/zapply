@@ -13,7 +13,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist/web/browser/ internal/webui/dist/
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/zapply ./cmd/zapply
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/diegohh0411/zapply/internal/webui.BuiltAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o /out/zapply ./cmd/zapply
 
 # Typst CLIs for server-side CV compiles, one per version a published
 # template pins (templates/*/*/manifest.json). Static musl builds.
