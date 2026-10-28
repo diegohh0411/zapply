@@ -242,9 +242,9 @@ version retention on attempts. Never expose it to the browser.
 bytes alone do not bound provider-side expansion, repeated state evaluation,
 or output billing across every decision model.
 
-For the MVP, enable only pricing profiles with zero completion rate and
-supported prompt/request charges; reject nonzero unknown pricing components.
-A model adapter must document whether billable input is bounded per request
+Pricing components are not filtered: any catalogue model with a positive
+context is accepted, and only the prompt and request rates enter the
+reservation. A model adapter must document whether billable input is bounded per request
 or per independently evaluated question. Conservatively reserve the advertised
 context times the prompt rate for each billable evaluation, plus the bounded
 request charge. If evaluation is per question, multiply the context allowance
