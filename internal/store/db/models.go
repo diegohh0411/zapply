@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DatePrecision string
@@ -680,6 +681,38 @@ func (e WorkMode) Valid() bool {
 type AppUser struct {
 	ID        uuid.UUID
 	CreatedAt time.Time
+}
+
+type CvDraft struct {
+	UserID          uuid.UUID
+	JobID           uuid.UUID
+	Template        string
+	TemplateVersion *int32
+	Locale          string
+	PageBudget      int16
+	Picks           json.RawMessage
+	Version         int32
+	UpdatedAt       time.Time
+}
+
+type CvExport struct {
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	JobID           uuid.UUID
+	IdempotencyKey  string
+	MatchRunID      *uuid.UUID
+	Template        string
+	TemplateVersion int32
+	Locale          string
+	DocumentDate    pgtype.Date
+	PageBudget      int16
+	Pages           int32
+	Overflow        bool
+	Content         json.RawMessage
+	ContentHash     string
+	ClientSha256    *string
+	Dropped         json.RawMessage
+	CreatedAt       time.Time
 }
 
 type DecisionAnswer struct {

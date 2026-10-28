@@ -1,6 +1,6 @@
 # Part 9: Web app (started with part 4)
 
-Status: in progress. Shell, sign-in, live updates, jobs and library screens are built. Matching, rendering and mail screens arrive with their parts.
+Status: in progress. Shell, sign-in, live updates, jobs, library, matching and CV rendering screens are built. Mail screens arrive with part 10.
 
 ## Stack
 

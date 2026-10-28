@@ -50,8 +50,14 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "typst_ts_web_compiler_bg.wasm",
+                "input": "node_modules/@myriaddreamin/typst-ts-web-compiler/pkg",
+                "output": "typst/0.7.0"
               }
             ],
+            "webWorkerTsConfig": "tsconfig.worker.json",
             "styles": [
               "src/styles.css"
             ]

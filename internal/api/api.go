@@ -26,6 +26,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/worker"
@@ -51,6 +52,9 @@ type Deps struct {
 	// DevToken mints a token for a subject (POST /dev/token, development
 	// only); nil disables the route.
 	DevToken func(subject string) (string, error)
+	// TypstDir holds the Typst CLIs for server-side CV compiles
+	// (render.Compiler); empty uses typst on PATH.
+	TypstDir string
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -65,6 +69,7 @@ func Handler(d Deps) http.Handler {
 	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue}
 	srv.matcher = match.New(d.Store, queue)
 	srv.jobs.Matcher = srv.matcher
+	srv.cv = render.NewService(d.Store, render.NewCompiler(d.TypstDir))
 	srv.decisionModels = openrouter.New("", "")
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
@@ -86,6 +91,7 @@ func Handler(d Deps) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	root.HandleFunc("GET /readyz", d.ready)
+	root.Handle("GET "+render.AssetsPath, templateAssets())
 	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), srv.ownerOnly, limitBody))
 	if d.DevToken != nil {
 		root.Handle("POST /dev/token", httpx.Chain(http.HandlerFunc(d.devToken), limitBody))

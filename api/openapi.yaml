@@ -1207,6 +1207,125 @@ paths:
           description: Success.
         default: { $ref: '#/components/responses/Problem' }
 
+  /v1/cv-templates:
+    get:
+      operationId: listCvTemplates
+      tags: [cv]
+      description: Every CV template version, with the files a browser compiles it with.
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CvTemplate" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/cv:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCv
+      tags: [cv]
+      description: |
+        The job's CV draft and its content before fitting, built from the
+        library, the latest completed match run and the draft's picks. The
+        draft is created on first read. The ETag is the draft's version.
+      responses:
+        "200":
+          description: Success.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvPreview" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putCv
+      tags: [cv]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CvDraftInput" }
+      responses:
+        "200":
+          description: The saved draft, rebuilt.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvPreview" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/cv/exports:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: listCvExports
+      tags: [cv]
+      description: The job's exports, newest first, without their content.
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExportPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCvExport
+      tags: [cv]
+      description: |
+        Stores an immutable snapshot of the CV the client fitted: the draft's
+        content, rebuilt on the server, without the dropped items. A stale
+        draft version fails with 412; a different content hash (the library
+        changed since the preview) with 409.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CvExportInput" }
+      responses:
+        "201":
+          description: The snapshot, with its content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExport" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/cv-exports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCvExport
+      tags: [cv]
+      responses:
+        "200":
+          description: The snapshot, with its content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExport" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/cv-exports/{id}/pdf:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCvExportPdf
+      tags: [cv]
+      description: |
+        Compiles the snapshot on the server, for clients without a browser.
+        Nothing is stored. 503 when the server lacks the template's Typst
+        version.
+      responses:
+        "200":
+          description: The PDF.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1243,6 +1362,122 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    CvTemplate:
+      type: object
+      required: [name, version, typst, locales, published, assets]
+      properties:
+        name: { type: string }
+        version: { type: integer }
+        typst: { type: string, description: The Typst version the template compiles with. }
+        locales: { type: array, items: { type: string } }
+        published: { type: boolean }
+        assets:
+          type: object
+          required: [main, strings, fonts]
+          properties:
+            main: { type: string }
+            strings: { type: string }
+            fonts: { type: array, items: { type: string } }
+    CvPicks:
+      type: object
+      required: [include, exclude]
+      properties:
+        include: { type: array, maxItems: 1000, items: { type: string, format: uuid }, description: Evidence or highlight IDs, pinned. }
+        exclude: { type: array, maxItems: 1000, items: { type: string, format: uuid } }
+    CvDraft:
+      type: object
+      required: [job_id, template, template_version, locale, page_budget, picks, version, updated_at]
+      properties:
+        job_id: { type: string, format: uuid }
+        template: { type: string }
+        template_version: { type: integer, nullable: true, description: Null follows the latest version. }
+        locale: { type: string }
+        page_budget: { type: integer, minimum: 1, maximum: 3 }
+        picks: { $ref: "#/components/schemas/CvPicks" }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    CvDraftInput:
+      type: object
+      required: [template, locale, page_budget, picks]
+      properties:
+        template: { type: string }
+        template_version: { type: integer, nullable: true }
+        locale: { type: string }
+        page_budget: { type: integer, minimum: 1, maximum: 3 }
+        picks: { $ref: "#/components/schemas/CvPicks" }
+    CvPreview:
+      type: object
+      required: [draft, template, content, content_hash, trim, available, match]
+      properties:
+        draft: { $ref: "#/components/schemas/CvDraft" }
+        template: { $ref: "#/components/schemas/CvTemplate" }
+        content: { type: object, additionalProperties: true, description: The template's content (templates/README.md). }
+        content_hash: { type: string }
+        trim: { type: array, items: { type: string }, description: Optional item IDs, least relevant first. }
+        available:
+          type: object
+          required: [entries, highlights]
+          properties:
+            entries:
+              type: array
+              items:
+                type: object
+                required: [id, title, kind, reason]
+                properties:
+                  id: { type: string }
+                  title: { type: string }
+                  kind: { type: string }
+                  reason: { type: string, enum: [excluded, suggested, not_selected] }
+            highlights:
+              type: array
+              items:
+                type: object
+                required: [id, evidence_id, text, excluded]
+                properties:
+                  id: { type: string }
+                  evidence_id: { type: string }
+                  text: { type: string }
+                  excluded: { type: boolean }
+        match:
+          type: object
+          nullable: true
+          required: [run_id, stale]
+          properties:
+            run_id: { type: string, format: uuid }
+            stale: { type: boolean }
+    CvExportInput:
+      type: object
+      required: [draft_version, content_hash, dropped, pages]
+      properties:
+        draft_version: { type: integer }
+        content_hash: { type: string }
+        dropped: { type: array, items: { type: string } }
+        pages: { type: integer, minimum: 1, maximum: 50 }
+        client_sha256: { type: string, pattern: '^[0-9a-fA-F]{64}$' }
+    CvExport:
+      type: object
+      required: [id, job_id, match_run_id, template, template_version, locale, document_date, page_budget, pages, overflow, content_hash, dropped, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        match_run_id: { type: string, format: uuid, nullable: true }
+        template: { type: string }
+        template_version: { type: integer }
+        locale: { type: string }
+        document_date: { type: string, format: date }
+        page_budget: { type: integer }
+        pages: { type: integer }
+        overflow: { type: boolean }
+        content_hash: { type: string }
+        client_sha256: { type: string, nullable: true }
+        dropped: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        content: { type: object, additionalProperties: true }
+    CvExportPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CvExport" } }
     Problem:
       type: object
       required: [title, status]

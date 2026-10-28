@@ -36,6 +36,7 @@ import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
+import { CvTab } from './cv/cv-tab';
 import { MatchTab } from './match/match-tab';
 import { StatusSelect } from './status-select';
 import { AuthService } from '../core/auth.service';
@@ -86,6 +87,7 @@ const emptyForm = (statusId = ''): Form => ({
 @Component({
   selector: 'app-job-sheet',
   imports: [
+    CvTab,
     MatchTab,
     StatusSelect,
     DatePipe,

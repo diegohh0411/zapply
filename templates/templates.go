@@ -86,6 +86,9 @@ var Sources = []string{"main.typ", "strings.json"}
 // content.json, with system and embedded fonts disabled, so the output
 // depends on nothing else on the machine.
 func Compile(ctx context.Context, typst string, m Manifest, content []byte) ([]byte, error) {
+	if len(content) > 256<<10 {
+		return nil, fmt.Errorf("CV content exceeds 256 KB")
+	}
 	dir, err := os.MkdirTemp("", "zapply-typst-")
 	if err != nil {
 		return nil, err
@@ -122,6 +125,13 @@ func Compile(ctx context.Context, typst string, m Manifest, content []byte) ([]b
 	cmd.Env = []string{} // no TYPST_* or SOURCE_DATE_EPOCH from the host
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("typst compile %s: %w: %s", m.Dir(), err, stderr.Bytes())
+	}
+	stat, err := os.Stat(out)
+	if err != nil {
+		return nil, err
+	}
+	if stat.Size() > 8<<20 {
+		return nil, fmt.Errorf("compiled CV exceeds 8 MB")
 	}
 	return os.ReadFile(out)
 }

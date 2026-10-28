@@ -95,3 +95,19 @@ Shared gateway code is under `internal/model`. Migration 00012 preserves existin
 accounting data while renaming shared gateway objects to `model_*`; administration
 uses `/v1/admin/model-attempts` and `model_operation.changed` events. Text diagnostic
 configuration retains the LLM-specific `LLM_MODEL`/`LLM_ENDPOINT` names.
+
+## CV rendering
+
+Open a job's **CV** tab to preview and export a PDF from your library. Matching
+ranks the content when available; otherwise the CV uses auto-included items.
+Pin or remove items, choose English or Spanish and a 1–3 page budget, then
+export. The browser compiles with Typst WASM; Postgres stores immutable content
+snapshots, and previous exports download identically after library edits.
+Apply migration 00016 before deploying.
+
+The image includes Typst 0.14.2 for `GET /v1/cv-exports/{id}/pdf`, which streams
+a PDF without storing it. For local server rendering, put that CLI on PATH or
+set `TYPST_DIR` to a directory containing `0.14.2/typst`. Browser rendering
+needs no local CLI. The native determinism tests also need `pdftotext`
+(poppler); run them with `ZAPPLY_REQUIRE_TYPST=1 make test-integration`.
+Details: [Part 7](docs/parts/07-rendering.md).

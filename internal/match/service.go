@@ -315,6 +315,27 @@ func (s *Service) Cancel(ctx context.Context, u, id uuid.UUID) error {
 		return s.cancelTx(ctx, tx, u, id)
 	}))
 }
+
+// LatestCompleted returns the job's newest completed run, with Stale set when
+// the job or library changed since it ran. ok is false when there is none.
+// Rendering (part 7) ranks a CV with it.
+func LatestCompleted(ctx context.Context, tx pgx.Tx, u, job uuid.UUID) (r Run, ok bool, e error) {
+	var id uuid.UUID
+	e = tx.QueryRow(ctx, `SELECT id FROM match_run WHERE user_id=$1 AND job_id=$2 AND status='completed' ORDER BY created_at DESC,id DESC LIMIT 1`, u, job).Scan(&id)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return r, false, nil
+	}
+	if e != nil {
+		return r, false, e
+	}
+	if r, e = loadRun(ctx, tx, u, id, false); e != nil {
+		return r, false, e
+	}
+	_, jh, _, fp, e := snapshot(ctx, tx, u, job)
+	r.Stale = jh != r.JobHash || fp != r.LibraryFingerprint
+	return r, e == nil, e
+}
+
 func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 	var out Run
 	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {

@@ -827,10 +827,219 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cv-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every CV template version, with the files a browser compiles it with. */
+        get: operations["listCvTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/cv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The job's CV draft and its content before fitting, built from the
+         *     library, the latest completed match run and the draft's picks. The
+         *     draft is created on first read. The ETag is the draft's version.
+         */
+        get: operations["getCv"];
+        put: operations["putCv"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/cv/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /** @description The job's exports, newest first, without their content. */
+        get: operations["listCvExports"];
+        put?: never;
+        /**
+         * @description Stores an immutable snapshot of the CV the client fitted: the draft's
+         *     content, rebuilt on the server, without the dropped items. A stale
+         *     draft version fails with 412; a different content hash (the library
+         *     changed since the preview) with 409.
+         */
+        post: operations["createCvExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cv-exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCvExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cv-exports/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description Compiles the snapshot on the server, for clients without a browser.
+         *     Nothing is stored. 503 when the server lacks the template's Typst
+         *     version.
+         */
+        get: operations["getCvExportPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CvTemplate: {
+            name: string;
+            version: number;
+            /** @description The Typst version the template compiles with. */
+            typst: string;
+            locales: string[];
+            published: boolean;
+            assets: {
+                main: string;
+                strings: string;
+                fonts: string[];
+            };
+        };
+        CvPicks: {
+            /** @description Evidence or highlight IDs */
+            include: string[];
+            exclude: string[];
+        };
+        CvDraft: {
+            /** Format: uuid */
+            job_id: string;
+            template: string;
+            /** @description Null follows the latest version. */
+            template_version: number | null;
+            locale: string;
+            page_budget: number;
+            picks: components["schemas"]["CvPicks"];
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CvDraftInput: {
+            template: string;
+            template_version?: number | null;
+            locale: string;
+            page_budget: number;
+            picks: components["schemas"]["CvPicks"];
+        };
+        CvPreview: {
+            draft: components["schemas"]["CvDraft"];
+            template: components["schemas"]["CvTemplate"];
+            /** @description The template's content (templates/README.md). */
+            content: {
+                [key: string]: unknown;
+            };
+            content_hash: string;
+            /** @description Optional item IDs */
+            trim: string[];
+            available: {
+                entries: {
+                    id: string;
+                    title: string;
+                    kind: string;
+                    /** @enum {string} */
+                    reason: "excluded" | "suggested" | "not_selected";
+                }[];
+                highlights: {
+                    id: string;
+                    evidence_id: string;
+                    text: string;
+                    excluded: boolean;
+                }[];
+            };
+            match: {
+                /** Format: uuid */
+                run_id: string;
+                stale: boolean;
+            } | null;
+        };
+        CvExportInput: {
+            draft_version: number;
+            content_hash: string;
+            dropped: string[];
+            pages: number;
+            client_sha256?: string;
+        };
+        CvExport: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            job_id: string;
+            /** Format: uuid */
+            match_run_id: string | null;
+            template: string;
+            template_version: number;
+            locale: string;
+            /** Format: date */
+            document_date: string;
+            page_budget: number;
+            pages: number;
+            overflow: boolean;
+            content_hash: string;
+            client_sha256?: string | null;
+            dropped: string[];
+            /** Format: date-time */
+            created_at: string;
+            content?: {
+                [key: string]: unknown;
+            };
+        };
+        CvExportPage: {
+            items: components["schemas"]["CvExport"][];
+        };
         Problem: {
             type?: string;
             title: string;
@@ -3218,6 +3427,182 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCvTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvTemplate"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putCv: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvDraftInput"];
+            };
+        };
+        responses: {
+            /** @description The saved draft, rebuilt. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCvExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExportPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCvExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Retrying with the same key and body returns the original result. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvExportInput"];
+            };
+        };
+        responses: {
+            /** @description The snapshot, with its content. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCvExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot, with its content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCvExportPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
             };
             default: components["responses"]["Problem"];
         };

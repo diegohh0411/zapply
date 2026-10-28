@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "node --test tests/*.cjs",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/app/api/schema.d.ts",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit"
   },
   "private": true,
   "packageManager": "npm@11.19.1",

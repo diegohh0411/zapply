@@ -1,6 +1,6 @@
 # Part 7: Rendering
 
-Status: in progress. Step 1 (the determinism gate and the `classic` template) is built; see "Implementation record" at the end.
+Status: implemented. All five build steps are complete; see "Implementation record" at the end.
 
 Matching (part 6) decides what a job should see: the selected entries, their
 highlights in order, and the ranked skills. Part 7 lays that subset out as an
@@ -158,10 +158,10 @@ cv_export   id · user_id · job_id · match_run_id? · template · template_ver
 
 | Endpoint | Notes |
 |---|---|
-| `GET /templates` | Published templates, their versions, locales and asset URLs |
+| `GET /cv-templates` | Published templates, their versions, locales and asset URLs |
 | `GET /jobs/{id}/cv` | The draft, its built content, the trim order and a stale-match flag. The draft creates itself on first read |
 | `PUT /jobs/{id}/cv` | Template, locale, page budget and picks. Requires `If-Match` |
-| `POST /jobs/{id}/cv/exports` | `{draft_version, dropped, pages, client_sha256?}`. The server rebuilds the content at that draft version, applies `dropped` (only trim-order items), and stores the snapshot. A stale draft returns `412`. `Idempotency-Key` supported |
+| `POST /jobs/{id}/cv/exports` | `{draft_version, content_hash, dropped, pages, client_sha256?}`. The server rebuilds the preview, checks its hash, applies `dropped` (only trim-order items), and stores the snapshot. A stale draft returns `412`; changed content returns `409`. `Idempotency-Key` supported, including concurrent retries |
 | `GET /jobs/{id}/cv/exports` | Export history for a job, newest first |
 | `GET /cv-exports/{id}` | The snapshot, with the asset URLs needed to compile it |
 | `GET /cv-exports/{id}/pdf` | Server-side compile, streamed and not stored |
@@ -239,7 +239,7 @@ The job sheet gets a **CV** tab next to Match:
   `web/tests/typst-golden.cjs` checks them against `typst.ts`.
 - **Immutability.** `templates/published.json` hashes every file a version
   compiles with, fonts included. Once `published` is true in a manifest, a
-  change fails CI. `classic/1` stays unpublished until part 7 ships.
+  change fails CI. `classic/1` is now published and frozen.
 - **Fonts.** Source Sans 3 (3.052, SIL Open Font License): regular, italic,
   semibold and semibold italic, 1.4 MB. It covers Latin scripts only, so text
   in other scripts prints as missing glyphs; a Noto fallback would be a new
@@ -255,4 +255,42 @@ The job sheet gets a **CV** tab next to Match:
   template, its fonts and `content.json`, with an empty environment. Step 5
   builds the server endpoint on it.
 - The content schema is in [`templates/README.md`](../../templates/README.md).
+
+### Steps 2–5: content, snapshots, web and server fallback
+
+- `internal/render` selects library content with the latest completed match,
+  applies draft picks and builds a deterministic trim order. Without a match,
+  it uses auto-included entries and highlights. Auto-included degrees remain
+  available in the CV even when a match does not rank them. Career breaks
+  require a pick. Pinning a highlight or nested entry also protects its
+  containing entries from trimming.
+- Non-language skills follow match relevance (library order without a match),
+  capped at 20. The first eight and all language skills remain when fitting;
+  skills beyond eight trim after optional entries.
+- Migration 00016 adds tenant-scoped drafts and insert-only snapshots. Drafts
+  use ETags; exports check the preview's content hash so library changes or a
+  new document date require fitting again. The server copies library text and
+  validates dropped IDs. It stores the client PDF digest as supplied, without
+  scheduling verification. Outbox writes accompany draft updates and exports.
+- The job sheet's CV tab compiles in a lazy Web Worker, fits to 1–3 pages,
+  previews the PDF, exposes pins and exclusions, and downloads snapshots from
+  export history. Compilation uses only bundled fonts and same-origin assets;
+  the Angular development proxy also serves template assets from the API.
+- Native rendering uses Typst 0.14.2 from `TYPST_DIR/<version>/typst` or a
+  matching CLI on PATH. The runtime image includes its static musl build.
+  Compiles have a 20-second deadline including queue time, two process-wide
+  slots, a 256 KB input limit and an 8 MB output limit, and use disposable
+  directories. PDFs are never persisted.
+- Tests cover builder selection and pins, fitting boundaries, actual worker
+  compilation and page counts, native/WASM golden hashes, literal text,
+  concurrent export retries, tenant isolation, stale drafts/content, snapshots
+  surviving library deletion, and late UI responses after account changes.
+
+### Local verification
+
+The web suite runs with `cd web && npm test`; `npm run typecheck` includes the
+worker, and `npm run build` checks the production bundles. Native gate tests
+need Typst 0.14.2 and `pdftotext` (poppler). Put the CLI on PATH to exercise the
+server fallback too, then run `ZAPPLY_REQUIRE_TYPST=1 make test-integration`.
+The Docker image installs the pinned CLI; browsers need no server compiler.
 

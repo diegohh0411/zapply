@@ -225,3 +225,7 @@
     section(s.sections.languages, languages.map(skill-line).join(", "))
   }
 }
+
+// Fitting reads the page count with a query for <cv-pages>. Metadata takes no
+// space and prints nothing.
+#context [#metadata(counter(page).final().first()) <cv-pages>]
