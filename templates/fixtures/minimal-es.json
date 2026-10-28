@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "locale": "es",
+  "date": "2026-01-05",
+  "profile": { "name": "María José Núñez" },
+  "sections": [
+    {
+      "key": "experience",
+      "entries": [
+        {
+          "id": "e1", "kind": "job", "form": "engagement", "title": "Enfermera de urgencias",
+          "organization": "Hospital Ángeles", "location": "Monterrey, N. L.",
+          "start": { "date": "2022-08", "precision": "month" }, "current": true,
+          "highlights": [{ "id": "h1", "text": "Coordiné el triaje de más de 40 pacientes por turno." }]
+        }
+      ]
+    },
+    { "key": "projects", "entries": [] },
+    {
+      "key": "funding",
+      "entries": [
+        {
+          "id": "e2", "kind": "funding", "form": "recognition", "title": "Beca de excelencia",
+          "start": { "date": "2019", "precision": "year" },
+          "details": { "funding_type": "scholarship", "funder": "CONAHCYT", "amount": 1250000, "currency": "MXN" }
+        }
+      ]
+    }
+  ],
+  "skills": [
+    { "name": "Triaje", "type": "hard" },
+    { "name": "Español", "type": "language", "proficiency": "native" },
+    { "name": "Inglés", "type": "language", "proficiency": "C1" }
+  ]
+}

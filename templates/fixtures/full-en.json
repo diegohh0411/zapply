@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "locale": "en",
+  "date": "2026-10-28",
+  "profile": {
+    "name": "Ada Lovelace",
+    "headline": "Data engineer",
+    "email": "ada@example.com",
+    "phone": "+44 20 7946 0000",
+    "location": "London, UK",
+    "links": [
+      { "label": "LinkedIn", "url": "https://www.linkedin.com/in/ada-example/" },
+      { "label": "GitHub", "url": "https://github.com/ada-example" }
+    ],
+    "summary": "Data engineer with eight years building batch and streaming pipelines for payments and logistics. I like small, well-tested systems that other people can run."
+  },
+  "sections": [
+    {
+      "key": "experience",
+      "entries": [
+        {
+          "id": "e1", "kind": "job", "form": "engagement", "title": "Senior Data Engineer",
+          "organization": "Analytical Engines Ltd", "location": "London, UK",
+          "start": { "date": "2021-03", "precision": "month" }, "current": true,
+          "details": { "employment_type": "full_time", "work_mode": "hybrid" },
+          "highlights": [
+            { "id": "h1", "text": "Cut nightly settlement pipeline runtime from 6 hours to 40 minutes by moving it to incremental Spark jobs." },
+            { "id": "h2", "text": "Led a team of four through a migration from Airflow 1 to Dagster with no missed SLAs." },
+            { "id": "h3", "text": "Introduced data contracts between 12 producer teams and the warehouse." }
+          ],
+          "children": [
+            {
+              "id": "e2", "kind": "project", "form": "output", "title": "Fraud feature store",
+              "start": { "date": "2023-05", "precision": "month" },
+              "url": "https://github.com/ada-example/feature-store",
+              "details": { "role": "Tech lead" },
+              "highlights": [{ "id": "h4", "text": "Served 300 features at p99 under 15 ms to the scoring service." }]
+            }
+          ]
+        },
+        {
+          "id": "e3", "kind": "freelance", "form": "engagement", "title": "Data consultant",
+          "start": { "date": "2019", "precision": "year" }, "end": { "date": "2021-02", "precision": "month" },
+          "summary": "Independent practice for small retailers.",
+          "children": [
+            {
+              "id": "e4", "kind": "assignment", "form": "engagement", "title": "Demand forecasting",
+              "start": { "date": "2020-01", "precision": "month" }, "end": { "date": "2020-09", "precision": "month" },
+              "details": { "client": "Babbage & Sons" },
+              "highlights": [{ "id": "h5", "text": "Reduced overstock by 18% with weekly forecasts per store." }]
+            }
+          ]
+        },
+        {
+          "id": "e5", "kind": "business", "form": "engagement", "title": "Punch Card Analytics",
+          "start": { "date": "2017-06", "precision": "month" }, "end": { "date": "2018-12", "precision": "month" },
+          "details": { "role": "co_founder", "team_size": 3 }
+        },
+        {
+          "id": "e6", "kind": "job", "form": "engagement", "title": "Data Analyst",
+          "organization": "Difference Logistics", "location": "Manchester, UK",
+          "start": { "date": "2015-09", "precision": "month" }, "end": { "date": "2017-05", "precision": "month" },
+          "details": { "employment_type": "part_time" }
+        }
+      ]
+    },
+    {
+      "key": "education",
+      "entries": [
+        {
+          "id": "e7", "kind": "degree_program", "form": "engagement", "title": "MSc Statistics",
+          "organization": "University of London",
+          "start": { "date": "2023", "precision": "year" }, "current": true,
+          "details": { "degree_type": "master", "status": "in_progress" }
+        },
+        {
+          "id": "e8", "kind": "degree_program", "form": "engagement", "title": "BSc Mathematics",
+          "organization": "University of Cambridge",
+          "start": { "date": "2011", "precision": "year" }, "end": { "date": "2015", "precision": "year" },
+          "details": { "degree_type": "bachelor", "field_of_study": "Mathematics", "status": "completed", "grade": "First", "honors": "With distinction" },
+          "children": [
+            {
+              "id": "e9", "kind": "award", "form": "recognition", "title": "Smith's Prize",
+              "start": { "date": "2015-06-14", "precision": "day" },
+              "details": { "issuer": "Faculty of Mathematics" }
+            }
+          ]
+        },
+        {
+          "id": "e10", "kind": "course", "form": "engagement", "title": "Streaming Systems",
+          "organization": "Coursera",
+          "start": { "date": "2022-02", "precision": "month" }, "end": { "date": "2022-02", "precision": "month" },
+          "details": { "format": "mooc", "hours": 40 }
+        }
+      ]
+    },
+    {
+      "key": "credentials",
+      "entries": [
+        {
+          "id": "e11", "kind": "certification", "form": "credential", "title": "Professional Data Engineer",
+          "start": { "date": "2024-04-02", "precision": "day" }, "end": { "date": "2026-04", "precision": "month" },
+          "url": "https://example.com/verify/ABC123",
+          "details": { "issuer": "Google Cloud", "credential_id": "ABC123" }
+        },
+        {
+          "id": "e12", "kind": "license", "form": "credential", "title": "Chartered Statistician",
+          "start": { "date": "2019", "precision": "year" },
+          "details": { "issuer": "Royal Statistical Society", "number": "CS-1843", "jurisdiction": "UK" }
+        }
+      ]
+    },
+    {
+      "key": "unpaid",
+      "entries": [
+        {
+          "id": "e13", "kind": "volunteering", "form": "engagement", "title": "Mentor",
+          "organization": "Code Club", "location": "Remote",
+          "start": { "date": "2018-01", "precision": "month" }, "current": true,
+          "details": { "cause": "Education" },
+          "highlights": [{ "id": "h6", "text": "Mentored 30+ students aged 9–13 through their first Python projects." }]
+        },
+        {
+          "id": "e14", "kind": "membership", "form": "engagement", "title": "Data Science Section",
+          "organization": "Royal Statistical Society",
+          "start": { "date": "2019", "precision": "year" }, "current": true,
+          "details": { "role": "officer" }
+        }
+      ]
+    },
+    {
+      "key": "publications",
+      "entries": [
+        {
+          "id": "e15", "kind": "publication", "form": "output", "title": "Notes on incremental settlement",
+          "start": { "date": "2024-09", "precision": "month" },
+          "details": { "publication_type": "conference", "venue": "Data Engineering Summit", "authors": ["A. Lovelace", "C. Babbage"], "doi": "10.1000/xyz123" }
+        }
+      ]
+    },
+    {
+      "key": "presentations",
+      "entries": [
+        {
+          "id": "e16", "kind": "presentation", "form": "output", "title": "Contracts, not meetings",
+          "start": { "date": "2023-11-08", "precision": "day" },
+          "details": { "event": "PyData London", "format": "talk" }
+        }
+      ]
+    },
+    {
+      "key": "funding",
+      "entries": [
+        {
+          "id": "e17", "kind": "funding", "form": "recognition", "title": "Open data tooling",
+          "start": { "date": "2022", "precision": "year" },
+          "details": { "funding_type": "grant", "funder": "Open Data Institute", "amount": 25000, "currency": "GBP" }
+        }
+      ]
+    }
+  ],
+  "skills": [
+    { "name": "Python", "type": "hard", "proficiency": "expert" },
+    { "name": "SQL", "type": "hard", "proficiency": "expert" },
+    { "name": "Data modeling", "type": "hard" },
+    { "name": "Spark", "type": "tool" },
+    { "name": "Dagster", "type": "tool" },
+    { "name": "PostgreSQL", "type": "tool" },
+    { "name": "Mentoring", "type": "soft" },
+    { "name": "English", "type": "language", "proficiency": "native" },
+    { "name": "French", "type": "language", "proficiency": "B2" }
+  ]
+}

@@ -1,6 +1,6 @@
 # Part 7: Rendering
 
-Status: planned.
+Status: in progress. Step 1 (the determinism gate and the `classic` template) is built; see "Implementation record" at the end.
 
 Matching (part 6) decides what a job should see: the selected entries, their
 highlights in order, and the ranked skills. Part 7 lays that subset out as an
@@ -47,7 +47,8 @@ Templates live in the repository as Typst source:
 ```
 templates/<name>/<version>/
   main.typ          the layout, keyed by evidence kind (part 2)
-  manifest.json     typst version, fonts bundle, supported locales, section headings
+  strings.json      section headings, month names and labels for each locale
+  manifest.json     typst version, fonts bundle, supported locales, published flag
 ```
 
 - **Versions are immutable once published.** A change to layout, fonts or
@@ -109,7 +110,7 @@ The page budget defaults to 1 and can be set to 1–3 pages per draft.
 ## Rendering
 
 **Browser (default).** The web app lazy-loads `typst.ts` (the compiler as WASM,
-several MB, cached long-term) only on the CV screen and compiles in a Web
+27 MB, about 7 MB with Brotli, cached long-term) only on the CV screen and compiles in a Web
 Worker so the UI stays responsive. Preview, fitting and download all happen
 locally. The download is named `<Full name> - <Company>.pdf`.
 
@@ -222,3 +223,36 @@ The job sheet gets a **CV** tab next to Match:
 - Page count is assumed to fall as `k` rises. A dropped item can, in
   principle, shift a break the wrong way. A linear fallback over the last
   few `k` handles it if the fixtures show it happening.
+
+## Implementation record
+
+### Step 1: determinism gate and `classic` v1
+
+- **Versions.** `typst.ts` 0.7.0, its latest stable release, compiles with
+  Typst 0.14.2, so `classic/1` pins 0.14.2. Typst 0.15 is out, but the browser
+  can't use it until `typst.ts` ships it, which is the lag the open question
+  expected.
+- **The gate passes.** The native CLI and the WASM compiler produce identical
+  PDFs for every fixture. `templates/golden.json` holds the hashes;
+  `templates/gate_test.go` checks them against the CLI (CI installs it and sets
+  `ZAPPLY_REQUIRE_TYPST=1`, so the check can't skip) and
+  `web/tests/typst-golden.cjs` checks them against `typst.ts`.
+- **Immutability.** `templates/published.json` hashes every file a version
+  compiles with, fonts included. Once `published` is true in a manifest, a
+  change fails CI. `classic/1` stays unpublished until part 7 ships.
+- **Fonts.** Source Sans 3 (3.052, SIL Open Font License): regular, italic,
+  semibold and semibold italic, 1.4 MB. It covers Latin scripts only, so text
+  in other scripts prints as missing glyphs; a Noto fallback would be a new
+  template version.
+- **Dates lead the line under the title instead of sitting right-aligned.**
+  `pdftotext` read right-aligned dates as a separate column and printed them
+  after the entry's highlights, which is how a simple ATS would see them too.
+  `TestTextIsLiteral` checks the reading order.
+- **Injection.** User text containing Typst markup (`#panic(...)`, `]`, `$`,
+  `<label>`, `@ref`, raw blocks) prints literally, checked through
+  `pdftotext` by `TestTextIsLiteral`.
+- **`templates.Compile`** runs the CLI in a scratch directory holding only the
+  template, its fonts and `content.json`, with an empty environment. Step 5
+  builds the server endpoint on it.
+- The content schema is in [`templates/README.md`](../../templates/README.md).
+

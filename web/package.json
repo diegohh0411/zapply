@@ -20,6 +20,8 @@
     "@angular/forms": "^22.2.0",
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
+    "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
+    "@myriaddreamin/typst.ts": "0.7.0",
     "@ng-icons/core": "^36.1.0",
     "@ng-icons/lucide": "^36.1.0",
     "@supabase/supabase-js": "^2.118.0",
