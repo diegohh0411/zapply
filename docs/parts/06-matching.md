@@ -390,9 +390,9 @@ The selection is a persisted platform setting, independent of the chat
 diagnostic's `LLM_MODEL`. Only owners can change it. A run snapshots its model
 when created; an unconfigured run waits as `blocked/model_not_configured` and
 binds the first configured model when resumed. Changing the selection affects
-new runs only. Missing models or unsupported pricing block calls explicitly;
-there is no silent model fallback. The MVP supports models whose pricing can
-be bounded by the gateway; the picker explains any unavailable option.
+new runs only. Missing models block calls explicitly; there is no silent model
+fallback. Pricing components are not filtered; the picker explains any
+unavailable option.
 
 ## Untrusted text
 

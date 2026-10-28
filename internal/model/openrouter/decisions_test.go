@@ -98,3 +98,17 @@ func TestDecisionHTTPAndReservation(t *testing.T) {
 		t.Fatal("stale quote sent")
 	}
 }
+
+func TestDecisionQuoteAcceptsExtraPricingComponents(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":[{"id":"~liquid/d1-ultra-latest","name":"D1 Ultra","context_length":32768,"architecture":{"output_modalities":["decisions"]},"pricing":{"prompt":"0.000000042","completion":"0","input_cache_read":"0.000000042"}}]}`))
+	}))
+	defer server.Close()
+	c := New("", "")
+	c.HTTP = server.Client()
+	c.BaseURL = server.URL + "/api/v1"
+	request := systemone.Request{Model: "~liquid/d1-ultra-latest", State: systemone.Raw("record"), Questions: map[string]systemone.Question{"q1": {Type: "noul", Instructions: systemone.Raw("Is `record` relevant?")}}}
+	if _, e := c.QuoteDecision(context.Background(), request); e != nil {
+		t.Fatalf("quote with input_cache_read pricing: %v", e)
+	}
+}

@@ -151,7 +151,8 @@ paid billing, BYOK, and a global spending ceiling remain outside this part.
   of the diagnostic's `LLM_MODEL`/`LLM_ENDPOINT`.
 - Decision reservations require an explicitly verified model adapter. It bounds
   billable input per request or per question and request-fee multiplicity;
-  unsupported pricing and unverified bounds block before dispatch. The production
+  unverified bounds block before dispatch. Pricing components are not
+  filtered; only the rates the reservation formula uses are read. The production
   registry starts empty pending the part 6 live verification. Decision IDs use
   automatic accounting lookup only when the adapter confirms support; otherwise
   uncertain reservations remain for owner reconciliation.

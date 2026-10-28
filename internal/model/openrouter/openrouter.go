@@ -166,15 +166,6 @@ func (c *Client) Quote(ctx context.Context) (modelapi.Quote, error) {
 				in = rate(field)
 			}
 		}
-		for name, value := range e.Pricing {
-			if slices.Contains([]string{"prompt", "completion", "request", "input_cache_read", "input_cache_write", "discount", "image", "web_search", "audio", "input_audio", "output_audio", "internal_reasoning"}, name) {
-				continue
-			}
-			n, err := modelapi.Cost(value)
-			if err != nil || n > 0 {
-				return modelapi.Quote{}, &modelapi.ProviderError{Code: "unsupported_pricing", Uncharged: true}
-			}
-		}
 		maxOutput := 128
 		if e.MaxOutput != nil && *e.MaxOutput < maxOutput {
 			maxOutput = *e.MaxOutput
