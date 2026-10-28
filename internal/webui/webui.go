@@ -17,7 +17,12 @@ var dist embed.FS
 
 // Config is served as /config.json. Everything in it is public: the
 // Supabase URL and publishable (anon) key are meant for browsers.
+// BuiltAt is set at image compilation time.
+var BuiltAt string
+
 type Config struct {
+	BuildCommit     string `json:"build_commit,omitempty"`
+	BuiltAt         string `json:"built_at,omitempty"`
 	SupabaseURL     string `json:"supabase_url"`
 	SupabaseAnonKey string `json:"supabase_anon_key"`
 	// DevLogin lets the app mint tokens through POST /dev/token.
