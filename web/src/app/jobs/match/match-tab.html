@@ -1,53 +1,183 @@
 <section class="space-y-5 py-4" aria-label="Job match">
-  <div class="flex items-center justify-between gap-3">
-    <h2 class="font-medium">Library match</h2>
-    @if (active()) {
-      <button z-button zType="outline" [zDisabled]="busy()" (click)="action('cancel')">Cancel run</button>
-    } @else {
-      <button z-button [zDisabled]="busy()" (click)="action('start')">{{ run() ? 'Re-run match' : 'Match library' }}</button>
-    }
-  </div>
-  @if (error() || store.errors().get(jobId())) { <p role="alert" class="text-sm text-destructive">{{ error() || store.errors().get(jobId()) }}</p> }
-  @if (run(); as r) {
-    <div class="rounded-xl border p-4 space-y-2" aria-live="polite">
-      <p class="text-sm font-medium">{{ r.status }} · {{ r.stage }}</p>
-      @if (r.blocked_reason) { <p class="text-sm text-muted-foreground">{{ r.blocked_reason.replaceAll('_', ' ') }}</p> }
-      @if (r.next_eligible_at) { <p class="text-xs">Next eligible {{ r.next_eligible_at | date:'medium' }}</p> }
-      @if (active()) { <progress class="w-full" [value]="r.answered + r.unanswered" [max]="r.total || 1" aria-label="Questions processed"></progress> }
-      <p class="text-xs text-muted-foreground">{{ r.answered }} of {{ r.total }} answered · {{ r.cached }} cached · {{ r.unanswered }} unanswered</p>
-      @if (r.obsolete_overrides?.length) { <p class="text-xs text-amber-700">{{ r.obsolete_overrides!.length }} corrections no longer apply to the current posting.</p> }
-      @if (r.truncated) { <p class="text-xs text-amber-700">This run reads the first 120 posting lines.</p> }
-      @if (r.stale) { <p class="text-sm text-amber-700">Inputs changed: {{ r.changed }} edited, {{ r.added }} added, {{ r.removed }} removed. Re-run for a current match.</p> }
-      @if (r.score !== null && r.score !== undefined) {
-        <div class="flex items-center gap-4"><div class="grid size-20 place-content-center rounded-full border-4 border-primary text-2xl font-semibold" aria-label="Job match score">{{ r.score | number:'1.0-0' }}</div><p class="text-sm">Must-haves met: {{ r.must_met }} of {{ r.must_total }}</p></div>
-      } @else if (r.status === 'partial') { <p class="text-sm">Some applicable answers are unknown. A complete score is unavailable.</p> }
-      <p class="text-xs text-muted-foreground">Settled cost: ${{ r.cost_usd || '0' }} · {{ r.model || 'Waiting for model configuration' }}</p>
+  <header class="flex items-start justify-between gap-3">
+    <div>
+      <h2 class="font-semibold">Your match</h2>
+      <p class="mt-1 text-xs text-muted-foreground">How this posting compares with the experience in your library.</p>
     </div>
-    @if ((r.status === 'completed' || r.status === 'partial') && r.result; as result) {
-      @if (result.seniority) { <p class="text-sm">Role seniority: {{ result.seniority.replaceAll('_',' ') }} · {{ result.relevant_years | number:'1.1-1' }} relevant years</p> }
-      @for (req of result.requirements; track req.text_hash) {
-        <article class="space-y-2 rounded-lg border p-3">
-          <p class="text-sm">{{ req.text }}</p>
-          <div class="flex flex-wrap items-center gap-3 text-xs">
-            <label>Classification <select class="rounded border bg-background p-1" [ngModel]="req.class" (ngModelChange)="action('correct',req.text_hash,$event)" [disabled]="busy()"><option value="must">Must have</option><option value="preferred">Preferred</option><option value="duty">Duty</option><option value="trait">Personal quality</option><option value="ignore">Ignore</option></select></label>
-            @if (req.class !== req.original_class) { <button class="underline" (click)="action('correct',req.text_hash,'reset')">Restore model reading</button> }
-            <span>{{ req.status }}{{ req.provisional ? ' · provisional' : '' }}</span>
-            @if (req.check) { <span>{{ req.check }}</span> }
-          </div>
-          @if (req.answer; as a) { <p class="text-xs text-muted-foreground">Direct probability: {{ (a.probabilities?.['3'] ?? 0) * 100 | number:'1.0-0' }}% · API confidence: {{ (a.confidence ?? 0) * 100 | number:'1.0-0' }}%{{ req.review ? ' · Review this judgment' : '' }}</p> }
-          @if (req.evidence_id) { <p class="text-xs">{{ req.evidence_title || 'Supporting evidence' }} · {{ req.highlight_ids.length }} supporting highlights</p> }
-          @for (citation of req.citations ?? []; track citation.id) { <blockquote class="border-l-2 pl-3 text-xs text-muted-foreground">{{ citation.text }}</blockquote> }
-          @if (req.status === 'gap') { <a class="text-xs underline" routerLink="/library/evidence">Add evidence in your library</a> }
-        </article>
-      }
-      @if (result.requirements.length === 0 && r.status === 'completed') { <p class="text-sm text-muted-foreground">No requirements were found in this posting.</p> }
-      @if (result.selection.length) { <h3 class="text-sm font-medium">Ranked selection for your CV</h3> }
-      @for (item of result.selection; track item.evidence_id) { <div class="rounded border p-3 text-xs">{{ item.title || 'Evidence' }} · relevance {{ item.relevance | number:'1.1-2' }} · {{ item.highlight_ids.length }} highlights</div> }
-      @if (result.suggestions.length) { <h3 class="text-sm font-medium">Matching evidence kept out of automatic CVs</h3> }
-      @for (item of result.suggestions; track item.evidence_id) { <p class="text-sm">{{ item.title || 'Evidence' }} · relevance {{ item.relevance | number:'1.1-2' }}</p> }
-      @if (result.skills.length) { <h3 class="text-sm font-medium">Ranked skills</h3><div class="flex flex-wrap gap-2">@for (skill of result.skills; track skill.skill_id) {<span class="rounded-full border px-2 py-1 text-xs">{{ skill.name || 'Skill' }} · {{ skill.relevance | number:'1.1-2' }}</span>}</div> }
-      @for (insight of result.insights; track $index) { @if (insight.type === 'near_miss' && insight.text) { <p class="text-sm text-muted-foreground">Near miss: {{ insight.text }}</p> } }
+    @if (active()) {
+      <button z-button zType="outline" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">Cancel match</button>
+    } @else if (run()) {
+      <button z-button zType="ghost" zSize="sm" class="shrink-0" [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')"><ng-icon name="lucideRefreshCw" /> Re-run</button>
     }
-  } @else { <p class="text-sm text-muted-foreground">Compare this posting with the evidence in your library.</p> }
-  @if (estimate(); as e) { <p class="text-xs text-muted-foreground">{{ e.available ? 'Conservative estimate: $' + e.cost_usd + ' (excludes retries and price changes)' : 'Cost estimate is unavailable. You can queue a run; calls wait until configuration and allowance permit them.' }}</p> }
+  </header>
+
+  @if (error() || store.errors().get(jobId())) {
+    <p role="alert" class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{{ error() || store.errors().get(jobId()) }}</p>
+  }
+
+  @if (run(); as r) {
+    @if (r.stale) {
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">Your library or this posting has changed. Re-run to update these results.</p>
+    }
+    @if (active() || !result()) {
+      <div class="space-y-3 rounded-xl border bg-muted/30 p-5" aria-live="polite">
+        <h3 class="font-medium">{{ statusLabel() }}</h3>
+        <p class="text-sm text-muted-foreground">
+          @switch (r.status) {
+            @case ('pending') { Your match will start when processing is available. }
+            @case ('running') { Looking for experience that supports the requirements in this posting. }
+            @case ('blocked') { Processing is waiting for configuration or available allowance. }
+            @case ('needs_review') { This match needs a review before it can continue. }
+            @default { Re-run the match to try again. }
+          }
+        </p>
+        @if (active()) {
+          <progress class="h-1.5 w-full accent-brand" [value]="r.answered + r.unanswered" [max]="r.total || 1" aria-label="Match progress"></progress>
+        }
+        @if (r.next_eligible_at) { <p class="text-xs text-muted-foreground">Next attempt {{ r.next_eligible_at | date:'medium' }}</p> }
+      </div>
+    }
+
+    @if (result(); as result) {
+      <div class="overflow-hidden rounded-xl border" aria-live="polite">
+        <div class="flex flex-col items-start gap-4 bg-muted/30 p-5 sm:flex-row sm:items-center sm:gap-5">
+          <div class="shrink-0 text-center" aria-label="Library coverage score">
+            <div class="text-4xl font-semibold tracking-tight">{{ requirements().length && r.score !== null && r.score !== undefined ? (r.score | number:'1.0-0') : '—' }}<span class="text-sm font-normal text-muted-foreground"> / 100</span></div>
+            <p class="mt-1 text-[11px] text-muted-foreground">Library coverage</p>
+          </div>
+          <div class="min-w-0 sm:border-l sm:pl-5">
+            <h3 class="text-sm font-medium">{{ !requirements().length ? 'Review the posting first' : r.status === 'partial' ? 'More information needed' : 'A starting point for your application' }}</h3>
+            <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ !requirements().length ? 'No clear requirements were identified. Check the classifications below before relying on this match.' : r.status === 'partial' ? 'Some comparisons are unfinished, so a complete score is unavailable.' : 'How well your saved experience supports this posting. This is not a prediction of getting hired.' }}</p>
+          </div>
+        </div>
+        <p class="border-t px-4 py-2 text-center text-[11px] text-muted-foreground">Counts cover requirements and responsibilities.</p>
+        <div class="grid grid-cols-3 divide-x border-t text-center">
+          <div class="p-3"><p class="text-xl font-semibold text-emerald-700 dark:text-emerald-400">{{ supported() }}</p><p class="mt-1 text-xs text-muted-foreground">Supported</p></div>
+          <div class="p-3"><p class="text-xl font-semibold text-amber-700 dark:text-amber-400">{{ review() }}</p><p class="mt-1 text-xs text-muted-foreground">To review</p></div>
+          <div class="p-3"><p class="text-xl font-semibold">{{ gaps() }}</p><p class="mt-1 text-xs text-muted-foreground">No evidence</p></div>
+        </div>
+      </div>
+      @if ((r.must_total ?? 0) > 0) {
+        <p class="text-xs text-muted-foreground">{{ r.must_met }} of {{ r.must_total }} must-haves have at least some supporting evidence.</p>
+      }
+      @if (r.truncated) { <p class="text-xs text-amber-700 dark:text-amber-400">Only the first 120 lines of this posting were analyzed.</p> }
+
+      @if (requirements().length) {
+        <section class="space-y-3" aria-label="Requirements and evidence">
+          <div><h3 class="text-sm font-semibold">Where you stand</h3><p class="mt-1 text-xs text-muted-foreground">Requirements and responsibilities. Open a row to see why.</p></div>
+          <div class="flex flex-wrap gap-1 rounded-lg bg-muted/50 p-1" role="group" aria-label="Filter requirements">
+            @for (item of filters; track item) {
+              <button type="button" class="rounded-md px-3 py-2 text-xs transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" [class]="filter() === item ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'" [attr.aria-pressed]="filter() === item" (click)="setFilter(item)">
+                {{ item === 'attention' ? 'Needs attention' : item === 'supported' ? 'Supported' : 'All' }} <span class="ml-1 opacity-60">{{ item === 'attention' ? review() + gaps() : item === 'supported' ? supported() : requirements().length }}</span>
+              </button>
+            }
+          </div>
+          <div class="divide-y rounded-xl border">
+            @for (req of filtered() | slice:0:limit(); track req.text_hash) {
+              <ng-container *ngTemplateOutlet="requirement; context: { $implicit: req }" />
+            } @empty {
+              <p class="p-5 text-sm text-muted-foreground">{{ filter() === 'attention' ? 'No requirements need attention. View Supported to explore your evidence.' : 'No requirements in this view.' }}</p>
+            }
+          </div>
+          @if (filtered().length > limit()) { <button z-button zType="outline" zSize="sm" class="w-full" (click)="limit.set(limit() + 6)">Show more ({{ filtered().length - limit() }} remaining)</button> }
+          @if (gaps()) {
+            <a z-button zType="outline" zSize="sm" routerLink="/library/evidence">Add experience to your library</a>
+            <p class="text-xs text-muted-foreground">A gap means we couldn’t find supporting evidence in your library.</p>
+          }
+        </section>
+      } @else {
+        <div class="rounded-xl border border-dashed p-5 text-sm">
+          <h3 class="font-medium">No clear requirements identified</h3>
+          <p class="mt-1 text-xs leading-relaxed text-muted-foreground">The posting was read as general context or personal qualities. Review the posting details below to correct a classification, or re-run the match.</p>
+        </div>
+      }
+
+      @if (result.selection.length || result.skills.length || result.suggestions.length) {
+        <details class="group rounded-xl border">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium">Experience to highlight <ng-icon name="lucideChevronDown" class="shrink-0 transition-transform group-open:rotate-180" /></summary>
+          <div class="space-y-4 border-t p-4">
+            <p class="text-xs text-muted-foreground">The most relevant items from your library for this application.</p>
+            @for (item of result.selection; track item.evidence_id) {
+              <div class="flex items-start justify-between gap-3 text-sm"><span>{{ item.title || 'Saved experience' }}</span><span class="shrink-0 text-xs text-muted-foreground">{{ item.highlight_ids.length }} highlights</span></div>
+            }
+            @if (result.skills.length) { <div class="flex flex-wrap gap-2">@for (skill of result.skills | slice:0:8; track skill.skill_id) { <span class="rounded-full bg-muted px-2.5 py-1 text-xs">{{ skill.name || 'Skill' }}</span> }</div> }
+            @if (result.suggestions.length) {
+              <div class="space-y-2"><p class="text-xs font-medium">Also relevant · excluded from automatic CVs</p>@for (item of result.suggestions; track item.evidence_id) { <p class="text-sm text-muted-foreground">{{ item.title || 'Saved experience' }}</p> }</div>
+            }
+          </div>
+        </details>
+      }
+      @if (context().length) {
+        <details class="group rounded-xl border">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm text-muted-foreground">Other posting details ({{ context().length }}) <ng-icon name="lucideChevronDown" class="shrink-0 transition-transform group-open:rotate-180" /></summary>
+          <p class="border-t px-4 pt-4 text-xs text-muted-foreground">Personal qualities and excluded text. Personal qualities also contribute to the coverage score.</p>
+          <div class="divide-y">@for (req of context(); track req.text_hash) { <ng-container *ngTemplateOutlet="requirement; context: { $implicit: req }" /> }</div>
+        </details>
+      }
+    }
+
+    <details class="group text-xs text-muted-foreground">
+      <summary class="flex w-fit cursor-pointer list-none items-center gap-2 py-2">Match details <ng-icon name="lucideChevronDown" class="transition-transform group-open:rotate-180" /></summary>
+      <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg border p-3">
+        <dt>Status</dt><dd>{{ statusLabel() }}</dd>
+        <dt>Processing stage</dt><dd>{{ r.stage.replaceAll('_', ' ') }}</dd>
+        @if (r.score !== null && r.score !== undefined) { <dt>Calculated coverage</dt><dd>{{ r.score | number:'1.0-0' }} / 100 · includes personal qualities</dd> }
+        @if (r.blocked_reason) { <dt>Waiting on</dt><dd>{{ r.blocked_reason.replaceAll('_', ' ') }}</dd> }
+        <dt>Comparisons</dt><dd>{{ r.answered }} of {{ r.total }} answered · {{ r.cached }} reused · {{ r.unanswered }} unanswered</dd>
+        <dt>Cost</dt><dd>{{ r.cost_usd ? ('$' + (r.cost_usd | number:'1.2-4')) : '$0.00' }}</dd>
+        <dt>Model</dt><dd class="break-all">{{ r.model || 'Not configured' }}</dd>
+        @if (r.finished_at) { <dt>Updated</dt><dd>{{ r.finished_at | date:'medium' }}</dd> }
+        @if (result(); as result) {
+          @if (result.seniority) { <dt>Role level</dt><dd>{{ result.seniority.replaceAll('_', ' ') }}</dd> }
+          <dt>Relevant experience</dt><dd>{{ result.relevant_years | number:'1.1-1' }} years in your library</dd>
+        }
+        @if (r.obsolete_overrides?.length) { <dt>Corrections</dt><dd>{{ r.obsolete_overrides!.length }} no longer apply to this posting.</dd> }
+      </dl>
+    </details>
+  } @else if (!store.errors().get(jobId())) {
+    <div class="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
+      <ng-icon name="lucideSearch" class="mb-4 size-7 text-muted-foreground" />
+      <h3 class="text-base font-medium">See where your experience fits</h3>
+      <p class="mb-5 mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">Find strengths, spot gaps, and choose what to highlight in your application.</p>
+      <button z-button [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')">Check my match</button>
+    </div>
+  }
+  @if (!result() && estimate(); as e) {
+    <p class="text-xs text-muted-foreground">{{ e.available ? 'Estimated cost: $' + (e.cost_usd | number:'1.2-4') : 'Cost estimate unavailable. Processing may wait for available allowance.' }}</p>
+  }
 </section>
+
+<ng-template #requirement let-req>
+  <details class="group/req">
+    <summary class="flex cursor-pointer list-none items-start gap-3 p-4 hover:bg-muted/30">
+      <span class="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full" [class]="coverageGroup(req) === 'supported' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : coverageGroup(req) === 'review' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-muted text-muted-foreground'">
+        <ng-icon [name]="coverageGroup(req) === 'supported' ? 'lucideCheck' : coverageGroup(req) === 'review' ? 'lucideCircleHelp' : 'lucideMinus'" class="size-3.5" />
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="line-clamp-2 text-sm leading-relaxed group-open/req:line-clamp-none">{{ req.text }}</p>
+        <p class="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground"><span>{{ requirementClass(req.class) }}</span><span aria-hidden="true">·</span><span>{{ coverageLabel(req) }}</span></p>
+      </div>
+      <ng-icon name="lucideChevronDown" class="mt-1 size-3.5 shrink-0 text-muted-foreground transition-transform group-open/req:rotate-180" />
+    </summary>
+    <div class="mx-4 mb-4 space-y-3 rounded-lg bg-muted/30 p-3 text-xs">
+      @if (req.evidence_id) {
+        <p><span class="text-muted-foreground">Supporting experience</span><br /><span class="mt-1 inline-block font-medium">{{ req.evidence_title || 'Saved experience' }}</span></p>
+      }
+      @if (req.provisional || req.status === 'unknown') { <p class="text-muted-foreground">Some comparisons are missing. This judgment may change when the match is complete.</p> }
+      @else if (req.review) { <p class="text-muted-foreground">The match is uncertain. Check the supporting experience before relying on this result.</p> }
+      @else if (req.status === 'gap') { <p class="text-muted-foreground">No supporting experience was found. Add a relevant project, role, or highlight if you have one.</p><a class="underline underline-offset-4" routerLink="/library/evidence">Add supporting experience</a> }
+      @else if (req.status === 'partial' || req.status === 'adjacent') { <p class="text-muted-foreground">Your library contains related experience, but it doesn’t fully support this requirement.</p> }
+      @if (req.check) { <p>{{ req.check }}</p> }
+      @for (citation of req.citations ?? []; track citation.id) { <blockquote class="border-l-2 border-brand/40 pl-3 leading-relaxed text-muted-foreground">{{ citation.text }}</blockquote> }
+      <div class="flex flex-wrap items-center gap-2 border-t pt-3">
+        <label class="flex flex-wrap items-center gap-2">Treat this as
+          <select class="max-w-full rounded-md border bg-background px-2 py-1.5 text-xs" [ngModel]="req.class" (ngModelChange)="action('correct', req.text_hash, $event)" [disabled]="busy()">
+            <option value="must">Must have</option><option value="preferred">Nice to have</option><option value="duty">Responsibility</option><option value="trait">Personal quality</option><option value="ignore">Exclude from match</option>
+          </select>
+        </label>
+        @if (req.class !== req.original_class) { <button class="underline underline-offset-4 disabled:opacity-50" [disabled]="busy()" (click)="action('correct',req.text_hash,'reset')">Reset</button> }
+      </div>
+      <p class="text-muted-foreground">Corrections save automatically and update this match.</p>
+    </div>
+  </details>
+</ng-template>
