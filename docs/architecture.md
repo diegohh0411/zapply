@@ -85,7 +85,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | 4 | Jobs and application tracking: postings, statuses, activity, views. See `docs/parts/04-jobs.md` |
 | 5 | Worker runtime + model gateway: River, system OpenRouter keys, platform owner UI, owner-assigned plans, rolling 7-day and 30-day cost allowances. See `docs/parts/05-worker.md` |
 | 6 | Matching pipeline: staged jobs, score cache keyed by content hash, explainability. See `docs/parts/06-matching.md` |
-| 7 | Rendering: Typst templates, page fitting, object storage, exports |
+| 7 | Rendering: versioned Typst templates, page fitting, CVs compiled in the browser (WASM) from immutable snapshots in Postgres, with no stored files. See `docs/parts/07-rendering.md` |
 | 8 | Company research: global cache, one research run per company, agent budget |
 | 9 | Angular + ZardUI web app, using the generated client. Started with part 4: shell, sign-in, live updates, jobs and library screens. See `docs/parts/09-web.md` |
 | 10 | Mail watcher fleet and inbox |
