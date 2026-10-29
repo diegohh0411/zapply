@@ -910,6 +910,11 @@ type MailMessage struct {
 	ClassifiedAt      *time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	StatusOutcome     *string
+	SuggestedStatusID *uuid.UUID
+	PreviousStatusID  *uuid.UUID
+	StatusConfidence  *float32
+	StatusAuto        bool
 }
 
 type MailOperation struct {
