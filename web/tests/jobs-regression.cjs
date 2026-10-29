@@ -38,6 +38,7 @@ const core = {
   input: signal,
   model: signal,
   output: () => ({ emit() {} }),
+  viewChild: () => () => undefined,
   DestroyRef,
   inject(token) {
     if (token === AuthService) return currentAuth;

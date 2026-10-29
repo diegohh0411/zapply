@@ -89,6 +89,8 @@ export class JobsPage {
   protected readonly statusesOpen = signal(false);
   protected readonly saveOpen = signal(false);
   protected viewName = '';
+  /** Set while the save dialog creates a blank view from the "+" menu. */
+  protected readonly newLayout = signal<Layout | null>(null);
   private newInStatus: string | undefined;
 
   protected readonly activeView = computed(
@@ -213,15 +215,26 @@ export class JobsPage {
   }
 
   protected openSave(): void {
+    this.newLayout.set(null);
     this.viewName = this.activeView()?.name ?? '';
+    this.saveOpen.set(true);
+  }
+
+  protected openNewView(layout: Layout): void {
+    this.newLayout.set(layout);
+    this.viewName = layout === 'table' ? 'Table' : 'Board';
     this.saveOpen.set(true);
   }
 
   protected async saveAsNew(): Promise<void> {
     const name = this.viewName.trim();
     if (!name) return;
+    const layout = this.newLayout();
+    const body: JobViewInput = layout
+      ? { name, layout, filters: {}, sort: '-updated_at' }
+      : this.viewInput(name);
     try {
-      const v = await this.store.createView(this.viewInput(name));
+      const v = await this.store.createView(body);
       this.saveOpen.set(false);
       this.selectView(v);
       this.toast.success(`Saved view “${name}”`);
@@ -242,8 +255,34 @@ export class JobsPage {
     }
   }
 
-  protected async deleteView(): Promise<void> {
-    const v = this.activeView();
+  protected async renameView(id: string, name: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
+    if (!v) return;
+    try {
+      await this.store.updateView(id, { name, layout: v.layout, filters: v.filters, sort: v.sort });
+    } catch (e) {
+      this.toast.error((e as Error).message);
+    }
+  }
+
+  protected async duplicateView(id: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
+    if (!v) return;
+    try {
+      const copy = await this.store.createView({
+        name: `${v.name} (copy)`,
+        layout: v.layout,
+        filters: v.filters,
+        sort: v.sort,
+      });
+      this.selectView(copy);
+    } catch (e) {
+      this.toast.error((e as Error).message);
+    }
+  }
+
+  protected async deleteView(id: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
     if (!v) return;
     if (
       !(await this.confirm.ask({
@@ -254,7 +293,7 @@ export class JobsPage {
       return;
     try {
       await this.store.deleteView(v.id);
-      this.selectView(null);
+      if (this.view() === v.id) this.selectView(null);
     } catch (e) {
       this.toast.error((e as Error).message);
     }
