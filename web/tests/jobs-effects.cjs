@@ -204,19 +204,19 @@ test('412 recovery releases Save and preserves edits with the new ETag', async (
   assert.equal(sheet.etag, '"2"');
 });
 
-test('CV activation resets for a newly opened job while quiet refreshes preserve it', async (t) => {
+test('Match activation resets for a newly opened job while quiet refreshes preserve it', async (t) => {
   const f = await fixture(t);
   const sheet = f.create('jobs/job-sheet.ts', 'JobSheet');
   f.flush();
   await sheet.load({ id: 'first' });
-  assert.equal(sheet.cvActive(), false);
-  sheet.cvActive.set(true);
+  assert.equal(sheet.matchActive(), false);
+  sheet.matchActive.set(true);
   await sheet.load({ id: 'first' }, true);
-  assert.equal(sheet.cvActive(), true);
+  assert.equal(sheet.matchActive(), true);
   await sheet.load({ id: 'second' });
-  assert.equal(sheet.cvActive(), false);
-  sheet.cvActive.set(true);
+  assert.equal(sheet.matchActive(), false);
+  sheet.matchActive.set(true);
   f.auth.identity.set('bob');
   f.flush();
-  assert.equal(sheet.cvActive(), false);
+  assert.equal(sheet.matchActive(), false);
 });
