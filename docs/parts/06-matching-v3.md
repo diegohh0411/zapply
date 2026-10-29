@@ -36,3 +36,9 @@ results are marked stale, their coverage scores are omitted from job summaries,
 and the match tab requests a re-run instead of showing the old gap checklist.
 Historical overrides have no effect on pipeline 3. The API's explicit pipeline
 parameter remains available for historical comparison.
+
+Starting a new run for a previously matched job clears its requirement
+corrections and manual CV includes and excludes. CV presentation settings and
+exported snapshots are preserved. A retry with the same idempotency key or a
+rejected start does not reset them again. Automatic matching runs only on job
+creation; later job and library edits make the match stale until manually rerun.

@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -215,7 +214,7 @@ func (s *Service) CreateJob(ctx context.Context, uid uuid.UUID, in JobInput) (Jo
 			return err
 		}
 		if s.Matcher != nil {
-			if err := s.Matcher.JobSaved(ctx, tx, uid, row, true, true); err != nil {
+			if err := s.Matcher.JobCreated(ctx, tx, uid, row); err != nil {
 				return err
 			}
 		}
@@ -326,11 +325,6 @@ func (s *Service) UpdateJob(ctx context.Context, uid, id uuid.UUID, ifVersion in
 				return err
 			}
 			if row, err = changeStatus(ctx, q, uid, row, from, *to, pos); err != nil {
-				return err
-			}
-		}
-		if s.Matcher != nil {
-			if err := s.Matcher.JobSaved(ctx, tx, uid, row, false, !bytes.Equal(cur.ContentHash, row.ContentHash)); err != nil {
 				return err
 			}
 		}

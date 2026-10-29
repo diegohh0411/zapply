@@ -3,6 +3,9 @@
     <div>
       <h2 class="font-semibold">Your match</h2>
       <p class="mt-1 text-xs text-muted-foreground">How this posting compares with the experience in your library.</p>
+      @if (run() && !active()) {
+        <p class="mt-1 text-xs text-muted-foreground">Re-running resets your match corrections and manual CV selections.</p>
+      }
     </div>
     @if (active()) {
       <button z-button zType="outline" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">Cancel match</button>

@@ -206,6 +206,27 @@ func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, 
 	if e != nil {
 		return Run{}, e
 	}
+	// A new run replaces the previous match's user adjustments. Keep draft
+	// presentation settings and immutable exports, but reset selection picks.
+	// The idempotency and active-run checks above ensure retries and conflicts
+	// cannot erase changes made after a run was started.
+	var previous bool
+	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM match_run WHERE user_id=$1 AND job_id=$2 AND id<>$3)`, u, job, id).Scan(&previous); e != nil {
+		return Run{}, e
+	}
+	if previous {
+		if _, e = tx.Exec(ctx, `DELETE FROM match_override WHERE user_id=$1 AND job_id=$2`, u, job); e != nil {
+			return Run{}, e
+		}
+		if _, e = tx.Exec(ctx, `WITH updated AS (
+			UPDATE cv_draft SET picks='{"include":[],"exclude":[]}'::jsonb, version=version+1, updated_at=now()
+			WHERE user_id=$1 AND job_id=$2 AND picks <> '{"include":[],"exclude":[]}'::jsonb
+			RETURNING job_id,version
+		) INSERT INTO outbox(id,user_id,topic,payload)
+		SELECT $3,$1,'cv_draft.updated',jsonb_build_object('id',job_id,'version',version) FROM updated`, u, job, uuid.Must(uuid.NewV7())); e != nil {
+			return Run{}, e
+		}
+	}
 	for _, item := range snap.Evidence {
 		if _, e = tx.Exec(ctx, `INSERT INTO match_run_item(user_id,run_id,evidence_id,content_hash,facts) VALUES($1,$2,$3,$4,$5)`, u, id, item.ID, item.ContentHash, systemone.Raw(item)); e != nil {
 			return Run{}, e
@@ -247,8 +268,8 @@ func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string, versi
 	})
 	return r, translate(e)
 }
-func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job, created, hashChanged bool) error {
-	if !created && !hashChanged || created && strings.TrimSpace(job.Description) == "" {
+func (s *Service) JobCreated(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job) error {
+	if strings.TrimSpace(job.Description) == "" {
 		return nil
 	}
 	var eligible bool
@@ -258,28 +279,7 @@ func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.J
 	if !eligible {
 		return nil
 	}
-	var id uuid.UUID
-	e := tx.QueryRow(ctx, `SELECT id FROM match_run WHERE user_id=$1 AND job_id=$2 AND status IN ('pending','running','blocked','needs_review') FOR UPDATE`, u, job.ID).Scan(&id)
-	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-		return e
-	}
-	if e == nil {
-		var dispatched bool
-		if e = tx.QueryRow(ctx, `SELECT platform.match_operations_dispatched(COALESCE(array_agg(operation_id),'{}'::uuid[])) FROM match_run_operation WHERE user_id=$1 AND run_id=$2`, u, id).Scan(&dispatched); e != nil {
-			return e
-		}
-		if dispatched {
-			_, e = tx.Exec(ctx, `UPDATE match_run SET rerun_requested=true,version=version+1 WHERE user_id=$1 AND id=$2`, u, id)
-			if e != nil {
-				return e
-			}
-			return emitRun(ctx, tx, u, id, job.ID)
-		}
-		if e = s.cancelTx(ctx, tx, u, id); e != nil {
-			return e
-		}
-	}
-	_, e = s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
+	_, e := s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
 	return e
 }
 func (s *Service) cancelTx(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
@@ -641,7 +641,7 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 		if e != nil {
 			return e
 		}
-		return s.finalize(ctx, tx, u, r, false)
+		return s.finalize(ctx, tx, u, r)
 	}))
 }
 

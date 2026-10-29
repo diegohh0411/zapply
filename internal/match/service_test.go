@@ -289,6 +289,79 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 		t.Fatalf("stale %v %#v", e, r)
 	}
 }
+
+func TestRerunResetsAdjustmentsOnce(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	hash := strings.Repeat("a", 64)
+	setAdjustments := func() {
+		t.Helper()
+		e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			if _, e := tx.Exec(ctx, `INSERT INTO match_override(user_id,job_id,text_hash,class) VALUES($1,$2,$3,'ignore') ON CONFLICT(user_id,job_id,text_hash) DO UPDATE SET class='ignore'`, f.u, f.job.ID, hash); e != nil {
+				return e
+			}
+			_, e := tx.Exec(ctx, `INSERT INTO cv_draft(user_id,job_id,locale,page_budget,picks) VALUES($1,$2,'es',2,'{"include":["item"],"exclude":[]}') ON CONFLICT(user_id,job_id) DO UPDATE SET picks=EXCLUDED.picks`, f.u, f.job.ID)
+			return e
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	check := func(wantOverrides int, wantPicks string, wantVersion int) {
+		t.Helper()
+		e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			var count, version, budget int
+			var picks []byte
+			var locale string
+			if e := tx.QueryRow(ctx, `SELECT count(*) FROM match_override WHERE user_id=$1 AND job_id=$2`, f.u, f.job.ID).Scan(&count); e != nil {
+				return e
+			}
+			if e := tx.QueryRow(ctx, `SELECT picks,version,locale,page_budget FROM cv_draft WHERE user_id=$1 AND job_id=$2`, f.u, f.job.ID).Scan(&picks, &version, &locale, &budget); e != nil {
+				return e
+			}
+			var got, want any
+			if e := json.Unmarshal(picks, &got); e != nil {
+				return e
+			}
+			if e := json.Unmarshal([]byte(wantPicks), &want); e != nil {
+				return e
+			}
+			if count != wantOverrides || version != wantVersion || locale != "es" || budget != 2 || !bytes.Equal(systemone.Raw(got), systemone.Raw(want)) {
+				t.Fatalf("adjustments: count=%d picks=%s version=%d locale=%s budget=%d", count, picks, version, locale, budget)
+			}
+			return nil
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	setAdjustments()
+	first := f.start(t)
+	check(1, `{"include":["item"],"exclude":[]}`, 1)
+	f.run(t, first.ID)
+	q, e := worker.NewQueue(f.db.Store)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := match.New(f.db.Store, q)
+	key := uuid.NewString()
+	r, e := s.Start(ctx, f.u, f.job.ID, key, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	check(0, `{"include":[],"exclude":[]}`, 2)
+	setAdjustments()
+	if _, e = s.Start(ctx, f.u, f.job.ID, key, 0); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Start(ctx, f.u, f.job.ID, uuid.NewString(), 0); e == nil {
+		t.Fatal("expected active run conflict")
+	}
+	check(1, `{"include":["item"],"exclude":[]}`, 2)
+	if e = s.Cancel(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+}
 func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	f := setup(t)
 	f.p.discard = true
@@ -309,7 +382,7 @@ func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 		t.Fatal("cancel dispatched")
 	}
 }
-func TestAutoRunsSupersedeAndUnconfigured(t *testing.T) {
+func TestAutoMatchOnlyOnCreation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.js.Matcher = f.s
@@ -322,20 +395,61 @@ func TestAutoRunsSupersedeAndUnconfigured(t *testing.T) {
 		t.Fatalf("auto create %v %#v", e, runs)
 	}
 	first := runs[0].ID
+	// Simulate a follow-up requested by an older version while this run was active.
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		if _, e := tx.Exec(ctx, `UPDATE match_run SET rerun_requested=true WHERE user_id=$1 AND id=$2`, f.u, first); e != nil {
+			return e
+		}
+		_, e := tx.Exec(ctx, `INSERT INTO cv_draft(user_id,job_id,picks) VALUES($1,$2,'{"include":["item"],"exclude":[]}')`, f.u, job.ID)
+		return e
+	}); e != nil {
+		t.Fatal(e)
+	}
 	job, e = f.js.UpdateJob(ctx, f.u, job.ID, job.Version, jobs.JobInput{Title: "Changed", Description: "Go"})
 	if e != nil {
 		t.Fatal(e)
 	}
 	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
-	if e != nil || len(runs) != 2 || runs[1].Status != "cancelled" {
-		t.Fatalf("supersede %v %#v", e, runs)
+	if e != nil || len(runs) != 1 || runs[0].ID != first || runs[0].Status != "pending" {
+		t.Fatalf("job edit changed active run %v %#v", e, runs)
 	}
-	if e = f.s.Advance(ctx, f.u, first); e != nil {
+	if _, e = f.lib.UpdateEvidence(ctx, f.u, f.evidence.ID, f.evidence.Version, library.EvidenceInput{Kind: "project", Category: library.Paid, Title: "Updated Go service"}); e != nil {
 		t.Fatal(e)
 	}
-	if f.p.calls != 0 {
-		t.Fatal("superseded dispatch")
+	run := f.run(t, first)
+	if !run.Stale || run.RerunRequested {
+		t.Fatal("edits during the run should make it stale")
 	}
+	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
+	if e != nil || len(runs) != 1 {
+		t.Fatalf("edits or legacy follow-up created a run: %v %#v", e, runs)
+	}
+	job, e = f.js.UpdateJob(ctx, f.u, job.ID, job.Version, jobs.JobInput{Title: "Changed again", Description: "Go"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
+	if e != nil || len(runs) != 1 {
+		t.Fatalf("completed job edit created a run: %v %#v", e, runs)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		var preserved bool
+		if e := tx.QueryRow(ctx, `SELECT picks->'include' = '["item"]'::jsonb FROM cv_draft WHERE user_id=$1 AND job_id=$2`, f.u, job.ID).Scan(&preserved); e != nil {
+			return e
+		}
+		if !preserved {
+			t.Fatal("edits reset manual CV picks")
+		}
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestUnconfiguredMatch(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	var e error
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error { _, e := tx.Exec(ctx, `SELECT platform.save_model_settings(NULL,2)`); return e }); e != nil {
 		t.Fatal(e)
 	}
