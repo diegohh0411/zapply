@@ -119,24 +119,38 @@
 }
 #let url-link(url) = link(url, short-url(url))
 
-#let entry(e) = block(breakable: true, above: 0.95em, below: 0pt, {
-  block(below: 0pt, text(weight: "semibold", e.title))
-  // Dates lead the line under the title instead of sitting right-aligned: a
-  // wide gap makes text extraction read them as a separate column.
-  let sub = (dates(e),) + subtitle(e)
-  sub = sub.filter(has)
-  if sub.len() > 0 {
-    block(above: 0.35em, below: 0pt, text(fill: luma(70), sub.join(" · ")))
+#let ink = rgb("#1a1a1a")
+#let muted = rgb("#4a4a4a")
+
+// Line 1: organization (bold) and location; line 2: title (italic), the
+// kind's details, and dates. Without an organization, the title leads.
+#let entry(e) = block(breakable: true, above: 1.6em, below: 0pt, {
+  let org = get(e, "organization")
+  let loc = get(e, "location")
+  let details = subtitle(e).filter(x => x != org and x != loc)
+  let when = dates(e)
+  if has(org) {
+    text(weight: "semibold", org)
+    if has(loc) { h(1fr); text(weight: "semibold", loc) }
+    linebreak()
+    text(style: "italic", ((e.title,) + details).join(" · "))
+    if has(when) { h(1fr); text(style: "italic", when) }
+  } else {
+    text(weight: "semibold", e.title)
+    if has(when) { h(1fr); text(style: "italic", when) }
+    let rest = details + (loc,)
+    rest = rest.filter(has)
+    if rest.len() > 0 { linebreak(); text(style: "italic", rest.join(" · ")) }
   }
   if has(get(e, "url")) {
-    block(above: 0.35em, below: 0pt, text(fill: luma(70), url-link(e.url)))
+    block(above: 0.35em, below: 0pt, text(fill: muted, url-link(e.url)))
   }
   if has(get(e, "summary")) {
     block(above: 0.5em, below: 0pt, e.summary)
   }
   let highlights = get(e, "highlights")
   if highlights != none and highlights.len() > 0 {
-    block(above: 0.5em, below: 0pt, list(..highlights.map(h => h.text)))
+    block(above: 0.4em, below: 0pt, list(..highlights.map(h => h.text)))
   }
   let children = get(e, "children")
   if children != none and children.len() > 0 {
@@ -167,36 +181,41 @@
 #let profile = cv.profile
 
 #set document(title: profile.name, author: profile.name, date: date)
-#set page(paper: cv.at("paper", default: s.paper), margin: (x: 1.7cm, y: 1.5cm))
-#set text(font: "Source Sans 3", size: 10.5pt, lang: cv.locale, hyphenate: false)
-#set par(leading: 0.6em, spacing: 0.6em)
-#set list(indent: 0.4em, body-indent: 0.5em, spacing: 0.45em, marker: [•])
+#set page(paper: cv.at("paper", default: s.paper), margin: (x: 40pt, y: 36pt))
+#set text(font: "Source Sans 3", size: 10.5pt, lang: cv.locale, hyphenate: false, fill: ink)
+#set par(leading: 0.55em, spacing: 5pt, justify: false)
+#set list(indent: 0.3em, body-indent: 0.5em, spacing: 0.55em, marker: [•])
+#show link: set text(fill: rgb("#1f4e9c"))
 
-#show heading.where(level: 1): it => block(below: 0.4em, text(size: 22pt, weight: "semibold", it.body))
-#show heading.where(level: 2): it => block(above: 1.4em, below: 0.75em, {
-  text(size: 11pt, weight: "semibold", tracking: 0.06em, upper(it.body))
-  v(-0.55em)
-  line(length: 100%, stroke: 0.6pt + luma(120))
+#show heading.where(level: 1): it => block(below: 5pt + 0.6em,
+  text(size: 22pt, weight: "semibold", tracking: 0.02em, it.body))
+// Section heading: larger, with a full-width rule underneath.
+#show heading.where(level: 2): it => block(above: 11pt + 0.6em, below: 6pt, sticky: true, {
+  stack(spacing: 3pt,
+    text(size: 12.6pt, weight: "semibold", tracking: 0.04em, it.body),
+    line(length: 100%, stroke: 0.6pt + ink))
 })
 
 // Header.
 
 #align(center, {
   heading(level: 1, profile.name)
+  let lines = ()
   if has(get(profile, "headline")) {
-    block(below: 0.5em, text(size: 12pt, profile.headline))
+    lines.push(text(size: 11.5pt, fill: muted, profile.headline))
   }
   let contact = ()
-  if has(get(profile, "location")) { contact.push(profile.location) }
   if has(get(profile, "email")) { contact.push(link("mailto:" + profile.email, profile.email)) }
   if has(get(profile, "phone")) { contact.push(profile.phone) }
+  if has(get(profile, "location")) { contact.push(profile.location) }
   let links = get(profile, "links")
   if links != none {
     for l in links {
       if has(get(l, "url")) { contact.push(url-link(l.url)) }
     }
   }
-  if contact.len() > 0 { contact.join(" · ") }
+  if contact.len() > 0 { lines.push(contact.join(text(fill: muted, "  |  "))) }
+  lines.join(linebreak())
 })
 
 #if has(get(profile, "summary")) {
@@ -213,12 +232,17 @@
 
 #let skills = get(cv, "skills")
 #if skills != none {
-  let groups = ("hard", "tool", "soft").map(t => (t, skills.filter(x => x.type == t)))
-  let lines = groups.filter(((t, xs)) => xs.len() > 0).map(((t, xs)) => {
-    text(weight: "semibold", s.skill_types.at(t) + ":") + " " + xs.map(skill-line).join(", ")
-  })
-  if lines.len() > 0 {
-    section(s.sections.skills, lines.join(linebreak()))
+  // One paragraph, capped at two lines: skills that don't fit are dropped
+  // from the end, so the most relevant (listed first) stay.
+  let names = ("hard", "tool", "soft").map(t => skills.filter(x => x.type == t)).join().map(skill-line)
+  if names.len() > 0 {
+    section(s.sections.skills, layout(size => {
+      let fits(n) = measure(block(width: size.width, par(names.slice(0, n).join(", ")))).height
+      let max = measure(block(width: size.width, par[x#linebreak()x])).height
+      let n = names.len()
+      while n > 1 and fits(n) > max { n -= 1 }
+      par(names.slice(0, n).join(", "))
+    }))
   }
   let languages = skills.filter(x => x.type == "language")
   if languages.len() > 0 {
