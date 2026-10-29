@@ -1,4 +1,4 @@
-<z-sheet [(zVisible)]="visible" zSide="right" zWidth="min(720px, 100vw)">
+<z-sheet [(zVisible)]="visible" zSide="right" zWidth="100vw">
   <z-sheet-header class="gap-3 border-b pb-4 pr-12">
     @if (isNew()) {
       <z-sheet-title>New job</z-sheet-title>
@@ -42,15 +42,17 @@
         <z-skeleton class="h-40 w-full" />
       </div>
     } @else {
-      <z-tab-group (zTabChange)="cvActive.set($event.label === 'CV')">
+      <z-tab-group (zTabChange)="matchActive.set($event.label === 'Match')">
         <z-tab label="Details">
           <ng-container *ngTemplateOutlet="details" />
         </z-tab>
         @if (!isNew()) {
-          <z-tab label="Match"><app-match-tab [jobId]="job()!.id" /></z-tab>
-          <z-tab label="CV">
-            @if (cvActive()) {
-              <app-cv-tab [jobId]="job()!.id" [company]="job()!.company" />
+          <z-tab label="Match">
+            @if (matchActive()) {
+              <div class="grid items-start gap-6 lg:grid-cols-2">
+                <app-match-tab class="min-w-0" [jobId]="job()!.id" />
+                <app-cv-tab class="min-w-0" [jobId]="job()!.id" [company]="job()!.company" />
+              </div>
             }
           </z-tab>
           <z-tab label="Mail"><app-mail-tab [jobId]="job()!.id" /></z-tab>
@@ -71,7 +73,7 @@
 </z-sheet>
 
 <ng-template #details>
-  <form id="job-form" class="grid grid-cols-1 gap-4 pt-3 sm:grid-cols-6" (ngSubmit)="save()" (input)="touch()">
+  <form id="job-form" class="grid max-w-4xl grid-cols-1 gap-4 pt-3 sm:grid-cols-6" (ngSubmit)="save()" (input)="touch()">
     <label class="field sm:col-span-6">
       <span>Title <span class="text-destructive">*</span></span>
       <input z-input name="title" [(ngModel)]="form.title" required placeholder="Senior Backend Engineer" />
