@@ -6,7 +6,7 @@ on:
   merge_group:
 
 jobs:
-  go:
+  go-checks:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -76,16 +76,33 @@ jobs:
         env:
           ZAPPLY_REQUIRE_TYPST: "1"
         run: go test -race -count=1 ./...
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
           tags: zapply
           cache-from: type=gha,scope=ci-image
           cache-to: type=gha,scope=ci-image,mode=max
+
+  # Preserve the required Go check while running the image build in parallel.
+  go:
+    if: always()
+    needs: [go-checks, image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          GO_CHECKS_RESULT: ${{ needs.go-checks.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
+        run: |
+          test "$GO_CHECKS_RESULT" = success && test "$IMAGE_RESULT" = success
 
   web:
     runs-on: ubuntu-latest
