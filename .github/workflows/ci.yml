@@ -78,6 +78,7 @@ jobs:
         run: go test -race -count=1 ./...
 
   image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +92,7 @@ jobs:
           cache-from: type=gha,scope=ci-image
           cache-to: type=gha,scope=ci-image,mode=max
 
-  # Preserve the required Go check while running the image build in parallel.
+  # Preserve the required Go check; the image is built on pushes to main.
   go:
     if: always()
     needs: [go-checks, image]
@@ -101,8 +102,14 @@ jobs:
         env:
           GO_CHECKS_RESULT: ${{ needs.go-checks.result }}
           IMAGE_RESULT: ${{ needs.image.result }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          test "$GO_CHECKS_RESULT" = success && test "$IMAGE_RESULT" = success
+          test "$GO_CHECKS_RESULT" = success
+          if [ "$EVENT_NAME" = push ]; then
+            test "$IMAGE_RESULT" = success
+          else
+            test "$IMAGE_RESULT" = skipped
+          fi
 
   web:
     runs-on: ubuntu-latest
