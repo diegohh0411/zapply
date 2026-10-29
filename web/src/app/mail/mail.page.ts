@@ -22,12 +22,13 @@ import {
   type MailAccount,
   type MailCategory,
 } from './format';
+import { MailStatusChange } from './status-change';
 
 type Message = Schemas['MailMessage'];
 
 @Component({
   selector: 'app-mail-page',
-  imports: [DatePipe, ZardButtonComponent],
+  imports: [DatePipe, MailStatusChange, ZardButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mx-auto max-w-5xl space-y-6 px-4 py-6">
@@ -156,6 +157,7 @@ type Message = Schemas['MailMessage'];
               @if (m.job_id && jobTitles()[m.job_id]) {
                 <p class="text-xs text-muted-foreground">Job: {{ jobTitles()[m.job_id] }}</p>
               }
+              <app-mail-status-change [message]="m" (changed)="replace($event)" />
             </li>
           } @empty {
             <li class="p-6 text-center text-sm text-muted-foreground">
@@ -221,6 +223,10 @@ export class MailPage {
       change.unsubscribe();
       resync.unsubscribe();
     });
+  }
+
+  protected replace(m: Message): void {
+    this.messages.update((list) => list.map((x) => (x.id === m.id ? m : x)));
   }
 
   private async load(): Promise<void> {

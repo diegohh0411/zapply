@@ -1432,6 +1432,30 @@ paths:
               schema: { $ref: "#/components/schemas/MailMessagePage" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/mail/messages/{id}/status-change:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: resolveMailStatusChange
+      tags: [mail]
+      description: >
+        Acts on the job status a message proposed. `apply` moves the job to the
+        proposed status and `dismiss` declines it; both need an outcome of
+        `review`. `undo` moves an applied job back to its earlier status, and
+        fails with 409 if the job's status was changed since.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailStatusChangeAction" }
+      responses:
+        "200":
+          description: The updated message.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailMessage" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -2602,6 +2626,28 @@ components:
         received_at: { type: string, format: date-time }
         classified_at: { type: string, format: date-time }
         gmail_url: { type: string, format: uri }
+        status_change:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/MailStatusChange' }]
+    MailStatusChange:
+      type: object
+      description: >
+        The job status a message proposed, once it was linked to a job.
+        `no_change` leaves the job as it is; `review` waits for the member;
+        `applied` moved the job (`auto` when no one had to confirm it);
+        `dismissed` and `undone` are the member declining or reverting it.
+      required: [outcome, proposed_status_id, previous_status_id, confidence, auto]
+      properties:
+        outcome: { type: string, enum: [no_change, review, applied, dismissed, undone] }
+        proposed_status_id: { type: string, format: uuid, nullable: true }
+        previous_status_id: { type: string, format: uuid, nullable: true }
+        confidence: { type: number, nullable: true }
+        auto: { type: boolean }
+    MailStatusChangeAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [apply, dismiss, undo] }
     MailMessagePage:
       type: object
       required: [items]

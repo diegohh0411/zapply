@@ -1033,6 +1033,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail/messages/{id}/status-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Acts on the job status a message proposed. `apply` moves the job to the proposed status and `dismiss` declines it; both need an outcome of `review`. `undo` moves an applied job back to its earlier status, and fails with 409 if the job's status was changed since. */
+        post: operations["resolveMailStatusChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1849,6 +1868,22 @@ export interface components {
             classified_at: string;
             /** Format: uri */
             gmail_url: string;
+            status_change?: components["schemas"]["MailStatusChange"] | null;
+        };
+        /** @description The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it. */
+        MailStatusChange: {
+            /** @enum {string} */
+            outcome: "no_change" | "review" | "applied" | "dismissed" | "undone";
+            /** Format: uuid */
+            proposed_status_id: string | null;
+            /** Format: uuid */
+            previous_status_id: string | null;
+            confidence: number | null;
+            auto: boolean;
+        };
+        MailStatusChangeAction: {
+            /** @enum {string} */
+            action: "apply" | "dismiss" | "undo";
         };
         MailMessagePage: {
             items: components["schemas"]["MailMessage"][];
@@ -3901,6 +3936,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailMessagePage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resolveMailStatusChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailStatusChangeAction"];
+            };
+        };
+        responses: {
+            /** @description The updated message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
                 };
             };
             default: components["responses"]["Problem"];

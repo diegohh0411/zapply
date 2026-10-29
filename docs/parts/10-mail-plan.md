@@ -169,7 +169,12 @@ worker writes `mail_message`. `refresh_token_enc` is never selectable by
   billed through the gateway with a reservation, keyed by the content sent.
 - The first answer is the category. For relevant categories a second small
   decision picks one of the member's open jobs (by company and title) or none.
-  It is a suggestion; changing a job's status stays manual in the MVP.
+- The job decision carries a second question in the same request: the
+  job's status after the email, with each job's current status in the state
+  (migration 00021, `internal/mail/status.go`). A proposal at or above 0.85
+  that moves the job forward on the board is applied, with a timeline entry;
+  a backward or less certain one waits for the member to apply or dismiss.
+  Applied moves can be undone while the job still sits in that status.
 - If the allowance is exhausted, classify jobs wait like other model work and the
   message shows as unclassified.
 - A member-facing switch pauses classification. The connect screen states that
