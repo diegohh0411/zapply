@@ -51,22 +51,6 @@
         @if (r.status === 'partial') {
           <p class="rounded-lg border p-4 text-sm">Some comparisons could not finish. These rankings are incomplete; re-run to try again.</p>
         }
-        <section class="space-y-3" aria-label="Ranked experience">
-          <div>
-            <h3 class="text-sm font-semibold">Experience to highlight</h3>
-            <p class="mt-1 text-xs text-muted-foreground">Ranked against the full posting to guide CV selection and highlight order.</p>
-          </div>
-          <div class="divide-y rounded-xl border">
-            @for (item of result.selection; track item.evidence_id) {
-              <div class="flex items-start justify-between gap-3 p-4 text-sm">
-                <div><p class="font-medium">{{ item.title || 'Saved experience' }}</p><p class="mt-1 text-xs text-muted-foreground">{{ relevanceLabel(item.relevance) }}</p></div>
-                <span class="shrink-0 text-xs text-muted-foreground">{{ item.highlight_ids.length }} highlights</span>
-              </div>
-            } @empty {
-              <p class="p-5 text-sm text-muted-foreground">{{ r.status === 'partial' ? 'No experience has been selected yet. Some comparisons are unfinished.' : 'No saved experience met the relevance threshold for automatic selection. You can still choose experience in your CV.' }}</p>
-            }
-          </div>
-        </section>
         @if (result.skills.length) {
           <section class="space-y-3" aria-label="Ranked skills">
             <h3 class="text-sm font-semibold">Skills for this posting</h3>

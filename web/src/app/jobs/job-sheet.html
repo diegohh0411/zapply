@@ -1,16 +1,17 @@
-<z-sheet [(zVisible)]="visible" zSide="right" zWidth="100vw">
-  <z-sheet-header class="gap-3 border-b pb-4 pr-12">
+@if (visible()) {
+<section class="flex min-h-full flex-col" aria-label="Job workspace">
+  <header class="flex flex-col gap-3 border-b p-4">
     @if (isNew()) {
-      <z-sheet-title>New job</z-sheet-title>
-      <z-sheet-description>Save a posting. Only the title is required.</z-sheet-description>
+      <h1 class="text-lg font-semibold">New job</h1>
+      <p class="text-sm text-muted-foreground">Save a posting. Only the title is required.</p>
     } @else if (job(); as j) {
-      <z-sheet-title class="text-lg leading-snug">{{ j.title }}</z-sheet-title>
-      <z-sheet-description>
+      <h1 class="text-lg font-semibold leading-snug">{{ j.title }}</h1>
+      <p class="text-sm text-muted-foreground">
         {{ j.company }}
         @if (j.archived) {
           <span class="ml-1 rounded bg-muted px-1.5 py-0.5 text-xs">Archived</span>
         }
-      </z-sheet-description>
+      </p>
       <div class="flex flex-wrap items-center gap-2">
         <app-status-select [statuses]="store.statuses()" [value]="j.status_id" (selectionChange)="changeStatus($event)" />
         @if (j.url) {
@@ -32,7 +33,7 @@
         </z-dropdown-menu>
       </div>
     }
-  </z-sheet-header>
+  </header>
 
   <div class="flex-1 overflow-y-auto px-4 py-4">
     @if (loading()) {
@@ -49,7 +50,7 @@
         @if (!isNew()) {
           <z-tab label="Match">
             @if (matchActive()) {
-              <div class="grid items-start gap-6 lg:grid-cols-2">
+              <div>
                 <app-match-tab class="min-w-0" [jobId]="job()!.id" />
                 <app-cv-tab class="min-w-0" [jobId]="job()!.id" [company]="job()!.company" />
               </div>
@@ -64,13 +65,14 @@
     }
   </div>
 
-  <z-sheet-footer class="flex-row justify-end gap-2 border-t">
-    <button z-button zType="outline" type="button" z-sheet-close>Close</button>
+  <footer class="flex justify-end gap-2 border-t p-4">
+    <button z-button zType="outline" type="button" (click)="visible.set(false)">Close</button>
     <button z-button type="submit" form="job-form" [zLoading]="saving()" [zDisabled]="!isNew() && !dirty()">
       {{ isNew() ? 'Save job' : 'Save changes' }}
     </button>
-  </z-sheet-footer>
-</z-sheet>
+  </footer>
+</section>
+}
 
 <ng-template #details>
   <form id="job-form" class="grid max-w-4xl grid-cols-1 gap-4 pt-3 sm:grid-cols-6" (ngSubmit)="save()" (input)="touch()">
