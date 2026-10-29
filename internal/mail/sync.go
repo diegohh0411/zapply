@@ -118,9 +118,10 @@ func (s *Service) revoked(ctx context.Context, u, id uuid.UUID) error {
 }
 
 func (s *Service) fail(ctx context.Context, u, id uuid.UUID, cause error) {
-	msg := "Sync failed; will retry."
+	msg := "Sync failed. zapply will keep retrying."
 	if cause != nil && !errors.Is(cause, context.Canceled) {
-		msg = "Sync failed: " + truncate(cause.Error(), 150)
+		// The cause can be a provider's raw JSON: the log keeps it, the member gets the short line.
+		s.log.Warn("mail sync failed", "account_id", id, "err", truncate(cause.Error(), 500))
 	}
 	ctx = context.WithoutCancel(ctx)
 	_ = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
@@ -367,8 +368,13 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 					return e
 				}
 			}
-			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw))
-			return e
+			// Progress proves Gmail is answering, so an earlier failure or backoff no
+			// longer describes the mailbox.
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3,last_error='',sync_retry_at=NULL,sync_quota_failures=0 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw))
+			if e != nil || !save {
+				return e
+			}
+			return emit(ctx, tx, u, "mail.account.updated", id) // one more mail found
 		})
 		if e != nil {
 			return e

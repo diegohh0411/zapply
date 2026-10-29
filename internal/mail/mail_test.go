@@ -942,3 +942,72 @@ func TestOnlyTheWorkerWritesMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountReportsProgressAndDropsStaleErrors(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	account := func() mail.Account {
+		t.Helper()
+		items, e := f.api.Accounts(ctx, f.u)
+		if e != nil || len(items) != 1 {
+			t.Fatalf("accounts %v %v", items, e)
+		}
+		return items[0]
+	}
+	f.fake.add("m1", "Recruiter <jobs@acme.test>", "Interview with Acme", "Can you talk Tuesday?")
+	f.fake.add("m2", "News <news@letters.test>", "Weekly newsletter", "Ten tips")
+	f.fake.recent = []string{"m1", "m2"}
+	// A failure from an earlier run is still on the account.
+	if _, e := f.db.Admin(t).Exec(ctx, `UPDATE mail_account SET last_error='Sync failed: old', sync_retry_at=now()-interval '1 second' WHERE id=$1`, acct); e != nil {
+		t.Fatal(e)
+	}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	// Both mails are found and waiting for the model.
+	if a := account(); a.MailsDone != 0 || a.MailsTotal != 2 || a.LastError != "" || a.RetryAt != nil {
+		t.Fatalf("after sync: %+v", a)
+	}
+	f.classifyAll(t, f.messageIDs(t))
+	if a := account(); a.MailsDone != 2 || a.MailsTotal != 2 || a.MailsRelevant != 1 {
+		t.Fatalf("after classify: %+v", a)
+	}
+
+	// Ids the sync has not read yet count toward the total.
+	if _, e := f.db.Admin(t).Exec(ctx, `UPDATE mail_account SET sync_pending='{"ids":["m1","m3","m4"],"cursor":"9"}' WHERE id=$1`, acct); e != nil {
+		t.Fatal(e)
+	}
+	if a := account(); a.MailsDone != 2 || a.MailsTotal != 4 {
+		t.Fatalf("with a backlog: %+v", a)
+	}
+
+	// Pausing and resuming clears a failure and a held retry.
+	if _, e := f.db.Admin(t).Exec(ctx, `UPDATE mail_account SET sync_pending=NULL,last_error='Gmail is limiting requests.',sync_retry_at=now()+interval '5 minutes' WHERE id=$1`, acct); e != nil {
+		t.Fatal(e)
+	}
+	if a := account(); a.RetryAt == nil {
+		t.Fatalf("retry not reported: %+v", a)
+	}
+	if _, e := f.api.SetPaused(ctx, f.u, acct, true); e != nil {
+		t.Fatal(e)
+	}
+	if a := account(); a.LastError != "" || a.RetryAt != nil {
+		t.Fatalf("pause kept the failure: %+v", a)
+	}
+}
+
+func TestSyncNowNeedsAnActiveAccount(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	if _, e := f.api.SyncNow(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.api.SetPaused(ctx, f.u, acct, true); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.api.SyncNow(ctx, f.u, acct); e == nil {
+		t.Fatal("a paused account was synced")
+	}
+}
