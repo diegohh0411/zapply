@@ -54,7 +54,7 @@ func (c *Client) Name() string { return "google" }
 func (c *Client) AuthURL(state, challenge string) string {
 	q := url.Values{
 		"client_id": {c.cfg.ClientID}, "redirect_uri": {c.cfg.RedirectURL}, "response_type": {"code"},
-		"scope": {Scope}, "access_type": {"offline"}, "prompt": {"consent"}, "include_granted_scopes": {"false"},
+		"scope": {Scope}, "access_type": {"offline"}, "prompt": {"select_account consent"}, "include_granted_scopes": {"false"},
 		"state": {state}, "code_challenge": {challenge}, "code_challenge_method": {"S256"},
 	}
 	return c.authURL + "?" + q.Encode()

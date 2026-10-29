@@ -28,7 +28,7 @@ func TestAuthURLUsesPKCEAndTheNarrowScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := u.Query()
-	if q.Get("scope") != Scope || q.Get("access_type") != "offline" || q.Get("prompt") != "consent" || q.Get("code_challenge") != "chal" ||
+	if q.Get("scope") != Scope || q.Get("access_type") != "offline" || q.Get("prompt") != "select_account consent" || q.Get("code_challenge") != "chal" ||
 		q.Get("code_challenge_method") != "S256" || q.Get("state") != "st" || q.Get("client_id") != "id" {
 		t.Fatalf("auth query %v", q)
 	}

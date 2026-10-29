@@ -1016,6 +1016,29 @@ export interface paths {
         patch: operations["updateMailAccount"];
         trace?: never;
     };
+    "/v1/mail/accounts/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Checks the mailbox now and retries mail still waiting to be classified.
+         *     409 unless the account is active. A sync held back by Gmail's rate limit
+         *     still waits; `retry_at` says until when.
+         */
+        post: operations["syncMailAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mail/messages": {
         parameters: {
             query?: never;
@@ -1833,6 +1856,17 @@ export interface components {
             /** Format: date-time */
             last_synced_at?: string | null;
             last_error: string;
+            /**
+             * Format: date-time
+             * @description When a sync held back by Gmail's rate limit resumes by itself.
+             */
+            retry_at: string | null;
+            /** @description Messages classified so far. */
+            mails_done: number;
+            /** @description Messages found so far, classified or not. Grows while a backlog is being read. */
+            mails_total: number;
+            /** @description Classified messages that concern an application. */
+            mails_relevant: number;
             version: number;
             /** Format: date-time */
             created_at: string;
@@ -3904,6 +3938,29 @@ export interface operations {
         };
         responses: {
             /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    syncMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, with its current progress. */
             200: {
                 headers: {
                     [name: string]: unknown;

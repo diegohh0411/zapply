@@ -1247,14 +1247,26 @@ type Link struct {
 
 // MailAccount defines model for MailAccount.
 type MailAccount struct {
-	Address      string              `json:"address"`
-	CreatedAt    time.Time           `json:"created_at"`
-	Id           openapi_types.UUID  `json:"id"`
-	LastError    string              `json:"last_error"`
-	LastSyncedAt *time.Time          `json:"last_synced_at,omitempty"`
-	Provider     MailAccountProvider `json:"provider"`
-	Status       MailAccountStatus   `json:"status"`
-	Version      int                 `json:"version"`
+	Address      string             `json:"address"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+	LastError    string             `json:"last_error"`
+	LastSyncedAt *time.Time         `json:"last_synced_at,omitempty"`
+
+	// MailsDone Messages classified so far.
+	MailsDone int `json:"mails_done"`
+
+	// MailsRelevant Classified messages that concern an application.
+	MailsRelevant int `json:"mails_relevant"`
+
+	// MailsTotal Messages found so far, classified or not. Grows while a backlog is being read.
+	MailsTotal int                 `json:"mails_total"`
+	Provider   MailAccountProvider `json:"provider"`
+
+	// RetryAt When a sync held back by Gmail's rate limit resumes by itself.
+	RetryAt *time.Time        `json:"retry_at"`
+	Status  MailAccountStatus `json:"status"`
+	Version int               `json:"version"`
 }
 
 // MailAccountProvider defines model for MailAccount.Provider.
@@ -2118,6 +2130,9 @@ type ServerInterface interface {
 
 	// (PATCH /v1/mail/accounts/{id})
 	UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/mail/accounts/{id}/sync)
+	SyncMailAccount(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams)
@@ -4240,6 +4255,32 @@ func (siw *ServerInterfaceWrapper) UpdateMailAccount(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// SyncMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) SyncMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMailMessages operation middleware
 func (siw *ServerInterfaceWrapper) ListMailMessages(w http.ResponseWriter, r *http.Request) {
 
@@ -4934,6 +4975,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/complete", wrapper.CompleteGoogleConnect)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.DisconnectMailAccount)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/sync", wrapper.SyncMailAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/messages/{id}/status-change", wrapper.ResolveMailStatusChange)
 
@@ -7519,6 +7561,45 @@ func (response UpdateMailAccountdefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type SyncMailAccountRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type SyncMailAccountResponseObject interface {
+	VisitSyncMailAccountResponse(w http.ResponseWriter) error
+}
+
+type SyncMailAccount200JSONResponse MailAccount
+
+func (response SyncMailAccount200JSONResponse) VisitSyncMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SyncMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SyncMailAccountdefaultApplicationProblemPlusJSONResponse) VisitSyncMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListMailMessagesRequestObject struct {
 	Params ListMailMessagesParams
 }
@@ -8450,6 +8531,9 @@ type StrictServerInterface interface {
 
 	// (PATCH /v1/mail/accounts/{id})
 	UpdateMailAccount(ctx context.Context, request UpdateMailAccountRequestObject) (UpdateMailAccountResponseObject, error)
+
+	// (POST /v1/mail/accounts/{id}/sync)
+	SyncMailAccount(ctx context.Context, request SyncMailAccountRequestObject) (SyncMailAccountResponseObject, error)
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(ctx context.Context, request ListMailMessagesRequestObject) (ListMailMessagesResponseObject, error)
@@ -10312,6 +10396,32 @@ func (sh *strictHandler) UpdateMailAccount(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMailAccountResponseObject); ok {
 		if err := validResponse.VisitUpdateMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SyncMailAccount operation middleware
+func (sh *strictHandler) SyncMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request SyncMailAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SyncMailAccount(ctx, request.(SyncMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SyncMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SyncMailAccountResponseObject); ok {
+		if err := validResponse.VisitSyncMailAccountResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

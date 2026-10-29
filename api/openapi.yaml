@@ -1406,6 +1406,24 @@ paths:
         "204": { description: Disconnected. }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/mail/accounts/{id}/sync:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: syncMailAccount
+      tags: [mail]
+      description: |
+        Checks the mailbox now and retries mail still waiting to be classified.
+        409 unless the account is active. A sync held back by Gmail's rate limit
+        still waits; `retry_at` says until when.
+      responses:
+        "200":
+          description: The account, with its current progress.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /v1/mail/messages:
     get:
       operationId: listMailMessages
@@ -2580,7 +2598,7 @@ components:
       enum: [received, assessment, interview, rejection, offer]
     MailAccount:
       type: object
-      required: [id, provider, address, status, last_error, version, created_at]
+      required: [id, provider, address, status, last_error, retry_at, mails_done, mails_total, mails_relevant, version, created_at]
       properties:
         id: { type: string, format: uuid }
         provider: { type: string, enum: [google] }
@@ -2588,6 +2606,16 @@ components:
         status: { type: string, enum: [active, paused, needs_reconnect, disconnected] }
         last_synced_at: { type: string, format: date-time, nullable: true }
         last_error: { type: string }
+        retry_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a sync held back by Gmail's rate limit resumes by itself.
+        mails_done: { type: integer, description: Messages classified so far. }
+        mails_total:
+          type: integer
+          description: Messages found so far, classified or not. Grows while a backlog is being read.
+        mails_relevant: { type: integer, description: Classified messages that concern an application. }
         version: { type: integer }
         created_at: { type: string, format: date-time }
     MailAccountList:

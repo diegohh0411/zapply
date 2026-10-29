@@ -271,6 +271,9 @@ func (s *Service) finish(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingM
 	if _, e := tx.Exec(ctx, `UPDATE mail_message SET state='classified',classified_at=now(),updated_at=now() WHERE user_id=$1 AND id=$2 AND state='pending'`, u, m.ID); e != nil {
 		return e
 	}
+	if e := s.counted(ctx, tx, u, m.ID); e != nil {
+		return e
+	}
 	if *m.Category == "other" {
 		return nil
 	}
@@ -279,8 +282,20 @@ func (s *Service) finish(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingM
 
 // giveUp stops trying to classify a message and drops what it held.
 func (s *Service) giveUp(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingMessage) error {
-	_, e := tx.Exec(ctx, `UPDATE mail_message SET state='failed',from_address=NULL,subject=NULL,snippet=NULL,updated_at=now() WHERE user_id=$1 AND id=$2 AND state='pending'`, u, m.ID)
-	return e
+	if _, e := tx.Exec(ctx, `UPDATE mail_message SET state='failed',from_address=NULL,subject=NULL,snippet=NULL,updated_at=now() WHERE user_id=$1 AND id=$2 AND state='pending'`, u, m.ID); e != nil {
+		return e
+	}
+	return s.counted(ctx, tx, u, m.ID)
+}
+
+// counted tells open pages that a mailbox's classified count moved. Mail judged
+// irrelevant has no event of its own, yet it still counts toward the progress.
+func (s *Service) counted(ctx context.Context, tx pgx.Tx, u, msg uuid.UUID) error {
+	var account uuid.UUID
+	if e := tx.QueryRow(ctx, `SELECT account_id FROM mail_message WHERE user_id=$1 AND id=$2`, u, msg).Scan(&account); e != nil {
+		return e
+	}
+	return emit(ctx, tx, u, "mail.account.updated", account)
 }
 
 // OnTerminal records the answer to a finished mail request, inside the same
@@ -326,6 +341,9 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		ok = true
 		if choice == "other" {
 			_, e = tx.Exec(ctx, `UPDATE mail_message SET category='other',state='classified',classified_at=now(),from_address=NULL,subject=NULL,snippet=NULL,job_id=NULL,updated_at=now() WHERE user_id=$1 AND id=$2`, op.UserID, msg)
+			if e == nil {
+				e = s.counted(ctx, tx, op.UserID, msg)
+			}
 		} else {
 			_, e = tx.Exec(ctx, `UPDATE mail_message SET category=$3,updated_at=now() WHERE user_id=$1 AND id=$2`, op.UserID, msg, choice)
 		}

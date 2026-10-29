@@ -66,6 +66,14 @@ type Account struct {
 	LastError    string     `json:"last_error"`
 	Version      int        `json:"version"`
 	CreatedAt    time.Time  `json:"created_at"`
+	// RetryAt is when a rate-limited sync resumes by itself; nil when none is held.
+	RetryAt *time.Time `json:"retry_at"`
+	// MailsDone of MailsTotal messages are classified. The total counts mail still
+	// waiting for the model and mail found but not yet read, so it grows during a
+	// backlog. MailsRelevant is how many of the done ones concern an application.
+	MailsDone     int `json:"mails_done"`
+	MailsTotal    int `json:"mails_total"`
+	MailsRelevant int `json:"mails_relevant"`
 }
 
 type Item struct {
@@ -262,10 +270,12 @@ func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, args river.JobArgs) er
 	return s.queue.InsertTx(ctx, tx, args)
 }
 
+const accountColumns = `id,provider,address,status,last_synced_at,last_error,version,created_at`
+
 func (s *Service) Accounts(ctx context.Context, u uuid.UUID) ([]Account, error) {
 	out := []Account{}
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		rows, e := tx.Query(ctx, `SELECT id,provider,address,status,last_synced_at,last_error,version,created_at FROM mail_account WHERE user_id=$1 ORDER BY created_at,id`, u)
+		rows, e := tx.Query(ctx, `SELECT `+accountColumns+` FROM mail_account WHERE user_id=$1 ORDER BY created_at,id`, u)
 		if e != nil {
 			return e
 		}
@@ -277,16 +287,50 @@ func (s *Service) Accounts(ctx context.Context, u uuid.UUID) ([]Account, error) 
 			}
 			out = append(out, a)
 		}
-		return rows.Err()
+		if e = rows.Err(); e != nil {
+			return e
+		}
+		rows.Close()
+		for i := range out {
+			if e = s.progress(ctx, tx, u, &out[i]); e != nil {
+				return e
+			}
+		}
+		return nil
 	})
 	return out, err
 }
 
 func (s *Service) account(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) (Account, error) {
 	var a Account
-	e := tx.QueryRow(ctx, `SELECT id,provider,address,status,last_synced_at,last_error,version,created_at FROM mail_account WHERE user_id=$1 AND id=$2 FOR UPDATE`, u, id).
+	e := tx.QueryRow(ctx, `SELECT `+accountColumns+` FROM mail_account WHERE user_id=$1 AND id=$2 FOR UPDATE`, u, id).
 		Scan(&a.ID, &a.Provider, &a.Address, &a.Status, &a.LastSyncedAt, &a.LastError, &a.Version, &a.CreatedAt)
-	return a, translate(e)
+	if e != nil {
+		return a, translate(e)
+	}
+	return a, s.progress(ctx, tx, u, &a)
+}
+
+// progress fills what a member watches while a mailbox is read: how many
+// messages are classified out of all it has found so far, and when a held sync
+// resumes. Ids still waiting in the sync's list count once, unless already stored.
+func (s *Service) progress(ctx context.Context, tx pgx.Tx, u uuid.UUID, a *Account) error {
+	var waiting, queued int
+	e := tx.QueryRow(ctx, `SELECT a.sync_retry_at,
+ (SELECT count(*) FILTER (WHERE m.state<>'pending') FROM mail_message m WHERE m.user_id=a.user_id AND m.account_id=a.id),
+ (SELECT count(*) FILTER (WHERE m.state='pending') FROM mail_message m WHERE m.user_id=a.user_id AND m.account_id=a.id),
+ (SELECT count(*) FILTER (WHERE m.state='classified' AND m.category<>'other') FROM mail_message m WHERE m.user_id=a.user_id AND m.account_id=a.id),
+ (SELECT count(*) FROM jsonb_array_elements_text(COALESCE(a.sync_pending->'ids','[]')) i
+   WHERE NOT EXISTS(SELECT FROM mail_message m WHERE m.user_id=a.user_id AND m.account_id=a.id AND m.provider_message_id=i))
+ FROM mail_account a WHERE a.user_id=$1 AND a.id=$2`, u, a.ID).Scan(&a.RetryAt, &a.MailsDone, &waiting, &a.MailsRelevant, &queued)
+	if e != nil {
+		return e
+	}
+	a.MailsTotal = a.MailsDone + waiting + queued
+	if a.RetryAt != nil && !a.RetryAt.After(time.Now()) {
+		a.RetryAt = nil
+	}
+	return nil
 }
 
 // SetPaused pauses or resumes classification for an account. A paused account
@@ -309,10 +353,11 @@ func (s *Service) SetPaused(ctx context.Context, u, id uuid.UUID, paused bool) (
 		if a.Status != from {
 			return &library.ConflictError{Message: "the account is " + a.Status + " and cannot be " + want}
 		}
-		if e = tx.QueryRow(ctx, `UPDATE mail_account SET status=$3,version=version+1,updated_at=now() WHERE user_id=$1 AND id=$2 RETURNING version`, u, id, want).Scan(&a.Version); e != nil {
+		// Pausing or resuming starts clean: an old failure or backoff is not about now.
+		if e = tx.QueryRow(ctx, `UPDATE mail_account SET status=$3,last_error='',sync_retry_at=NULL,sync_quota_failures=0,version=version+1,updated_at=now() WHERE user_id=$1 AND id=$2 RETURNING version`, u, id, want).Scan(&a.Version); e != nil {
 			return e
 		}
-		a.Status = want
+		a.Status, a.LastError, a.RetryAt = want, "", nil
 		out = a
 		if e = emit(ctx, tx, u, "mail.account.updated", id); e != nil {
 			return e
@@ -320,30 +365,54 @@ func (s *Service) SetPaused(ctx context.Context, u, id uuid.UUID, paused bool) (
 		if paused {
 			return nil
 		}
-		// Mail read before the pause is still waiting to be classified.
-		rows, e := tx.Query(ctx, `SELECT id FROM mail_message WHERE user_id=$1 AND account_id=$2 AND state='pending'`, u, id)
+		return s.wake(ctx, tx, u, id, "resume")
+	})
+	return out, err
+}
+
+// wake queues a sync of the mailbox and a retry of every message still waiting
+// for the model, which a pause or a long failure may have left idle.
+func (s *Service) wake(ctx context.Context, tx pgx.Tx, u, id uuid.UUID, why string) error {
+	rows, e := tx.Query(ctx, `SELECT id FROM mail_message WHERE user_id=$1 AND account_id=$2 AND state='pending'`, u, id)
+	if e != nil {
+		return e
+	}
+	var waiting []uuid.UUID
+	for rows.Next() {
+		var m uuid.UUID
+		if e = rows.Scan(&m); e != nil {
+			rows.Close()
+			return e
+		}
+		waiting = append(waiting, m)
+	}
+	rows.Close()
+	if e = rows.Err(); e != nil {
+		return e
+	}
+	for _, m := range waiting {
+		if e = s.enqueue(ctx, tx, ClassifyArgs{UserID: u, MessageID: m, Wake: why + ":" + uuid.NewString()}); e != nil {
+			return e
+		}
+	}
+	return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: why + ":" + uuid.NewString()})
+}
+
+// SyncNow checks the mailbox now instead of waiting for the next notification
+// or scan. A sync held back by Gmail's rate limit still waits for its time, which
+// the account reports as RetryAt.
+func (s *Service) SyncNow(ctx context.Context, u, id uuid.UUID) (Account, error) {
+	var out Account
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		a, e := s.account(ctx, tx, u, id)
 		if e != nil {
 			return e
 		}
-		var waiting []uuid.UUID
-		for rows.Next() {
-			var m uuid.UUID
-			if e = rows.Scan(&m); e != nil {
-				rows.Close()
-				return e
-			}
-			waiting = append(waiting, m)
+		out = a
+		if a.Status != "active" {
+			return &library.ConflictError{Message: "the account is " + a.Status + " and cannot be synced"}
 		}
-		rows.Close()
-		if e = rows.Err(); e != nil {
-			return e
-		}
-		for _, m := range waiting {
-			if e = s.enqueue(ctx, tx, ClassifyArgs{UserID: u, MessageID: m, Wake: "resume"}); e != nil {
-				return e
-			}
-		}
-		return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "resume:" + uuid.NewString()})
+		return s.wake(ctx, tx, u, id, "manual")
 	})
 	return out, err
 }
