@@ -31,16 +31,17 @@ import (
 
 // fakeMail is an in-memory mailbox standing in for Gmail.
 type fakeMail struct {
-	mu       sync.Mutex
-	address  string
-	revoked  bool
-	messages map[string]mail.Message
-	recent   []string
-	added    []string
-	calls    map[string]int
-	stopped  int
-	revokes  []string
-	pageSize int
+	mu        sync.Mutex
+	address   string
+	revoked   bool
+	messages  map[string]mail.Message
+	recent    []string
+	added     []string
+	calls     map[string]int
+	stopped   int
+	revokes   []string
+	pageSize  int
+	rateAfter int
 }
 
 func newFakeMail(address string) *fakeMail {
@@ -134,6 +135,9 @@ func (f *fakeMail) Get(_ context.Context, _, id string) (mail.Message, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hit("get")
+	if f.rateAfter > 0 && f.calls["get"] == f.rateAfter {
+		return mail.Message{}, mail.ErrRateLimited
+	}
 	m, ok := f.messages[id]
 	if !ok {
 		return mail.Message{}, mail.ErrMessageGone
@@ -740,6 +744,35 @@ func TestRecoverQueuesDueWorkOnce(t *testing.T) {
 	}
 }
 
+func TestSyncResumesAfterQuotaError(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	f.fake.add("first", "a@example.test", "one", "preview")
+	f.fake.add("second", "b@example.test", "two", "preview")
+	f.fake.recent = []string{"first", "second"}
+	f.fake.rateAfter = 2
+	if e := f.ws.Sync(ctx, f.u, acct); e == nil || !strings.Contains(e.Error(), "JobSnooze") {
+		t.Fatalf("expected retry, got %v", e)
+	}
+	if n := len(f.messageIDs(t)); n != 1 {
+		t.Fatalf("saved %d messages before quota error", n)
+	}
+	var message string
+	if e := f.db.Admin(t).QueryRow(ctx, `SELECT last_error FROM mail_account WHERE id=$1`, acct).Scan(&message); e != nil || !strings.Contains(message, "limiting") {
+		t.Fatalf("status %q: %v", message, e)
+	}
+	if _, e := f.db.Admin(t).Exec(ctx, `UPDATE mail_account SET sync_retry_at=now()-interval '1 second' WHERE id=$1`, acct); e != nil {
+		t.Fatal(e)
+	}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	if n := len(f.messageIDs(t)); n != 2 || f.fake.count("get") != 3 {
+		t.Fatalf("saved %d messages, made %d reads", n, f.fake.count("get"))
+	}
+}
+
 func TestBacklogIsReadInBatchesWithoutSkipping(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -765,21 +798,20 @@ func TestBacklogIsReadInBatchesWithoutSkipping(t *testing.T) {
 		}
 		return n
 	}
-	// 100 messages per run; the cursor stops where the run did, not at the mailbox's end.
-	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
-		t.Fatal(e)
-	}
-	if n := len(f.messageIDs(t)); n != 120 || cursor() != "120" || syncs() != 1 {
-		t.Fatalf("first run: %d messages, cursor %s, follow-ups %d", n, cursor(), syncs())
-	}
-	for i := 0; i < 2; i++ {
-		if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+	// Exhaust the shared budget repeatedly, then allow the next window.
+	for i := 0; i < 10 && len(f.messageIDs(t)) < 250; i++ {
+		e := f.ws.Sync(ctx, f.u, acct)
+		if e != nil && !strings.Contains(e.Error(), "JobSnooze") {
+			t.Fatal(e)
+		}
+		if _, e = f.db.Admin(t).Exec(ctx, `UPDATE mail_account SET sync_window_start=now()-interval '66 seconds' WHERE id=$1`, acct); e != nil {
 			t.Fatal(e)
 		}
 	}
-	if n := len(f.messageIDs(t)); n != 250 || cursor() != "250" {
-		t.Fatalf("after catching up: %d messages, cursor %s", n, cursor())
+	if n := len(f.messageIDs(t)); n != 250 || cursor() != "250" || syncs() == 0 {
+		t.Fatalf("after catching up: %d messages, cursor %s, follow-ups %d", n, cursor(), syncs())
 	}
+
 }
 
 func TestUnstorableMailDoesNotStopTheSync(t *testing.T) {
