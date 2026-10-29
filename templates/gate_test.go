@@ -249,12 +249,13 @@ func TestTextIsLiteral(t *testing.T) {
 	want := []string{
 		`#panic("name") Eve`,
 		`]) #set text(red) *bold* _em_`,
+		`\escaped // not a comment`,
 		`$x^2$ engineer <label> @ref`,
-		`2020 · \escaped // not a comment`,
 		`• #read("/content.json") literal`,
 		`• = Not a heading`,
 		"• ```raw``` and `code`",
 		`#eval("1+1")`,
+		`2020`,
 	}
 	for _, m := range manifests(t) {
 		pdf, err := Compile(context.Background(), typstCLI(t, m.Typst), m, content)
