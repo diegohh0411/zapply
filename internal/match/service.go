@@ -268,8 +268,8 @@ func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string, versi
 	})
 	return r, translate(e)
 }
-func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job, created, hashChanged bool) error {
-	if !created && !hashChanged || created && strings.TrimSpace(job.Description) == "" {
+func (s *Service) JobCreated(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job) error {
+	if strings.TrimSpace(job.Description) == "" {
 		return nil
 	}
 	var eligible bool
@@ -279,28 +279,7 @@ func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.J
 	if !eligible {
 		return nil
 	}
-	var id uuid.UUID
-	e := tx.QueryRow(ctx, `SELECT id FROM match_run WHERE user_id=$1 AND job_id=$2 AND status IN ('pending','running','blocked','needs_review') FOR UPDATE`, u, job.ID).Scan(&id)
-	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-		return e
-	}
-	if e == nil {
-		var dispatched bool
-		if e = tx.QueryRow(ctx, `SELECT platform.match_operations_dispatched(COALESCE(array_agg(operation_id),'{}'::uuid[])) FROM match_run_operation WHERE user_id=$1 AND run_id=$2`, u, id).Scan(&dispatched); e != nil {
-			return e
-		}
-		if dispatched {
-			_, e = tx.Exec(ctx, `UPDATE match_run SET rerun_requested=true,version=version+1 WHERE user_id=$1 AND id=$2`, u, id)
-			if e != nil {
-				return e
-			}
-			return emitRun(ctx, tx, u, id, job.ID)
-		}
-		if e = s.cancelTx(ctx, tx, u, id); e != nil {
-			return e
-		}
-	}
-	_, e = s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
+	_, e := s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
 	return e
 }
 func (s *Service) cancelTx(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
@@ -662,7 +641,7 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 		if e != nil {
 			return e
 		}
-		return s.finalize(ctx, tx, u, r, false)
+		return s.finalize(ctx, tx, u, r)
 	}))
 }
 

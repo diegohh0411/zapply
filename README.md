@@ -88,7 +88,7 @@ only its identifier is kept. Setup, environment variables and design:
 
 ## Matching
 
-Part 6 adds automatic matching when saved jobs change, reusable decision-answer
+Part 6 adds automatic matching when jobs are created, reusable decision-answer
 caching, deterministic coverage and CV selections, corrections, run history and
 staleness. Open a saved job's **Match** tab; automatic matching can be turned off
 in Profile. Apply migrations through 00012 before deploying the updated API and worker.

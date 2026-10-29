@@ -310,19 +310,17 @@ existing holds (`usage_limit`).
 
 ## Running automatically
 
-A match runs on its own when a job is saved:
+A match runs on its own when a job is created:
 
-- **When:** a job is created with a description, or its `content_hash` changes.
+- **When:** a job is created with a description.
   The run is queued in the same transaction as the job write, so it starts
   immediately and is never queued for a rolled-back write.
 - **Which jobs:** only jobs in `saved`, `active` or `offer` stages.
 - **Who:** any member with `auto_match` on. Members without a plan get a run
   that waits as `blocked` with the gateway's reason, and proceeds once a plan is
   assigned. No call is made until the allowance covers it.
-- **Superseded runs:** a new automatic run replaces one that hasn't dispatched
-  a request yet. A run that has dispatched finishes, and its answers are cached.
-- **Library edits don't start runs.** One edit would otherwise re-score that
-  item against every saved job. The jobs show as stale, with a one-click re-run.
+- **Edits don't start runs.** Changes to the job or library make existing
+  matches stale; users can re-run them from the Match tab.
 - **A setting:** `auto_match` on the profile, on by default.
 
 Manual runs work the same way, from the Match tab.

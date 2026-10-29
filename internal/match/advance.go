@@ -142,7 +142,7 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 			}
 			if r.Stage == "read" {
 				if r.Pipeline == PipelineV3 {
-					return s.finalize(ctx, tx, u, r, true)
+					return s.finalize(ctx, tx, u, r)
 				}
 				a, e = answers(ctx, tx, u, id)
 				if e != nil {
@@ -161,7 +161,7 @@ func (s *Service) Advance(ctx context.Context, u, id uuid.UUID) error {
 				continue
 			}
 			r.Stage = "finalize"
-			return s.finalize(ctx, tx, u, r, true)
+			return s.finalize(ctx, tx, u, r)
 		}
 		return nil
 	})
@@ -325,7 +325,7 @@ func (s *Service) status(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, sta
 	}
 	return emitRun(ctx, tx, u, r.ID, r.JobID)
 }
-func (s *Service) finalize(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, followup bool) error {
+func (s *Service) finalize(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run) error {
 	a, e := answers(ctx, tx, u, r.ID)
 	if e != nil {
 		return e
@@ -350,11 +350,7 @@ func (s *Service) finalize(ctx context.Context, tx pgx.Tx, u uuid.UUID, r Run, f
 	if e = s.status(ctx, tx, u, r, status, "", nil); e != nil {
 		return e
 	}
-	if _, e = tx.Exec(ctx, `UPDATE match_run SET stage='finalize',result=$3,score=$4,must_met=$5,must_total=$6,finished_at=$7 WHERE user_id=$1 AND id=$2`, u, r.ID, systemone.Raw(result), result.Score, result.MustMet, result.MustTotal, asOf); e != nil {
-		return e
-	}
-	if followup && r.RerunRequested {
-		_, e = s.create(ctx, tx, u, r.JobID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
+	if _, e = tx.Exec(ctx, `UPDATE match_run SET stage='finalize',result=$3,score=$4,must_met=$5,must_total=$6,finished_at=$7,rerun_requested=false WHERE user_id=$1 AND id=$2`, u, r.ID, systemone.Raw(result), result.Score, result.MustMet, result.MustTotal, asOf); e != nil {
 		return e
 	}
 	return nil
