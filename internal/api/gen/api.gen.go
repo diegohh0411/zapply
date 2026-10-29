@@ -1246,6 +1246,7 @@ type MailMessage struct {
 	Category     MailCategory        `json:"category"`
 	ClassifiedAt time.Time           `json:"classified_at"`
 	From         string              `json:"from"`
+	GmailUrl     string              `json:"gmail_url"`
 	Id           openapi_types.UUID  `json:"id"`
 	JobId        *openapi_types.UUID `json:"job_id,omitempty"`
 	ReceivedAt   time.Time           `json:"received_at"`

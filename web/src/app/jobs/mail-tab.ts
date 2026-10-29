@@ -8,6 +8,8 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideChevronRight, lucideExternalLink } from '@ng-icons/lucide';
 import { RouterLink } from '@angular/router';
 
 import { Api, type Schemas } from '../core/api';
@@ -18,7 +20,8 @@ import { categoryLabel } from '../mail/format';
 /** Mail about one application: the messages classified into this job. */
 @Component({
   selector: 'app-mail-tab',
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, NgIcon, RouterLink],
+  providers: [provideIcons({ lucideChevronRight, lucideExternalLink })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-3 pt-3">
@@ -27,18 +30,49 @@ import { categoryLabel } from '../mail/format';
       }
       <ul class="divide-y rounded-lg border">
         @for (m of messages(); track m.id) {
-          <li class="space-y-1 p-3">
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <span class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{{
-                label(m.category)
-              }}</span>
-              <span class="truncate font-medium">{{ m.from }}</span>
-              <time class="ml-auto text-muted-foreground" [attr.datetime]="m.received_at">{{
-                m.received_at | date: 'medium'
-              }}</time>
-            </div>
-            <p class="text-sm font-medium">{{ m.subject || '(no subject)' }}</p>
-            <p class="text-sm text-muted-foreground">{{ m.snippet }}</p>
+          <li class="flex items-start gap-1 pr-2">
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted/50"
+              [attr.aria-expanded]="isOpen(m.id)"
+              (click)="toggle(m.id)"
+            >
+              <ng-icon
+                name="lucideChevronRight"
+                size="16"
+                class="mt-0.5 shrink-0 text-muted-foreground transition-transform"
+                [class.rotate-90]="isOpen(m.id)"
+              />
+              <span class="min-w-0 flex-1 space-y-1">
+                <span class="flex items-center gap-2">
+                  <span class="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{{
+                    label(m.category)
+                  }}</span>
+                  <span class="truncate font-medium">{{ m.subject || '(no subject)' }}</span>
+                  <time
+                    class="ml-auto shrink-0 text-xs text-muted-foreground"
+                    [attr.datetime]="m.received_at"
+                    >{{ m.received_at | date: 'MMM d, y' }}</time
+                  >
+                </span>
+                @if (isOpen(m.id)) {
+                  <span class="block text-xs text-muted-foreground">
+                    {{ m.from }} · {{ m.received_at | date: 'medium' }}
+                  </span>
+                  <span class="block text-sm text-muted-foreground">{{ m.snippet }}</span>
+                }
+              </span>
+            </button>
+            <a
+              [href]="m.gmail_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-1.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Open in Gmail"
+              title="Open in Gmail"
+            >
+              <ng-icon name="lucideExternalLink" size="16" />
+            </a>
           </li>
         } @empty {
           <li class="p-4 text-center text-sm text-muted-foreground">
@@ -65,6 +99,7 @@ export class MailTab {
   protected readonly messages = signal<Schemas['MailMessage'][]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal('');
+  private readonly open = signal<ReadonlySet<string>>(new Set());
   private request = 0;
 
   constructor() {
@@ -81,6 +116,18 @@ export class MailTab {
       this.request++;
       change.unsubscribe();
       resync.unsubscribe();
+    });
+  }
+
+  protected isOpen(id: string): boolean {
+    return this.open().has(id);
+  }
+
+  protected toggle(id: string): void {
+    this.open.update((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
     });
   }
 

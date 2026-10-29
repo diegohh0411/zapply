@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/url"
 	"sync"
 	"time"
 
@@ -77,6 +78,13 @@ type Item struct {
 	Snippet      string     `json:"snippet"`
 	ReceivedAt   time.Time  `json:"received_at"`
 	ClassifiedAt time.Time  `json:"classified_at"`
+	GmailURL     string     `json:"gmail_url"`
+}
+
+// gmailURL opens a thread in the mailbox it was read from. authuser picks the
+// right account when the browser is signed in to several.
+func gmailURL(address, threadID string) string {
+	return "https://mail.google.com/mail/?authuser=" + url.QueryEscape(address) + "#all/" + url.PathEscape(threadID)
 }
 
 func translate(err error) error {
@@ -340,7 +348,8 @@ func (s *Service) Messages(ctx context.Context, u uuid.UUID, category string, jo
 		}
 	}
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		rows, e := tx.Query(ctx, `SELECT id,account_id,category,job_id,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at
+		rows, e := tx.Query(ctx, `SELECT id,account_id,category,job_id,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at,
+ (SELECT address FROM mail_account WHERE id=account_id),COALESCE(NULLIF(thread_id,''),provider_message_id)
  FROM mail_message WHERE user_id=$1 AND state='classified' AND category<>'other'
  AND ($2='' OR category=$2) AND ($3::uuid IS NULL OR job_id=$3)
  AND ($4::uuid IS NULL OR (received_at,id) < (SELECT received_at,id FROM mail_message WHERE user_id=$1 AND id=$4))
@@ -351,9 +360,11 @@ func (s *Service) Messages(ctx context.Context, u uuid.UUID, category string, jo
 		defer rows.Close()
 		for rows.Next() {
 			var m Item
-			if e = rows.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt); e != nil {
+			var address, thread string
+			if e = rows.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt, &address, &thread); e != nil {
 				return e
 			}
+			m.GmailURL = gmailURL(address, thread)
 			out = append(out, m)
 		}
 		return rows.Err()
