@@ -5,6 +5,7 @@ import {
   lucideBuilding2,
   lucideFolderOpen,
   lucideLogOut,
+  lucideMail,
   lucideSparkles,
   lucideSquareKanban,
   lucideUser,
@@ -35,6 +36,7 @@ interface NavItem {
       lucideBuilding2,
       lucideSparkles,
       lucideLogOut,
+      lucideMail,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -154,7 +156,10 @@ export class Shell {
   protected readonly groups = computed<{ label: string; items: NavItem[] }[]>(() => [
     {
       label: 'Applications',
-      items: [{ path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' }],
+      items: [
+        { path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' },
+        { path: '/mail', label: 'Mail', icon: 'lucideMail' },
+      ],
     },
     {
       label: 'Library',

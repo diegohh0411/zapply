@@ -933,6 +933,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
+         *     when the server has no Google OAuth client, in which case connecting
+         *     answers 503.
+         */
+        get: operations["listMailAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Begins the Gmail consent flow. Send the browser to `url`; Google returns
+         *     to the server's `/oauth/google/callback`, which redirects to the app, which
+         *     calls `completeGoogleConnect`.
+         */
+        post: operations["startGoogleConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/google/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Finishes the consent flow with the `state` and `code` the server's
+         *     callback passed to the app. The state must belong to the caller, who is
+         *     the member that started it; 422 on `state` otherwise.
+         */
+        post: operations["completeGoogleConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account. */
+        delete: operations["disconnectMailAccount"];
+        options?: never;
+        head?: never;
+        /** @description Pause or resume reading an account. A paused account is not read and nothing is sent to the model. */
+        patch: operations["updateMailAccount"];
+        trace?: never;
+    };
+    "/v1/mail/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Mail classified as relevant to a job application, newest first. */
+        get: operations["listMailMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1438,7 +1538,7 @@ export interface components {
          * @description The SSE `event` name of a change event.
          * @enum {string}
          */
-        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed";
+        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed" | "mail.account.updated" | "mail.message.classified";
         Plan: {
             /** Format: uuid */
             id: string;
@@ -1698,6 +1798,58 @@ export interface components {
         };
         MatchRunPage: {
             items: components["schemas"]["MatchRun"][];
+            /** Format: uuid */
+            next_cursor?: string;
+        };
+        /** @enum {string} */
+        MailCategory: "received" | "assessment" | "interview" | "rejection" | "offer";
+        MailAccount: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "google";
+            address: string;
+            /** @enum {string} */
+            status: "active" | "paused" | "needs_reconnect" | "disconnected";
+            /** Format: date-time */
+            last_synced_at?: string | null;
+            last_error: string;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        MailAccountList: {
+            configured: boolean;
+            items: components["schemas"]["MailAccount"][];
+        };
+        MailAccountUpdate: {
+            paused: boolean;
+        };
+        MailConnect: {
+            url: string;
+        };
+        MailConnectComplete: {
+            state: string;
+            code: string;
+        };
+        MailMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            account_id: string;
+            category: components["schemas"]["MailCategory"];
+            /** Format: uuid */
+            job_id?: string | null;
+            from: string;
+            subject: string;
+            snippet: string;
+            /** Format: date-time */
+            received_at: string;
+            /** Format: date-time */
+            classified_at: string;
+        };
+        MailMessagePage: {
+            items: components["schemas"]["MailMessage"][];
             /** Format: uuid */
             next_cursor?: string;
         };
@@ -3606,6 +3758,147 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMailAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member's mail accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccountList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startGoogleConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the browser. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailConnect"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeGoogleConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailConnectComplete"];
+            };
+        };
+        responses: {
+            /** @description The connected account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disconnectMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailAccountUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMailMessages: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["MailCategory"];
+                job_id?: string;
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessagePage"];
                 };
             };
             default: components["responses"]["Problem"];

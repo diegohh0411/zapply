@@ -47,7 +47,7 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | Secrets in a `secrets` table | Encrypted system-owned OpenRouter keys in the MVP; key management is specified in part 5. User-owned credentials arrive with later features | Database dumps must not leak provider keys or future IMAP passwords |
 | Local llama.cpp on loopback | A **model gateway** module: system-owned OpenRouter keys, owner-assigned plans, rolling 7-day and 30-day cost allowances, usage metering. BYOK follows a successful MVP | Hosted inference is shared and costs money |
 | Typst compiled in-process in a greedy loop | Typst WASM in a browser worker, fitted from immutable snapshots in Postgres; on-demand native fallback | No PDF storage; snapshots rebuild the same bytes |
-| IMAP IDLE task per desktop app | A **mail watcher** fleet: per-account leases in Postgres, sharded, with reconnect and backoff (part 10) | Long-lived connections need owners, not stateless workers |
+| IMAP IDLE task per desktop app | The Gmail API with Pub/Sub push notifications and a periodic reconcile scan (part 10); no long-lived connections, so no watcher fleet | Long-lived connections need owners, not stateless workers |
 | `cvd-mcp` over stdio | A remote MCP server (streamable HTTP + OAuth) on the API (part 11) | Works for hosted users |
 | Auto-apply via a Tauri browser window | A browser extension that calls the API (later) | A server cannot drive the user's browser |
 
@@ -88,5 +88,5 @@ The concept is the same as cvd. The implementation is redesigned for a service w
 | 7 | Rendering: versioned Typst templates, page fitting, CVs compiled in the browser (WASM) from immutable snapshots in Postgres, with no stored files. See `docs/parts/07-rendering.md` |
 | 8 | Company research: global cache, one research run per company, agent budget |
 | 9 | Angular + ZardUI web app, using the generated client. Started with part 4: shell, sign-in, live updates, jobs and library screens. See `docs/parts/09-web.md` |
-| 10 | Mail watcher fleet and inbox |
+| 10 | Mail inbox: Gmail OAuth, Pub/Sub push with a reconcile scan, one classification per message, no watcher fleet. See `docs/parts/10-mail-plan.md` |
 | 11 | Remote MCP, browser-extension autofill |

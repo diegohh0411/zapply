@@ -873,6 +873,50 @@ type JobView struct {
 	UpdatedAt time.Time
 }
 
+type MailAccount struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Provider       string
+	Address        string
+	Status         string
+	HistoryID      *string
+	WatchExpiresAt *time.Time
+	LastSyncedAt   *time.Time
+	SyncLeaseUntil *time.Time
+	LastError      string
+	Version        int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type MailMessage struct {
+	ID                uuid.UUID
+	UserID            uuid.UUID
+	AccountID         uuid.UUID
+	ProviderMessageID string
+	ThreadID          string
+	ReceivedAt        time.Time
+	State             string
+	Category          *string
+	JobID             *uuid.UUID
+	FromAddress       *string
+	Subject           *string
+	Snippet           *string
+	ClassifiedAt      *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type MailOperation struct {
+	UserID      uuid.UUID
+	MessageID   uuid.UUID
+	OperationID uuid.UUID
+	Stage       string
+	Ingested    bool
+	Ok          bool
+	CreatedAt   time.Time
+}
+
 type MatchOverride struct {
 	UserID   uuid.UUID
 	JobID    uuid.UUID
@@ -1003,6 +1047,38 @@ type PlatformAudit struct {
 
 type PlatformBudgetAccount struct {
 	UserID uuid.UUID
+}
+
+type PlatformMailAccountIndex struct {
+	AccountID      uuid.UUID
+	UserID         uuid.UUID
+	Provider       string
+	Address        string
+	Status         string
+	WatchExpiresAt *time.Time
+	LastSyncedAt   *time.Time
+	UpdatedAt      time.Time
+}
+
+type PlatformMailCredential struct {
+	AccountID         uuid.UUID
+	UserID            uuid.UUID
+	Ciphertext        []byte
+	EncryptionVersion string
+	UpdatedAt         time.Time
+}
+
+type PlatformMailOauthFlow struct {
+	StateHash string
+	UserID    uuid.UUID
+	Verifier  string
+	ExpiresAt time.Time
+}
+
+type PlatformMailWorkIndex struct {
+	MessageID uuid.UUID
+	UserID    uuid.UUID
+	UpdatedAt time.Time
 }
 
 type PlatformMatchIndex struct {

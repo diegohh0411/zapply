@@ -12,6 +12,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
+	"github.com/diegohh0411/zapply/internal/mail"
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
@@ -31,6 +32,8 @@ type server struct {
 	matcher        *match.Service
 	cv             *render.Service
 	decisionModels *openrouter.Client
+	mail           *mail.Service
+	pushVerifier   auth.Verifier
 }
 
 var _ gen.StrictServerInterface = (*server)(nil)

@@ -1326,6 +1326,112 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/mail/accounts:
+    get:
+      operationId: listMailAccounts
+      tags: [mail]
+      description: |
+        Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
+        when the server has no Google OAuth client, in which case connecting
+        answers 503.
+      responses:
+        "200":
+          description: The member's mail accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccountList" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/google/start:
+    post:
+      operationId: startGoogleConnect
+      tags: [mail]
+      description: |
+        Begins the Gmail consent flow. Send the browser to `url`; Google returns
+        to the server's `/oauth/google/callback`, which redirects to the app, which
+        calls `completeGoogleConnect`.
+      responses:
+        "200":
+          description: Where to send the browser.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailConnect" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/google/complete:
+    post:
+      operationId: completeGoogleConnect
+      tags: [mail]
+      description: |
+        Finishes the consent flow with the `state` and `code` the server's
+        callback passed to the app. The state must belong to the caller, who is
+        the member that started it; 422 on `state` otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailConnectComplete" }
+      responses:
+        "200":
+          description: The connected account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateMailAccount
+      tags: [mail]
+      description: Pause or resume reading an account. A paused account is not read and nothing is sent to the model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailAccountUpdate" }
+      responses:
+        "200":
+          description: The updated account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: disconnectMailAccount
+      tags: [mail]
+      description: Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account.
+      responses:
+        "204": { description: Disconnected. }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/messages:
+    get:
+      operationId: listMailMessages
+      tags: [mail]
+      description: Mail classified as relevant to a job application, newest first.
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: "#/components/schemas/MailCategory" }
+        - name: job_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: A page of messages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailMessagePage" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1958,6 +2064,8 @@ components:
         - usage.changed
         - model_operation.changed
         - match_run.changed
+        - mail.account.updated
+        - mail.message.classified
 
     "Plan":
       "type": "object"
@@ -2441,4 +2549,61 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/MatchRun' } }
+        next_cursor: { type: string, format: uuid }
+
+    MailCategory:
+      type: string
+      enum: [received, assessment, interview, rejection, offer]
+    MailAccount:
+      type: object
+      required: [id, provider, address, status, last_error, version, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [google] }
+        address: { type: string }
+        status: { type: string, enum: [active, paused, needs_reconnect, disconnected] }
+        last_synced_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+    MailAccountList:
+      type: object
+      required: [configured, items]
+      properties:
+        configured: { type: boolean }
+        items: { type: array, items: { $ref: '#/components/schemas/MailAccount' } }
+    MailAccountUpdate:
+      type: object
+      required: [paused]
+      properties:
+        paused: { type: boolean }
+    MailConnect:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+    MailConnectComplete:
+      type: object
+      required: [state, code]
+      properties:
+        state: { type: string, minLength: 1, maxLength: 512 }
+        code: { type: string, minLength: 1, maxLength: 2048 }
+    MailMessage:
+      type: object
+      required: [id, account_id, category, from, subject, snippet, received_at, classified_at]
+      properties:
+        id: { type: string, format: uuid }
+        account_id: { type: string, format: uuid }
+        category: { $ref: '#/components/schemas/MailCategory' }
+        job_id: { type: string, format: uuid, nullable: true }
+        from: { type: string }
+        subject: { type: string }
+        snippet: { type: string }
+        received_at: { type: string, format: date-time }
+        classified_at: { type: string, format: date-time }
+    MailMessagePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/MailMessage' } }
         next_cursor: { type: string, format: uuid }
