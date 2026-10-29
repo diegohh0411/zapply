@@ -13,7 +13,7 @@ const ts = require('typescript');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '../..');
 
-async function start(t) {
+async function start(t, { wasmFailures = 0 } = {}) {
   const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'zapply-worker-'));
   t.after(() => fs.rmSync(outdir, { recursive: true, force: true }));
   await build({
@@ -33,9 +33,13 @@ async function start(t) {
     const path = require('node:path');
     globalThis.self = globalThis;
     globalThis.fetch = async (url) => {
+      parentPort.postMessage({ fetched: url });
       let file;
       if (url.startsWith('/assets/templates/')) file = path.join(workerData.root, 'templates', url.slice('/assets/templates/'.length));
-      else if (url === '/typst/0.7.0/typst_ts_web_compiler_bg.wasm') file = workerData.wasm;
+      else if (url === '/typst/0.7.0/typst_ts_web_compiler_bg.wasm') {
+        if (workerData.wasmFailures-- > 0) return new Response('', { status: 503 });
+        file = workerData.wasm;
+      }
       else throw new Error('Unexpected external fetch: ' + url);
       return fs.existsSync(file)
         ? new Response(fs.readFileSync(file), { headers: { 'Content-Type': file.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream' } })
@@ -49,6 +53,7 @@ async function start(t) {
       eval: true,
       workerData: {
         root,
+        wasmFailures,
         module: pathToFileURL(path.join(outdir, 'typst.worker.mjs')).href,
         wasm: require.resolve('@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm'),
       },
@@ -61,7 +66,12 @@ async function start(t) {
   });
   let seq = 0;
   const pending = new Map();
+  const fetches = [];
   worker.on('message', (data) => {
+    if (data.fetched) {
+      fetches.push(data.fetched);
+      return;
+    }
     const p = pending.get(data.id);
     pending.delete(data.id);
     if (data.error) p.reject(new Error(data.error));
@@ -82,14 +92,36 @@ async function start(t) {
       .filter((f) => /\.(ttf|otf)$/.test(f))
       .map((f) => '/assets/templates/' + fontDir + '/' + f),
   };
-  return (content, assets = template) =>
+  const compile = (content, assets = template) =>
     new Promise((resolve, reject) => {
       const id = ++seq;
       pending.set(id, { resolve, reject });
       worker.postMessage({ id, template: assets, content });
     });
+  compile.preload = () => worker.postMessage({ type: 'preload' });
+  compile.fetches = fetches;
+  return compile;
 }
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+
+test('preloading shares one streamed WASM module with queued compiles', async (t) => {
+  const compile = await start(t);
+  compile.preload();
+  compile.preload();
+  const content = JSON.parse(fs.readFileSync(path.join(root, 'templates/fixtures/full-en.json')));
+  const results = await Promise.all([compile(content), compile(content)]);
+  const golden = JSON.parse(fs.readFileSync(path.join(root, 'templates/golden.json')));
+  for (const result of results) assert.equal(hash(result.pdf), golden['classic/1/full-en']);
+  assert.equal(compile.fetches.filter((url) => url.endsWith('.wasm')).length, 1);
+});
+
+test('a failed WASM fetch can be retried', async (t) => {
+  const compile = await start(t, { wasmFailures: 1 });
+  const content = JSON.parse(fs.readFileSync(path.join(root, 'templates/fixtures/full-en.json')));
+  await assert.rejects(compile(content), /Couldn't load.*503/);
+  assert.ok((await compile(content)).pdf.length > 0);
+  assert.equal(compile.fetches.filter((url) => url.endsWith('.wasm')).length, 2);
+});
 
 test(
   'browser worker reports pages and reproduces native golden PDFs across queued requests',

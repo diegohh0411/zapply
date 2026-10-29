@@ -99,7 +99,7 @@ function fixture(
     inject: (token) => {
       if (token === AuthService) return auth;
       if (token === EventsService) return { changes: new Subject(), resync: new Subject() };
-      if (token === TypstService) return { compile };
+      if (token === TypstService) return { compile, preload() {} };
       if (token === DomSanitizer) return { bypassSecurityTrustResourceUrl: (url) => url };
       if (token === DestroyRef)
         return {

@@ -11,6 +11,8 @@ export interface CompileRequest {
   content: CvContent;
 }
 
+export type WorkerRequest = CompileRequest | { type: 'preload' };
+
 export interface CompileResponse {
   id: number;
   pages?: number;

@@ -195,6 +195,7 @@ export class CvTab {
     this.setPdf(undefined);
     this.fitting.set(true);
     try {
+      this.typst.preload();
       const p = Api.ok(await this.api.GET('/v1/jobs/{id}/cv', { params: { path: { id } } }));
       if (!this.current(scope) || version !== this.loadVersion) return;
       this.preview.set(p);

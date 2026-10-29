@@ -4,7 +4,7 @@
 import { createTypstCompiler, type TypstCompiler } from '@myriaddreamin/typst.ts/compiler';
 import { disableDefaultFontAssets, loadFonts } from '@myriaddreamin/typst.ts/options.init';
 
-import type { CompileRequest, CompileResponse } from './typst-protocol';
+import type { CompileRequest, CompileResponse, WorkerRequest } from './typst-protocol';
 
 // Copied from node_modules by angular.json; the directory is the typst.ts
 // release, which pins the Typst version (web/tests/typst-golden.cjs).
@@ -12,6 +12,20 @@ const WASM = '/typst/0.7.0/typst_ts_web_compiler_bg.wasm';
 
 const compilers = new Map<string, Promise<TypstCompiler>>();
 const sources = new Map<string, Promise<Uint8Array>>();
+let wasm: Promise<WebAssembly.Module> | undefined;
+
+function loadWasm(): Promise<WebAssembly.Module> {
+  if (!wasm) {
+    wasm = WebAssembly.compileStreaming(
+      fetch(WASM).then((r) => {
+        if (!r.ok) throw new Error(`Couldn't load ${WASM} (${r.status})`);
+        return r;
+      }),
+    );
+    wasm.catch(() => (wasm = undefined));
+  }
+  return wasm;
+}
 
 function fetchBytes(url: string): Promise<Uint8Array> {
   let p = sources.get(url);
@@ -32,10 +46,11 @@ function compiler(fonts: string[]): Promise<TypstCompiler> {
   let p = compilers.get(key);
   if (!p) {
     p = (async () => {
-      const data = await Promise.all(fonts.map(fetchBytes));
+      // Download and compile WASM while the font requests are in flight.
+      const [module, data] = await Promise.all([loadWasm(), Promise.all(fonts.map(fetchBytes))]);
       const c = createTypstCompiler();
       await c.init({
-        getModule: () => ({ module_or_path: WASM }),
+        getModule: () => ({ module_or_path: module }),
         beforeBuild: [disableDefaultFontAssets(), loadFonts(data)],
       });
       return c;
@@ -71,7 +86,12 @@ async function compile(req: CompileRequest): Promise<CompileResponse> {
 
 // Compiles share one compiler's shadow files, so they run one at a time.
 let queue: Promise<unknown> = Promise.resolve();
-addEventListener('message', ({ data }: MessageEvent<CompileRequest>) => {
+addEventListener('message', ({ data }: MessageEvent<WorkerRequest>) => {
+  if ('type' in data) {
+    // Best effort: a failed preload is retried by the real compile request.
+    void loadWasm().catch(() => {});
+    return;
+  }
   queue = queue.then(async () => {
     try {
       const out = await compile(data);
