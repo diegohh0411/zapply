@@ -138,3 +138,26 @@ func TestMailProposesAndAppliesStatusChanges(t *testing.T) {
 		t.Fatalf("undo after a manual move: %v, job in %s", e, f.statusName(t))
 	}
 }
+
+func TestWorkerMovesJobsThroughColumnGrantsOnly(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	for _, c := range []struct {
+		table, column string
+		want          bool
+	}{
+		{"job", "status_id", true}, {"job", "position", true}, {"job", "title", false},
+		{"job", "description", false}, {"job_status", "updated_at", true}, {"job_status", "name", false},
+	} {
+		var ok bool
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT has_column_privilege('zapply_worker',$1,$2,'UPDATE')`, c.table, c.column).Scan(&ok); e != nil || ok != c.want {
+			t.Errorf("zapply_worker UPDATE %s.%s = %v, want %v (%v)", c.table, c.column, ok, c.want, e)
+		}
+	}
+	for _, table := range []string{"job", "job_status"} {
+		var ok bool
+		if e := f.db.Admin(t).QueryRow(ctx, `SELECT has_table_privilege('zapply_worker',$1,'UPDATE')`, table).Scan(&ok); e != nil || ok {
+			t.Errorf("zapply_worker can UPDATE all of %s (%v)", table, e)
+		}
+	}
+}

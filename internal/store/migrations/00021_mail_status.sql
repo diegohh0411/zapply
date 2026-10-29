@@ -19,8 +19,8 @@ CREATE INDEX mail_message_review ON mail_message(user_id,received_at DESC) WHERE
 
 -- The member resolves proposals; nothing else about a message is theirs to write.
 GRANT UPDATE(status_outcome,previous_status_id,updated_at) ON mail_message TO zapply_app;
--- The worker moves jobs when it applies a proposal.
-GRANT UPDATE ON job TO zapply_worker;
+-- The worker moves jobs when it applies a proposal: only the columns MoveJob writes.
+GRANT UPDATE(status_id,position,applied_on,status_changed_at,version,updated_at) ON job TO zapply_worker;
 -- Moving a job locks its status row FOR UPDATE, which needs an UPDATE grant.
 GRANT UPDATE(updated_at) ON job_status TO zapply_worker;
 GRANT SELECT,INSERT ON job_activity TO zapply_worker;
@@ -32,7 +32,7 @@ ALTER POLICY tenant ON job_activity TO zapply_app,zapply_worker;
 ALTER POLICY tenant ON job_activity TO zapply_app;
 REVOKE SELECT,INSERT ON job_activity FROM zapply_worker;
 REVOKE UPDATE(updated_at) ON job_status FROM zapply_worker;
-REVOKE UPDATE ON job FROM zapply_worker;
+REVOKE UPDATE(status_id,position,applied_on,status_changed_at,version,updated_at) ON job FROM zapply_worker;
 REVOKE UPDATE(status_outcome,previous_status_id,updated_at) ON mail_message FROM zapply_app;
 DROP INDEX mail_message_review;
 ALTER TABLE mail_message DROP COLUMN status_outcome, DROP COLUMN suggested_status_id, DROP COLUMN previous_status_id,
