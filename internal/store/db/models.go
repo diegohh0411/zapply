@@ -874,19 +874,24 @@ type JobView struct {
 }
 
 type MailAccount struct {
-	ID             uuid.UUID
-	UserID         uuid.UUID
-	Provider       string
-	Address        string
-	Status         string
-	HistoryID      *string
-	WatchExpiresAt *time.Time
-	LastSyncedAt   *time.Time
-	SyncLeaseUntil *time.Time
-	LastError      string
-	Version        int32
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                uuid.UUID
+	UserID            uuid.UUID
+	Provider          string
+	Address           string
+	Status            string
+	HistoryID         *string
+	WatchExpiresAt    *time.Time
+	LastSyncedAt      *time.Time
+	SyncLeaseUntil    *time.Time
+	LastError         string
+	Version           int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	SyncPending       []byte
+	SyncWindowStart   *time.Time
+	SyncWindowReads   int32
+	SyncRetryAt       *time.Time
+	SyncQuotaFailures int32
 }
 
 type MailMessage struct {

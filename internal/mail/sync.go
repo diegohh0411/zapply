@@ -326,7 +326,7 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 			expires = &watch.Expires
 		}
 		if e = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3,watch_expires_at=COALESCE($4,watch_expires_at) WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, raw, expires)
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3,watch_expires_at=COALESCE($4,watch_expires_at) WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw), expires)
 			return e
 		}); e != nil {
 			return e
@@ -367,7 +367,7 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 					return e
 				}
 			}
-			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, raw)
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw))
 			return e
 		})
 		if e != nil {
