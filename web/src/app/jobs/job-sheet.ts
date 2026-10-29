@@ -30,8 +30,6 @@ import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSelectImports } from '@/shared/components/select';
-import { ZardSheetImports } from '@/shared/components/sheet';
-import { ZardSidebarService, ZARD_SIDEBAR_WIDTH, ZARD_SIDEBAR_WIDTH_ICON } from '@/shared/components/sidebar';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTabsImports } from '@/shared/components/tabs';
@@ -101,7 +99,6 @@ const emptyForm = (statusId = ''): Form => ({
     ZardInputComponent,
     ZardTextareaComponent,
     ZardSkeletonComponent,
-    ...ZardSheetImports,
     ...ZardSelectImports,
     ...ZardTabsImports,
     ...ZardDropdownImports,
@@ -123,9 +120,6 @@ const emptyForm = (statusId = ''): Form => ({
   templateUrl: './job-sheet.html',
 })
 export class JobSheet {
-  protected readonly sidebar = inject(ZardSidebarService);
-  protected readonly sidebarWidth = ZARD_SIDEBAR_WIDTH;
-  protected readonly sidebarIconWidth = ZARD_SIDEBAR_WIDTH_ICON;
   private readonly auth = inject(AuthService);
   protected readonly store = inject(JobsStore);
   private readonly toast = inject(ZardSonnerService);

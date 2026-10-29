@@ -1,3 +1,4 @@
+@if (!sheetOpen()) {
 <app-database
   [views]="store.views()"
   [activeViewId]="activeView()?.id ?? null"
@@ -104,6 +105,8 @@
     <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" />
   }
 </ng-template>
+
+}
 
 <app-job-sheet
   [target]="sheetTarget()"
