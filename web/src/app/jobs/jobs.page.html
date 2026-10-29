@@ -9,7 +9,10 @@
   (viewChange)="selectViewId($event)"
   (layoutChange)="setLayout($event)"
   (save)="openSave()"
-  (remove)="deleteView()"
+  (remove)="deleteView($event)"
+  (addView)="openNewView($event)"
+  (renameView)="renameView($event.id, $event.name)"
+  (duplicateView)="duplicateView($event)"
 >
   <div databaseHeader class="flex flex-wrap items-center gap-3">
     <div class="mr-auto">
@@ -118,12 +121,12 @@
 
 <z-dialog [(zVisible)]="saveOpen" zWidth="min(420px, 95vw)">
   <z-dialog-header>
-    <z-dialog-title>{{ activeView() ? 'Update view' : 'Save view' }}</z-dialog-title>
+    <z-dialog-title>{{ newLayout() ? 'New view' : activeView() ? 'Update view' : 'Save view' }}</z-dialog-title>
     <z-dialog-description
       >Keeps the current layout and filters one click away.</z-dialog-description
     >
   </z-dialog-header>
-  <form class="flex flex-col gap-4" (ngSubmit)="activeView() ? updateView() : saveAsNew()">
+  <form class="flex flex-col gap-4" (ngSubmit)="activeView() && !newLayout() ? updateView() : saveAsNew()">
     <label class="field">
       <span>Name</span>
       <input
@@ -135,7 +138,7 @@
       />
     </label>
     <z-dialog-footer class="gap-2">
-      @if (activeView()) {
+      @if (activeView() && !newLayout()) {
         <button
           z-button
           zType="outline"
