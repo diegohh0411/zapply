@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/diegohh0411/zapply/internal/decide"
@@ -11,6 +12,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/worker"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/riverqueue/river"
 )
 
@@ -48,8 +50,9 @@ type pendingMessage struct {
 }
 
 type jobOption struct {
-	ID    uuid.UUID
-	Label string
+	ID     uuid.UUID
+	Label  string
+	Status string
 }
 
 func (s *Service) loadMessage(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) (pendingMessage, error) {
@@ -116,19 +119,34 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 			return e
 		}
 
-		stage := ""
-		var jobs []jobOption
+		// The job stage asks which job the email is about and what that job's
+		// status should be now, in one request over the same state.
+		var (
+			stage string
+			qs    []systemone.Question
+			about map[string]any
+		)
 		switch {
 		case m.Category == nil && attempts["category"] >= categoryAttempts:
 			return s.giveUp(ctx, tx, u, m)
 		case m.Category == nil:
-			stage = "category"
+			stage, qs = "category", []systemone.Question{categoryQuestion()}
 		case *m.Category != "other" && !jobDone && attempts["job"] < jobAttempts:
-			if jobs, e = s.openJobs(ctx, tx, u); e != nil {
+			open, e := s.openJobs(ctx, tx, u)
+			if e != nil {
 				return e
 			}
-			if len(jobs) > 0 {
-				stage = "job"
+			all, e := statuses(ctx, tx, u)
+			if e != nil {
+				return e
+			}
+			if len(open) > 0 {
+				stage, qs = "job", []systemone.Question{jobQuestion(open), statusQuestion(all)}
+				jobs := make([]map[string]string, len(open))
+				for i, j := range open {
+					jobs[i] = map[string]string{"id": j.ID.String(), "job": j.Label, "status": j.Status}
+				}
+				about = map[string]any{"jobs": jobs}
 			}
 		}
 		if stage == "" {
@@ -146,7 +164,7 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 			snooze = 5 * time.Minute
 			return nil
 		}
-		return s.dispatch(ctx, tx, u, m, *model, stage, jobs)
+		return s.dispatch(ctx, tx, u, m, *model, stage, qs, about)
 	})
 	if err != nil {
 		return err
@@ -158,7 +176,7 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 }
 
 func (s *Service) openJobs(ctx context.Context, tx pgx.Tx, u uuid.UUID) ([]jobOption, error) {
-	rows, e := tx.Query(ctx, `SELECT j.id,j.title,j.company FROM job j JOIN job_status st ON st.user_id=j.user_id AND st.id=j.status_id
+	rows, e := tx.Query(ctx, `SELECT j.id,j.title,j.company,st.name FROM job j JOIN job_status st ON st.user_id=j.user_id AND st.id=j.status_id
  WHERE j.user_id=$1 AND j.archived_at IS NULL AND st.stage IN ('saved','active','offer') ORDER BY j.updated_at DESC,j.id LIMIT $2`, u, maxJobOptions)
 	if e != nil {
 		return nil, e
@@ -168,7 +186,7 @@ func (s *Service) openJobs(ctx context.Context, tx pgx.Tx, u uuid.UUID) ([]jobOp
 	for rows.Next() {
 		var o jobOption
 		var title, company string
-		if e = rows.Scan(&o.ID, &title, &company); e != nil {
+		if e = rows.Scan(&o.ID, &title, &company, &o.Status); e != nil {
 			return nil, e
 		}
 		o.Label = title
@@ -199,27 +217,34 @@ func jobQuestion(jobs []jobOption) systemone.Question {
 		criteria[j.ID.String()] = j.Label
 	}
 	return systemone.Question{Type: "choice", Instructions: systemone.Raw(map[string]any{
-		"question": "Which of the candidate's tracked jobs is `email` about? Choose none unless the sender, subject or preview clearly names the company or role.",
+		"question": "Which of the candidate's tracked jobs in `jobs` is `email` about? Choose none unless the sender, subject or preview clearly names the company or role.",
 	}), Criteria: systemone.Raw(criteria)}
 }
 
 // dispatch sends one question about one message through the model gateway.
-func (s *Service) dispatch(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingMessage, model, stage string, jobs []jobOption) error {
+// dispatch sends a stage's questions about one message through the model
+// gateway as a single request; they share one state, the email plus about.
+// The answers come back as q1, q2, … in the order of qs.
+func (s *Service) dispatch(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingMessage, model, stage string, qs []systemone.Question, about map[string]any) error {
 	if s.queue == nil {
 		return errors.New("mail queue unavailable")
 	}
-	q := categoryQuestion()
-	if stage == "job" {
-		q = jobQuestion(jobs)
+	st := map[string]any{"email": map[string]string{"from": m.From, "subject": m.Subject, "preview": m.Snippet}}
+	for k, v := range about {
+		st[k] = v
 	}
-	state := systemone.Raw(map[string]any{"email": map[string]string{"from": m.From, "subject": m.Subject, "preview": m.Snippet}})
-	p, e := decide.New("q1", state, q)
-	if e != nil {
-		return e
+	state := systemone.Raw(st)
+	pending := make([]decide.Pending, len(qs))
+	for i, q := range qs {
+		p, e := decide.New(fmt.Sprintf("q%d", i+1), state, q)
+		if e != nil {
+			return e
+		}
+		pending[i] = p
 	}
-	packed, e := decide.Pack(model, []decide.Pending{p}, 0, 1)
+	packed, e := decide.Pack(model, pending, 0, len(qs))
 	if e != nil || len(packed) != 1 {
-		return errors.Join(errors.New("mail question too large"), e)
+		return errors.Join(errors.New("mail questions too large for one request"), e)
 	}
 	hash, e := systemone.Hash(packed[0].Request)
 	if e != nil {
@@ -297,15 +322,20 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 	if e != nil {
 		return true, e
 	}
-	var choice string
+	var got []choice
 	if op.Status == "completed" && m.State == "pending" {
-		choice, e = s.answer(ctx, tx, op)
-		if e != nil {
+		if got, e = s.answers(ctx, tx, op); e != nil {
 			return true, e
 		}
 	}
+	pick := func(i int) choice {
+		if i < len(got) {
+			return got[i]
+		}
+		return choice{}
+	}
 	ok := false
-	switch {
+	switch choice := pick(0).Choice; {
 	case choice == "":
 	case stage == "category" && m.Category == nil && isCategory(choice):
 		ok = true
@@ -319,9 +349,18 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		}
 	case stage == "job":
 		ok = true
-		if job, perr := uuid.Parse(choice); perr == nil {
-			// The job may have been deleted since the question was asked.
-			_, e = tx.Exec(ctx, `UPDATE mail_message SET job_id=$3,updated_at=now() WHERE user_id=$1 AND id=$2 AND EXISTS(SELECT FROM job WHERE user_id=$1 AND id=$3)`, op.UserID, msg, job)
+		job, perr := uuid.Parse(choice)
+		if perr != nil {
+			break
+		}
+		// The job may have been deleted since the question was asked.
+		var tag pgconn.CommandTag
+		tag, e = tx.Exec(ctx, `UPDATE mail_message SET job_id=$3,updated_at=now() WHERE user_id=$1 AND id=$2 AND EXISTS(SELECT FROM job WHERE user_id=$1 AND id=$3)`, op.UserID, msg, job)
+		// An unusable status answer still keeps the link.
+		if e == nil && tag.RowsAffected() == 1 {
+			if to, perr := uuid.Parse(pick(1).Choice); perr == nil {
+				e = s.settleStatus(ctx, tx, op.UserID, msg, job, to, pick(1).P)
+			}
 		}
 	}
 	if e != nil {
@@ -348,28 +387,39 @@ func isCategory(c string) bool {
 	return false
 }
 
-// answer returns the validated choice in a finished request, or "" when the
-// model's answer is missing or does not fit the question that was asked.
-func (s *Service) answer(ctx context.Context, tx pgx.Tx, op worker.Operation) (string, error) {
+type choice struct {
+	Choice string
+	P      float64 // the probability the model gave Choice
+}
+
+// answers returns the answers in a finished request in question order (q1,
+// q2, …). An answer that is missing or does not fit its question is empty.
+func (s *Service) answers(ctx context.Context, tx pgx.Tx, op worker.Operation) ([]choice, error) {
 	var body []byte
 	if e := tx.QueryRow(ctx, `SELECT body FROM model_request WHERE user_id=$1 AND operation_id=$2`, op.UserID, op.ID).Scan(&body); e != nil {
-		return "", e
+		return nil, e
 	}
 	var req systemone.Request
 	if e := json.Unmarshal(body, &req); e != nil {
-		return "", e
+		return nil, e
 	}
-	q, ok := req.Questions["q1"]
-	if !ok {
-		return "", nil
+	var raw map[string]json.RawMessage
+	if json.Unmarshal([]byte(op.Result), &raw) != nil {
+		return nil, nil
 	}
-	var answers map[string]json.RawMessage
-	if json.Unmarshal([]byte(op.Result), &answers) != nil || len(answers) != 1 {
-		return "", nil
+	out := make([]choice, len(req.Questions))
+	for i := range out {
+		key := fmt.Sprintf("q%d", i+1)
+		q, ok := req.Questions[key]
+		var a systemone.Answer
+		if !ok || json.Unmarshal(raw[key], &a) != nil || systemone.Validate(q, a) != nil {
+			continue
+		}
+		p, ok := a.Probabilities[a.Choice]
+		if !ok && a.Confidence != nil {
+			p = *a.Confidence
+		}
+		out[i] = choice{a.Choice, min(1, max(0, p))}
 	}
-	var a systemone.Answer
-	if json.Unmarshal(answers["q1"], &a) != nil || systemone.Validate(q, a) != nil {
-		return "", nil
-	}
-	return a.Choice, nil
+	return out, nil
 }

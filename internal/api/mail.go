@@ -189,3 +189,8 @@ func (s *server) googlePush(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *server) ResolveMailStatusChange(ctx context.Context, req gen.ResolveMailStatusChangeRequestObject) (gen.ResolveMailStatusChangeResponseObject, error) {
+	m, err := s.mail.Resolve(ctx, uid(ctx), req.Id, string(req.Body.Action))
+	return mailValue[gen.ResolveMailStatusChange200JSONResponse](m, err)
+}

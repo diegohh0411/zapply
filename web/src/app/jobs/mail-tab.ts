@@ -16,11 +16,12 @@ import { Api, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { EventsService } from '../core/events.service';
 import { categoryLabel } from '../mail/format';
+import { MailStatusChange } from '../mail/status-change';
 
 /** Mail about one application: the messages classified into this job. */
 @Component({
   selector: 'app-mail-tab',
-  imports: [DatePipe, NgIcon, RouterLink],
+  imports: [DatePipe, MailStatusChange, NgIcon, RouterLink],
   providers: [provideIcons({ lucideChevronRight, lucideExternalLink })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -30,49 +31,56 @@ import { categoryLabel } from '../mail/format';
       }
       <ul class="divide-y rounded-lg border">
         @for (m of messages(); track m.id) {
-          <li class="flex items-start gap-1 pr-2">
-            <button
-              type="button"
-              class="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted/50"
-              [attr.aria-expanded]="isOpen(m.id)"
-              (click)="toggle(m.id)"
-            >
-              <ng-icon
-                name="lucideChevronRight"
-                size="16"
-                class="mt-0.5 shrink-0 text-muted-foreground transition-transform"
-                [class.rotate-90]="isOpen(m.id)"
-              />
-              <span class="min-w-0 flex-1 space-y-1">
-                <span class="flex items-center gap-2">
-                  <span class="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{{
-                    label(m.category)
-                  }}</span>
-                  <span class="truncate font-medium">{{ m.subject || '(no subject)' }}</span>
-                  <time
-                    class="ml-auto shrink-0 text-xs text-muted-foreground"
-                    [attr.datetime]="m.received_at"
-                    >{{ m.received_at | date: 'MMM d, y' }}</time
-                  >
-                </span>
-                @if (isOpen(m.id)) {
-                  <span class="block text-xs text-muted-foreground">
-                    {{ m.from }} · {{ m.received_at | date: 'medium' }}
+          <li class="pr-2">
+            <div class="flex items-start gap-1">
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted/50"
+                [attr.aria-expanded]="isOpen(m.id)"
+                (click)="toggle(m.id)"
+              >
+                <ng-icon
+                  name="lucideChevronRight"
+                  size="16"
+                  class="mt-0.5 shrink-0 text-muted-foreground transition-transform"
+                  [class.rotate-90]="isOpen(m.id)"
+                />
+                <span class="min-w-0 flex-1 space-y-1">
+                  <span class="flex items-center gap-2">
+                    <span class="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{{
+                      label(m.category)
+                    }}</span>
+                    <span class="truncate font-medium">{{ m.subject || '(no subject)' }}</span>
+                    <time
+                      class="ml-auto shrink-0 text-xs text-muted-foreground"
+                      [attr.datetime]="m.received_at"
+                      >{{ m.received_at | date: 'MMM d, y' }}</time
+                    >
                   </span>
-                  <span class="block text-sm text-muted-foreground">{{ m.snippet }}</span>
-                }
-              </span>
-            </button>
-            <a
-              [href]="m.gmail_url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="mt-1.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Open in Gmail"
-              title="Open in Gmail"
-            >
-              <ng-icon name="lucideExternalLink" size="16" />
-            </a>
+                  @if (isOpen(m.id)) {
+                    <span class="block text-xs text-muted-foreground">
+                      {{ m.from }} · {{ m.received_at | date: 'medium' }}
+                    </span>
+                    <span class="block text-sm text-muted-foreground">{{ m.snippet }}</span>
+                  }
+                </span>
+              </button>
+              <a
+                [href]="m.gmail_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-1.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Open in Gmail"
+                title="Open in Gmail"
+              >
+                <ng-icon name="lucideExternalLink" size="16" />
+              </a>
+            </div>
+            <app-mail-status-change
+              class="block pb-2 pl-9 empty:hidden"
+              [message]="m"
+              (changed)="replace($event)"
+            />
           </li>
         } @empty {
           <li class="p-4 text-center text-sm text-muted-foreground">
@@ -117,6 +125,10 @@ export class MailTab {
       change.unsubscribe();
       resync.unsubscribe();
     });
+  }
+
+  protected replace(m: Schemas['MailMessage']): void {
+    this.messages.update((list) => list.map((x) => (x.id === m.id ? m : x)));
   }
 
   protected isOpen(id: string): boolean {

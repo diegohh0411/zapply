@@ -402,6 +402,35 @@ func (s *Service) MoveJob(ctx context.Context, uid, id uuid.UUID, m JobMove) (Jo
 	return out, err
 }
 
+// MoveToStatus moves a job to the top of a status column inside the caller's
+// transaction, as UpdateJob does. With from set, it moves nothing and reports
+// false unless the job is still in that status, so a change the member made in
+// the meantime wins. A job already in the status is left alone.
+func MoveToStatus(ctx context.Context, tx pgx.Tx, uid, jobID, statusID uuid.UUID, from *uuid.UUID) (bool, error) {
+	q := db.New(tx)
+	to, err := q.GetJobStatusForUpdate(ctx, db.GetJobStatusForUpdateParams{UserID: uid, ID: statusID})
+	if err != nil {
+		return false, notFound(err)
+	}
+	cur, err := q.GetJobForUpdate(ctx, db.GetJobForUpdateParams{UserID: uid, ID: jobID})
+	if err != nil {
+		return false, notFound(err)
+	}
+	if cur.StatusID == statusID || (from != nil && cur.StatusID != *from) {
+		return false, nil
+	}
+	prev, err := statusByID(ctx, q, uid, cur.StatusID)
+	if err != nil {
+		return false, err
+	}
+	pos, err := topOf(ctx, q, uid, to.ID, jobID)
+	if err != nil {
+		return false, err
+	}
+	_, err = changeStatus(ctx, q, uid, cur, prev, to, pos)
+	return err == nil, err
+}
+
 // topOf returns a key before the first job in a column (excluding self).
 func topOf(ctx context.Context, q *db.Queries, uid, statusID, self uuid.UUID) (string, error) {
 	col, err := q.ListColumn(ctx, db.ListColumnParams{UserID: uid, StatusID: statusID})

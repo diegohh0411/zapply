@@ -153,8 +153,12 @@ func atoi(s string) int {
 	return n
 }
 
-// model answers mail questions from the subject line.
-type model struct{ calls int }
+// model answers mail questions from the subject line. statusP is the
+// probability it gives a proposed status (1 when unset).
+type model struct {
+	calls   int
+	statusP float64
+}
 
 func (p *model) Quote(context.Context) (modelapi.Quote, error) {
 	return modelapi.Quote{}, errors.New("chat")
@@ -172,21 +176,45 @@ func (p *model) DecisionSheet(_ context.Context, name string) (billing.Sheet, er
 }
 func (p *model) Decide(_ context.Context, key string, r systemone.Request, _ modelapi.Quote) (modelapi.Result, error) {
 	p.calls++
-	var state struct{ Email struct{ Subject string } }
+	var state struct {
+		Email struct{ Subject string }
+		Jobs  []struct{ Status string }
+	}
 	_ = json.Unmarshal(r.State, &state)
+	current := "" // the fixture tracks one job
+	if len(state.Jobs) > 0 {
+		current = state.Jobs[0].Status
+	}
 	subject := strings.ToLower(state.Email.Subject)
 	answers := map[string]systemone.Answer{}
 	conf := .9
 	for k, q := range r.Questions {
 		var options map[string]string
 		_ = json.Unmarshal(q.Criteria, &options)
-		chosen := "other"
+		chosen, prob := "other", 1.0
+		_, isJob := options["none"]
 		if _, isCategory := options["received"]; isCategory {
 			for _, c := range []string{"interview", "rejection", "offer", "assessment", "received"} {
 				if strings.Contains(subject, c) {
 					chosen = c
 					break
 				}
+			}
+		} else if !isJob {
+			// A status question: options are "Name: hint".
+			want := current
+			for word, name := range map[string]string{"interview": "Interviewing", "offer": "Offer", "rejection": "Rejected"} {
+				if strings.Contains(subject, word) {
+					want = name
+				}
+			}
+			for id, label := range options {
+				if strings.HasPrefix(label, want+":") {
+					chosen = id
+				}
+			}
+			if want != current && p.statusP > 0 {
+				prob = p.statusP
 			}
 		} else {
 			chosen = "none"
@@ -197,10 +225,11 @@ func (p *model) Decide(_ context.Context, key string, r systemone.Request, _ mod
 			}
 		}
 		a := systemone.Answer{Type: "choice", Choice: chosen, Confidence: &conf, Probabilities: map[string]float64{}}
+		// The rest of the probability is spread over the other options.
 		for o := range options {
-			a.Probabilities[o] = 0
+			a.Probabilities[o] = (1 - prob) / float64(len(options)-1)
 		}
-		a.Probabilities[chosen] = 1
+		a.Probabilities[chosen] = prob
 		answers[k] = a
 	}
 	amount := int64(100)

@@ -77,16 +77,52 @@ type Account struct {
 }
 
 type Item struct {
-	ID           uuid.UUID  `json:"id"`
-	AccountID    uuid.UUID  `json:"account_id"`
-	Category     string     `json:"category"`
-	JobID        *uuid.UUID `json:"job_id"`
-	From         string     `json:"from"`
-	Subject      string     `json:"subject"`
-	Snippet      string     `json:"snippet"`
-	ReceivedAt   time.Time  `json:"received_at"`
-	ClassifiedAt time.Time  `json:"classified_at"`
-	GmailURL     string     `json:"gmail_url"`
+	ID           uuid.UUID     `json:"id"`
+	AccountID    uuid.UUID     `json:"account_id"`
+	Category     string        `json:"category"`
+	JobID        *uuid.UUID    `json:"job_id"`
+	From         string        `json:"from"`
+	Subject      string        `json:"subject"`
+	Snippet      string        `json:"snippet"`
+	ReceivedAt   time.Time     `json:"received_at"`
+	ClassifiedAt time.Time     `json:"classified_at"`
+	GmailURL     string        `json:"gmail_url"`
+	Status       *StatusChange `json:"status_change"`
+}
+
+// StatusChange is what a message proposed for its job's status, and what
+// became of it. Outcome is no_change, review, applied, dismissed or undone.
+type StatusChange struct {
+	Outcome    string     `json:"outcome"`
+	ProposedID *uuid.UUID `json:"proposed_status_id"`
+	PreviousID *uuid.UUID `json:"previous_status_id"`
+	Confidence *float64   `json:"confidence"`
+	Auto       bool       `json:"auto"`
+}
+
+const itemColumns = `id,account_id,category,job_id,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at,
+ (SELECT address FROM mail_account WHERE id=account_id),COALESCE(NULLIF(thread_id,''),provider_message_id),
+ status_outcome,suggested_status_id,previous_status_id,status_confidence,status_auto`
+
+func scanItem(row pgx.Row) (Item, error) {
+	var m Item
+	var address, thread string
+	var outcome *string
+	var c StatusChange
+	if e := row.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt, &address, &thread,
+		&outcome, &c.ProposedID, &c.PreviousID, &c.Confidence, &c.Auto); e != nil {
+		return m, e
+	}
+	m.GmailURL = gmailURL(address, thread)
+	if outcome != nil {
+		c.Outcome = *outcome
+		m.Status = &c
+	}
+	return m, nil
+}
+
+func (s *Service) item(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) (Item, error) {
+	return scanItem(tx.QueryRow(ctx, `SELECT `+itemColumns+` FROM mail_message WHERE user_id=$1 AND id=$2`, u, id))
 }
 
 // gmailURL opens a thread in the mailbox it was read from. authuser picks the
@@ -417,8 +453,7 @@ func (s *Service) Messages(ctx context.Context, u uuid.UUID, category string, jo
 		}
 	}
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		rows, e := tx.Query(ctx, `SELECT id,account_id,category,job_id,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at,
- (SELECT address FROM mail_account WHERE id=account_id),COALESCE(NULLIF(thread_id,''),provider_message_id)
+		rows, e := tx.Query(ctx, `SELECT `+itemColumns+`
  FROM mail_message WHERE user_id=$1 AND state='classified' AND category<>'other'
  AND ($2='' OR category=$2) AND ($3::uuid IS NULL OR job_id=$3)
  AND ($4::uuid IS NULL OR (received_at,id) < (SELECT received_at,id FROM mail_message WHERE user_id=$1 AND id=$4))
@@ -428,12 +463,10 @@ func (s *Service) Messages(ctx context.Context, u uuid.UUID, category string, jo
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var m Item
-			var address, thread string
-			if e = rows.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt, &address, &thread); e != nil {
+			m, e := scanItem(rows)
+			if e != nil {
 				return e
 			}
-			m.GmailURL = gmailURL(address, thread)
 			out = append(out, m)
 		}
 		return rows.Err()

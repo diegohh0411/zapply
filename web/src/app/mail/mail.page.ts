@@ -39,6 +39,7 @@ import {
   type MailCategory,
   type Tone,
 } from './format';
+import { MailStatusChange } from './status-change';
 
 type Message = Schemas['MailMessage'];
 
@@ -67,7 +68,7 @@ const REFRESH_MS = 800;
 
 @Component({
   selector: 'app-mail-page',
-  imports: [DatePipe, NgIcon, ZardButtonComponent, ZardProgressComponent],
+  imports: [DatePipe, MailStatusChange, NgIcon, ZardButtonComponent, ZardProgressComponent],
   providers: [
     provideIcons({
       lucideMail,
@@ -327,6 +328,7 @@ const REFRESH_MS = 800;
                   <span>Mailbox: {{ addresses()[m.account_id] }}</span>
                 }
               </p>
+              <app-mail-status-change [message]="m" (changed)="replace($event)" />
             </li>
           } @empty {
             <li class="p-6 text-center text-sm text-muted-foreground">
@@ -427,6 +429,10 @@ export class MailPage {
       change.unsubscribe();
       resync.unsubscribe();
     });
+  }
+
+  protected replace(m: Message): void {
+    this.messages.update((list) => list.map((x) => (x.id === m.id ? m : x)));
   }
 
   private refreshSoon(what: 'accounts' | 'messages'): void {

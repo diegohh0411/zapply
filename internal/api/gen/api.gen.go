@@ -424,6 +424,54 @@ func (e MailCategory) Valid() bool {
 	}
 }
 
+// Defines values for MailStatusChangeOutcome.
+const (
+	Applied   MailStatusChangeOutcome = "applied"
+	Dismissed MailStatusChangeOutcome = "dismissed"
+	NoChange  MailStatusChangeOutcome = "no_change"
+	Review    MailStatusChangeOutcome = "review"
+	Undone    MailStatusChangeOutcome = "undone"
+)
+
+// Valid indicates whether the value is a known member of the MailStatusChangeOutcome enum.
+func (e MailStatusChangeOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Dismissed:
+		return true
+	case NoChange:
+		return true
+	case Review:
+		return true
+	case Undone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailStatusChangeActionAction.
+const (
+	Apply   MailStatusChangeActionAction = "apply"
+	Dismiss MailStatusChangeActionAction = "dismiss"
+	Undo    MailStatusChangeActionAction = "undo"
+)
+
+// Valid indicates whether the value is a known member of the MailStatusChangeActionAction enum.
+func (e MailStatusChangeActionAction) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case Dismiss:
+		return true
+	case Undo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MePlatformRole.
 const (
 	MePlatformRoleMember MePlatformRole = "member"
@@ -1263,6 +1311,7 @@ type MailMessage struct {
 	JobId        *openapi_types.UUID `json:"job_id,omitempty"`
 	ReceivedAt   time.Time           `json:"received_at"`
 	Snippet      string              `json:"snippet"`
+	StatusChange *MailStatusChange   `json:"status_change,omitempty"`
 	Subject      string              `json:"subject"`
 }
 
@@ -1271,6 +1320,26 @@ type MailMessagePage struct {
 	Items      []MailMessage       `json:"items"`
 	NextCursor *openapi_types.UUID `json:"next_cursor,omitempty"`
 }
+
+// MailStatusChange The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it.
+type MailStatusChange struct {
+	Auto             bool                    `json:"auto"`
+	Confidence       *float32                `json:"confidence"`
+	Outcome          MailStatusChangeOutcome `json:"outcome"`
+	PreviousStatusId *openapi_types.UUID     `json:"previous_status_id"`
+	ProposedStatusId *openapi_types.UUID     `json:"proposed_status_id"`
+}
+
+// MailStatusChangeOutcome defines model for MailStatusChange.Outcome.
+type MailStatusChangeOutcome string
+
+// MailStatusChangeAction defines model for MailStatusChangeAction.
+type MailStatusChangeAction struct {
+	Action MailStatusChangeActionAction `json:"action"`
+}
+
+// MailStatusChangeActionAction defines model for MailStatusChangeAction.Action.
+type MailStatusChangeActionAction string
 
 // MatchEstimate defines model for MatchEstimate.
 type MatchEstimate struct {
@@ -1852,6 +1921,9 @@ type CompleteGoogleConnectJSONRequestBody = MailConnectComplete
 // UpdateMailAccountJSONRequestBody defines body for UpdateMailAccount for application/json ContentType.
 type UpdateMailAccountJSONRequestBody = MailAccountUpdate
 
+// ResolveMailStatusChangeJSONRequestBody defines body for ResolveMailStatusChange for application/json ContentType.
+type ResolveMailStatusChangeJSONRequestBody = MailStatusChangeAction
+
 // CreateOrganizationJSONRequestBody defines body for CreateOrganization for application/json ContentType.
 type CreateOrganizationJSONRequestBody = OrganizationInput
 
@@ -2064,6 +2136,9 @@ type ServerInterface interface {
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams)
+
+	// (POST /v1/mail/messages/{id}/status-change)
+	ResolveMailStatusChange(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -4278,6 +4353,32 @@ func (siw *ServerInterfaceWrapper) ListMailMessages(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ResolveMailStatusChange operation middleware
+func (siw *ServerInterfaceWrapper) ResolveMailStatusChange(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveMailStatusChange(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMatchRun operation middleware
 func (siw *ServerInterfaceWrapper) GetMatchRun(w http.ResponseWriter, r *http.Request) {
 
@@ -4876,6 +4977,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/sync", wrapper.SyncMailAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/messages/{id}/status-change", wrapper.ResolveMailStatusChange)
 
 	return m
 }
@@ -7537,6 +7639,46 @@ func (response ListMailMessagesdefaultApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type ResolveMailStatusChangeRequestObject struct {
+	Id   ID `json:"id"`
+	Body *ResolveMailStatusChangeJSONRequestBody
+}
+
+type ResolveMailStatusChangeResponseObject interface {
+	VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error
+}
+
+type ResolveMailStatusChange200JSONResponse MailMessage
+
+func (response ResolveMailStatusChange200JSONResponse) VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveMailStatusChangedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResolveMailStatusChangedefaultApplicationProblemPlusJSONResponse) VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMatchRunRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -8395,6 +8537,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(ctx context.Context, request ListMailMessagesRequestObject) (ListMailMessagesResponseObject, error)
+
+	// (POST /v1/mail/messages/{id}/status-change)
+	ResolveMailStatusChange(ctx context.Context, request ResolveMailStatusChangeRequestObject) (ResolveMailStatusChangeResponseObject, error)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(ctx context.Context, request GetMatchRunRequestObject) (GetMatchRunResponseObject, error)
@@ -10303,6 +10448,39 @@ func (sh *strictHandler) ListMailMessages(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMailMessagesResponseObject); ok {
 		if err := validResponse.VisitListMailMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveMailStatusChange operation middleware
+func (sh *strictHandler) ResolveMailStatusChange(w http.ResponseWriter, r *http.Request, id ID) {
+	var request ResolveMailStatusChangeRequestObject
+
+	request.Id = id
+
+	var body ResolveMailStatusChangeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveMailStatusChange(ctx, request.(ResolveMailStatusChangeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveMailStatusChange")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveMailStatusChangeResponseObject); ok {
+		if err := validResponse.VisitResolveMailStatusChangeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
