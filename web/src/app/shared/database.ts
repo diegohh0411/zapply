@@ -2,9 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { NgTemplateOutlet } from '@angular/common';
 import { TemplateRef } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideEllipsis, lucideSettings2, lucideSquareKanban, lucideTable } from '@ng-icons/lucide';
+import { lucidePlus, lucideSettings2, lucideSquareKanban, lucideTable } from '@ng-icons/lucide';
 import { ZardButtonComponent } from './components/button';
-import { ZardDropdownImports } from './components/dropdown';
 import { DatabaseViewSettings } from './database-view-settings';
 
 export interface DatabaseView {
@@ -19,84 +18,82 @@ export interface DatabaseView {
     NgTemplateOutlet,
     NgIcon,
     ZardButtonComponent,
-    ...ZardDropdownImports,
     DatabaseViewSettings,
   ],
-  providers: [provideIcons({ lucideEllipsis, lucideSettings2, lucideSquareKanban, lucideTable })],
+  providers: [provideIcons({ lucidePlus, lucideSettings2, lucideSquareKanban, lucideTable })],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'flex h-full min-h-0 flex-col' },
+  host: { class: 'relative flex h-full min-h-0 flex-col overflow-hidden' },
   template: `
-    <header class="flex flex-col gap-3 px-4 pb-2 pt-4">
+    <header class="flex flex-col gap-3 px-4 pt-4">
       <ng-content select="[databaseHeader]" />
-      <nav class="-mb-1 flex items-center gap-1 overflow-x-auto" aria-label="Saved views">
-        <button
-          type="button"
-          class="view-tab"
-          [class.view-tab-active]="!activeView()"
-          [attr.aria-current]="!activeView() ? 'page' : null"
-          (click)="select(null)"
-        >
-          <ng-icon [name]="!activeView() && layout() === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
-          {{ defaultViewName() }}
-        </button>
-        @for (v of views(); track v.id) {
+      <div class="flex items-center gap-2 border-b">
+        <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" aria-label="Saved views">
           <button
             type="button"
             class="view-tab"
-            [class.view-tab-active]="activeView()?.id === v.id"
-            [attr.aria-current]="activeView()?.id === v.id ? 'page' : null"
-            (click)="select(v.id)"
+            [class.view-tab-active]="!activeView()"
+            [attr.aria-current]="!activeView() ? 'page' : null"
+            (click)="select(null)"
           >
-            <ng-icon [name]="v.layout === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
-            {{ v.name }}
+            <ng-icon [name]="!activeView() && layout() === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
+            {{ defaultViewName() }}
           </button>
-        }
-        @if (modified()) {
+          @for (v of views(); track v.id) {
+            <button
+              type="button"
+              class="view-tab"
+              [class.view-tab-active]="activeView()?.id === v.id"
+              [attr.aria-current]="activeView()?.id === v.id ? 'page' : null"
+              (click)="select(v.id)"
+            >
+              <ng-icon [name]="v.layout === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
+              {{ v.name }}
+            </button>
+          }
+          <button type="button" class="view-tab-add" aria-label="Add view" (click)="save.emit()">
+            <ng-icon name="lucidePlus" class="size-4" />
+          </button>
+        </nav>
+        <div class="flex shrink-0 items-center gap-1 pb-1">
+          @if (modified()) {
+            <button
+              type="button"
+              class="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              (click)="save.emit()"
+            >
+              {{ activeView() ? 'Save changes' : 'Save as view' }}
+            </button>
+          }
           <button
             z-button
             zType="ghost"
-            zSize="sm"
+            zSize="icon-sm"
             type="button"
-            class="ml-1 text-brand"
-            (click)="save.emit()"
+            aria-label="View settings"
+            [attr.aria-expanded]="viewSettingsOpen()"
+            [class.bg-muted]="viewSettingsOpen()"
+            (click)="viewSettingsOpen.set(!viewSettingsOpen())"
           >
-            {{ activeView() ? 'Save changes…' : 'Save as view…' }}
+            <ng-icon name="lucideSettings2" />
           </button>
-        }
-        <button z-button zType="ghost" zSize="icon-sm" type="button" class="ml-auto" aria-label="View settings" (click)="viewSettingsOpen.set(true)">
-          <ng-icon name="lucideSettings2" />
-        </button>
-        @if (activeView(); as v) {
-          <z-dropdown-menu>
-            <button
-              dropdown-trigger
-              z-button
-              zType="ghost"
-              zSize="icon-sm"
-              type="button"
-              [attr.aria-label]="'Options for view ' + v.name"
-            >
-              <ng-icon name="lucideEllipsis" />
-            </button>
-            <z-dropdown-menu-item (click)="save.emit()">Rename or update…</z-dropdown-menu-item>
-            <z-dropdown-menu-item zType="destructive" (click)="remove.emit()"
-              >Delete view</z-dropdown-menu-item
-            >
-          </z-dropdown-menu>
-        }
-      </nav>
-
+        </div>
+      </div>
       <ng-content select="[databaseFilters]" />
     </header>
     <section class="min-h-0 flex-1 overflow-auto pt-2">
       <ng-container *ngTemplateOutlet="content(); context: { $implicit: layout() }" />
     </section>
-    <app-database-view-settings
-      [(visible)]="viewSettingsOpen"
-      [viewName]="activeView()?.name ?? defaultViewName()"
-      [layout]="layout()"
-      (layoutChange)="layoutChange.emit($event)"
-    />
+    @if (viewSettingsOpen()) {
+      <app-database-view-settings
+        [(visible)]="viewSettingsOpen"
+        [viewName]="activeView()?.name ?? defaultViewName()"
+        [layout]="layout()"
+        [editable]="!!activeView()"
+        (layoutChange)="layoutChange.emit($event)"
+        (rename)="save.emit()"
+        (remove)="remove.emit()"
+      />
+    }
   `,
 })
 export class Database {
