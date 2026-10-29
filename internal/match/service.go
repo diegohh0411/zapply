@@ -206,6 +206,27 @@ func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, 
 	if e != nil {
 		return Run{}, e
 	}
+	// A new run replaces the previous match's user adjustments. Keep draft
+	// presentation settings and immutable exports, but reset selection picks.
+	// The idempotency and active-run checks above ensure retries and conflicts
+	// cannot erase changes made after a run was started.
+	var previous bool
+	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM match_run WHERE user_id=$1 AND job_id=$2 AND id<>$3)`, u, job, id).Scan(&previous); e != nil {
+		return Run{}, e
+	}
+	if previous {
+		if _, e = tx.Exec(ctx, `DELETE FROM match_override WHERE user_id=$1 AND job_id=$2`, u, job); e != nil {
+			return Run{}, e
+		}
+		if _, e = tx.Exec(ctx, `WITH updated AS (
+			UPDATE cv_draft SET picks='{"include":[],"exclude":[]}'::jsonb, version=version+1, updated_at=now()
+			WHERE user_id=$1 AND job_id=$2 AND picks <> '{"include":[],"exclude":[]}'::jsonb
+			RETURNING job_id,version
+		) INSERT INTO outbox(id,user_id,topic,payload)
+		SELECT $3,$1,'cv_draft.updated',jsonb_build_object('id',job_id,'version',version) FROM updated`, u, job, uuid.Must(uuid.NewV7())); e != nil {
+			return Run{}, e
+		}
+	}
 	for _, item := range snap.Evidence {
 		if _, e = tx.Exec(ctx, `INSERT INTO match_run_item(user_id,run_id,evidence_id,content_hash,facts) VALUES($1,$2,$3,$4,$5)`, u, id, item.ID, item.ContentHash, systemone.Raw(item)); e != nil {
 			return Run{}, e

@@ -276,8 +276,8 @@ Part 7 is being built at the same time, so this is the boundary between them.
 - **The selection is ranked, not trimmed.** Part 7 fits a CV to pages, so it
   keeps items from the top until the page is full.
 - **Part 6 stores no user picks.** Pinning and excluding items belong to the
-  CV document in part 7, seeded from the selection. Re-running a match never
-  overwrites a user's picks.
+  CV document in part 7, seeded from the selection. Starting a new match
+  clears those picks so the new ranking can select the CV content.
 - **Part 7 must work without part 6.** With no completed run for a job,
   rendering falls back to `auto_include`.
 - Shape of `GET /v1/match-runs/{id}` → selection fields (ids only; part 7

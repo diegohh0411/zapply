@@ -79,7 +79,8 @@ templates/<name>/<version>/
    `library_fingerprint` differs), the draft says so and offers a new run.
 2. **Picks.** Apply the user's includes and excludes. An included item is
    pinned and is never trimmed. Career breaks appear only when included
-   (part 2).
+   (part 2). Starting a new match for a previously matched job clears these
+   picks; presentation settings and exported snapshots are retained.
 3. **Sections.** Group items by category and kind into the template's
    sections, and sort entries by date within each section.
 4. **Trim order.** List optional items from least to most relevant:
