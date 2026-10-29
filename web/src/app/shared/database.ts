@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { NgTemplateOutlet } from '@angular/common';
 import { TemplateRef } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideEllipsis } from '@ng-icons/lucide';
+import { lucideEllipsis, lucideSettings2, lucideSquareKanban, lucideTable } from '@ng-icons/lucide';
 import { ZardButtonComponent } from './components/button';
 import { ZardDropdownImports } from './components/dropdown';
 import { DatabaseViewSettings } from './database-view-settings';
@@ -22,11 +22,11 @@ export interface DatabaseView {
     ...ZardDropdownImports,
     DatabaseViewSettings,
   ],
-  providers: [provideIcons({ lucideEllipsis })],
+  providers: [provideIcons({ lucideEllipsis, lucideSettings2, lucideSquareKanban, lucideTable })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'flex h-full min-h-0 flex-col' },
   template: `
-    <header class="flex flex-col gap-3 border-b px-4 pb-3 pt-4">
+    <header class="flex flex-col gap-3 px-4 pb-2 pt-4">
       <ng-content select="[databaseHeader]" />
       <nav class="-mb-1 flex items-center gap-1 overflow-x-auto" aria-label="Saved views">
         <button
@@ -36,6 +36,7 @@ export interface DatabaseView {
           [attr.aria-current]="!activeView() ? 'page' : null"
           (click)="select(null)"
         >
+          <ng-icon [name]="!activeView() && layout() === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
           {{ defaultViewName() }}
         </button>
         @for (v of views(); track v.id) {
@@ -46,6 +47,7 @@ export interface DatabaseView {
             [attr.aria-current]="activeView()?.id === v.id ? 'page' : null"
             (click)="select(v.id)"
           >
+            <ng-icon [name]="v.layout === 'table' ? 'lucideTable' : 'lucideSquareKanban'" class="size-4" />
             {{ v.name }}
           </button>
         }
@@ -61,8 +63,11 @@ export interface DatabaseView {
             {{ activeView() ? 'Save changes…' : 'Save as view…' }}
           </button>
         }
+        <button z-button zType="ghost" zSize="icon-sm" type="button" class="ml-auto" aria-label="View settings" (click)="viewSettingsOpen.set(true)">
+          <ng-icon name="lucideSettings2" />
+        </button>
         @if (activeView(); as v) {
-          <z-dropdown-menu class="ml-auto">
+          <z-dropdown-menu>
             <button
               dropdown-trigger
               z-button
@@ -111,6 +116,5 @@ export class Database {
   );
   protected select(id: string | null): void {
     this.viewChange.emit(id);
-    this.viewSettingsOpen.set(true);
   }
 }
