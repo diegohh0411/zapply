@@ -1847,6 +1847,8 @@ export interface components {
             received_at: string;
             /** Format: date-time */
             classified_at: string;
+            /** Format: uri */
+            gmail_url: string;
         };
         MailMessagePage: {
             items: components["schemas"]["MailMessage"][];

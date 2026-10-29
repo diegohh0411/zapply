@@ -2590,7 +2590,7 @@ components:
         code: { type: string, minLength: 1, maxLength: 2048 }
     MailMessage:
       type: object
-      required: [id, account_id, category, from, subject, snippet, received_at, classified_at]
+      required: [id, account_id, category, from, subject, snippet, received_at, classified_at, gmail_url]
       properties:
         id: { type: string, format: uuid }
         account_id: { type: string, format: uuid }
@@ -2601,6 +2601,7 @@ components:
         snippet: { type: string }
         received_at: { type: string, format: date-time }
         classified_at: { type: string, format: date-time }
+        gmail_url: { type: string, format: uri }
     MailMessagePage:
       type: object
       required: [items]
