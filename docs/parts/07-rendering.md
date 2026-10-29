@@ -110,9 +110,14 @@ The page budget defaults to 1 and can be set to 1–3 pages per draft.
 ## Rendering
 
 **Browser (default).** The web app lazy-loads `typst.ts` (the compiler as WASM,
-27 MB, about 7 MB with Brotli, cached long-term) only on the CV screen and compiles in a Web
-Worker so the UI stays responsive. Preview, fitting and download all happen
-locally. The download is named `<Full name> - <Company>.pdf`.
+28.3 MB, about 8.1 MB with Brotli) only on the CV screen and compiles in a Web
+Worker so the UI stays responsive. The production build precompresses the
+compiler with Brotli and gzip, and the static handler serves the negotiated
+representation with a year-long immutable cache policy on its versioned URL.
+Streaming WASM compilation starts alongside the CV API request and overlaps
+font loading; the worker reuses the module and compiler on subsequent requests.
+The first visit still pays download and initialization costs. Preview, fitting
+and download all happen locally. The download is named `<Full name> - <Company>.pdf`.
 
 **Server (fallback).** Clients without a browser, such as remote MCP and possibly
 the extension (part 11), call `GET /v1/cv-exports/{id}/pdf`. The API compiles

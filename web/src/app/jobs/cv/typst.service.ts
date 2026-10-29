@@ -20,6 +20,11 @@ export class TypstService {
     { resolve: (c: Compiled) => void; reject: (e: Error) => void }
   >();
 
+  /** Overlap compiler download and WASM compilation with the CV API request. */
+  preload(): void {
+    this.start().postMessage({ type: 'preload' });
+  }
+
   compile(template: CvTemplate, content: CvContent): Promise<Compiled> {
     const worker = this.start();
     const id = ++this.seq;
