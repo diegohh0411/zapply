@@ -91,6 +91,28 @@ func TestGetAsksOnlyForHeadersAndSnippet(t *testing.T) {
 	}
 }
 
+func TestQuotaErrorsAreDistinguishedFromOtherForbiddenResponses(t *testing.T) {
+	for _, tc := range []struct {
+		status  int
+		body    string
+		limited bool
+	}{
+		{403, `{"error":{"errors":[{"reason":"userRateLimitExceeded"}]}}`, true},
+		{403, `{"error":{"status":"RESOURCE_EXHAUSTED"}}`, true},
+		{429, `{}`, true},
+		{403, `{"error":{"errors":[{"reason":"accessNotConfigured"}]}}`, false},
+	} {
+		c := server(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+			_, _ = io.WriteString(w, tc.body)
+		})
+		_, err := c.Profile(context.Background(), "token")
+		if err == nil || errors.Is(err, mail.ErrRateLimited) != tc.limited {
+			t.Fatalf("status %d body %s: %v", tc.status, tc.body, err)
+		}
+	}
+}
+
 func TestHistoryReadsInboxAdditionsAndReportsExpiry(t *testing.T) {
 	c := server(t, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

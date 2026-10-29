@@ -173,6 +173,27 @@ func (c *Client) call(ctx context.Context, access, method, path string, query ur
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 	if res.StatusCode >= 300 {
+		var problem struct {
+			Error struct {
+				Errors []struct {
+					Reason string `json:"reason"`
+				} `json:"errors"`
+				Status string `json:"status"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal(raw, &problem)
+		limited := res.StatusCode == http.StatusTooManyRequests
+		if res.StatusCode == http.StatusForbidden {
+			for _, e := range problem.Error.Errors {
+				if e.Reason == "rateLimitExceeded" || e.Reason == "userRateLimitExceeded" || e.Reason == "quotaExceeded" {
+					limited = true
+				}
+			}
+			limited = limited || problem.Error.Status == "RESOURCE_EXHAUSTED"
+		}
+		if limited {
+			return fmt.Errorf("%w: gmail request limit", mail.ErrRateLimited)
+		}
 		// Error bodies can echo request fields; keep only a short prefix.
 		return &apiError{res.StatusCode, truncate(string(raw), 200)}
 	}

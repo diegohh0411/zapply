@@ -17,6 +17,8 @@ var (
 	ErrHistoryExpired = errors.New("mail history cursor expired")
 	// ErrMessageGone means the message was deleted before it could be read.
 	ErrMessageGone = errors.New("mail message not found")
+	// ErrRateLimited is a temporary provider quota or rate limit.
+	ErrRateLimited = errors.New("mail provider rate limited")
 )
 
 type Tokens struct {

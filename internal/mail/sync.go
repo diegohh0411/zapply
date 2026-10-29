@@ -2,7 +2,9 @@ package mail
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +61,7 @@ type accountState struct {
 	Address   string
 	Status    string
 	HistoryID *string
+	Pending   []byte
 }
 
 // access returns a usable access token for the account, refreshing when needed.
@@ -140,9 +143,10 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 	}
 	var acc accountState
 	var held bool
+	var wait time.Duration
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		var lease *time.Time
-		e := tx.QueryRow(ctx, `SELECT address,status,history_id,sync_lease_until FROM mail_account WHERE user_id=$1 AND id=$2 FOR UPDATE`, u, id).Scan(&acc.Address, &acc.Status, &acc.HistoryID, &lease)
+		var lease, retryAt *time.Time
+		e := tx.QueryRow(ctx, `SELECT address,status,history_id,sync_lease_until,sync_pending,sync_retry_at FROM mail_account WHERE user_id=$1 AND id=$2 FOR UPDATE`, u, id).Scan(&acc.Address, &acc.Status, &acc.HistoryID, &lease, &acc.Pending, &retryAt)
 		if errors.Is(e, pgx.ErrNoRows) {
 			acc.Status = ""
 			return nil
@@ -151,6 +155,11 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 			return e
 		}
 		if acc.Status != "active" {
+			return nil
+		}
+		if retryAt != nil && retryAt.After(time.Now()) {
+			held = true
+			wait = time.Until(*retryAt)
 			return nil
 		}
 		if lease != nil && lease.After(time.Now()) {
@@ -167,9 +176,17 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 		return nil
 	}
 	if held {
-		return river.JobSnooze(5 * time.Second)
+		return river.JobSnooze(max(wait, 5*time.Second))
 	}
 	err = s.sync(ctx, u, id, acc)
+	var delay time.Duration
+	if errors.Is(err, ErrRateLimited) {
+		var e error
+		delay, e = s.quotaBackoff(ctx, u, id)
+		if e != nil {
+			err = e
+		}
+	}
 	// Release the lease even when the run was cancelled; a crash leaves it to expire.
 	release := context.WithoutCancel(ctx)
 	_ = s.store.InTenant(release, u, func(tx pgx.Tx) error {
@@ -179,6 +196,10 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, ErrRateLimited):
+		return river.JobSnooze(delay)
+	case errors.Is(err, errPaced):
+		return river.JobSnooze(65 * time.Second)
 	case errors.Is(err, ErrRevoked):
 		return nil // the member must reconnect; retrying cannot help
 	default:
@@ -187,110 +208,182 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 	}
 }
 
+type pendingSync struct {
+	IDs       []string `json:"ids"`
+	Cursor    string   `json:"cursor"`
+	More      bool     `json:"more"`
+	Bootstrap bool     `json:"bootstrap"`
+}
+
+var errPaced = errors.New("mail sync request budget reached")
+
+// reserveRead maintains a shared, durable per-account budget, even across workers
+// and restarts. 40 full reads cost 2400 units, leaving room for other calls.
+func (s *Service) reserveRead(ctx context.Context, u, id uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `UPDATE mail_account SET
+   sync_window_reads=CASE WHEN sync_window_start IS NULL OR sync_window_start <= now()-interval '65 seconds' THEN 1 ELSE sync_window_reads+1 END,
+   sync_window_start=CASE WHEN sync_window_start IS NULL OR sync_window_start <= now()-interval '65 seconds' THEN now() ELSE sync_window_start END
+   WHERE user_id=$1 AND id=$2 AND status='active' AND (sync_window_start IS NULL OR sync_window_start <= now()-interval '65 seconds' OR sync_window_reads < 40)
+   RETURNING true`, u, id).Scan(&ok)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return ok, err
+}
+
+func (s *Service) quotaBackoff(ctx context.Context, u, id uuid.UUID) (time.Duration, error) {
+	var failures int
+	var delay time.Duration
+	ctx = context.WithoutCancel(ctx)
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		if e := tx.QueryRow(ctx, `SELECT sync_quota_failures FROM mail_account WHERE user_id=$1 AND id=$2 AND status='active' FOR UPDATE`, u, id).Scan(&failures); e != nil {
+			return e
+		}
+		failures = min(failures+1, 6)
+		delay = time.Minute*time.Duration(1<<(failures-1)) + time.Duration(rand.IntN(15))*time.Second
+		_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_quota_failures=$3, sync_retry_at=now()+$4 * interval '1 second',
+		 last_error='Gmail is limiting requests. Sync will resume automatically.', updated_at=now() WHERE user_id=$1 AND id=$2`, u, id, failures, delay.Seconds())
+		return e
+	})
+	return delay, err
+}
+
 func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) error {
 	access, err := s.access(ctx, u, id)
 	if err != nil {
 		return err
 	}
-	var cursor string
-	var ids []string
-	var more bool
-	var watch *Watch
-	bootstrap := acc.HistoryID == nil
-	if !bootstrap {
-		page := ""
-		cursor = *acc.HistoryID
-		for {
-			p, e := s.provider.History(ctx, access, *acc.HistoryID, page)
-			if errors.Is(e, ErrHistoryExpired) {
-				bootstrap = true
-				break
+	var pending pendingSync
+	if len(acc.Pending) != 0 {
+		if err := json.Unmarshal(acc.Pending, &pending); err != nil {
+			return err
+		}
+	} else {
+		var cursor string
+		var ids []string
+		var more bool
+		var watch *Watch
+		bootstrap := acc.HistoryID == nil
+		if !bootstrap {
+			page := ""
+			cursor = *acc.HistoryID
+			for {
+				p, e := s.provider.History(ctx, access, *acc.HistoryID, page)
+				if errors.Is(e, ErrHistoryExpired) {
+					bootstrap = true
+					break
+				}
+				if e != nil {
+					return e
+				}
+				ids = append(ids, p.MessageIDs...)
+				if p.Next == "" {
+					if p.HistoryID != "" {
+						cursor = p.HistoryID
+					}
+					break
+				}
+				// Not the last page: the mailbox's current position would skip what is
+				// left, so only advance over the changes actually read.
+				cursor = newer(cursor, p.LastID)
+				if len(ids) >= syncBatch {
+					more = true
+					break
+				}
+				page = p.Next
 			}
+		}
+		if bootstrap {
+			// Take the cursor before listing so nothing arriving meanwhile is missed;
+			// a message seen twice is deduplicated on insert.
+			profile, e := s.provider.Profile(ctx, access)
 			if e != nil {
 				return e
 			}
-			ids = append(ids, p.MessageIDs...)
-			if p.Next == "" {
-				if p.HistoryID != "" {
-					cursor = p.HistoryID
-				}
-				break
-			}
-			// Not the last page: the mailbox's current position would skip what is
-			// left, so only advance over the changes actually read.
-			cursor = newer(cursor, p.LastID)
-			if len(ids) >= syncBatch {
-				more = true
-				break
-			}
-			page = p.Next
-		}
-	}
-	if bootstrap {
-		// Take the cursor before listing so nothing arriving meanwhile is missed;
-		// a message seen twice is deduplicated on insert.
-		profile, e := s.provider.Profile(ctx, access)
-		if e != nil {
-			return e
-		}
-		cursor = profile.HistoryID
-		if ids, e = s.provider.Recent(ctx, access, backfillDays, backfillMax); e != nil {
-			return e
-		}
-	}
-	if s.push {
-		if w, ok, e := s.provider.Watch(ctx, access); e != nil {
-			s.log.Warn("mail watch failed", "account_id", id, "err", e)
-		} else if ok {
-			watch = &w
-		}
-	}
-	ids = unique(storable(ids))
-	known, err := s.known(ctx, u, id, ids)
-	if err != nil {
-		return err
-	}
-	msgs := make([]Message, 0, len(ids))
-	for _, mid := range ids {
-		if known[mid] {
-			continue
-		}
-		m, e := s.provider.Get(ctx, access, mid)
-		if errors.Is(e, ErrMessageGone) {
-			continue
-		}
-		if e != nil {
-			return e
-		}
-		// Mail the member sent to themselves is not an application update.
-		if strings.Contains(strings.ToLower(m.From), "<"+acc.Address+">") || strings.EqualFold(strings.TrimSpace(m.From), acc.Address) {
-			continue
-		}
-		if m.ReceivedAt.Before(time.Now().AddDate(0, 0, -maxAgeDays)) {
-			continue
-		}
-		msgs = append(msgs, m)
-	}
-	return s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		for _, m := range msgs {
-			if e := s.store1(ctx, tx, u, id, m); e != nil {
+			cursor = profile.HistoryID
+			if ids, e = s.provider.Recent(ctx, access, backfillDays, backfillMax); e != nil {
 				return e
 			}
+		}
+		if s.push {
+			if w, ok, e := s.provider.Watch(ctx, access); e != nil {
+				s.log.Warn("mail watch failed", "account_id", id, "err", e)
+			} else if ok {
+				watch = &w
+			}
+		}
+
+		pending = pendingSync{IDs: unique(storable(ids)), Cursor: cursor, More: more, Bootstrap: bootstrap}
+		raw, e := json.Marshal(pending)
+		if e != nil {
+			return e
 		}
 		var expires *time.Time
 		if watch != nil {
 			expires = &watch.Expires
 		}
-		tag, e := tx.Exec(ctx, `UPDATE mail_account SET history_id=$3,last_synced_at=now(),last_error='',watch_expires_at=COALESCE($4,watch_expires_at),version=version+1,updated_at=now()
- WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, cursor, expires)
+		if e = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3,watch_expires_at=COALESCE($4,watch_expires_at) WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw), expires)
+			return e
+		}); e != nil {
+			return e
+		}
+	}
+	for len(pending.IDs) > 0 {
+		mid := pending.IDs[0]
+		known, e := s.known(ctx, u, id, []string{mid})
+		if e != nil {
+			return e
+		}
+		var m Message
+		save := false
+		if !known[mid] {
+			ok, e := s.reserveRead(ctx, u, id)
+			if e != nil {
+				return e
+			}
+			if !ok {
+				return errPaced
+			}
+			m, e = s.provider.Get(ctx, access, mid)
+			if e != nil && !errors.Is(e, ErrMessageGone) {
+				return e
+			}
+			if e == nil && !strings.Contains(strings.ToLower(m.From), "<"+acc.Address+">") && !strings.EqualFold(strings.TrimSpace(m.From), acc.Address) && !m.ReceivedAt.Before(time.Now().AddDate(0, 0, -maxAgeDays)) {
+				save = true
+			}
+		}
+		pending.IDs = pending.IDs[1:]
+		raw, e := json.Marshal(pending)
+		if e != nil {
+			return e
+		}
+		e = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+			if save {
+				if e := s.store1(ctx, tx, u, id, m); e != nil {
+					return e
+				}
+			}
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw))
+			return e
+		})
+		if e != nil {
+			return e
+		}
+	}
+	return s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		tag, e := tx.Exec(ctx, `UPDATE mail_account SET history_id=$3,last_synced_at=now(),last_error='',sync_pending=NULL,sync_retry_at=NULL,sync_quota_failures=0,version=version+1,updated_at=now() WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, pending.Cursor)
 		if e != nil || tag.RowsAffected() == 0 {
 			return e
 		}
 		if e = emit(ctx, tx, u, "mail.account.updated", id); e != nil {
 			return e
 		}
-		if more {
-			return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "continue:" + cursor})
+		if pending.More || pending.Bootstrap {
+			return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "continue:" + pending.Cursor})
 		}
 		return nil
 	})
