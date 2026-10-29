@@ -101,7 +101,7 @@
       (move)="move($event)"
     />
   } @else {
-    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" />
+    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" />
   }
 </ng-template>
 
