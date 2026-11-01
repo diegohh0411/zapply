@@ -42,7 +42,7 @@ interface NavItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <z-sidebar-provider class="h-svh min-h-0">
-      <z-sidebar zCollapsible="icon" #sidebar="zSidebar">
+      <z-sidebar zCollapsible="icon">
         <z-sidebar-header>
           <ul z-sidebar-menu>
             <li z-sidebar-menu-item>
@@ -50,7 +50,6 @@ interface NavItem {
                 z-sidebar-menu-button
                 zSize="lg"
                 routerLink="/jobs"
-                (click)="sidebar.sidebarService.setOpenMobile(false)"
               >
                 <img src="icon.svg" alt="" class="size-8 shrink-0 rounded-md" />
                 <span class="text-base font-semibold tracking-tight">zapply</span>
@@ -74,7 +73,6 @@ interface NavItem {
                         #rla="routerLinkActive"
                         [zActive]="rla.isActive"
                         [zTooltip]="item.label"
-                        (click)="sidebar.sidebarService.setOpenMobile(false)"
                       >
                         <ng-icon [name]="item.icon" />
                         <span>{{ item.label }}</span>
