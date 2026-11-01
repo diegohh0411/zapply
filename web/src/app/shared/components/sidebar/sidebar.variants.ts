@@ -58,16 +58,16 @@ export const sidebarInnerVariants = cva(
  * drawer out of the tab order and the accessibility tree.
  */
 export const sidebarMobileBackdropVariants = cva(
-  'fixed inset-0 z-50 bg-black/50 transition-opacity duration-150 ease-in-out data-closed:pointer-events-none data-closed:opacity-0 data-open:opacity-100',
+  'fixed inset-0 z-50 bg-black/50 transition-opacity duration-150 ease-in-out data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=open]:opacity-100 motion-reduce:transition-none',
 );
 
 export const sidebarMobileVariants = cva(
-  'fixed inset-y-0 z-50 flex h-dvh w-(--sidebar-width) max-w-[85vw] flex-col bg-sidebar p-0 text-sidebar-foreground shadow-lg transition-transform ease-in-out data-closed:duration-300 data-open:duration-500',
+  'fixed inset-y-0 z-[51] flex h-dvh w-(--sidebar-width) max-w-[85vw] flex-col bg-sidebar p-0 text-sidebar-foreground shadow-lg transition-transform ease-in-out data-[state=closed]:pointer-events-none data-[state=closed]:duration-300 data-[state=open]:duration-500 motion-reduce:transition-none',
   {
     variants: {
       zSide: {
-        left: 'left-0 data-closed:-translate-x-full',
-        right: 'right-0 data-closed:translate-x-full',
+        left: 'left-0 data-[state=closed]:-translate-x-full',
+        right: 'right-0 data-[state=closed]:translate-x-full',
       },
     },
     defaultVariants: {
@@ -102,7 +102,7 @@ export const sidebarTriggerVariants = cva(
 );
 
 export const sidebarRailVariants = cva([
-  'absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex',
+  'absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border md:flex',
   'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
   '[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize',
   'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar',
@@ -111,7 +111,7 @@ export const sidebarRailVariants = cva([
 ]);
 
 export const sidebarInsetVariants = cva([
-  'relative flex w-full flex-1 flex-col bg-background',
+  'relative z-0 flex w-full flex-1 flex-col bg-background',
   'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2',
 ]);
 

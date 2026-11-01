@@ -1,7 +1,9 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
-import { computed, inject, Injectable, PLATFORM_ID, REQUEST, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { computed, effect, inject, Injectable, PLATFORM_ID, REQUEST, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+
+import { NavigationEnd, NavigationSkipped, NavigationSkippedCode, Router } from '@angular/router';
 
 import { map, of } from 'rxjs';
 
@@ -10,6 +12,8 @@ import {
   ZARD_SIDEBAR_COOKIE_NAME,
   ZARD_SIDEBAR_MOBILE_BREAKPOINT,
 } from '@/shared/components/sidebar/sidebar.constants';
+
+let nextSidebarId = 0;
 
 export type ZardSidebarState = 'expanded' | 'collapsed';
 
@@ -21,6 +25,8 @@ export type ZardSidebarState = 'expanded' | 'collapsed';
  */
 @Injectable()
 export class ZardSidebarService {
+  readonly mobileId = `z-sidebar-mobile-${nextSidebarId++}`;
+
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly document = inject(DOCUMENT);
   private readonly request = inject(REQUEST, { optional: true });
@@ -54,6 +60,38 @@ export class ZardSidebarService {
   readonly open = computed(() => this.controlledOpen() ?? this.internalOpen());
   readonly openMobile = this.internalOpenMobile.asReadonly();
   readonly state = computed<ZardSidebarState>(() => (this.open() ? 'expanded' : 'collapsed'));
+
+  constructor() {
+    effect(() => {
+      if (!this.isMobile()) this.internalOpenMobile.set(false);
+    });
+
+    effect(onCleanup => {
+      if (!this.isBrowser || !this.isMobile() || !this.openMobile()) return;
+      const body = this.document.body.style;
+      const root = this.document.documentElement.style;
+      const bodyOverflow = body.overflow;
+      const rootOverflow = root.overflow;
+      body.overflow = root.overflow = 'hidden';
+      onCleanup(() => {
+        body.overflow = bodyOverflow;
+        root.overflow = rootOverflow;
+      });
+    });
+
+    // Wait for routing to finish, including same-URL links. Canceled/failed navigation and
+    // modified clicks that open a new tab should leave the drawer open.
+    inject(Router, { optional: true })
+      ?.events.pipe(takeUntilDestroyed())
+      .subscribe(event => {
+        if (
+          event instanceof NavigationEnd ||
+          (event instanceof NavigationSkipped && event.code === NavigationSkippedCode.IgnoredSameUrlNavigation)
+        ) {
+          this.setOpenMobile(false);
+        }
+      });
+  }
 
   setOpen(value: boolean | ((open: boolean) => boolean)): void {
     const openState = typeof value === 'function' ? value(this.open()) : value;
