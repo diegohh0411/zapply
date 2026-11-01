@@ -370,9 +370,10 @@ export class JobsStore {
 
   // Statuses
 
-  async createStatus(body: Schemas['JobStatusInput']): Promise<void> {
-    Api.ok(await this.inSession(() => this.api.POST('/v1/job-statuses', { body })));
+  async createStatus(body: Schemas['JobStatusInput']): Promise<JobStatus> {
+    const created = Api.ok(await this.inSession(() => this.api.POST('/v1/job-statuses', { body })));
     await this.loadStatuses();
+    return created;
   }
 
   async updateStatus(id: string, body: Schemas['JobStatusInput']): Promise<void> {

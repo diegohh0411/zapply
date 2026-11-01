@@ -1,7 +1,9 @@
 import { CdkDrag, type CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideArchive, lucideMapPin, lucidePlus, lucideWallet } from '@ng-icons/lucide';
+import { lucideArchive, lucideEllipsis, lucideMapPin, lucidePlus, lucideWallet } from '@ng-icons/lucide';
+
+import { ZardDropdownImports } from '@/shared/components/dropdown';
 
 import { ago, hostname, salary } from './format';
 import { StatusPill } from './status-pill';
@@ -16,8 +18,8 @@ export interface BoardMove {
 
 @Component({
   selector: 'app-job-board',
-  imports: [CdkDropListGroup, CdkDropList, CdkDrag, CdkDragPlaceholder, NgIcon, StatusPill],
-  providers: [provideIcons({ lucidePlus, lucideMapPin, lucideWallet, lucideArchive })],
+  imports: [CdkDropListGroup, CdkDropList, CdkDrag, CdkDragPlaceholder, NgIcon, StatusPill, ...ZardDropdownImports],
+  providers: [provideIcons({ lucidePlus, lucideMapPin, lucideWallet, lucideArchive, lucideEllipsis })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex h-full gap-3 overflow-x-auto p-4 pt-2" cdkDropListGroup>
@@ -26,14 +28,22 @@ export interface BoardMove {
           <header class="flex items-center gap-2 px-3 pb-1 pt-3">
             <h2 class="min-w-0"><app-status-pill [status]="col.status" /></h2>
             <span class="text-xs tabular-nums text-muted-foreground">{{ col.jobs.length }}</span>
+            <span class="ml-auto flex shrink-0 items-center">
+            <z-dropdown-menu>
+              <button dropdown-trigger type="button" class="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground" [attr.aria-label]="col.status.name + ' options'">
+                <ng-icon name="lucideEllipsis" class="size-4" />
+              </button>
+              <z-dropdown-menu-item (click)="editProperty.emit()">Edit property</z-dropdown-menu-item>
+            </z-dropdown-menu>
             <button
               type="button"
-              class="ml-auto rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+              class="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground"
               (click)="add.emit(col.status.id)"
               [attr.aria-label]="'Add a job to ' + col.status.name"
             >
               <ng-icon name="lucidePlus" class="size-4" />
             </button>
+            </span>
           </header>
 
           <div
@@ -101,6 +111,7 @@ export class JobBoard {
   readonly jobs = input.required<JobSummary[]>();
   readonly open = output<string>();
   readonly add = output<string>();
+  readonly editProperty = output<void>();
   readonly move = output<BoardMove>();
 
   protected readonly host = hostname;

@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideArrowDown, lucideArrowUp, lucideType, lucideBuilding2, lucideCircleDot, lucideMapPin, lucideCalendarDays, lucideClock, lucideSparkles, lucideBanknote, lucideFileText, lucidePlus } from '@ng-icons/lucide';
 
+import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardTableImports } from '@/shared/components/table';
 
 import { ago, hostname, salary } from './format';
@@ -13,7 +14,7 @@ type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' 
 
 @Component({
   selector: 'app-job-table',
-  imports: [DatePipe, NgIcon, StatusPill, ...ZardTableImports],
+  imports: [DatePipe, NgIcon, StatusPill, ...ZardTableImports, ...ZardDropdownImports],
   providers: [provideIcons({ lucideArrowUp, lucideArrowDown, lucideType, lucideBuilding2, lucideCircleDot, lucideMapPin, lucideCalendarDays, lucideClock, lucideSparkles, lucideBanknote, lucideFileText, lucidePlus })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -24,13 +25,29 @@ type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' 
             <tr z-table-row>
               @for (c of cols; track c.key) {
                 <th z-table-head [class]="c.class" [attr.aria-sort]="sortKey() === c.key ? (asc() ? 'ascending' : 'descending') : null">
-                  <button type="button" class="inline-flex items-center gap-1 hover:text-foreground" (click)="sortBy(c.key)">
-                    <ng-icon [name]="c.icon" class="size-4 text-muted-foreground" />
-                    {{ c.label }}
-                    @if (sortKey() === c.key) {
-                      <ng-icon [name]="asc() ? 'lucideArrowUp' : 'lucideArrowDown'" class="size-3" />
-                    }
-                  </button>
+                  @if (c.key === 'status') {
+                    <z-dropdown-menu>
+                      <button dropdown-trigger type="button" class="inline-flex items-center gap-1 hover:text-foreground">
+                        <ng-icon [name]="c.icon" class="size-4 text-muted-foreground" />
+                        {{ c.label }}
+                        @if (sortKey() === c.key) {
+                          <ng-icon [name]="asc() ? 'lucideArrowUp' : 'lucideArrowDown'" class="size-3" />
+                        }
+                      </button>
+                      <z-dropdown-menu-item (click)="editProperty.emit()">Edit property</z-dropdown-menu-item>
+                      <z-dropdown-menu-separator />
+                      <z-dropdown-menu-item (click)="setSort(c.key, true)"><ng-icon name="lucideArrowUp" /> Sort ascending</z-dropdown-menu-item>
+                      <z-dropdown-menu-item (click)="setSort(c.key, false)"><ng-icon name="lucideArrowDown" /> Sort descending</z-dropdown-menu-item>
+                    </z-dropdown-menu>
+                  } @else {
+                    <button type="button" class="inline-flex items-center gap-1 hover:text-foreground" (click)="sortBy(c.key)">
+                      <ng-icon [name]="c.icon" class="size-4 text-muted-foreground" />
+                      {{ c.label }}
+                      @if (sortKey() === c.key) {
+                        <ng-icon [name]="asc() ? 'lucideArrowUp' : 'lucideArrowDown'" class="size-3" />
+                      }
+                    </button>
+                  }
                 </th>
               }
               <th z-table-head class="hidden lg:table-cell"><span class="inline-flex items-center gap-1"><ng-icon name="lucideBanknote" class="size-4" /> Salary</span></th>
@@ -74,6 +91,7 @@ export class JobTable {
   readonly jobs = input.required<JobSummary[]>();
   readonly open = output<string>();
   readonly add = output<void>();
+  readonly editProperty = output<void>();
 
   protected readonly host = hostname;
   protected readonly pay = salary;
@@ -119,6 +137,11 @@ export class JobTable {
 
   protected statusOf(j: JobSummary): JobStatus | undefined {
     return this.statusIndex().get(j.status_id)?.s;
+  }
+
+  protected setSort(key: Key, asc: boolean): void {
+    this.sortKey.set(key);
+    this.asc.set(asc);
   }
 
   protected sortBy(key: Key): void {

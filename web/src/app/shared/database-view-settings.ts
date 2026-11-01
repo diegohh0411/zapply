@@ -1,24 +1,28 @@
-import { ChangeDetectionStrategy, Component, input, model, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, input, model, output, signal, TemplateRef } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
   lucideChevronRight,
+  lucideCircleDot,
   lucidePencil,
   lucideSquareKanban,
   lucideTable,
   lucideTrash2,
   lucideX,
 } from '@ng-icons/lucide';
+import type { DatabaseProperty } from './database';
 
 // Notion-style view settings: a panel docked to the right edge of the
 // database (not the viewport), with menu rows that drill into sub-pages.
 @Component({
   selector: 'app-database-view-settings',
-  imports: [NgIcon],
+  imports: [NgIcon, NgTemplateOutlet],
   providers: [
     provideIcons({
       lucideArrowLeft,
       lucideChevronRight,
+      lucideCircleDot,
       lucidePencil,
       lucideSquareKanban,
       lucideTable,
@@ -35,7 +39,43 @@ import {
     '(keydown.escape)': 'close()',
   },
   template: `
-    @if (page() === 'main') {
+    @if (editing(); as p) {
+      <div class="flex items-center gap-2 px-3 pb-1 pt-3">
+        <button type="button" class="settings-icon-btn" aria-label="Back" (click)="property.set(null); page.set('properties')">
+          <ng-icon name="lucideArrowLeft" class="size-4" />
+        </button>
+        <h2 class="flex-1 text-sm font-semibold">Edit property</h2>
+        <button type="button" class="settings-icon-btn" aria-label="Close view settings" (click)="close()">
+          <ng-icon name="lucideX" class="size-4" />
+        </button>
+      </div>
+      <div class="flex items-center gap-2 px-3 py-2">
+        <ng-icon [name]="p.icon" class="size-4 text-muted-foreground" />
+        <span class="min-w-0 flex-1 truncate rounded-md border bg-muted/40 px-2 py-1 text-sm">{{ p.name }}</span>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <ng-container *ngTemplateOutlet="propertyEditor()" />
+      </div>
+    } @else if (page() === 'properties') {
+      <div class="flex items-center gap-2 px-3 pb-1 pt-3">
+        <button type="button" class="settings-icon-btn" aria-label="Back" (click)="page.set('main')">
+          <ng-icon name="lucideArrowLeft" class="size-4" />
+        </button>
+        <h2 class="flex-1 text-sm font-semibold">Edit properties</h2>
+        <button type="button" class="settings-icon-btn" aria-label="Close view settings" (click)="close()">
+          <ng-icon name="lucideX" class="size-4" />
+        </button>
+      </div>
+      <div class="flex flex-col p-1">
+        @for (p of properties(); track p.id) {
+          <button type="button" class="settings-row" (click)="property.set(p.id)">
+            <ng-icon [name]="p.icon" class="size-4 text-muted-foreground" />
+            <span class="flex-1 text-left">{{ p.name }}</span>
+            <ng-icon name="lucideChevronRight" class="size-4 text-muted-foreground" />
+          </button>
+        }
+      </div>
+    } @else if (page() === 'main') {
       <div class="flex items-center gap-2 px-3 pb-1 pt-3">
         <h2 class="flex-1 text-sm font-semibold">View settings</h2>
         <button type="button" class="settings-icon-btn" aria-label="Close view settings" (click)="close()">
@@ -55,6 +95,13 @@ import {
           <span class="text-muted-foreground">{{ layout() === 'table' ? 'Table' : 'Board' }}</span>
           <ng-icon name="lucideChevronRight" class="size-4 text-muted-foreground" />
         </button>
+        @if (properties().length) {
+          <button type="button" class="settings-row" (click)="page.set('properties')">
+            <ng-icon name="lucideCircleDot" class="size-4 text-muted-foreground" />
+            <span class="flex-1 text-left">Edit properties</span>
+            <ng-icon name="lucideChevronRight" class="size-4 text-muted-foreground" />
+          </button>
+        }
       </div>
       @if (editable()) {
         <div class="mt-auto flex flex-col border-t p-1">
@@ -98,13 +145,17 @@ import {
 })
 export class DatabaseViewSettings {
   readonly visible = model(false);
+  readonly property = model<string | null>(null);
+  readonly properties = input<readonly DatabaseProperty[]>([]);
+  readonly propertyEditor = input<TemplateRef<unknown> | null>(null);
   readonly viewName = input.required<string>();
   readonly layout = input.required<'board' | 'table'>();
   readonly editable = input(false);
   readonly layoutChange = output<'board' | 'table'>();
   readonly rename = output<void>();
   readonly remove = output<void>();
-  protected readonly page = signal<'main' | 'layout'>('main');
+  protected readonly page = signal<'main' | 'layout' | 'properties'>('main');
+  protected readonly editing = computed(() => this.properties().find((p) => p.id === this.property()));
   protected readonly layouts = [
     { value: 'table', label: 'Table', icon: 'lucideTable' },
     { value: 'board', label: 'Board', icon: 'lucideSquareKanban' },
@@ -114,6 +165,7 @@ export class DatabaseViewSettings {
   }
   protected close(): void {
     this.page.set('main');
+    this.property.set(null);
     this.visible.set(false);
   }
 }
