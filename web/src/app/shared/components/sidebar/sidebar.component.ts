@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePanelLeft } from '@ng-icons/lucide';
+import { lucidePanelLeft, lucideX } from '@ng-icons/lucide';
 import type { ClassValue } from 'clsx';
 
 import { buttonVariants } from '@/shared/components/button/button.variants';
@@ -30,6 +30,7 @@ import {
   sidebarInnerVariants,
   sidebarInsetVariants,
   sidebarMobileBackdropVariants,
+  sidebarMobileCloseVariants,
   sidebarMobileVariants,
   sidebarNoneVariants,
   sidebarRailVariants,
@@ -41,6 +42,8 @@ import {
   type ZardSidebarVariantVariants,
 } from '@/shared/components/sidebar/sidebar.variants';
 import { mergeClasses } from '@/shared/utils/merge-classes';
+
+const SWIPE_CLOSE_DISTANCE_PX = 50;
 
 @Component({
   selector: 'z-sidebar-provider',
@@ -110,7 +113,8 @@ export class ZardSidebarProviderComponent implements OnInit {
 
 @Component({
   selector: 'z-sidebar',
-  imports: [A11yModule, NgTemplateOutlet],
+  imports: [A11yModule, NgIcon, NgTemplateOutlet],
+  viewProviders: [provideIcons({ lucideX })],
   template: `
     <ng-template #projected>
       <ng-content />
@@ -146,7 +150,18 @@ export class ZardSidebarProviderComponent implements OnInit {
         [attr.inert]="sidebarService.openMobile() ? null : ''"
         [class]="mobileClasses()"
         [style]="mobileStyle"
+        (touchstart)="onDrawerTouchStart($event)"
+        (touchend)="onDrawerTouchEnd($event)"
       >
+        <button
+          type="button"
+          data-slot="sidebar-close"
+          aria-label="Close Sidebar"
+          [class]="closeClasses()"
+          (click)="sidebarService.setOpenMobile(false)"
+        >
+          <ng-icon name="lucideX" class="size-5" />
+        </button>
         <div class="flex size-full flex-col">
           <ng-container [ngTemplateOutlet]="projected" />
         </div>
@@ -184,6 +199,8 @@ export class ZardSidebarComponent {
   readonly class = input<ClassValue>('');
   readonly dir = input<'ltr' | 'rtl' | undefined>(undefined);
 
+  private touchStart?: { x: number; y: number };
+
   protected readonly mobileStyle = `--sidebar-width: ${ZARD_SIDEBAR_WIDTH_MOBILE}`;
 
   protected readonly isDesktop = computed(() => this.zCollapsible() !== 'none' && !this.sidebarService.isMobile());
@@ -210,6 +227,8 @@ export class ZardSidebarComponent {
     mergeClasses(sidebarMobileVariants({ zSide: this.zSide() }), this.class()),
   );
 
+  protected readonly closeClasses = computed(() => sidebarMobileCloseVariants({ zSide: this.zSide() }));
+
   protected readonly gapClasses = computed(() => sidebarGapVariants({ zVariant: this.zVariant() }));
 
   protected readonly containerClasses = computed(() =>
@@ -217,6 +236,28 @@ export class ZardSidebarComponent {
   );
 
   protected readonly innerClasses = computed(() => sidebarInnerVariants());
+
+  /** Remembers where a touch began, so its end can tell a swipe from a tap or a vertical scroll. */
+  protected onDrawerTouchStart(event: TouchEvent): void {
+    const touch = event.changedTouches[0];
+    this.touchStart = touch ? { x: touch.clientX, y: touch.clientY } : undefined;
+  }
+
+  /** Swiping the drawer back towards its edge closes it. */
+  protected onDrawerTouchEnd(event: TouchEvent): void {
+    const touch = event.changedTouches[0];
+    const start = this.touchStart;
+    this.touchStart = undefined;
+    if (!touch || !start) {
+      return;
+    }
+
+    const deltaX = touch.clientX - start.x;
+    const towardsEdge = this.zSide() === 'left' ? -deltaX : deltaX;
+    if (towardsEdge >= SWIPE_CLOSE_DISTANCE_PX && towardsEdge > Math.abs(touch.clientY - start.y)) {
+      this.sidebarService.setOpenMobile(false);
+    }
+  }
 
   protected onEscape(): void {
     if (this.sidebarService.openMobile()) {
