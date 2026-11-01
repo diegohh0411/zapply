@@ -39,7 +39,7 @@ The build output is embedded with `go:embed` (`internal/webui`) and served by th
 
 The frame is ZardUI's sidebar:
 - **Desktop:** it collapses to icons from the header button, the rail or Ctrl/⌘+B, and remembers its state in a cookie.
-- **Mobile:** it becomes a drawer that closes after you pick a page.
+- **Mobile:** it becomes a drawer, opened from the header button. It closes after you pick a page, or with its close button, a tap outside, a swipe back towards the edge or Esc.
 - **Header:** a slim bar holds the toggle and the live-updates indicator.
 
 | Route | What |

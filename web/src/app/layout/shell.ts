@@ -46,7 +46,12 @@ interface NavItem {
         <z-sidebar-header>
           <ul z-sidebar-menu>
             <li z-sidebar-menu-item>
-              <a z-sidebar-menu-button zSize="lg" routerLink="/jobs">
+              <a
+                z-sidebar-menu-button
+                zSize="lg"
+                routerLink="/jobs"
+                (click)="sidebar.sidebarService.setOpenMobile(false)"
+              >
                 <img src="icon.svg" alt="" class="size-8 shrink-0 rounded-md" />
                 <span class="text-base font-semibold tracking-tight">zapply</span>
               </a>
