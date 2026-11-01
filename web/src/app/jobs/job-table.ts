@@ -26,7 +26,7 @@ type Key = 'score' | 'title' | 'company' | 'status' | 'location' | 'applied_on' 
               @for (c of cols; track c.key) {
                 <th z-table-head [class]="c.class" [attr.aria-sort]="sortKey() === c.key ? (asc() ? 'ascending' : 'descending') : null">
                   @if (c.key === 'status') {
-                    <z-dropdown-menu class="w-48">
+                    <z-dropdown-menu>
                       <button dropdown-trigger type="button" class="inline-flex items-center gap-1 hover:text-foreground">
                         <ng-icon [name]="c.icon" class="size-4 text-muted-foreground" />
                         {{ c.label }}

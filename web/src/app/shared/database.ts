@@ -155,11 +155,27 @@ export interface DatabaseView {
           </button>
         </div>
       </div>
-      <ng-content select="[databaseFilters]" />
     </header>
-    <section class="min-h-0 flex-1 overflow-auto pt-2">
-      <ng-container *ngTemplateOutlet="content(); context: { $implicit: layout() }" />
-    </section>
+    <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div class="px-4 pt-3"><ng-content select="[databaseFilters]" /></div>
+      <section class="min-h-0 flex-1 overflow-auto pt-2">
+        <ng-container *ngTemplateOutlet="content(); context: { $implicit: layout() }" />
+      </section>
+      @if (viewSettingsOpen()) {
+        <app-database-view-settings
+          [(visible)]="viewSettingsOpen"
+          [(property)]="editingProperty"
+          [properties]="properties()"
+          [propertyEditor]="propertyEditor()"
+          [viewName]="activeView()?.name ?? defaultViewName()"
+          [layout]="layout()"
+          [editable]="!!activeView()"
+          (layoutChange)="layoutChange.emit($event)"
+          (rename)="save.emit()"
+          (remove)="remove.emit(activeView()!.id)"
+        />
+      }
+    </div>
     <z-dropdown-menu-content #tabMenu="zDropdownMenuContent" class="w-52">
       @if (menuView(); as v) {
         <z-dropdown-menu-item (click)="startRename(v)"><ng-icon name="lucidePencil" /> Rename</z-dropdown-menu-item>
@@ -170,20 +186,6 @@ export interface DatabaseView {
         <z-dropdown-menu-item zType="destructive" (click)="remove.emit(v.id)"><ng-icon name="lucideTrash2" /> Delete view</z-dropdown-menu-item>
       }
     </z-dropdown-menu-content>
-    @if (viewSettingsOpen()) {
-      <app-database-view-settings
-        [(visible)]="viewSettingsOpen"
-        [(property)]="editingProperty"
-        [properties]="properties()"
-        [propertyEditor]="propertyEditor()"
-        [viewName]="activeView()?.name ?? defaultViewName()"
-        [layout]="layout()"
-        [editable]="!!activeView()"
-        (layoutChange)="layoutChange.emit($event)"
-        (rename)="save.emit()"
-        (remove)="remove.emit(activeView()!.id)"
-      />
-    }
   `,
 })
 export class Database {

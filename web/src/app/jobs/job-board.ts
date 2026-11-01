@@ -28,7 +28,8 @@ export interface BoardMove {
           <header class="flex items-center gap-2 px-3 pb-1 pt-3">
             <h2 class="min-w-0"><app-status-pill [status]="col.status" /></h2>
             <span class="text-xs tabular-nums text-muted-foreground">{{ col.jobs.length }}</span>
-            <z-dropdown-menu class="ml-auto w-44">
+            <span class="ml-auto flex shrink-0 items-center">
+            <z-dropdown-menu>
               <button dropdown-trigger type="button" class="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground" [attr.aria-label]="col.status.name + ' options'">
                 <ng-icon name="lucideEllipsis" class="size-4" />
               </button>
@@ -42,6 +43,7 @@ export interface BoardMove {
             >
               <ng-icon name="lucidePlus" class="size-4" />
             </button>
+            </span>
           </header>
 
           <div
