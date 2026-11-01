@@ -7,11 +7,12 @@ import {
   input,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideSearch, lucideSettings2, lucideX } from '@ng-icons/lucide';
+import { lucidePlus, lucideSearch, lucideX } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDialogImports } from '@/shared/components/dialog';
@@ -34,7 +35,7 @@ import {
   STAGES,
 } from './jobs.store';
 import { Database } from '../shared/database';
-import { StatusesDialog } from './statuses-dialog';
+import { StatusProperty } from './status-property';
 
 type Layout = 'board' | 'table';
 
@@ -58,14 +59,13 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
     JobBoard,
     JobTable,
     JobSheet,
-    StatusesDialog,
+    StatusProperty,
     Database,
   ],
   providers: [
     provideIcons({
       lucidePlus,
       lucideSearch,
-      lucideSettings2,
       lucideX,
     }),
   ],
@@ -86,7 +86,8 @@ export class JobsPage {
   protected readonly state = signal<ViewState>(DEFAULT_STATE);
   protected readonly sheetTarget = signal<SheetTarget | null>(null);
   protected readonly sheetOpen = signal(false);
-  protected readonly statusesOpen = signal(false);
+  protected readonly properties = [{ id: 'status', name: 'Status', icon: 'lucideCircleDot' }];
+  protected readonly database = viewChild(Database);
   protected readonly saveOpen = signal(false);
   protected viewName = '';
   /** Set while the save dialog creates a blank view from the "+" menu. */

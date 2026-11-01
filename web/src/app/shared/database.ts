@@ -28,6 +28,12 @@ import { ZardDropdownImports } from './components/dropdown';
 import { ZardButtonComponent } from './components/button';
 import { DatabaseViewSettings } from './database-view-settings';
 
+export interface DatabaseProperty {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export interface DatabaseView {
   id: string;
   name: string;
@@ -134,9 +140,18 @@ export interface DatabaseView {
             aria-label="View settings"
             [attr.aria-expanded]="viewSettingsOpen()"
             [class.bg-muted]="viewSettingsOpen()"
-            (click)="viewSettingsOpen.set(!viewSettingsOpen())"
+            (click)="toggleSettings()"
           >
             <ng-icon name="lucideSettings2" />
+          </button>
+          <button
+            z-button
+            zSize="sm"
+            type="button"
+            class="bg-blue-600 text-white hover:bg-blue-700"
+            (click)="add.emit()"
+          >
+            {{ addLabel() }} <ng-icon name="lucidePlus" />
           </button>
         </div>
       </div>
@@ -158,6 +173,9 @@ export interface DatabaseView {
     @if (viewSettingsOpen()) {
       <app-database-view-settings
         [(visible)]="viewSettingsOpen"
+        [(property)]="editingProperty"
+        [properties]="properties()"
+        [propertyEditor]="propertyEditor()"
         [viewName]="activeView()?.name ?? defaultViewName()"
         [layout]="layout()"
         [editable]="!!activeView()"
@@ -175,6 +193,11 @@ export class Database {
   readonly layout = input.required<'board' | 'table'>();
   readonly modified = input(false);
   readonly content = input.required<TemplateRef<unknown>>();
+  readonly addLabel = input('New');
+  /** Editable properties; propertyEditor renders the one being edited. */
+  readonly properties = input<readonly DatabaseProperty[]>([]);
+  readonly propertyEditor = input<TemplateRef<unknown> | null>(null);
+  readonly add = output<void>();
   readonly viewChange = output<string | null>();
   readonly layoutChange = output<'board' | 'table'>();
   readonly save = output<void>();
@@ -187,9 +210,19 @@ export class Database {
   private readonly toast = inject(ZardSonnerService);
   private readonly renameInput = viewChild<ElementRef<HTMLInputElement>>('renameInput');
   protected readonly viewSettingsOpen = signal(false);
+  protected readonly editingProperty = signal<string | null>(null);
   protected readonly activeView = computed(() =>
     this.views().find((v) => v.id === this.activeViewId()),
   );
+  /** Opens a property's editor in the view settings panel. */
+  editProperty(id: string): void {
+    this.editingProperty.set(id);
+    this.viewSettingsOpen.set(true);
+  }
+  protected toggleSettings(): void {
+    this.editingProperty.set(null);
+    this.viewSettingsOpen.update((v) => !v);
+  }
   /** Clicking the active tab opens its menu below it, like Notion. */
   protected openMenu(v: DatabaseView, trigger: ZardContextMenuDirective, event: MouseEvent): void {
     this.menuView.set(v);

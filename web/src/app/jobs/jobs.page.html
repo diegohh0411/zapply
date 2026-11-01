@@ -13,6 +13,9 @@
   (addView)="openNewView($event)"
   (renameView)="renameView($event.id, $event.name)"
   (duplicateView)="duplicateView($event)"
+  (add)="newJob()"
+  [properties]="properties"
+  [propertyEditor]="propertyEditor"
 >
   <div databaseHeader class="flex flex-wrap items-center gap-3">
     <div class="mr-auto">
@@ -22,10 +25,6 @@
         {{ counts().offer === 1 ? 'offer' : 'offers' }}
       </p>
     </div>
-    <button z-button zType="outline" type="button" (click)="statusesOpen.set(true)">
-      <ng-icon name="lucideSettings2" /> Columns
-    </button>
-    <button z-button type="button" (click)="newJob()"><ng-icon name="lucidePlus" /> New job</button>
   </div>
 
   <div databaseFilters class="flex flex-wrap items-center gap-2">
@@ -103,11 +102,14 @@
       (open)="open($event)"
       (add)="newJob($event)"
       (move)="move($event)"
+      (editProperty)="database()?.editProperty('status')"
     />
   } @else {
-    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" />
+    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" (editProperty)="database()?.editProperty('status')" />
   }
 </ng-template>
+
+<ng-template #propertyEditor><app-status-property /></ng-template>
 
 }
 
@@ -117,7 +119,6 @@
   (visibleChange)="sheetVisible($event)"
   (opened)="open($event)"
 />
-<app-statuses-dialog [(visible)]="statusesOpen" />
 
 <z-dialog [(zVisible)]="saveOpen" zWidth="min(420px, 95vw)">
   <z-dialog-header>
