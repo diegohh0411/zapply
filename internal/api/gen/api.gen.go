@@ -868,10 +868,11 @@ type CvPicks struct {
 type CvPreview struct {
 	Available struct {
 		Entries []struct {
-			Id     string                          `json:"id"`
-			Kind   string                          `json:"kind"`
-			Reason CvPreviewAvailableEntriesReason `json:"reason"`
-			Title  string                          `json:"title"`
+			Id      string                          `json:"id"`
+			Kind    string                          `json:"kind"`
+			Reason  CvPreviewAvailableEntriesReason `json:"reason"`
+			Section string                          `json:"section"`
+			Title   string                          `json:"title"`
 		} `json:"entries"`
 		Highlights []struct {
 			EvidenceId string `json:"evidence_id"`

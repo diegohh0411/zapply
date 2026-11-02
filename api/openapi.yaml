@@ -1611,11 +1611,12 @@ components:
               type: array
               items:
                 type: object
-                required: [id, title, kind, reason]
+                required: [id, title, kind, section, reason]
                 properties:
                   id: { type: string }
                   title: { type: string }
                   kind: { type: string }
+                  section: { type: string }
                   reason: { type: string, enum: [excluded, suggested, not_selected] }
             highlights:
               type: array

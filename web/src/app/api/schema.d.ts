@@ -1169,6 +1169,7 @@ export interface components {
                     id: string;
                     title: string;
                     kind: string;
+                    section: string;
                     /** @enum {string} */
                     reason: "excluded" | "suggested" | "not_selected";
                 }[];

@@ -136,7 +136,7 @@
       </summary>
       <div class="space-y-4 border-t p-4">
         <p class="text-xs text-muted-foreground">
-          Pinned items are never trimmed. Removing an item only affects this job's CV.
+          Pinned items are never trimmed. Use the eye to show or hide items in this job's CV.
         </p>
         @for (section of rows(); track section.key) {
           <div>
@@ -151,7 +151,7 @@
                 >
                   <span
                     class="min-w-0 flex-1"
-                    [class.text-muted-foreground]="row.state === 'trimmed'"
+                    [class.text-muted-foreground]="row.state === 'trimmed' || row.state === 'hidden'"
                     [class.line-through]="row.state === 'trimmed'"
                     [class.font-medium]="!row.highlight"
                     >{{ row.highlight ? '• ' : '' }}{{ row.label }}</span
@@ -161,6 +161,9 @@
                   }
                   @if (row.state === 'trimmed') {
                     <span class="shrink-0 text-[11px] text-muted-foreground">Trimmed to fit</span>
+                  }
+                  @if (row.state === 'hidden') {
+                    <span class="shrink-0 text-[11px] text-muted-foreground">Hidden</span>
                   }
                   @if (row.state === 'pinned') {
                     <button
@@ -172,7 +175,7 @@
                     >
                       <ng-icon name="lucidePin" /> Pinned
                     </button>
-                  } @else {
+                  } @else if (row.state !== 'hidden') {
                     <button
                       type="button"
                       class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
@@ -185,12 +188,12 @@
                   }
                   <button
                     type="button"
-                    class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                    class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
                     [disabled]="busy()"
-                    (click)="pick(row.id, 'exclude')"
-                    [attr.aria-label]="'Remove ' + row.label"
+                    (click)="pick(row.id, row.state === 'hidden' || row.state === 'trimmed' ? 'include' : 'exclude')"
+                    [attr.aria-label]="(row.state === 'hidden' || row.state === 'trimmed' ? 'Show ' : 'Hide ') + row.label"
                   >
-                    <ng-icon name="lucideX" />
+                    <ng-icon [name]="row.state === 'hidden' || row.state === 'trimmed' ? 'lucideEyeOff' : 'lucideEye'" />
                   </button>
                 </li>
               }
@@ -222,56 +225,6 @@
         }
       </div>
     </details>
-
-    @if (p.available.entries.length || p.available.highlights.length) {
-      <details class="group rounded-xl border">
-        <summary
-          class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm text-muted-foreground"
-        >
-          Left out ({{ p.available.entries.length + p.available.highlights.length }})
-          <ng-icon
-            name="lucideChevronDown"
-            class="shrink-0 transition-transform group-open:rotate-180"
-          />
-        </summary>
-        <ul class="divide-y border-t px-4">
-          @for (e of p.available.entries; track e.id) {
-            <li class="flex items-start gap-2 py-2 text-sm">
-              <span class="min-w-0 flex-1"
-                ><span class="font-medium">{{ e.title }}</span>
-                <span class="text-xs text-muted-foreground">· {{ reasons[e.reason] }}</span></span
-              >
-              <button
-                type="button"
-                class="shrink-0 text-xs text-brand hover:underline"
-                [disabled]="busy()"
-                (click)="pick(e.id, 'include')"
-              >
-                <ng-icon name="lucidePlus" /> Add
-              </button>
-            </li>
-          }
-          @for (h of p.available.highlights; track h.id) {
-            <li class="flex items-start gap-2 py-2 text-sm">
-              <span class="min-w-0 flex-1"
-                >• {{ h.text }}
-                @if (h.excluded) {
-                  <span class="text-xs text-muted-foreground">· Removed by you</span>
-                }
-              </span>
-              <button
-                type="button"
-                class="shrink-0 text-xs text-brand hover:underline"
-                [disabled]="busy()"
-                (click)="pick(h.id, 'include')"
-              >
-                <ng-icon name="lucidePlus" /> Add
-              </button>
-            </li>
-          }
-        </ul>
-      </details>
-    }
 
     @if (exports().length) {
       <details class="group rounded-xl border">
