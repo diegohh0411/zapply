@@ -2,6 +2,8 @@ package api_test
 
 import (
 	"context"
+	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"net/http/httptest"
 	"os"
@@ -31,6 +33,30 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer admin.Close(ctx)
+	me := c.must(200, "GET", "/v1/me", nil)
+	userID := uuid.MustParse(me.Body["id"].(string))
+	c.must(403, "PUT", "/v1/admin/model-settings", map[string]any{"decision_model": nil, "summary_max_output_tokens": 4096}, "If-Match", "1")
+	if err = store.SetOwner(ctx, db.AdminURL, userID, true); err != nil {
+		t.Fatal(err)
+	}
+	settings := c.must(200, "GET", "/v1/admin/model-settings", nil)
+	if settings.Body["summary_max_output_tokens"] != float64(2048) {
+		t.Fatalf("unexpected default: %v", settings.Body)
+	}
+	for _, cap := range []int{1024, 2048, 4096, 8192} {
+		settings = c.must(200, "PUT", "/v1/admin/model-settings", map[string]any{"decision_model": nil, "summary_max_output_tokens": cap}, "If-Match", fmt.Sprint(settings.Body["version"]))
+		if settings.Body["summary_max_output_tokens"] != float64(cap) {
+			t.Fatalf("cap not saved: %v", settings.Body)
+		}
+	}
+	for _, cap := range []int{0, 256, 512, 3000, 16384} {
+		c.must(422, "PUT", "/v1/admin/model-settings", map[string]any{"decision_model": nil, "summary_max_output_tokens": cap}, "If-Match", fmt.Sprint(settings.Body["version"]))
+	}
+	// Older clients preserve the saved cap when they omit the new setting.
+	settings = c.must(200, "PUT", "/v1/admin/model-settings", map[string]any{"decision_model": nil}, "If-Match", fmt.Sprint(settings.Body["version"]))
+	if settings.Body["summary_max_output_tokens"] != float64(8192) {
+		t.Fatal("omitted cap reset the setting")
+	}
 	if _, err = admin.Exec(ctx, `UPDATE platform.model_settings SET summary_model='test/model',summary_endpoint='test'`); err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +79,30 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 	if err = admin.QueryRow(ctx, `SELECT count(*) FROM model_operation WHERE kind='summary'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("duplicate generation: %d %v", n, err)
 	}
+	var requestCap int
+	if err = admin.QueryRow(ctx, `SELECT (body->>'max_output_tokens')::int FROM model_request WHERE operation_id=$1`, old).Scan(&requestCap); err != nil || requestCap != 8192 {
+		t.Fatalf("queued cap: %d %v", requestCap, err)
+	}
+	// A cap-only change invalidates the old snapshot and queues a new request.
+	err = pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.user_id',$1,true)`, userID.String()); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',2048)`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first = c.must(200, "GET", path, nil)
+	var replacement string
+	if err = admin.QueryRow(ctx, `SELECT operation_id::text FROM cv_summary WHERE job_id=$1`, job).Scan(&replacement); err != nil || replacement == old {
+		t.Fatalf("cap change did not replace snapshot: %v", err)
+	}
+	if err = admin.QueryRow(ctx, `SELECT (body->>'max_output_tokens')::int FROM model_request WHERE operation_id=$1`, replacement).Scan(&requestCap); err != nil || requestCap != 2048 {
+		t.Fatalf("replacement cap: %d %v", requestCap, err)
+	}
+	old = replacement
 	draft := first.Body["draft"].(map[string]any)
 	draft["summary"] = "My manually written summary"
 	saved := c.must(200, "PUT", path, draft, "If-Match", first.Header.Get("ETag"))

@@ -14,12 +14,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type summaryProvider struct{ *fake }
+type summaryProvider struct {
+	*fake
+	quote *modelapi.Quote
+}
 
 func (p summaryProvider) ChatSheet(ctx context.Context, model, endpoint string) (billing.Sheet, error) {
-	return billing.Sheet{Provider: "openrouter", Model: model, RequestRate: p.amount, Context: 100000, MaxOutput: 256, OutputEnforced: true, Prior: billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 64}, FetchedAt: time.Now()}, nil
+	return billing.Sheet{Provider: "openrouter", Model: model, RequestRate: p.amount, OutputRate: 1, Context: 100000, MaxOutput: 8192, OutputEnforced: true, Prior: billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 64}, FetchedAt: time.Now()}, nil
 }
 func (p summaryProvider) GenerateMessages(ctx context.Context, key string, q modelapi.Quote, messages any) (modelapi.Result, error) {
+	*p.quote = q
 	return p.Generate(ctx, key, q)
 }
 
@@ -39,7 +43,7 @@ func TestSummaryUsesMemberAllowance(t *testing.T) {
 	}
 	var operation uuid.UUID
 	err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
-		request := worker.SummaryRequest{JobID: job, Model: "test/model", Endpoint: "test", Input: "Selected compiler work", Messages: []summary.Message{{Role: "system", Content: summary.Instruction + strings.Repeat(" ", 8192)}, {Role: "user", Content: "Selected compiler work"}}}
+		request := worker.SummaryRequest{MaxOutputTokens: 4096, JobID: job, Model: "test/model", Endpoint: "test", Input: "Selected compiler work", Messages: []summary.Message{{Role: "system", Content: summary.Instruction + strings.Repeat(" ", 8192)}, {Role: "user", Content: "Selected compiler work"}}}
 		var err error
 		operation, err = f.q.EnqueueSummary(ctx, tx, f.u, "hash", request)
 		if err != nil {
@@ -52,10 +56,14 @@ func TestSummaryUsesMemberAllowance(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.p.text = "Engineer experienced in building compilers."
-	f.r.Provider = summaryProvider{f.p}
+	var quote modelapi.Quote
+	f.r.Provider = summaryProvider{f.p, &quote}
 	args := worker.Args{UserID: f.u, OperationID: operation}
 	if err = f.r.Process(ctx, args); err != nil {
 		t.Fatal(err)
+	}
+	if quote.MaxOutput != 4096 || quote.Shape.MaxOutput != 4096 || quote.Reserved < f.p.amount+4096 {
+		t.Fatalf("token cap missing from provider quote or reservation: %#v", quote)
 	}
 	if op := f.state(t, args); op.Status != "completed" || op.Result != f.p.text {
 		t.Fatalf("summary operation: %#v", op)

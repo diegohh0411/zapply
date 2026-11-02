@@ -634,6 +634,30 @@ func (e SkillType) Valid() bool {
 	}
 }
 
+// Defines values for SummaryMaxOutputTokens.
+const (
+	N1024 SummaryMaxOutputTokens = 1024
+	N2048 SummaryMaxOutputTokens = 2048
+	N4096 SummaryMaxOutputTokens = 4096
+	N8192 SummaryMaxOutputTokens = 8192
+)
+
+// Valid indicates whether the value is a known member of the SummaryMaxOutputTokens enum.
+func (e SummaryMaxOutputTokens) Valid() bool {
+	switch e {
+	case N1024:
+		return true
+	case N2048:
+		return true
+	case N4096:
+		return true
+	case N8192:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkMode.
 const (
 	Hybrid WorkMode = "hybrid"
@@ -1496,11 +1520,14 @@ type ModelOperationStatus string
 
 // ModelSettings defines model for ModelSettings.
 type ModelSettings struct {
-	DecisionModel   *string   `json:"decision_model"`
-	SummaryEndpoint *string   `json:"summary_endpoint,omitempty"`
-	SummaryModel    *string   `json:"summary_model,omitempty"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Version         int       `json:"version"`
+	DecisionModel   *string `json:"decision_model"`
+	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
+
+	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+	SummaryMaxOutputTokens SummaryMaxOutputTokens `json:"summary_max_output_tokens"`
+	SummaryModel           *string                `json:"summary_model,omitempty"`
+	UpdatedAt              time.Time              `json:"updated_at"`
+	Version                int                    `json:"version"`
 }
 
 // Organization defines model for Organization.
@@ -1643,6 +1670,9 @@ type SkillMerge struct {
 // SkillType defines model for SkillType.
 type SkillType string
 
+// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+type SummaryMaxOutputTokens int
+
 // SystemKey defines model for SystemKey.
 type SystemKey struct {
 	Active      bool               `json:"active"`
@@ -1728,7 +1758,10 @@ type ResolveModelAttemptParams struct {
 type PutModelSettingsJSONBody struct {
 	DecisionModel   *string `json:"decision_model"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
-	SummaryModel    *string `json:"summary_model,omitempty"`
+
+	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+	SummaryMaxOutputTokens *SummaryMaxOutputTokens `json:"summary_max_output_tokens,omitempty"`
+	SummaryModel           *string                 `json:"summary_model,omitempty"`
 }
 
 // PutModelSettingsParams defines parameters for PutModelSettings.

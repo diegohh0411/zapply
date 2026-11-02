@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/diegohh0411/zapply/internal/summary"
@@ -30,7 +31,10 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 	if d.Summary == nil && lastSummary != "" {
 		p.Content.Profile.Summary = lastSummary
 	}
-	var settings struct{ Model, Endpoint string }
+	var settings struct {
+		Model, Endpoint string
+		MaxOutputTokens int `json:"max_output_tokens"`
+	}
 	var raw []byte
 	if err := tx.QueryRow(ctx, `SELECT platform.summary_settings()`).Scan(&raw); err != nil {
 		return err
@@ -44,7 +48,7 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 	}
 	// Only selected content enters the agent; contact details and the previous summary are excluded.
 	input, _ := json.Marshal(map[string]any{"locale": p.Content.Locale, "job_description": description, "sections": p.Content.Sections, "skills": p.Content.Skills})
-	hash := sha256.Sum256(append(input, []byte(settings.Model+"|"+settings.Endpoint)...))
+	hash := sha256.Sum256(append(input, []byte(settings.Model+"|"+settings.Endpoint+"|"+strconv.Itoa(settings.MaxOutputTokens))...))
 	key := hex.EncodeToString(hash[:])
 	if oldHash != key || operation == nil || dirty {
 		if operation != nil {
@@ -67,7 +71,7 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 			return err
 		}
 		// Reserve extra framing bytes for the SDK's generated system instructions.
-		request := worker.SummaryRequest{Model: settings.Model, Endpoint: settings.Endpoint, JobID: d.JobID, Input: string(input), Messages: []summary.Message{{Role: "system", Content: summary.Instruction + strings.Repeat(" ", 8192)}, {Role: "user", Content: string(input)}}}
+		request := worker.SummaryRequest{MaxOutputTokens: settings.MaxOutputTokens, Model: settings.Model, Endpoint: settings.Endpoint, JobID: d.JobID, Input: string(input), Messages: []summary.Message{{Role: "system", Content: summary.Instruction + strings.Repeat(" ", 8192)}, {Role: "user", Content: string(input)}}}
 		id, err := q.EnqueueSummary(ctx, tx, u, key, request)
 		if err != nil {
 			return err
