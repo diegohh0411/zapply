@@ -410,7 +410,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
 	} else if chat != nil {
 		stop := r.watchSummary(callCtx, cancel, args, chat.JobID)
-		_, err = summary.Run(callCtx, chat.Model, chat.Input, chat.outputTokenCap(), func(ctx context.Context, _ string, messages []summary.Message) (string, error) {
+		_, err = summary.Run(callCtx, chat.Model, chat.Input, chat.outputTokenCap(), chat.characterCap(), func(ctx context.Context, _ string, messages []summary.Message) (string, error) {
 			raw, _ := json.Marshal(messages)
 			reserved, _ := json.Marshal(chat.Messages)
 			if len(raw) > len(reserved) {

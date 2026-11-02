@@ -634,6 +634,33 @@ func (e SkillType) Valid() bool {
 	}
 }
 
+// Defines values for SummaryMaxCharacters.
+const (
+	N100 SummaryMaxCharacters = 100
+	N200 SummaryMaxCharacters = 200
+	N300 SummaryMaxCharacters = 300
+	N400 SummaryMaxCharacters = 400
+	N500 SummaryMaxCharacters = 500
+)
+
+// Valid indicates whether the value is a known member of the SummaryMaxCharacters enum.
+func (e SummaryMaxCharacters) Valid() bool {
+	switch e {
+	case N100:
+		return true
+	case N200:
+		return true
+	case N300:
+		return true
+	case N400:
+		return true
+	case N500:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SummaryMaxOutputTokens.
 const (
 	N1024 SummaryMaxOutputTokens = 1024
@@ -1523,6 +1550,9 @@ type ModelSettings struct {
 	DecisionModel   *string `json:"decision_model"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
 
+	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+	SummaryMaxCharacters SummaryMaxCharacters `json:"summary_max_characters"`
+
 	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
 	SummaryMaxOutputTokens SummaryMaxOutputTokens `json:"summary_max_output_tokens"`
 	SummaryModel           *string                `json:"summary_model,omitempty"`
@@ -1670,6 +1700,9 @@ type SkillMerge struct {
 // SkillType defines model for SkillType.
 type SkillType string
 
+// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+type SummaryMaxCharacters int
+
 // SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
 type SummaryMaxOutputTokens int
 
@@ -1758,6 +1791,9 @@ type ResolveModelAttemptParams struct {
 type PutModelSettingsJSONBody struct {
 	DecisionModel   *string `json:"decision_model"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
+
+	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+	SummaryMaxCharacters *SummaryMaxCharacters `json:"summary_max_characters,omitempty"`
 
 	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
 	SummaryMaxOutputTokens *SummaryMaxOutputTokens `json:"summary_max_output_tokens,omitempty"`

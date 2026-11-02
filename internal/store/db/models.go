@@ -1149,6 +1149,7 @@ type PlatformModelSetting struct {
 	SummaryModel           *string
 	SummaryEndpoint        *string
 	SummaryMaxOutputTokens int32
+	SummaryMaxCharacters   int32
 }
 
 type PlatformModelUsage struct {

@@ -1740,6 +1740,11 @@ export interface components {
             compatibility_reason: string;
         };
         /**
+         * @description Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+         * @enum {integer}
+         */
+        SummaryMaxCharacters: 100 | 200 | 300 | 400 | 500;
+        /**
          * @description Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
          * @enum {integer}
          */
@@ -1749,6 +1754,7 @@ export interface components {
             summary_model?: string | null;
             summary_endpoint?: string | null;
             summary_max_output_tokens: components["schemas"]["SummaryMaxOutputTokens"];
+            summary_max_characters: components["schemas"]["SummaryMaxCharacters"];
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3565,6 +3571,7 @@ export interface operations {
                     summary_model?: string | null;
                     summary_endpoint?: string | null;
                     summary_max_output_tokens?: components["schemas"]["SummaryMaxOutputTokens"];
+                    summary_max_characters?: components["schemas"]["SummaryMaxCharacters"];
                 };
             };
         };

@@ -105,6 +105,9 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 	if e != nil {
 		return nil, e
 	}
+	if req.Body.SummaryMaxCharacters != nil && !req.Body.SummaryMaxCharacters.Valid() {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_characters", Message: "select a supported character cap"}}}
+	}
 	if req.Body.SummaryMaxOutputTokens != nil && !req.Body.SummaryMaxOutputTokens.Valid() {
 		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_output_tokens", Message: "select a supported token cap"}}}
 	}
@@ -137,7 +140,7 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 		if err := tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens, req.Body.SummaryMaxCharacters); err != nil {
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)

@@ -12,6 +12,7 @@ import (
 )
 
 type SummaryRequest struct {
+	MaxCharacters   int               `json:"max_characters,omitempty"`
 	MaxOutputTokens int               `json:"max_output_tokens,omitempty"`
 	Model           string            `json:"model"`
 	Endpoint        string            `json:"endpoint"`
@@ -80,4 +81,12 @@ func (r SummaryRequest) outputTokenCap() int {
 		return 256
 	}
 	return r.MaxOutputTokens
+}
+
+// characterCap preserves the original limit for requests queued before configuration.
+func (r SummaryRequest) characterCap() int {
+	if r.MaxCharacters == 0 {
+		return summary.MaxCharacters
+	}
+	return r.MaxCharacters
 }

@@ -3,6 +3,7 @@ package summary
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -44,14 +45,14 @@ func TestCancelledRunDoesNotPublishLateOutput(t *testing.T) {
 }
 
 func TestNewRequiresGateway(t *testing.T) {
-	if _, err := New("model", DefaultMaxOutputTokens, nil); err == nil {
+	if _, err := New("model", DefaultMaxOutputTokens, MaxCharacters, nil); err == nil {
 		t.Fatal("agent accepted missing allowance gateway")
 	}
 }
 
 func TestRunUsesFreshADKSession(t *testing.T) {
 	calls := 0
-	text, err := Run(context.Background(), "test/model", `{"job_description":"Write Go","sections":[]}`, DefaultMaxOutputTokens, func(ctx context.Context, name string, messages []Message) (string, error) {
+	text, err := Run(context.Background(), "test/model", `{"job_description":"Write Go","sections":[]}`, DefaultMaxOutputTokens, MaxCharacters, func(ctx context.Context, name string, messages []Message) (string, error) {
 		calls++
 		if name != "test/model" || len(messages) < 2 || messages[len(messages)-1].Content != `{"job_description":"Write Go","sections":[]}` {
 			t.Fatalf("unexpected agent input: %s %#v", name, messages)
@@ -82,5 +83,27 @@ func TestSummaryCharacterCapCountsUnicode(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRunEnforcesConfiguredCharacterCap(t *testing.T) {
+	for _, cap := range []int{100, 200, 300, 400, 500} {
+		for _, extra := range []int{0, 1} {
+			t.Run(fmt.Sprintf("cap_%d_extra_%d", cap, extra), func(t *testing.T) {
+				output := strings.Repeat("é", cap+extra)
+				text, err := Run(context.Background(), "test/model", "selected evidence", DefaultMaxOutputTokens, cap, func(_ context.Context, _ string, messages []Message) (string, error) {
+					if len(messages) < 2 || !strings.Contains(messages[0].Content, fmt.Sprintf("at most %d Unicode characters", cap)) {
+						t.Fatalf("configured limit missing from instruction: %#v", messages)
+					}
+					return output, nil
+				})
+				if extra == 0 && (err != nil || text != output) {
+					t.Fatalf("valid Unicode output rejected: %q %v", text, err)
+				}
+				if extra == 1 && (err == nil || text != "") {
+					t.Fatalf("oversized output accepted: %q %v", text, err)
+				}
+			})
+		}
 	}
 }
