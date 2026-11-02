@@ -15,9 +15,11 @@ import (
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
+	"github.com/diegohh0411/zapply/internal/summary"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -196,6 +198,7 @@ func (r *Runtime) Recover(ctx context.Context, client *river.Client[pgx.Tx]) err
 func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var op Operation
 	var attempts []Attempt
+	var chat *SummaryRequest
 	var decision *systemone.Request
 	var calibration []byte
 	if err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
@@ -205,6 +208,30 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		}
 		if err := json.Unmarshal(raw, &op); err != nil {
 			return err
+		}
+		if op.Kind == "summary" {
+			chat = &SummaryRequest{}
+			var body []byte
+			if err := tx.QueryRow(ctx, "SELECT body FROM model_request WHERE operation_id=$1", op.ID).Scan(&body); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(body, chat); err != nil {
+				return err
+			}
+			var dirty bool
+			if err := tx.QueryRow(ctx, "SELECT COALESCE((SELECT dirty OR operation_id IS DISTINCT FROM $1 FROM cv_summary WHERE user_id=$2 AND job_id=$3),true)", op.ID, args.UserID, chat.JobID).Scan(&dirty); err != nil {
+				return err
+			}
+			if dirty {
+				var cancelled bool
+				if err := tx.QueryRow(ctx, "SELECT platform.cancel_operation($1)", op.ID).Scan(&cancelled); err != nil {
+					return err
+				}
+				if cancelled {
+					op.Status = "cancelled"
+					return nil
+				}
+			}
 		}
 		if op.Kind == "decision" {
 			var body []byte
@@ -283,6 +310,12 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 			return r.block(ctx, args, "decision_provider_unavailable", nil, 5*time.Minute)
 		}
 		quote, err = modelapi.QuoteDecision(ctx, dp, *decision, modelapi.CalibrationOf(calibration))
+	} else if chat != nil {
+		p, ok := r.Provider.(ChatProvider)
+		if !ok {
+			return r.block(ctx, args, "chat_provider_unavailable", nil, time.Minute)
+		}
+		quote, err = modelapi.QuoteChat(ctx, p, modelapi.ChatRequest{Model: chat.Model, Endpoint: chat.Endpoint, Messages: chat.Messages, MaxOutput: 256}, billing.Calibration{})
 	} else {
 		quote, err = r.Provider.Quote(ctx)
 	}
@@ -375,6 +408,21 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var result modelapi.Result
 	if decision != nil {
 		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
+	} else if chat != nil {
+		stop := r.watchSummary(callCtx, cancel, args, chat.JobID)
+		_, err = summary.Run(callCtx, chat.Model, chat.Input, func(ctx context.Context, _ string, messages []summary.Message) (string, error) {
+			raw, _ := json.Marshal(messages)
+			reserved, _ := json.Marshal(chat.Messages)
+			if len(raw) > len(reserved) {
+				return "", &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
+			}
+			result, err = r.Provider.(ChatProvider).GenerateMessages(ctx, key, quote, messages)
+			return result.Text, err
+		})
+		stop()
+		if err != nil {
+			result.Text = ""
+		}
 	} else {
 		result, err = r.Provider.Generate(callCtx, key, quote)
 	}

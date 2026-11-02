@@ -753,6 +753,7 @@ type CvDraft struct {
 	Locale     string             `json:"locale"`
 	PageBudget int                `json:"page_budget"`
 	Picks      CvPicks            `json:"picks"`
+	Summary    *string            `json:"summary,omitempty"`
 	Template   string             `json:"template"`
 
 	// TemplateVersion Null follows the latest version.
@@ -766,6 +767,7 @@ type CvDraftInput struct {
 	Locale          string  `json:"locale"`
 	PageBudget      int     `json:"page_budget"`
 	Picks           CvPicks `json:"picks"`
+	Summary         *string `json:"summary,omitempty"`
 	Template        string  `json:"template"`
 	TemplateVersion *int    `json:"template_version,omitempty"`
 }
@@ -836,7 +838,10 @@ type CvPreview struct {
 		RunId openapi_types.UUID `json:"run_id"`
 		Stale bool               `json:"stale"`
 	} `json:"match"`
-	Template CvTemplate `json:"template"`
+	SummaryReason     *string    `json:"summary_reason,omitempty"`
+	SummaryStatus     *string    `json:"summary_status,omitempty"`
+	SummarySuggestion *string    `json:"summary_suggestion,omitempty"`
+	Template          CvTemplate `json:"template"`
 
 	// Trim Optional item IDs
 	Trim []string `json:"trim"`
@@ -1491,9 +1496,11 @@ type ModelOperationStatus string
 
 // ModelSettings defines model for ModelSettings.
 type ModelSettings struct {
-	DecisionModel *string   `json:"decision_model"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Version       int       `json:"version"`
+	DecisionModel   *string   `json:"decision_model"`
+	SummaryEndpoint *string   `json:"summary_endpoint,omitempty"`
+	SummaryModel    *string   `json:"summary_model,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Version         int       `json:"version"`
 }
 
 // Organization defines model for Organization.
@@ -1719,7 +1726,9 @@ type ResolveModelAttemptParams struct {
 
 // PutModelSettingsJSONBody defines parameters for PutModelSettings.
 type PutModelSettingsJSONBody struct {
-	DecisionModel *string `json:"decision_model"`
+	DecisionModel   *string `json:"decision_model"`
+	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
+	SummaryModel    *string `json:"summary_model,omitempty"`
 }
 
 // PutModelSettingsParams defines parameters for PutModelSettings.
@@ -1989,6 +1998,9 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(w http.ResponseWriter, r *http.Request, id ID, params ActivateSystemKeyParams)
+
+	// (GET /v1/admin/text-models)
+	ListTextModels(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/cv-exports/{id})
 	GetCvExport(w http.ResponseWriter, r *http.Request, id ID)
@@ -2700,6 +2712,20 @@ func (siw *ServerInterfaceWrapper) ActivateSystemKey(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ActivateSystemKey(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTextModels operation middleware
+func (siw *ServerInterfaceWrapper) ListTextModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTextModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4953,6 +4979,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/model-attempts/{id}/resolve", wrapper.ResolveModelAttempt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/gateway-tests", wrapper.CreateGatewayTest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/gateway-tests/{id}", wrapper.GetGatewayTest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/text-models", wrapper.ListTextModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/decision-models", wrapper.ListDecisionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
@@ -5591,6 +5618,44 @@ type ActivateSystemKeydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ActivateSystemKeydefaultApplicationProblemPlusJSONResponse) VisitActivateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelsRequestObject struct {
+}
+
+type ListTextModelsResponseObject interface {
+	VisitListTextModelsResponse(w http.ResponseWriter) error
+}
+
+type ListTextModels200JSONResponse []DecisionModel
+
+func (response ListTextModels200JSONResponse) VisitListTextModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListTextModelsdefaultApplicationProblemPlusJSONResponse) VisitListTextModelsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8391,6 +8456,9 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(ctx context.Context, request ActivateSystemKeyRequestObject) (ActivateSystemKeyResponseObject, error)
 
+	// (GET /v1/admin/text-models)
+	ListTextModels(ctx context.Context, request ListTextModelsRequestObject) (ListTextModelsResponseObject, error)
+
 	// (GET /v1/cv-exports/{id})
 	GetCvExport(ctx context.Context, request GetCvExportRequestObject) (GetCvExportResponseObject, error)
 
@@ -9056,6 +9124,30 @@ func (sh *strictHandler) ActivateSystemKey(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ActivateSystemKeyResponseObject); ok {
 		if err := validResponse.VisitActivateSystemKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTextModels operation middleware
+func (sh *strictHandler) ListTextModels(w http.ResponseWriter, r *http.Request) {
+	var request ListTextModelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTextModels(ctx, request.(ListTextModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTextModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTextModelsResponseObject); ok {
+		if err := validResponse.VisitListTextModelsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -3,7 +3,7 @@
     <div>
       <h2 class="font-semibold">CV for this job</h2>
       <p class="mt-1 text-xs text-muted-foreground">
-        Built only from your library. Nothing is rewritten.
+        Built from your selected library evidence, with a tailored summary.
       </p>
     </div>
     <button
@@ -17,6 +17,24 @@
       <ng-icon name="lucideDownload" /> Export PDF
     </button>
   </header>
+
+  @if (preview(); as p) {
+    <section class="space-y-2 rounded-xl border p-4" aria-label="Summary">
+      <h3 class="font-medium">Summary</h3>
+      <p class="text-xs text-muted-foreground">{{ p.summary_status === 'completed' ? 'Summary updated from the selected evidence.' : 'Summary: ' + (p.summary_status ?? 'pending').replaceAll('_', ' ') }} {{ p.summary_reason?.replaceAll('_', ' ') }}</p>
+      <textarea class="w-full rounded border bg-background p-2" rows="4" [(ngModel)]="summaryText" aria-label="Edit summary" aria-describedby="summary-character-count"></textarea>
+      <p id="summary-character-count" class="text-xs" [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit">{{ summaryCharacterCount }} / {{ summaryCharacterLimit }} characters</p>
+      <div class="flex gap-2">
+        <button z-button zSize="sm" zType="outline" [zDisabled]="busy()" (click)="save({})">Regenerate</button>
+        <button z-button zSize="sm" [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit" (click)="save({summary: summaryText})">Save summary</button>
+        <button z-button zSize="sm" zType="outline" [zDisabled]="busy()" (click)="save({summary: null})">Use automatic summary</button>
+      </div>
+      @if (p.draft.summary !== null && p.draft.summary !== undefined && p.summary_suggestion) {
+        <p class="text-sm">{{ p.summary_suggestion }}</p>
+        <button z-button zSize="sm" zType="outline" [zDisabled]="busy()" (click)="save({summary: p.summary_suggestion})">Apply suggestion</button>
+      }
+    </section>
+  }
 
   @if (error()) {
     <p

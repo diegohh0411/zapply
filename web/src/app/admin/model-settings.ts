@@ -7,7 +7,10 @@ import { ZardButtonComponent } from '@/shared/components/button';
  selector: 'app-model-settings', imports: [FormsModule, ZardButtonComponent], changeDetection: ChangeDetectionStrategy.OnPush,
  template: `
  <section class="space-y-3 rounded-xl border p-5">
-   <h2 class="font-medium">Matching decision model</h2>
+   <h2 class="font-medium">AI models</h2>
+   <label class="field"><span>Summary model (OpenRouter ID)</span><select class="rounded border bg-background p-2" [(ngModel)]="summaryModel"><option value="">Not configured</option>@for (m of textModels(); track m.id) {<option [value]="m.id">{{ m.name }}</option>}</select></label>
+   <label class="field"><span>Summary provider endpoint</span><input class="rounded border bg-background p-2" [(ngModel)]="summaryEndpoint" placeholder="OpenRouter endpoint tag" /></label>
+   <p class="text-xs text-muted-foreground">Automatic summaries use this model and each user's existing USD allowance.</p>
    <p class="text-sm text-muted-foreground">Uses the active system OpenRouter key. New runs use this selection; existing runs retain their model.</p>
    @if (error()) { <p role="alert" class="text-sm text-destructive">{{ error() }}</p> }
    @if (settings(); as saved) {
@@ -25,16 +28,19 @@ export class ModelSettings {
  private readonly api = inject(Api).client;
  private readonly auth = inject(AuthService);
  readonly settings = signal<Schemas['ModelSettings'] | null>(null);
+ readonly textModels = signal<Schemas['DecisionModel'][]>([]);
  readonly models = signal<Schemas['DecisionModel'][]>([]);
  readonly error = signal(''); readonly loading = signal(false); readonly busy = signal(false);
+ summaryModel = ''; summaryEndpoint = '';
  selected = ''; private generation = 0;
- constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.selected = ''; void this.load(); }); }); }
+ constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; void this.load(); }); }); }
  async load(): Promise<void> {
    const identity = this.auth.identity(), seq = ++this.generation; this.loading.set(true); this.error.set('');
    const current = () => identity === this.auth.identity() && seq === this.generation;
    try {
      const saved = Api.ok(await this.api.GET('/v1/admin/model-settings')); if (!current()) return;
-     this.settings.set(saved); this.selected = saved.decision_model ?? '';
+     this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? '';
+     const textModels = Api.ok(await this.api.GET('/v1/admin/text-models')); if (current()) this.textModels.set(textModels);
      const models = Api.ok(await this.api.GET('/v1/admin/decision-models')); if (current()) this.models.set(models);
    } catch(e) { if (current()) this.error.set((e as Error).message); }
    finally { if (current()) this.loading.set(false); }
@@ -44,7 +50,7 @@ export class ModelSettings {
    const identity = this.auth.identity(), generation = this.generation; this.busy.set(true); this.error.set('');
    const current = () => identity === this.auth.identity() && generation === this.generation;
    try {
-     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null } }));
+     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null, summary_model: this.summaryModel || null, summary_endpoint: this.summaryEndpoint || null } }));
      if (current()) this.settings.set(value);
    } catch(e) { if (current()) this.error.set((e as Error).message); }
    finally { if (current()) this.busy.set(false); }

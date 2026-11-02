@@ -41,6 +41,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/relay"
+	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/telemetry"
@@ -241,6 +242,24 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	runtime.RecoverFeatures = func(ctx context.Context, c *river.Client[pgx.Tx]) error {
 		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c))
 	}
+	summaries := render.NewService(st, nil)
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				check, done := context.WithTimeout(ctx, 10*time.Second)
+				err := summaries.RefreshSummaries(check)
+				done()
+				if err != nil && ctx.Err() == nil {
+					log.Error("summary refresh failed", "err", err)
+				}
+			}
+		}
+	}()
 	client, err := runtime.Client(cfg.Worker.Concurrency)
 	if err != nil {
 		return err

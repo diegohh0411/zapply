@@ -81,7 +81,12 @@ func (s *server) catalogue(ctx context.Context, refresh bool) ([]openrouter.Deci
 	if e != nil {
 		return nil, &membership.Error{Status: 503, Code: "encryption_unavailable", Detail: "System key encryption is unavailable."}
 	}
-	models, e := s.decisionModels.DecisionModels(ctx, key, refresh)
+	var models []openrouter.DecisionModel
+	if refreshTextCatalogue(ctx) {
+		models, e = s.decisionModels.TextModels(ctx, key)
+	} else {
+		models, e = s.decisionModels.DecisionModels(ctx, key, refresh)
+	}
 	if e != nil {
 		return nil, &membership.Error{Status: 503, Code: "model_catalogue_unavailable", Detail: "The model catalogue is unavailable. Saved settings are unchanged."}
 	}
@@ -116,9 +121,33 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "decision_model", Message: "select an available decision model"}}}
 		}
 	}
+	if (req.Body.SummaryModel == nil) != (req.Body.SummaryEndpoint == nil) {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "model and endpoint must both be configured"}}}
+	}
+	if req.Body.SummaryModel != nil {
+		if _, err := s.decisionModels.ChatSheet(ctx, *req.Body.SummaryModel, *req.Body.SummaryEndpoint); err != nil {
+			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "select an available text model endpoint supporting bounded output"}}}
+		}
+	}
 	var raw json.RawMessage
 	e = s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw)
+		if err := tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2)`, req.Body.SummaryModel, req.Body.SummaryEndpoint); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)
 	})
 	return decodePlatform[gen.PutModelSettings200JSONResponse](raw, membership.Translate(e))
+}
+
+type textCatalogueKey struct{}
+
+func refreshTextCatalogue(ctx context.Context) bool {
+	v, _ := ctx.Value(textCatalogueKey{}).(bool)
+	return v
+}
+func (s *server) ListTextModels(ctx context.Context, _ gen.ListTextModelsRequestObject) (gen.ListTextModelsResponseObject, error) {
+	return convertMatch[gen.ListTextModels200JSONResponse](s.catalogue(context.WithValue(ctx, textCatalogueKey{}, true), false))
 }
