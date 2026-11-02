@@ -76,6 +76,11 @@ export class CvTab {
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly exports = signal<Export[]>([]);
+  protected summaryText = '';
+  protected readonly summaryCharacterLimit = 500;
+  protected get summaryCharacterCount(): number { return Array.from(this.summaryText).length; }
+  private loadedSummaryText = '';
+  private summaryPoll?: ReturnType<typeof setTimeout>;
   protected readonly relevance = signal<Record<string, number>>({});
   private templates?: Promise<CvTemplate[]>;
   private url?: string;
@@ -151,6 +156,7 @@ export class CvTab {
         this.busy.set(false);
         this.error.set('');
         this.notice.set('');
+        this.summaryText = ''; this.loadedSummaryText = ''; clearTimeout(this.summaryPoll);
         if (identity) {
           void this.load(id);
           void this.loadExports(id);
@@ -181,6 +187,8 @@ export class CvTab {
       const id = this.jobId();
       if (['evidence.', 'skill.', 'organization.', 'profile.'].some((p) => e.topic.startsWith(p)))
         reload();
+      else if (e.topic === 'model_operation.changed') reload();
+      else if (e.topic === 'job.updated' && e.data.id === id) reload();
       else if (e.topic === 'match_run.changed' && e.data.job_id === id) reload();
       else if (
         e.topic === 'cv_draft.updated' &&
@@ -199,6 +207,7 @@ export class CvTab {
       ++this.loadVersion;
       ++this.generation;
       clearTimeout(timer);
+      clearTimeout(this.summaryPoll);
       this.setPdf(undefined);
     });
   }
@@ -215,6 +224,11 @@ export class CvTab {
       const p = Api.ok(await this.api.GET('/v1/jobs/{id}/cv', { params: { path: { id } } }));
       if (!this.current(scope) || version !== this.loadVersion) return;
       this.preview.set(p);
+      const nextSummary = p.draft.summary ?? String((p.content as unknown as CvContent).profile['summary'] ?? '');
+      if (this.summaryText === this.loadedSummaryText) this.summaryText = nextSummary;
+      this.loadedSummaryText = nextSummary;
+      clearTimeout(this.summaryPoll);
+      if (['pending','running','blocked','needs_review'].includes(p.summary_status ?? '')) this.summaryPoll=setTimeout(()=>void this.load(id),2000);
       await this.refit();
     } catch (e) {
       if (this.current(scope) && version === this.loadVersion) {
@@ -297,6 +311,7 @@ export class CvTab {
         locale: d.locale,
         page_budget: d.page_budget,
         picks: d.picks,
+        summary: d.summary,
         ...change,
       };
       const next = Api.ok(

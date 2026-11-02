@@ -1053,6 +1053,16 @@ paths:
         -
           "$ref": "#/components/parameters/ID"
 
+  /v1/admin/text-models:
+    get:
+      operationId: listTextModels
+      responses:
+        '200':
+          description: Available OpenRouter text models (owner only).
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DecisionModel' } }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/decision-models:
     get:
       operationId: listDecisionModels
@@ -1086,6 +1096,8 @@ paths:
               required: [decision_model]
               properties:
                 decision_model: { type: string, nullable: true }
+                summary_model: { type: string, nullable: true }
+                summary_endpoint: { type: string, nullable: true }
       responses:
         '200':
           description: Updated settings.
@@ -1536,6 +1548,7 @@ components:
       type: object
       required: [job_id, template, template_version, locale, page_budget, picks, version, updated_at]
       properties:
+        summary: { type: string, nullable: true, maxLength: 500 }
         job_id: { type: string, format: uuid }
         template: { type: string }
         template_version: { type: integer, nullable: true, description: Null follows the latest version. }
@@ -1548,6 +1561,7 @@ components:
       type: object
       required: [template, locale, page_budget, picks]
       properties:
+        summary: { type: string, nullable: true, maxLength: 500 }
         template: { type: string }
         template_version: { type: integer, nullable: true }
         locale: { type: string }
@@ -1557,6 +1571,9 @@ components:
       type: object
       required: [draft, template, content, content_hash, trim, available, match]
       properties:
+        summary_status: { type: string }
+        summary_suggestion: { type: string }
+        summary_reason: { type: string }
         draft: { $ref: "#/components/schemas/CvDraft" }
         template: { $ref: "#/components/schemas/CvTemplate" }
         content: { type: object, additionalProperties: true, description: The template's content (templates/README.md). }
@@ -2435,6 +2452,8 @@ components:
       required: [version, decision_model, updated_at]
       properties:
         decision_model: { type: string, nullable: true }
+        summary_model: { type: string, nullable: true }
+        summary_endpoint: { type: string, nullable: true }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:

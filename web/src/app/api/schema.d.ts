@@ -704,6 +704,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/text-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTextModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/decision-models": {
         parameters: {
             query?: never;
@@ -1098,6 +1114,7 @@ export interface components {
             exclude: string[];
         };
         CvDraft: {
+            summary?: string | null;
             /** Format: uuid */
             job_id: string;
             template: string;
@@ -1111,6 +1128,7 @@ export interface components {
             updated_at: string;
         };
         CvDraftInput: {
+            summary?: string | null;
             template: string;
             template_version?: number | null;
             locale: string;
@@ -1118,6 +1136,9 @@ export interface components {
             picks: components["schemas"]["CvPicks"];
         };
         CvPreview: {
+            summary_status?: string;
+            summary_suggestion?: string;
+            summary_reason?: string;
             draft: components["schemas"]["CvDraft"];
             template: components["schemas"]["CvTemplate"];
             /** @description The template's content (templates/README.md). */
@@ -1704,6 +1725,8 @@ export interface components {
         };
         ModelSettings: {
             decision_model: string | null;
+            summary_model?: string | null;
+            summary_endpoint?: string | null;
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3414,6 +3437,27 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listTextModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available OpenRouter text models (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionModel"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listDecisionModels: {
         parameters: {
             query?: never;
@@ -3470,6 +3514,8 @@ export interface operations {
             content: {
                 "application/json": {
                     decision_model: string | null;
+                    summary_model?: string | null;
+                    summary_endpoint?: string | null;
                 };
             };
         };

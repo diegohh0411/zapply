@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/diegohh0411/zapply/internal/summary"
 	"io/fs"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -92,6 +94,7 @@ func manifest(name string, version *int) (templates.Manifest, bool) {
 }
 
 type Draft struct {
+	Summary         *string   `json:"summary"`
 	JobID           uuid.UUID `json:"job_id"`
 	Template        string    `json:"template"`
 	TemplateVersion *int      `json:"template_version"`
@@ -104,11 +107,12 @@ type Draft struct {
 
 // DraftInput is a PUT: everything in the draft the user sets.
 type DraftInput struct {
-	Template        string `json:"template"`
-	TemplateVersion *int   `json:"template_version"`
-	Locale          string `json:"locale"`
-	PageBudget      int    `json:"page_budget"`
-	Picks           Picks  `json:"picks"`
+	Summary         *string `json:"summary"`
+	Template        string  `json:"template"`
+	TemplateVersion *int    `json:"template_version"`
+	Locale          string  `json:"locale"`
+	PageBudget      int     `json:"page_budget"`
+	Picks           Picks   `json:"picks"`
 }
 
 // MatchInfo names the run that ranked a CV.
@@ -119,13 +123,16 @@ type MatchInfo struct {
 
 // Preview is a draft with its built content, before fitting.
 type Preview struct {
-	Draft       Draft      `json:"draft"`
-	Template    Template   `json:"template"`
-	Content     Content    `json:"content"`
-	ContentHash string     `json:"content_hash"`
-	Trim        []string   `json:"trim"`
-	Available   Available  `json:"available"`
-	Match       *MatchInfo `json:"match"`
+	SummaryStatus     string     `json:"summary_status"`
+	SummarySuggestion string     `json:"summary_suggestion"`
+	SummaryReason     string     `json:"summary_reason"`
+	Draft             Draft      `json:"draft"`
+	Template          Template   `json:"template"`
+	Content           Content    `json:"content"`
+	ContentHash       string     `json:"content_hash"`
+	Trim              []string   `json:"trim"`
+	Available         Available  `json:"available"`
+	Match             *MatchInfo `json:"match"`
 }
 
 // ExportInput creates a snapshot of what the client fitted.
@@ -168,12 +175,12 @@ func translate(e error) error {
 	return e
 }
 
-const draftSQL = `SELECT job_id,template,template_version,locale,page_budget,picks,version,updated_at FROM cv_draft WHERE user_id=$1 AND job_id=$2`
+const draftSQL = `SELECT job_id,template,template_version,locale,page_budget,picks,version,updated_at,summary FROM cv_draft WHERE user_id=$1 AND job_id=$2`
 
 func scanDraft(row pgx.Row) (Draft, error) {
 	var d Draft
 	var picks []byte
-	if e := row.Scan(&d.JobID, &d.Template, &d.TemplateVersion, &d.Locale, &d.PageBudget, &picks, &d.Version, &d.UpdatedAt); e != nil {
+	if e := row.Scan(&d.JobID, &d.Template, &d.TemplateVersion, &d.Locale, &d.PageBudget, &picks, &d.Version, &d.UpdatedAt, &d.Summary); e != nil {
 		return d, e
 	}
 	d.Picks = Picks{Include: []string{}, Exclude: []string{}}
@@ -241,7 +248,12 @@ func (s *Service) build(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (P
 		locale = m.Locales[0]
 	}
 	b := Build(lib, ranking, d.Picks, locale, s.Now().UTC())
-	return Preview{Draft: d, Template: info(m), Content: b.Content, ContentHash: b.Content.Hash(), Trim: b.Trim, Available: b.Available, Match: mi}, nil
+	p := Preview{Draft: d, Template: info(m), Content: b.Content, Trim: b.Trim, Available: b.Available, Match: mi}
+	if err := s.summary(ctx, tx, u, d, &p); err != nil {
+		return p, err
+	}
+	p.ContentHash = p.Content.Hash()
+	return p, nil
 }
 
 func (s *Service) Preview(ctx context.Context, u, job uuid.UUID) (Preview, error) {
@@ -295,6 +307,9 @@ func (in DraftInput) validate() error {
 
 // SaveDraft replaces the draft's settings, if version is still current.
 func (s *Service) SaveDraft(ctx context.Context, u, job uuid.UUID, version int, in DraftInput) (Preview, error) {
+	if in.Summary != nil && utf8.RuneCountInString(*in.Summary) > summary.MaxCharacters {
+		return Preview{}, invalid("summary", "must be at most 500 characters")
+	}
 	if in.Picks.Include == nil {
 		in.Picks.Include = []string{}
 	}
@@ -314,9 +329,9 @@ func (s *Service) SaveDraft(ctx context.Context, u, job uuid.UUID, version int, 
 			return library.ErrVersionMismatch
 		}
 		picks, _ := json.Marshal(in.Picks)
-		d, e = scanDraft(tx.QueryRow(ctx, `UPDATE cv_draft SET template=$3,template_version=$4,locale=$5,page_budget=$6,picks=$7,version=version+1,updated_at=now()
- WHERE user_id=$1 AND job_id=$2 RETURNING job_id,template,template_version,locale,page_budget,picks,version,updated_at`,
-			u, job, in.Template, in.TemplateVersion, in.Locale, in.PageBudget, string(picks)))
+		d, e = scanDraft(tx.QueryRow(ctx, `UPDATE cv_draft SET template=$3,template_version=$4,locale=$5,page_budget=$6,picks=$7,summary=$8,version=version+1,updated_at=now()
+ WHERE user_id=$1 AND job_id=$2 RETURNING job_id,template,template_version,locale,page_budget,picks,version,updated_at,summary`,
+			u, job, in.Template, in.TemplateVersion, in.Locale, in.PageBudget, string(picks), in.Summary))
 		if e != nil {
 			return e
 		}

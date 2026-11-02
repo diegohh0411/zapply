@@ -177,11 +177,17 @@ func million(s string) json.Number {
 	return json.Number(r.FloatString(12))
 }
 func (c *Client) Generate(ctx context.Context, key string, q modelapi.Quote) (modelapi.Result, error) {
+	return c.GenerateMessages(ctx, key, q, diagnosticMessages)
+}
+
+// GenerateMessages uses the same bounded endpoint and cost accounting as diagnostic calls.
+// Callers must reserve allowance for the quoted request before invoking it.
+func (c *Client) GenerateMessages(ctx context.Context, key string, q modelapi.Quote, messages any) (modelapi.Result, error) {
 	if time.Since(q.FetchedAt) > 15*time.Minute {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "stale_quote", Uncharged: true}
 	}
 	raw, err := c.request(ctx, "POST", "/chat/completions", key, map[string]any{
-		"model": q.Model, "messages": diagnosticMessages, "stream": false, "max_tokens": q.MaxOutput,
+		"model": q.Model, "messages": messages, "stream": false, "max_tokens": q.MaxOutput,
 		"provider": map[string]any{"only": []string{q.Endpoint}, "allow_fallbacks": false, "require_parameters": true,
 			"max_price": map[string]any{"prompt": million(q.InputRate), "completion": million(q.OutputRate), "request": json.Number(q.RequestRate)}},
 	})
