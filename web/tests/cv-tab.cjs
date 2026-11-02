@@ -139,12 +139,15 @@ test('account switch rejects late CV previews and history before the identity ef
   f.destroy();
 });
 
-test('newest CV preview wins and a failed refit cannot export the previous PDF', async () => {
+test('newest CV preview wins and a failed refit preserves the PDF but prevents export', async () => {
   const pending = deferred();
   let requests = 0;
   let fail = false;
   const f = fixture(
-    { GET: () => (++requests === 1 ? pending.promise : Promise.resolve(ok(preview(requests)))) },
+    { GET: () => (++requests === 1 ? pending.promise : Promise.resolve(ok({
+      ...preview(requests),
+      content: { ...content, profile: { name: `Ada ${requests}` } },
+    }))), POST: () => assert.fail('a stale PDF cannot be exported') },
     async () => {
       if (fail) throw Error('compile failed');
       return { pages: 1, pdf: new Uint8Array([37, 80, 68, 70]) };
@@ -156,11 +159,67 @@ test('newest CV preview wins and a failed refit cannot export the previous PDF',
   await older;
   assert.equal(f.tab.preview().draft.version, 2);
   assert.ok(f.tab.fitted());
+  const previous = f.tab.fitted();
   fail = true;
   await f.tab.load('job');
-  assert.equal(f.tab.fitted(), undefined);
+  assert.equal(f.tab.fitted(), previous);
+  assert.equal(f.tab.pdfCurrent(), false);
   assert.equal(f.tab.error(), 'compile failed');
   assert.equal(f.tab.fitting(), false);
+  await f.tab.export();
+  f.destroy();
+});
+
+test('summary polls keep the existing PDF and only compile changed inputs in the background', async () => {
+  let p = { ...preview(1), summary_status: 'running' };
+  let compilations = 0;
+  const pending = deferred();
+  const f = fixture({ GET: async () => ok(p) }, () => {
+    compilations++;
+    return compilations === 1
+      ? Promise.resolve({ pages: 1, pdf: new Uint8Array([1]) })
+      : pending.promise;
+  });
+  await f.tab.load('job');
+  const previous = f.tab.fitted();
+  await f.tab.load('job');
+  assert.equal(compilations, 1);
+  assert.equal(f.tab.fitted(), previous);
+  assert.equal(f.tab.pdfCurrent(), true);
+
+  p = { ...p, summary_status: 'completed', content: {
+    ...content, profile: { ...content.profile, summary: 'Updated summary' },
+  } };
+  const loading = f.tab.load('job');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(compilations, 2);
+  assert.equal(f.tab.fitted(), previous);
+  assert.equal(f.tab.fitting(), true);
+  assert.equal(f.tab.pdfCurrent(), false);
+  pending.resolve({ pages: 1, pdf: new Uint8Array([2]) });
+  await loading;
+  assert.notEqual(f.tab.fitted().url, previous.url);
+  assert.equal(f.tab.fitted().pdf[0], 2);
+  assert.equal(f.tab.pdfCurrent(), true);
+  assert.equal(f.tab.fitting(), false);
+  f.destroy();
+});
+
+test('saving keeps the PDF visible and switching jobs clears it', async () => {
+  const pending = deferred();
+  const f = fixture({ GET: async () => ok(preview(1)), PUT: () => pending.promise });
+  await f.tab.load('job');
+  const previous = f.tab.fitted();
+  const saving = f.tab.save({ page_budget: 2 });
+  assert.equal(f.tab.fitted(), previous);
+  assert.equal(f.tab.pdfCurrent(), false);
+  pending.resolve(ok({ ...preview(2), draft: { ...preview(2).draft, page_budget: 2 } }));
+  await saving;
+  assert.equal(f.tab.pdfCurrent(), true);
+  f.tab.jobId.set('another-job');
+  f.effects[0]();
+  assert.equal(f.tab.fitted(), undefined);
+  assert.equal(f.tab.pdfCurrent(), false);
   f.destroy();
 });
 
