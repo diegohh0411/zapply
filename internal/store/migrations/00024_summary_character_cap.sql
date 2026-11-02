@@ -2,6 +2,7 @@
 -- +goose StatementBegin
 ALTER TABLE platform.model_settings ADD COLUMN summary_max_characters integer NOT NULL DEFAULT 500
  CHECK (summary_max_characters IN (100,200,300,400,500));
+-- The migration login can SET ROLE but does not inherit platform function ownership.
 SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.summary_settings() RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
  SELECT jsonb_build_object('model',summary_model,'endpoint',summary_endpoint,'max_output_tokens',summary_max_output_tokens,'max_characters',summary_max_characters) FROM platform.model_settings WHERE id

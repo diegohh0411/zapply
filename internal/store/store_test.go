@@ -379,7 +379,8 @@ func TestSummaryCapMigrationsWithoutInheritedPlatformOwnership(t *testing.T) {
 				t.Fatal(err)
 			}
 			role := "migration_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-			if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS"); err != nil {
+			password := uuid.NewString()
+			if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '"+password+"'"); err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() {
@@ -401,10 +402,8 @@ func TestSummaryCapMigrationsWithoutInheritedPlatformOwnership(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			query := migrationURL.Query()
-			// RESET ROLE must also return to this restricted identity, never the admin.
-			query.Set("session_authorization", role)
-			migrationURL.RawQuery = query.Encode()
+			// Authenticate as the restricted role so RESET ROLE cannot restore admin privileges.
+			migrationURL.User = url.UserPassword(role, password)
 			if err := store.MigrateTo(ctx, migrationURL.String(), tc.to, discardLogger()); err != nil {
 				t.Fatalf("migrate as non-inheriting schema owner: %v", err)
 			}
