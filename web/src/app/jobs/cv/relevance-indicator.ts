@@ -16,7 +16,7 @@ import { relevanceLabel } from '../match/match-presentation';
         <span aria-hidden="true">{{ percent() }}%</span>
       </button>
       <span [id]="tooltipId()" role="tooltip" class="pointer-events-none invisible absolute right-0 top-full z-20 mt-2 w-48 rounded-md border bg-background p-2 text-xs font-normal text-foreground shadow-lg group-hover:visible group-focus-within:visible">
-        {{ description() }}. This is the model's relevance estimate for this experience and the job posting.
+        {{ description() }}. Estimated relevance to this job.
       </span>
     </span>
   `,
