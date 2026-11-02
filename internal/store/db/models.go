@@ -693,6 +693,7 @@ type CvDraft struct {
 	Picks           json.RawMessage
 	Version         int32
 	UpdatedAt       time.Time
+	Summary         *string
 }
 
 type CvExport struct {
@@ -713,6 +714,16 @@ type CvExport struct {
 	ClientSha256    *string
 	Dropped         json.RawMessage
 	CreatedAt       time.Time
+}
+
+type CvSummary struct {
+	UserID      uuid.UUID
+	JobID       uuid.UUID
+	InputHash   string
+	LastSummary string
+	OperationID *uuid.UUID
+	Dirty       bool
+	ChangedAt   time.Time
 }
 
 type DecisionAnswer struct {
@@ -1131,10 +1142,12 @@ type PlatformModelQuote struct {
 }
 
 type PlatformModelSetting struct {
-	ID            bool
-	DecisionModel *string
-	Version       int32
-	UpdatedAt     time.Time
+	ID              bool
+	DecisionModel   *string
+	Version         int32
+	UpdatedAt       time.Time
+	SummaryModel    *string
+	SummaryEndpoint *string
 }
 
 type PlatformModelUsage struct {
