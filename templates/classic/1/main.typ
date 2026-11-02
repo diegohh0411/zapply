@@ -124,7 +124,7 @@
 
 // Line 1: organization (bold) and location; line 2: title (italic), the
 // kind's details, and dates. Without an organization, the title leads.
-#let entry(e) = block(breakable: true, above: 1.6em, below: 0pt, {
+#let entry(e) = block(breakable: true, above: 1.2em, below: 0pt, {
   let org = get(e, "organization")
   let loc = get(e, "location")
   let details = subtitle(e).filter(x => x != org and x != loc)
