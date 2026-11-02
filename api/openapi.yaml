@@ -1121,6 +1121,7 @@ paths:
                 summary_model: { type: string, nullable: true }
                 summary_endpoint: { type: string, nullable: true }
                 summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
+                summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
       responses:
         '200':
           description: Updated settings.
@@ -2470,18 +2471,23 @@ components:
         context_length: { type: integer }
         pricing: { type: object, additionalProperties: true }
         compatibility_reason: { type: string }
+    SummaryMaxCharacters:
+      type: integer
+      enum: [100, 200, 300, 400, 500]
+      description: Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
     SummaryMaxOutputTokens:
       type: integer
       enum: [1024, 2048, 4096, 8192]
       description: Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
     ModelSettings:
       type: object
-      required: [version, decision_model, summary_max_output_tokens, updated_at]
+      required: [version, decision_model, summary_max_output_tokens, summary_max_characters, updated_at]
       properties:
         decision_model: { type: string, nullable: true }
         summary_model: { type: string, nullable: true }
         summary_endpoint: { type: string, nullable: true }
         summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
+        summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:

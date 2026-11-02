@@ -10,9 +10,9 @@ import (
 )
 
 // Run uses a fresh session so no facts from previous selections leak into a draft.
-func Run(ctx context.Context, modelName, input string, maxOutputTokens int, generate Generate) (string, error) {
+func Run(ctx context.Context, modelName, input string, maxOutputTokens, maxCharacters int, generate Generate) (string, error) {
 	calls := 0
-	a, err := New(modelName, maxOutputTokens, func(ctx context.Context, name string, messages []Message) (string, error) {
+	a, err := New(modelName, maxOutputTokens, maxCharacters, func(ctx context.Context, name string, messages []Message) (string, error) {
 		calls++
 		if calls > 1 {
 			return "", errors.New("summary: call limit exceeded")

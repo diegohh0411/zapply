@@ -31,13 +31,15 @@ Deploy migration 00022 and restart both API and worker. Generation stays
 unconfigured until an owner selects a model and endpoint. No live provider
 calls are made by the automated tests.
 
-Generated and manually saved summaries have a 500-character cap, counted as
-Unicode code points including spaces and punctuation. Oversized model output
-is rejected; the editor displays a counter and prevents saving oversized text.
+Owners select a final generated-summary cap of 100, 200, 300, 400, or 500
+characters (default 500), counted as Unicode code points including spaces and
+punctuation. The generation prompt and output validation use this cap.
+Oversized model output is rejected. Manually saved summaries retain their
+500-character limit; the editor displays a counter and prevents oversized saves.
 
 Owners also select a summary completion-token cap: 1,024, 2,048 (default),
 4,096, or 8,192. This budget includes reasoning tokens as well as the
-final paragraph; the 500-character summary limit is unchanged. The selected cap
+final paragraph, independently of the final-summary character cap. The selected cap
 is snapshotted in each queued request and used for both the full-cost allowance
 reservation and the provider's `max_tokens`. Changing the setting invalidates
 existing summaries. Requests queued before cap configuration retain their
@@ -45,3 +47,9 @@ original 256-token bound until replaced.
 
 Apply migration 00023 before deploying the updated API and worker. It sets the
 initial cap to 2,048 and invalidates existing summary snapshots for regeneration.
+
+Apply migration 00024 before deploying the updated API and worker. The character
+cap is saved in each queued request and included in the generation snapshot.
+Changing it invalidates automatic summaries. Older clients that omit the
+setting preserve its saved value, and older queued requests retain their
+original 500-character limit. Existing manual summaries are preserved.
