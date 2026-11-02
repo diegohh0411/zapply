@@ -203,9 +203,10 @@ type Available struct {
 }
 
 type AvailableEntry struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Kind  string `json:"kind"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Kind    string `json:"kind"`
+	Section string `json:"section"`
 	// Reason is excluded (by the user), suggested (matching found it
 	// relevant but it isn't auto-included), or not_selected.
 	Reason string `json:"reason"`
@@ -450,7 +451,7 @@ func available(lib Library, selected, exclude, suggested map[string]bool, shown 
 			} else if suggested[e.ID] {
 				reason = "suggested"
 			}
-			out.Entries = append(out.Entries, AvailableEntry{e.ID, e.Title, e.Kind, reason})
+			out.Entries = append(out.Entries, AvailableEntry{e.ID, e.Title, e.Kind, sectionOf(e), reason})
 			continue
 		}
 		for _, h := range e.Highlights {

@@ -18,8 +18,8 @@ import {
   lucideChevronDown,
   lucideDownload,
   lucidePin,
-  lucidePlus,
-  lucideX,
+  lucideEye,
+  lucideEyeOff,
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
@@ -46,7 +46,7 @@ interface Row {
   label: string;
   depth: number;
   highlight: boolean;
-  state: 'shown' | 'trimmed' | 'pinned';
+  state: 'shown' | 'trimmed' | 'pinned' | 'hidden';
 }
 
 /** A job's CV: preview, fitting, picks and exports (part 7). */
@@ -54,7 +54,7 @@ interface Row {
   selector: 'app-cv-tab',
   imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator],
   viewProviders: [
-    provideIcons({ lucideChevronDown, lucideDownload, lucidePin, lucidePlus, lucideX }),
+    provideIcons({ lucideChevronDown, lucideDownload, lucidePin, lucideEye, lucideEyeOff }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',
@@ -129,7 +129,7 @@ export class CvTab {
     const dropped = this.dropped();
     const state = (id: string): Row['state'] =>
       pinned.has(id) ? 'pinned' : dropped.has(id) ? 'trimmed' : 'shown';
-    return content.sections.map((s) => {
+    const sections = content.sections.map((s) => {
       const rows: Row[] = [];
       const walk = (e: CvEntry, depth: number, parentDropped = false) => {
         const trimmed = parentDropped || dropped.has(e.id);
@@ -148,11 +148,22 @@ export class CvTab {
             highlight: true,
             state: trimmed ? 'trimmed' : state(h.id),
           });
+        for (const h of p.available.highlights.filter((h) => h.evidence_id === e.id))
+          rows.push({ id: h.id, label: h.text, depth: depth + 1, highlight: true, state: 'hidden' });
         for (const c of e.children ?? []) walk(c, depth + 1, trimmed);
       };
       s.entries.forEach((e) => walk(e, 0));
       return { key: s.key, label: sectionLabels[s.key] ?? s.key, rows };
     });
+    for (const e of p.available.entries) {
+      let section = sections.find((s) => s.key === e.section);
+      if (!section) {
+        section = { key: e.section, label: sectionLabels[e.section] ?? e.section, rows: [] };
+        sections.push(section);
+      }
+      section.rows.push({ id: e.id, label: e.title, depth: 0, highlight: false, state: 'hidden' });
+    }
+    return sections;
   });
   protected readonly trimmedCount = computed(() => this.dropped().size);
   protected readonly overflow = computed(() => {
