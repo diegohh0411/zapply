@@ -1053,6 +1053,28 @@ paths:
         -
           "$ref": "#/components/parameters/ID"
 
+  /v1/admin/text-model-endpoints:
+    get:
+      operationId: listTextModelEndpoints
+      parameters:
+        - name: model
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$' }
+      responses:
+        '200':
+          description: Compatible provider endpoints for a text model (owner only).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [tag, name]
+                  properties:
+                    tag: { type: string }
+                    name: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/text-models:
     get:
       operationId: listTextModels

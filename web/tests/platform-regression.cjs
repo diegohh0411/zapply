@@ -175,3 +175,31 @@ test('a late charge page cannot repopulate a refreshed usage list', async (t) =>
   assert.equal(page.entries().length, 1);
   assert.equal(page.entries()[0].id, 'new-charge');
 });
+
+test('summary provider dropdown discards stale model responses and selects the sole endpoint', async () => {
+  const f = fixture('admin/model-settings.ts');
+  const settings = new f.types.ModelSettings();
+  settings.selectSummaryModel('first/model');
+  settings.selectSummaryModel('second/model');
+  f.requests[1].resolve(ok([{tag:'second/fp8',name:'Second provider'}]));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint,'second/fp8');
+  f.requests[0].resolve(ok([{tag:'first/fp8',name:'First provider'}]));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint,'second/fp8');
+  assert.equal(settings.endpoints()[0].tag,'second/fp8');
+});
+
+test('summary provider dropdown preserves saved choices and clears unavailable ones', async () => {
+  const f = fixture('admin/model-settings.ts');
+  const settings = new f.types.ModelSettings();
+  settings.summaryModel='test/model'; settings.summaryEndpoint='saved/fp8';
+  const loading=settings.loadEndpoints();
+  f.requests[0].resolve(ok([{tag:'saved/fp8',name:'Saved'},{tag:'other/fp8',name:'Other'}]));
+  await loading;
+  assert.equal(settings.summaryEndpoint,'saved/fp8');
+  const refresh=settings.loadEndpoints();
+  f.requests[1].resolve(ok([])); await refresh;
+  assert.equal(settings.summaryEndpoint,'');
+  assert.equal(settings.endpointLoading(),false);
+});
