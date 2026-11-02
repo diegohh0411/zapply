@@ -1142,12 +1142,13 @@ type PlatformModelQuote struct {
 }
 
 type PlatformModelSetting struct {
-	ID              bool
-	DecisionModel   *string
-	Version         int32
-	UpdatedAt       time.Time
-	SummaryModel    *string
-	SummaryEndpoint *string
+	ID                     bool
+	DecisionModel          *string
+	Version                int32
+	UpdatedAt              time.Time
+	SummaryModel           *string
+	SummaryEndpoint        *string
+	SummaryMaxOutputTokens int32
 }
 
 type PlatformModelUsage struct {
