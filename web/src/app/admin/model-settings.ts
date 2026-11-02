@@ -15,6 +15,10 @@ import { ZardButtonComponent } from '@/shared/components/button';
    </select></label>
    @if (summaryModel && !endpointLoading() && !endpointError() && !endpoints().length) {<p class="text-sm text-muted-foreground">No compatible providers are available for this model. Choose another model.</p>}
    @if (endpointError()) {<p role="alert" class="text-sm text-destructive">{{ endpointError() }}</p><button z-button zType="outline" (click)="loadEndpoints()">Retry loading providers</button>}
+   <label class="field"><span>Summary token cap</span><select class="rounded border bg-background p-2" [(ngModel)]="summaryMaxOutputTokens" [disabled]="loading() || busy()">
+     @for (cap of summaryTokenCaps; track cap.value) {<option [ngValue]="cap.value">{{ cap.label }}</option>}
+   </select></label>
+   <p class="text-xs text-muted-foreground">Includes reasoning and summary text. Higher caps give reasoning models more room and reserve more of the user's allowance. The final summary remains limited to 500 characters.</p>
    <p class="text-xs text-muted-foreground">Automatic summaries use this model and each user's existing USD allowance.</p>
    <p class="text-sm text-muted-foreground">Uses the active system OpenRouter key. New runs use this selection; existing runs retain their model.</p>
    @if (error()) { <p role="alert" class="text-sm text-destructive">{{ error() }}</p> }
@@ -41,15 +45,20 @@ export class ModelSettings {
  readonly textModels = signal<Schemas['DecisionModel'][]>([]);
  readonly models = signal<Schemas['DecisionModel'][]>([]);
  readonly error = signal(''); readonly loading = signal(false); readonly busy = signal(false);
+ readonly summaryTokenCaps: {value: Schemas['SummaryMaxOutputTokens']; label: string}[] = [
+   {value: 1024, label: '1,024 tokens'}, {value: 2048, label: '2,048 tokens (default)'},
+   {value: 4096, label: '4,096 tokens'}, {value: 8192, label: '8,192 tokens'},
+ ];
+ summaryMaxOutputTokens: Schemas['SummaryMaxOutputTokens'] = 2048;
  summaryModel = ''; summaryEndpoint = '';
  selected = ''; private generation = 0;
- constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); void this.load(); }); }); }
+ constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; this.summaryMaxOutputTokens = 2048; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); void this.load(); }); }); }
  async load(): Promise<void> {
    const identity = this.auth.identity(), seq = ++this.generation; this.loading.set(true); this.error.set('');
    const current = () => identity === this.auth.identity() && seq === this.generation;
    try {
      const saved = Api.ok(await this.api.GET('/v1/admin/model-settings')); if (!current()) return;
-     this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? '';
+     this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryMaxOutputTokens = saved.summary_max_output_tokens;
      await this.loadEndpoints(); if (!current()) return;
      const textModels = Api.ok(await this.api.GET('/v1/admin/text-models')); if (!current()) return; this.textModels.set(textModels);
      const models = Api.ok(await this.api.GET('/v1/admin/decision-models')); if (current()) this.models.set(models);
@@ -77,7 +86,7 @@ export class ModelSettings {
    const identity = this.auth.identity(), generation = this.generation; this.busy.set(true); this.error.set('');
    const current = () => identity === this.auth.identity() && generation === this.generation;
    try {
-     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null, summary_model: this.summaryModel || null, summary_endpoint: this.summaryEndpoint || null } }));
+     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null, summary_model: this.summaryModel || null, summary_endpoint: this.summaryEndpoint || null, summary_max_output_tokens: this.summaryMaxOutputTokens } }));
      if (current()) this.settings.set(value);
    } catch(e) { if (current()) this.error.set((e as Error).message); }
    finally { if (current()) this.busy.set(false); }

@@ -1739,10 +1739,16 @@ export interface components {
             };
             compatibility_reason: string;
         };
+        /**
+         * @description Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+         * @enum {integer}
+         */
+        SummaryMaxOutputTokens: 1024 | 2048 | 4096 | 8192;
         ModelSettings: {
             decision_model: string | null;
             summary_model?: string | null;
             summary_endpoint?: string | null;
+            summary_max_output_tokens: components["schemas"]["SummaryMaxOutputTokens"];
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3558,6 +3564,7 @@ export interface operations {
                     decision_model: string | null;
                     summary_model?: string | null;
                     summary_endpoint?: string | null;
+                    summary_max_output_tokens?: components["schemas"]["SummaryMaxOutputTokens"];
                 };
             };
         };

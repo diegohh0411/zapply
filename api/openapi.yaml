@@ -1120,6 +1120,7 @@ paths:
                 decision_model: { type: string, nullable: true }
                 summary_model: { type: string, nullable: true }
                 summary_endpoint: { type: string, nullable: true }
+                summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
       responses:
         '200':
           description: Updated settings.
@@ -2469,13 +2470,18 @@ components:
         context_length: { type: integer }
         pricing: { type: object, additionalProperties: true }
         compatibility_reason: { type: string }
+    SummaryMaxOutputTokens:
+      type: integer
+      enum: [1024, 2048, 4096, 8192]
+      description: Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
     ModelSettings:
       type: object
-      required: [version, decision_model, updated_at]
+      required: [version, decision_model, summary_max_output_tokens, updated_at]
       properties:
         decision_model: { type: string, nullable: true }
         summary_model: { type: string, nullable: true }
         summary_endpoint: { type: string, nullable: true }
+        summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:

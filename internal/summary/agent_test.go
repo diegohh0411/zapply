@@ -44,14 +44,14 @@ func TestCancelledRunDoesNotPublishLateOutput(t *testing.T) {
 }
 
 func TestNewRequiresGateway(t *testing.T) {
-	if _, err := New("model", nil); err == nil {
+	if _, err := New("model", DefaultMaxOutputTokens, nil); err == nil {
 		t.Fatal("agent accepted missing allowance gateway")
 	}
 }
 
 func TestRunUsesFreshADKSession(t *testing.T) {
 	calls := 0
-	text, err := Run(context.Background(), "test/model", `{"job_description":"Write Go","sections":[]}`, func(ctx context.Context, name string, messages []Message) (string, error) {
+	text, err := Run(context.Background(), "test/model", `{"job_description":"Write Go","sections":[]}`, DefaultMaxOutputTokens, func(ctx context.Context, name string, messages []Message) (string, error) {
 		calls++
 		if name != "test/model" || len(messages) < 2 || messages[len(messages)-1].Content != `{"job_description":"Write Go","sections":[]}` {
 			t.Fatalf("unexpected agent input: %s %#v", name, messages)

@@ -34,3 +34,14 @@ calls are made by the automated tests.
 Generated and manually saved summaries have a 500-character cap, counted as
 Unicode code points including spaces and punctuation. Oversized model output
 is rejected; the editor displays a counter and prevents saving oversized text.
+
+Owners also select a summary completion-token cap: 1,024, 2,048 (default),
+4,096, or 8,192. This budget includes reasoning tokens as well as the
+final paragraph; the 500-character summary limit is unchanged. The selected cap
+is snapshotted in each queued request and used for both the full-cost allowance
+reservation and the provider's `max_tokens`. Changing the setting invalidates
+existing summaries. Requests queued before cap configuration retain their
+original 256-token bound until replaced.
+
+Apply migration 00023 before deploying the updated API and worker. It sets the
+initial cap to 2,048 and invalidates existing summary snapshots for regeneration.

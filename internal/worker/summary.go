@@ -12,11 +12,12 @@ import (
 )
 
 type SummaryRequest struct {
-	Model    string            `json:"model"`
-	Endpoint string            `json:"endpoint"`
-	JobID    uuid.UUID         `json:"job_id"`
-	Input    string            `json:"input"`
-	Messages []summary.Message `json:"messages"`
+	MaxOutputTokens int               `json:"max_output_tokens,omitempty"`
+	Model           string            `json:"model"`
+	Endpoint        string            `json:"endpoint"`
+	JobID           uuid.UUID         `json:"job_id"`
+	Input           string            `json:"input"`
+	Messages        []summary.Message `json:"messages"`
 }
 type ChatProvider interface {
 	modelapi.ChatPricer
@@ -71,4 +72,12 @@ func (q *Queue) EnqueueSummary(ctx context.Context, tx pgx.Tx, u uuid.UUID, hash
 	opts.ScheduledAt = time.Now().Add(700 * time.Millisecond)
 	_, err = q.client.InsertTx(ctx, tx, Args{UserID: u, OperationID: id}, opts)
 	return id, err
+}
+
+// outputTokenCap preserves the original bound for requests queued before cap configuration.
+func (r SummaryRequest) outputTokenCap() int {
+	if r.MaxOutputTokens == 0 {
+		return 256
+	}
+	return r.MaxOutputTokens
 }
