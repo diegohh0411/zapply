@@ -72,6 +72,7 @@ export class CvTab {
     undefined,
   );
   protected readonly fitting = signal(false);
+  protected readonly pdfCurrent = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly notice = signal('');
@@ -102,6 +103,7 @@ export class CvTab {
   protected readonly relevance = signal<Record<string, number>>({});
   private templates?: Promise<CvTemplate[]>;
   private url?: string;
+  private fittedKey?: string;
   private generation = 0;
   private loadVersion = 0;
   private destroyed = false;
@@ -246,7 +248,7 @@ export class CvTab {
     const scope = this.scope();
     const version = ++this.loadVersion;
     ++this.generation;
-    this.setPdf(undefined);
+    this.pdfCurrent.set(false);
     this.fitting.set(true);
     try {
       this.typst.preload();
@@ -293,11 +295,19 @@ export class CvTab {
     if (!p) return;
     const generation = ++this.generation;
     const scope = this.scope();
-    this.setPdf(undefined);
+    this.error.set('');
     const content = p.content as unknown as CvContent;
+    // Summary status polls often return identical PDF inputs. Keep the iframe
+    // and its object URL intact until there is an actual replacement to show.
+    const key = JSON.stringify([p.template.assets, content, p.trim, p.draft.page_budget]);
+    if (this.fitted() && this.fittedKey === key) {
+      this.pdfCurrent.set(true);
+      this.fitting.set(false);
+      return;
+    }
+    this.pdfCurrent.set(false);
     const compiled = new Map<number, Compiled>();
     this.fitting.set(true);
-    this.error.set('');
     try {
       const result = await fit(p.trim.length, p.draft.page_budget, async (k) => {
         if (generation !== this.generation || !this.current(scope)) throw new Error('superseded');
@@ -308,6 +318,8 @@ export class CvTab {
       if (generation !== this.generation || !this.current(scope)) return;
       const pdf = compiled.get(result.k)!.pdf;
       this.setPdf({ ...result, pdf });
+      this.fittedKey = key;
+      this.pdfCurrent.set(true);
     } catch (e) {
       if (generation === this.generation && this.current(scope))
         this.error.set((e as Error).message);
@@ -320,6 +332,8 @@ export class CvTab {
     if (this.url) URL.revokeObjectURL(this.url);
     this.url = undefined;
     if (!f) {
+      this.fittedKey = undefined;
+      this.pdfCurrent.set(false);
       this.fitted.set(undefined);
       return;
     }
@@ -336,7 +350,7 @@ export class CvTab {
     const d = p.draft;
     const version = ++this.loadVersion;
     ++this.generation;
-    this.setPdf(undefined);
+    this.pdfCurrent.set(false);
     this.busy.set(true);
     this.notice.set('');
     try {
@@ -393,7 +407,7 @@ export class CvTab {
   protected async export(): Promise<void> {
     const p = this.preview();
     const f = this.fitted();
-    if (!p || !f || this.busy() || this.fitting()) return;
+    if (!p || !f || !this.pdfCurrent() || this.busy() || this.fitting()) return;
     const id = this.jobId();
     const scope = this.scope();
     this.busy.set(true);
