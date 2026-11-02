@@ -35,6 +35,7 @@ import {
   type CvEntry,
   type Fit,
 } from './cv-content';
+import { RelevanceIndicator } from './relevance-indicator';
 import { TypstService, type Compiled, type CvTemplate } from './typst.service';
 
 type Preview = Schemas['CvPreview'];
@@ -51,7 +52,7 @@ interface Row {
 /** A job's CV: preview, fitting, picks and exports (part 7). */
 @Component({
   selector: 'app-cv-tab',
-  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon],
+  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator],
   viewProviders: [
     provideIcons({ lucideChevronDown, lucideDownload, lucidePin, lucidePlus, lucideX }),
   ],
@@ -75,6 +76,7 @@ export class CvTab {
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly exports = signal<Export[]>([]);
+  protected readonly relevance = signal<Record<string, number>>({});
   private templates?: Promise<CvTemplate[]>;
   private url?: string;
   private generation = 0;
@@ -154,6 +156,20 @@ export class CvTab {
           void this.loadExports(id);
         } else this.fitting.set(false);
       });
+    });
+    effect((onCleanup) => {
+      const p = this.preview();
+      let active = true;
+      this.relevance.set({});
+      if (p?.match) {
+        void this.api.GET('/v1/match-runs/{id}', { params: { path: { id: p.match.run_id } } })
+          .then((response) => {
+            const run = Api.ok(response);
+            if (!active || run.result?.scoring_version !== 3 || run.result.partial) return;
+            this.relevance.set(Object.fromEntries(run.result.evidence.map((item) => [item.evidence_id, item.relevance])));
+          }).catch(() => { /* Relevance is optional; the CV remains usable. */ });
+      }
+      onCleanup(() => { active = false; });
     });
     const events = inject(EventsService);
     let timer: ReturnType<typeof setTimeout> | undefined;
