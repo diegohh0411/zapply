@@ -704,6 +704,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/text-model-endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTextModelEndpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/text-models": {
         parameters: {
             query?: never;
@@ -3432,6 +3448,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelOperation"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTextModelEndpoints: {
+        parameters: {
+            query: {
+                model: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compatible provider endpoints for a text model (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tag: string;
+                        name: string;
+                    }[];
                 };
             };
             default: components["responses"]["Problem"];

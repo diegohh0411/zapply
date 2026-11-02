@@ -210,3 +210,31 @@ test('a delayed CV save cannot replace a newer preview received during the save'
   assert.ok(f.tab.fitted());
   f.destroy();
 });
+
+test('summary generation shows progress, preserves text and prevents duplicate runs', async () => {
+  let saves = 0;
+  const p = { ...preview(1), summary_status: 'running' };
+  const f = fixture({ GET: async () => ok(p), PUT: async () => { saves++; return ok(p); } });
+  f.tab.summaryText = 'Unsaved personal summary';
+  await f.tab.load('job');
+  assert.equal(f.tab.summaryGenerating(), true);
+  assert.match(f.tab.summaryMessage(), /Generating summary/);
+  assert.equal(f.tab.summaryText, 'Unsaved personal summary');
+  f.tab.regenerateSummary();
+  assert.equal(saves, 0);
+  f.tab.preview.set({ ...p, summary_status: 'completed' });
+  assert.equal(f.tab.summaryGenerating(), false);
+  assert.match(f.tab.summaryMessage(), /updated/);
+  f.destroy();
+});
+
+test('failed and blocked summary runs show actionable messages without a spinner', () => {
+  const f = fixture({});
+  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'result_unavailable' });
+  assert.equal(f.tab.summaryGenerating(), false);
+  assert.match(f.tab.summaryMessage(), /Try Regenerate/);
+  f.tab.preview.set({ ...preview(1), summary_status: 'blocked', summary_reason: 'usage_limit' });
+  assert.equal(f.tab.summaryGenerating(), false);
+  assert.match(f.tab.summaryMessage(), /allowance/);
+  f.destroy();
+});

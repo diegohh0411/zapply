@@ -76,6 +76,24 @@ export class CvTab {
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly exports = signal<Export[]>([]);
+  protected readonly summaryGenerating = computed(() => this.busy() || ['pending', 'running'].includes(this.preview()?.summary_status ?? ''));
+  protected readonly summaryMessage = computed(() => {
+    if (this.summaryGenerating()) return 'Generating summary…';
+    const p = this.preview();
+    switch (p?.summary_status) {
+      case 'completed': return 'Summary updated from the selected evidence.';
+      case 'failed': return 'We couldn’t generate a summary. Your current text is preserved. Try Regenerate.';
+      case 'blocked': return p.summary_reason === 'usage_limit' ? 'Summary generation is paused because your USD allowance is exhausted.' : 'Summary generation is waiting. It will retry automatically when available.';
+      case 'needs_review': return 'Summary generation needs an administrator’s review. Your current text is preserved.';
+      case 'not_configured': return 'An administrator needs to configure a summary model before generation is available.';
+      case 'waiting_for_input': return 'Select library evidence and add a job description to generate a summary.';
+      case 'cancelled': return 'Summary generation was cancelled. Try Regenerate when you’re ready.';
+      default: return 'Your summary uses the evidence selected for this job.';
+    }
+  });
+  protected regenerateSummary(): void {
+    if (!this.summaryGenerating()) void this.save({});
+  }
   protected summaryText = '';
   protected readonly summaryCharacterLimit = 500;
   protected get summaryCharacterCount(): number { return Array.from(this.summaryText).length; }
@@ -228,7 +246,7 @@ export class CvTab {
       if (this.summaryText === this.loadedSummaryText) this.summaryText = nextSummary;
       this.loadedSummaryText = nextSummary;
       clearTimeout(this.summaryPoll);
-      if (['pending','running','blocked','needs_review'].includes(p.summary_status ?? '')) this.summaryPoll=setTimeout(()=>void this.load(id),2000);
+      this.scheduleSummaryPoll(p, id);
       await this.refit();
     } catch (e) {
       if (this.current(scope) && version === this.loadVersion) {
@@ -236,6 +254,12 @@ export class CvTab {
         this.fitting.set(false);
       }
     }
+  }
+
+  private scheduleSummaryPoll(p: Preview, id: string): void {
+    clearTimeout(this.summaryPoll);
+    if (['pending', 'running', 'blocked', 'needs_review'].includes(p.summary_status ?? ''))
+      this.summaryPoll = setTimeout(() => void this.load(id), 2000);
   }
 
   private async loadExports(id: string): Promise<void> {
@@ -328,6 +352,7 @@ export class CvTab {
       }
       ++this.loadVersion;
       this.preview.set(next);
+      this.scheduleSummaryPoll(next, id);
       await this.refit();
     } catch (e) {
       if (!this.current(scope)) return;

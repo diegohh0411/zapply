@@ -151,3 +151,15 @@ func refreshTextCatalogue(ctx context.Context) bool {
 func (s *server) ListTextModels(ctx context.Context, _ gen.ListTextModelsRequestObject) (gen.ListTextModelsResponseObject, error) {
 	return convertMatch[gen.ListTextModels200JSONResponse](s.catalogue(context.WithValue(ctx, textCatalogueKey{}, true), false))
 }
+
+func (s *server) ListTextModelEndpoints(ctx context.Context, req gen.ListTextModelEndpointsRequestObject) (gen.ListTextModelEndpointsResponseObject, error) {
+	err := s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error { _, err := tx.Exec(ctx, `SELECT platform.assert_owner()`); return err })
+	if err != nil {
+		return nil, membership.Translate(err)
+	}
+	endpoints, err := s.decisionModels.TextEndpoints(ctx, req.Params.Model)
+	if err != nil {
+		return nil, &membership.Error{Status: 503, Code: "endpoint_catalogue_unavailable", Detail: "Provider endpoints could not be loaded. Try again."}
+	}
+	return convertMatch[gen.ListTextModelEndpoints200JSONResponse](endpoints, nil)
+}
