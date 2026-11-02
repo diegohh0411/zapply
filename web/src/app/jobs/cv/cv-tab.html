@@ -145,6 +145,9 @@
                     [class.font-medium]="!row.highlight"
                     >{{ row.highlight ? '• ' : '' }}{{ row.label }}</span
                   >
+                  @if (!row.highlight && relevance()[row.id] !== undefined) {
+                    <app-relevance-indicator [itemId]="row.id" [relevance]="relevance()[row.id]" />
+                  }
                   @if (row.state === 'trimmed') {
                     <span class="shrink-0 text-[11px] text-muted-foreground">Trimmed to fit</span>
                   }
