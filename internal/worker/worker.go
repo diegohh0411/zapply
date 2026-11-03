@@ -244,7 +244,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				dp, ok := r.Provider.(modelapi.DecisionProvider)
 				lookupAllowed = ok && dp.DecisionLookupSupported(decision.Model)
 			}
-			if !lookupAllowed || a.GenerationID == nil || time.Since(a.Deadline) > lookupWindow {
+			if !lookupAllowed || a.GenerationID == nil {
 				return river.JobSnooze(wait)
 			}
 			key, err := r.key(ctx, args.UserID, a.KeyID)
@@ -408,10 +408,6 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	}
 	return river.JobSnooze(time.Minute)
 }
-
-// lookupWindow bounds automatic generation lookups. Older unresolved attempts
-// wait for an owner to resolve them from provider evidence.
-const lookupWindow = 7 * 24 * time.Hour
 
 // reconcileDelay backs off as an unresolved attempt ages: one minute at first,
 // growing to an hour about four hours after the deadline.

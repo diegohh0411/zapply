@@ -324,6 +324,32 @@ func TestUncertainOutcomeNeverResends(t *testing.T) {
 	}
 }
 
+func TestUncertainReservationAllowsOtherCallsWithinBudget(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.p.amount, _ = modelapi.ParseUSD("0.4")
+	f.p.uncertain = true
+	first := f.operation(t)
+	_ = f.r.Process(ctx, first)
+	f.p.uncertain = false
+	second := f.operation(t)
+	if err := f.r.Process(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	if f.state(t, second).Status != "completed" {
+		t.Fatal("unrelated operation did not complete")
+	}
+	third := f.operation(t)
+	_ = f.r.Process(ctx, third)
+	if f.state(t, third).BlockedReason != "usage_limit" {
+		t.Fatalf("reservation was not counted: %#v", f.state(t, third))
+	}
+	_ = f.r.Process(ctx, first)
+	if f.p.calls.Load() != 2 {
+		t.Fatalf("unexpected provider calls: %d", f.p.calls.Load())
+	}
+}
+
 func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -618,7 +644,7 @@ func TestUncertainOutputWithNULKeepsGeneration(t *testing.T) {
 	}
 }
 
-func TestGenerationLookupsStopAfterWindow(t *testing.T) {
+func TestGenerationLookupRetriesAfterExtendedOutage(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.p.missingCost, f.p.lookupFails = true, true
@@ -631,8 +657,11 @@ func TestGenerationLookupsStopAfterWindow(t *testing.T) {
 	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET deadline_at=now()-interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
-	_ = f.r.Process(ctx, args)
-	if f.p.lookups.Load() != 1 || f.state(t, args).Status != "needs_review" {
-		t.Fatalf("lookups=%d status=%s", f.p.lookups.Load(), f.state(t, args).Status)
+	f.p.lookupFails = false
+	if err := f.r.Process(ctx, args); err != nil {
+		t.Fatal(err)
+	}
+	if f.p.lookups.Load() != 2 || f.state(t, args).Status != "completed" || f.p.calls.Load() != 1 {
+		t.Fatalf("lookups=%d status=%s calls=%d", f.p.lookups.Load(), f.state(t, args).Status, f.p.calls.Load())
 	}
 }
