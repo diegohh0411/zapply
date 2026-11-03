@@ -449,3 +449,48 @@ func TestSummaryCapMigrationsWithoutInheritedPlatformOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestUncertainReservationsMigrationWithoutInheritedPlatformOwnership(t *testing.T) {
+	db := testdb.NewAtVersion(t, 24)
+	ctx := context.Background()
+	admin := db.Admin(t)
+	role := "migration_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	password := uuid.NewString()
+	if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '"+password+"'"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec(ctx, "REASSIGN OWNED BY "+role+" TO CURRENT_USER; DROP OWNED BY "+role+"; DROP ROLE "+role); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, statement := range []string{
+		"GRANT zapply_platform TO " + role + " WITH INHERIT FALSE, SET TRUE",
+		"ALTER TABLE public.goose_db_version OWNER TO " + role,
+	} {
+		if _, err := admin.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	migrationURL, err := url.Parse(db.AdminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationURL.User = url.UserPassword(role, password)
+	if err := store.MigrateTo(ctx, migrationURL.String(), 25, discardLogger()); err != nil {
+		t.Fatalf("migration: %v", err)
+	}
+	source, err := os.ReadFile("migrations/00025_uncertain_reservations.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	down := strings.SplitN(string(source), "-- +goose Down", 2)[1]
+	conn, err := pgx.Connect(ctx, migrationURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if err := pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error { _, err := tx.Exec(ctx, down); return err }); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+}
