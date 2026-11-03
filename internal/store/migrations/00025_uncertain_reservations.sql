@@ -60,7 +60,7 @@ BEGIN
  FROM platform.model_usage WHERE user_id=u AND accounted_at>t-interval '720 hours' AND accounted_at<=t;
  SELECT COALESCE(sum(reserved),0),count(*) FILTER (WHERE state='dispatching') INTO h,n FROM platform.model_attempt WHERE user_id=u AND state IN('dispatching','uncertain');
  IF p_cost>p.cap_7d OR p_cost>p.cap_30d THEN RETURN jsonb_build_object('reason','request_exceeds_plan'); END IF;
- IF n>0 THEN RETURN jsonb_build_object('reason','in_flight'); END IF;
+ IF n>=8 THEN RETURN jsonb_build_object('reason','in_flight'); END IF;
  IF w+h+p_cost>p.cap_7d OR m+h+p_cost>p.cap_30d THEN RETURN jsonb_build_object('reason','usage_limit'); END IF;
  SELECT id INTO k FROM platform.system_key WHERE active;
  IF k IS NULL THEN RETURN jsonb_build_object('reason','provider_key_missing'); END IF;
@@ -134,7 +134,7 @@ BEGIN
  FROM platform.model_usage WHERE user_id=u AND accounted_at>t-interval '720 hours' AND accounted_at<=t;
  SELECT COALESCE(sum(reserved),0),count(*) INTO h,n FROM platform.model_attempt WHERE user_id=u AND state IN('dispatching','uncertain');
  IF p_cost>p.cap_7d OR p_cost>p.cap_30d THEN RETURN jsonb_build_object('reason','request_exceeds_plan'); END IF;
- IF n>0 THEN RETURN jsonb_build_object('reason','in_flight'); END IF;
+ IF n>=8 THEN RETURN jsonb_build_object('reason','in_flight'); END IF;
  IF w+h+p_cost>p.cap_7d OR m+h+p_cost>p.cap_30d THEN RETURN jsonb_build_object('reason','usage_limit'); END IF;
  SELECT id INTO k FROM platform.system_key WHERE active;
  IF k IS NULL THEN RETURN jsonb_build_object('reason','provider_key_missing'); END IF;
