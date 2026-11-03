@@ -1,6 +1,7 @@
 -- Uncertain calls retain their reservations without blocking unrelated requests.
 -- +goose Up
 -- +goose StatementBegin
+SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.usage_for(p_user uuid) RETURNS jsonb LANGUAGE plpgsql STABLE
 SET search_path = pg_catalog, platform, pg_temp AS $$
 DECLARE t timestamptz:=statement_timestamp(); w bigint:=0; m bigint:=0; h bigint:=0; cw bigint:=0; cm bigint:=0; reason text:=''; next_at timestamptz; member jsonb;
@@ -71,10 +72,12 @@ BEGIN
  PERFORM platform.emit(u,'usage.changed',u);
  RETURN jsonb_build_object('reason','','attempt_id',p_id,'key_id',k,'state','dispatching');
 END $$;
+RESET ROLE;
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.usage_for(p_user uuid) RETURNS jsonb LANGUAGE plpgsql STABLE
 SET search_path = pg_catalog, platform, pg_temp AS $$
 DECLARE t timestamptz:=statement_timestamp(); w bigint:=0; m bigint:=0; h bigint:=0; cw bigint:=0; cm bigint:=0; reason text:=''; next_at timestamptz; member jsonb;
@@ -145,4 +148,5 @@ BEGIN
  PERFORM platform.emit(u,'usage.changed',u);
  RETURN jsonb_build_object('reason','','attempt_id',p_id,'key_id',k,'state','dispatching');
 END $$;
+RESET ROLE;
 -- +goose StatementEnd
