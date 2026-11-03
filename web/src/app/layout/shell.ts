@@ -5,10 +5,9 @@ import {
   lucideBuilding2,
   lucideFolderOpen,
   lucideLogOut,
-  lucideMoon,
+  lucideMail,
   lucideSparkles,
   lucideSquareKanban,
-  lucideSun,
   lucideUser,
 } from '@ng-icons/lucide';
 
@@ -17,7 +16,7 @@ import { ZardSidebarImports } from '@/shared/components/sidebar';
 import { AuthService } from '../core/auth.service';
 import { AccountService } from '../core/account.service';
 import { EventsService } from '../core/events.service';
-import { ThemeService } from './theme';
+import { ConfigService } from '../core/config';
 
 interface NavItem {
   path: string;
@@ -37,18 +36,21 @@ interface NavItem {
       lucideBuilding2,
       lucideSparkles,
       lucideLogOut,
-      lucideSun,
-      lucideMoon,
+      lucideMail,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <z-sidebar-provider class="h-svh min-h-0">
-      <z-sidebar zCollapsible="icon" #sidebar="zSidebar">
+      <z-sidebar zCollapsible="icon">
         <z-sidebar-header>
           <ul z-sidebar-menu>
             <li z-sidebar-menu-item>
-              <a z-sidebar-menu-button zSize="lg" routerLink="/jobs">
+              <a
+                z-sidebar-menu-button
+                zSize="lg"
+                routerLink="/jobs"
+              >
                 <img src="icon.svg" alt="" class="size-8 shrink-0 rounded-md" />
                 <span class="text-base font-semibold tracking-tight">zapply</span>
               </a>
@@ -71,7 +73,6 @@ interface NavItem {
                         #rla="routerLinkActive"
                         [zActive]="rla.isActive"
                         [zTooltip]="item.label"
-                        (click)="sidebar.sidebarService.setOpenMobile(false)"
                       >
                         <ng-icon [name]="item.icon" />
                         <span>{{ item.label }}</span>
@@ -90,17 +91,6 @@ interface NavItem {
               <button
                 type="button"
                 z-sidebar-menu-button
-                (click)="theme.toggle()"
-                [zTooltip]="theme.dark() ? 'Light theme' : 'Dark theme'"
-              >
-                <ng-icon [name]="theme.dark() ? 'lucideSun' : 'lucideMoon'" />
-                <span>{{ theme.dark() ? 'Light theme' : 'Dark theme' }}</span>
-              </button>
-            </li>
-            <li z-sidebar-menu-item>
-              <button
-                type="button"
-                z-sidebar-menu-button
                 (click)="auth.signOut()"
                 [zTooltip]="'Sign out ' + (auth.session()?.label ?? '')"
               >
@@ -109,6 +99,9 @@ interface NavItem {
               </button>
             </li>
           </ul>
+          @if (buildLabel()) {
+            <p class="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">{{ buildLabel() }}</p>
+          }
         </z-sidebar-footer>
 
         <button z-sidebar-rail></button>
@@ -147,12 +140,29 @@ export class Shell {
   protected readonly auth = inject(AuthService);
   private readonly account = inject(AccountService);
   protected readonly events = inject(EventsService);
-  protected readonly theme = inject(ThemeService);
+  private readonly config = inject(ConfigService);
+  protected readonly buildLabel = computed(() => {
+    const { build_commit, built_at } = this.config.config();
+    const parts: string[] = [];
+    if (build_commit) parts.push(build_commit.slice(-6));
+    if (built_at) {
+      const date = new Date(built_at);
+      if (!Number.isNaN(date.getTime())) {
+        const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
+        const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
+        parts.push(`${day}, ${time}`);
+      }
+    }
+    return parts.join(' · ');
+  });
 
   protected readonly groups = computed<{ label: string; items: NavItem[] }[]>(() => [
     {
       label: 'Applications',
-      items: [{ path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' }],
+      items: [
+        { path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' },
+        { path: '/mail', label: 'Mail', icon: 'lucideMail' },
+      ],
     },
     {
       label: 'Library',

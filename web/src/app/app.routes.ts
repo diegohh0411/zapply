@@ -33,6 +33,11 @@ export const routes: Routes = [
         loadComponent: () => import('./jobs/jobs.page').then((m) => m.JobsPage),
       },
       {
+        path: 'mail',
+        title: 'Mail · zapply',
+        loadComponent: () => import('./mail/mail.page').then((m) => m.MailPage),
+      },
+      {
         path: 'usage',
         title: 'Model usage · zapply',
         loadComponent: () => import('./usage/usage.page').then((m) => m.UsagePage),

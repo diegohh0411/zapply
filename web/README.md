@@ -11,3 +11,8 @@ npm run build      # `make web` copies the output into internal/webui/dist for e
 ```
 
 Components in `src/app/shared` come from ZardUI and are ours to edit.
+
+`npm run build` also generates Brotli and gzip copies of the Typst WASM
+compiler. The Go static handler negotiates these copies and caches the
+versioned compiler URL for a year. Use the npm build command for deploys so
+this compression step runs; `ng serve` serves the original asset in development.

@@ -28,7 +28,7 @@ import (
 type Service struct {
 	store   *store.Store
 	Matcher interface {
-		JobSaved(context.Context, pgx.Tx, uuid.UUID, db.Job, bool, bool) error
+		JobCreated(context.Context, pgx.Tx, uuid.UUID, db.Job) error
 	}
 }
 

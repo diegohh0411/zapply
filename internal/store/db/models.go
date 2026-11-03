@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DatePrecision string
@@ -682,6 +683,49 @@ type AppUser struct {
 	CreatedAt time.Time
 }
 
+type CvDraft struct {
+	UserID          uuid.UUID
+	JobID           uuid.UUID
+	Template        string
+	TemplateVersion *int32
+	Locale          string
+	PageBudget      int16
+	Picks           json.RawMessage
+	Version         int32
+	UpdatedAt       time.Time
+	Summary         *string
+}
+
+type CvExport struct {
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	JobID           uuid.UUID
+	IdempotencyKey  string
+	MatchRunID      *uuid.UUID
+	Template        string
+	TemplateVersion int32
+	Locale          string
+	DocumentDate    pgtype.Date
+	PageBudget      int16
+	Pages           int32
+	Overflow        bool
+	Content         json.RawMessage
+	ContentHash     string
+	ClientSha256    *string
+	Dropped         json.RawMessage
+	CreatedAt       time.Time
+}
+
+type CvSummary struct {
+	UserID      uuid.UUID
+	JobID       uuid.UUID
+	InputHash   string
+	LastSummary string
+	OperationID *uuid.UUID
+	Dirty       bool
+	ChangedAt   time.Time
+}
+
 type DecisionAnswer struct {
 	UserID       uuid.UUID
 	Model        string
@@ -840,6 +884,60 @@ type JobView struct {
 	UpdatedAt time.Time
 }
 
+type MailAccount struct {
+	ID                uuid.UUID
+	UserID            uuid.UUID
+	Provider          string
+	Address           string
+	Status            string
+	HistoryID         *string
+	WatchExpiresAt    *time.Time
+	LastSyncedAt      *time.Time
+	SyncLeaseUntil    *time.Time
+	LastError         string
+	Version           int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	SyncPending       []byte
+	SyncWindowStart   *time.Time
+	SyncWindowReads   int32
+	SyncRetryAt       *time.Time
+	SyncQuotaFailures int32
+}
+
+type MailMessage struct {
+	ID                uuid.UUID
+	UserID            uuid.UUID
+	AccountID         uuid.UUID
+	ProviderMessageID string
+	ThreadID          string
+	ReceivedAt        time.Time
+	State             string
+	Category          *string
+	JobID             *uuid.UUID
+	FromAddress       *string
+	Subject           *string
+	Snippet           *string
+	ClassifiedAt      *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	StatusOutcome     *string
+	SuggestedStatusID *uuid.UUID
+	PreviousStatusID  *uuid.UUID
+	StatusConfidence  *float32
+	StatusAuto        bool
+}
+
+type MailOperation struct {
+	UserID      uuid.UUID
+	MessageID   uuid.UUID
+	OperationID uuid.UUID
+	Stage       string
+	Ingested    bool
+	Ok          bool
+	CreatedAt   time.Time
+}
+
 type MatchOverride struct {
 	UserID   uuid.UUID
 	JobID    uuid.UUID
@@ -874,6 +972,7 @@ type MatchRun struct {
 	Unanswered         int32
 	CreatedAt          time.Time
 	FinishedAt         *time.Time
+	Pipeline           int16
 }
 
 type MatchRunItem struct {
@@ -971,6 +1070,38 @@ type PlatformBudgetAccount struct {
 	UserID uuid.UUID
 }
 
+type PlatformMailAccountIndex struct {
+	AccountID      uuid.UUID
+	UserID         uuid.UUID
+	Provider       string
+	Address        string
+	Status         string
+	WatchExpiresAt *time.Time
+	LastSyncedAt   *time.Time
+	UpdatedAt      time.Time
+}
+
+type PlatformMailCredential struct {
+	AccountID         uuid.UUID
+	UserID            uuid.UUID
+	Ciphertext        []byte
+	EncryptionVersion string
+	UpdatedAt         time.Time
+}
+
+type PlatformMailOauthFlow struct {
+	StateHash string
+	UserID    uuid.UUID
+	Verifier  string
+	ExpiresAt time.Time
+}
+
+type PlatformMailWorkIndex struct {
+	MessageID uuid.UUID
+	UserID    uuid.UUID
+	UpdatedAt time.Time
+}
+
 type PlatformMatchIndex struct {
 	RunID     uuid.UUID
 	UserID    uuid.UUID
@@ -1011,10 +1142,14 @@ type PlatformModelQuote struct {
 }
 
 type PlatformModelSetting struct {
-	ID            bool
-	DecisionModel *string
-	Version       int32
-	UpdatedAt     time.Time
+	ID                     bool
+	DecisionModel          *string
+	Version                int32
+	UpdatedAt              time.Time
+	SummaryModel           *string
+	SummaryEndpoint        *string
+	SummaryMaxOutputTokens int32
+	SummaryMaxCharacters   int32
 }
 
 type PlatformModelUsage struct {

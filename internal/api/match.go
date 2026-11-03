@@ -22,7 +22,11 @@ func convertMatch[T any](value any, err error) (T, error) {
 	return decodePlatform[T](raw, e)
 }
 func (s *server) CreateMatchRun(ctx context.Context, req gen.CreateMatchRunRequestObject) (gen.CreateMatchRunResponseObject, error) {
-	return convertMatch[gen.CreateMatchRun202JSONResponse](s.matcher.Start(ctx, uid(ctx), req.Id, req.Params.IdempotencyKey))
+	version := 0
+	if req.Params.Pipeline != nil {
+		version = *req.Params.Pipeline
+	}
+	return convertMatch[gen.CreateMatchRun202JSONResponse](s.matcher.Start(ctx, uid(ctx), req.Id, req.Params.IdempotencyKey, version))
 }
 func (s *server) ListMatchRuns(ctx context.Context, req gen.ListMatchRunsRequestObject) (gen.ListMatchRunsResponseObject, error) {
 	runs, e := s.matcher.List(ctx, uid(ctx), req.Id, req.Params.Before, pageLimit(req.Params.Limit))
@@ -77,7 +81,12 @@ func (s *server) catalogue(ctx context.Context, refresh bool) ([]openrouter.Deci
 	if e != nil {
 		return nil, &membership.Error{Status: 503, Code: "encryption_unavailable", Detail: "System key encryption is unavailable."}
 	}
-	models, e := s.decisionModels.DecisionModels(ctx, key, refresh)
+	var models []openrouter.DecisionModel
+	if refreshTextCatalogue(ctx) {
+		models, e = s.decisionModels.TextModels(ctx, key)
+	} else {
+		models, e = s.decisionModels.DecisionModels(ctx, key, refresh)
+	}
 	if e != nil {
 		return nil, &membership.Error{Status: 503, Code: "model_catalogue_unavailable", Detail: "The model catalogue is unavailable. Saved settings are unchanged."}
 	}
@@ -96,6 +105,12 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 	if e != nil {
 		return nil, e
 	}
+	if req.Body.SummaryMaxCharacters != nil && !req.Body.SummaryMaxCharacters.Valid() {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_characters", Message: "select a supported character cap"}}}
+	}
+	if req.Body.SummaryMaxOutputTokens != nil && !req.Body.SummaryMaxOutputTokens.Valid() {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_output_tokens", Message: "select a supported token cap"}}}
+	}
 	if req.Body.DecisionModel != nil {
 		models, e := s.catalogue(ctx, true)
 		if e != nil {
@@ -112,9 +127,45 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "decision_model", Message: "select an available decision model"}}}
 		}
 	}
+	if (req.Body.SummaryModel == nil) != (req.Body.SummaryEndpoint == nil) {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "model and endpoint must both be configured"}}}
+	}
+	if req.Body.SummaryModel != nil {
+		if _, err := s.decisionModels.ChatSheet(ctx, *req.Body.SummaryModel, *req.Body.SummaryEndpoint); err != nil {
+			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "select an available text model endpoint supporting bounded output"}}}
+		}
+	}
 	var raw json.RawMessage
 	e = s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw)
+		if err := tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens, req.Body.SummaryMaxCharacters); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)
 	})
 	return decodePlatform[gen.PutModelSettings200JSONResponse](raw, membership.Translate(e))
+}
+
+type textCatalogueKey struct{}
+
+func refreshTextCatalogue(ctx context.Context) bool {
+	v, _ := ctx.Value(textCatalogueKey{}).(bool)
+	return v
+}
+func (s *server) ListTextModels(ctx context.Context, _ gen.ListTextModelsRequestObject) (gen.ListTextModelsResponseObject, error) {
+	return convertMatch[gen.ListTextModels200JSONResponse](s.catalogue(context.WithValue(ctx, textCatalogueKey{}, true), false))
+}
+
+func (s *server) ListTextModelEndpoints(ctx context.Context, req gen.ListTextModelEndpointsRequestObject) (gen.ListTextModelEndpointsResponseObject, error) {
+	err := s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error { _, err := tx.Exec(ctx, `SELECT platform.assert_owner()`); return err })
+	if err != nil {
+		return nil, membership.Translate(err)
+	}
+	endpoints, err := s.decisionModels.TextEndpoints(ctx, req.Params.Model)
+	if err != nil {
+		return nil, &membership.Error{Status: 503, Code: "endpoint_catalogue_unavailable", Detail: "Provider endpoints could not be loaded. Try again."}
+	}
+	return convertMatch[gen.ListTextModelEndpoints200JSONResponse](endpoints, nil)
 }

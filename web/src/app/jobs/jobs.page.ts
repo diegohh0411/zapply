@@ -7,23 +7,15 @@ import {
   input,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideEllipsis,
-  lucidePlus,
-  lucideSearch,
-  lucideSettings2,
-  lucideSquareKanban,
-  lucideTable,
-  lucideX,
-} from '@ng-icons/lucide';
+import { lucidePlus, lucideSearch, lucideX } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDialogImports } from '@/shared/components/dialog';
-import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
@@ -42,7 +34,8 @@ import {
   JobsStore,
   STAGES,
 } from './jobs.store';
-import { StatusesDialog } from './statuses-dialog';
+import { Database } from '../shared/database';
+import { StatusProperty } from './status-property';
 
 type Layout = 'board' | 'table';
 
@@ -62,22 +55,18 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
     ZardInputComponent,
     ZardSwitchComponent,
     ZardSkeletonComponent,
-    ...ZardDropdownImports,
     ...ZardDialogImports,
     JobBoard,
     JobTable,
     JobSheet,
-    StatusesDialog,
+    StatusProperty,
+    Database,
   ],
   providers: [
     provideIcons({
       lucidePlus,
       lucideSearch,
-      lucideSettings2,
-      lucideSquareKanban,
-      lucideTable,
       lucideX,
-      lucideEllipsis,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,9 +86,12 @@ export class JobsPage {
   protected readonly state = signal<ViewState>(DEFAULT_STATE);
   protected readonly sheetTarget = signal<SheetTarget | null>(null);
   protected readonly sheetOpen = signal(false);
-  protected readonly statusesOpen = signal(false);
+  protected readonly properties = [{ id: 'status', name: 'Status', icon: 'lucideCircleDot' }];
+  protected readonly database = viewChild(Database);
   protected readonly saveOpen = signal(false);
   protected viewName = '';
+  /** Set while the save dialog creates a blank view from the "+" menu. */
+  protected readonly newLayout = signal<Layout | null>(null);
   private newInStatus: string | undefined;
 
   protected readonly activeView = computed(
@@ -212,6 +204,10 @@ export class JobsPage {
 
   // Views
 
+  protected selectViewId(id: string | null): void {
+    this.selectView(this.store.views().find((v) => v.id === id) ?? null);
+  }
+
   protected selectView(v: JobView | null): void {
     void this.router.navigate([], {
       queryParams: { view: v?.id ?? null },
@@ -220,15 +216,26 @@ export class JobsPage {
   }
 
   protected openSave(): void {
+    this.newLayout.set(null);
     this.viewName = this.activeView()?.name ?? '';
+    this.saveOpen.set(true);
+  }
+
+  protected openNewView(layout: Layout): void {
+    this.newLayout.set(layout);
+    this.viewName = layout === 'table' ? 'Table' : 'Board';
     this.saveOpen.set(true);
   }
 
   protected async saveAsNew(): Promise<void> {
     const name = this.viewName.trim();
     if (!name) return;
+    const layout = this.newLayout();
+    const body: JobViewInput = layout
+      ? { name, layout, filters: {}, sort: '-updated_at' }
+      : this.viewInput(name);
     try {
-      const v = await this.store.createView(this.viewInput(name));
+      const v = await this.store.createView(body);
       this.saveOpen.set(false);
       this.selectView(v);
       this.toast.success(`Saved view “${name}”`);
@@ -249,8 +256,34 @@ export class JobsPage {
     }
   }
 
-  protected async deleteView(): Promise<void> {
-    const v = this.activeView();
+  protected async renameView(id: string, name: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
+    if (!v) return;
+    try {
+      await this.store.updateView(id, { name, layout: v.layout, filters: v.filters, sort: v.sort });
+    } catch (e) {
+      this.toast.error((e as Error).message);
+    }
+  }
+
+  protected async duplicateView(id: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
+    if (!v) return;
+    try {
+      const copy = await this.store.createView({
+        name: `${v.name} (copy)`,
+        layout: v.layout,
+        filters: v.filters,
+        sort: v.sort,
+      });
+      this.selectView(copy);
+    } catch (e) {
+      this.toast.error((e as Error).message);
+    }
+  }
+
+  protected async deleteView(id: string): Promise<void> {
+    const v = this.store.views().find((x) => x.id === id);
     if (!v) return;
     if (
       !(await this.confirm.ask({
@@ -261,7 +294,7 @@ export class JobsPage {
       return;
     try {
       await this.store.deleteView(v.id);
-      this.selectView(null);
+      if (this.view() === v.id) this.selectView(null);
     } catch (e) {
       this.toast.error((e as Error).message);
     }

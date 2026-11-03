@@ -174,11 +174,25 @@
 }
 
 @layer components {
+  /* Notion-style view tabs: plain text, 2px underline on the active one. */
   .view-tab {
-    @apply whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground;
+    @apply relative mb-1 inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted;
   }
   .view-tab-active {
-    @apply bg-muted font-medium text-foreground;
+    @apply font-medium text-foreground;
+  }
+  .view-tab-active::after {
+    content: '';
+    @apply absolute inset-x-1 -bottom-1 h-0.5 rounded-full bg-foreground;
+  }
+  .view-tab-add {
+    @apply mb-1 grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground;
+  }
+  .settings-row {
+    @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-muted;
+  }
+  .settings-icon-btn {
+    @apply grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground;
   }
   .chip {
     @apply rounded-full border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground;

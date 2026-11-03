@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -343,5 +344,108 @@ func TestNoNamedPreparedStatements(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("%d named prepared statements on the connection", n)
+	}
+}
+
+func TestSummaryCapMigrationsWithoutInheritedPlatformOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, setting, signature string
+		from, to                       int64
+		want                           int
+	}{
+		{"tokens", "00023_summary_token_cap.sql", "max_output_tokens", "platform.save_summary_settings(text,text,integer)", 22, 23, 2048},
+		{"characters", "00024_summary_character_cap.sql", "max_characters", "platform.save_summary_settings(text,text,integer,integer)", 23, 24, 500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testdb.NewAtVersion(t, tc.from)
+			ctx := context.Background()
+			admin := db.Admin(t)
+			user, err := db.Store.ResolveUser(ctx, principal())
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := uuid.New()
+			status := uuid.New()
+			if _, err := admin.Exec(ctx, `INSERT INTO job_status(id,user_id,name,normalized_name,stage,position) VALUES($1,$2,'Saved','saved','saved','a0')`, status, user); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := admin.Exec(ctx, `INSERT INTO job(id,user_id,status_id,title,position,content_hash) VALUES($1,$2,$3,'Engineer','a0','\x00'::bytea)`, job, user, status); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := admin.Exec(ctx, `INSERT INTO cv_draft(user_id,job_id) VALUES($1,$2)`, user, job); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := admin.Exec(ctx, `INSERT INTO cv_summary(user_id,job_id,dirty) VALUES($1,$2,false)`, user, job); err != nil {
+				t.Fatal(err)
+			}
+			role := "migration_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+			password := uuid.NewString()
+			if _, err := admin.Exec(ctx, "CREATE ROLE "+role+" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '"+password+"'"); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if _, err := admin.Exec(ctx, "REASSIGN OWNED BY "+role+" TO CURRENT_USER; DROP OWNED BY "+role+"; DROP ROLE "+role); err != nil {
+					t.Error(err)
+				}
+			})
+			for _, statement := range []string{
+				"GRANT zapply_platform TO " + role + " WITH INHERIT FALSE, SET TRUE",
+				"GRANT USAGE, CREATE ON SCHEMA public, platform TO " + role,
+				"ALTER TABLE platform.model_settings OWNER TO " + role,
+				"ALTER TABLE public.goose_db_version OWNER TO " + role,
+			} {
+				if _, err := admin.Exec(ctx, statement); err != nil {
+					t.Fatal(err)
+				}
+			}
+			migrationURL, err := url.Parse(db.AdminURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Authenticate as the restricted role so RESET ROLE cannot restore admin privileges.
+			migrationURL.User = url.UserPassword(role, password)
+			if err := store.MigrateTo(ctx, migrationURL.String(), tc.to, discardLogger()); err != nil {
+				t.Fatalf("migrate as non-inheriting schema owner: %v", err)
+			}
+			if err := store.MigrateTo(ctx, migrationURL.String(), tc.to, discardLogger()); err != nil {
+				t.Fatalf("retry migration: %v", err)
+			}
+			for _, signature := range []string{"platform.summary_settings()", tc.signature} {
+				var owner string
+				if err := admin.QueryRow(ctx, `SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid=$1::regprocedure`, signature).Scan(&owner); err != nil {
+					t.Fatal(err)
+				}
+				if owner != "zapply_platform" {
+					t.Fatalf("%s owner = %s; want zapply_platform", signature, owner)
+				}
+			}
+			var cap int
+			if err := admin.QueryRow(ctx, `SELECT (platform.summary_settings()->>$1)::int`, tc.setting).Scan(&cap); err != nil || cap != tc.want {
+				t.Fatalf("summary cap = %d, err = %v; want %d", cap, err, tc.want)
+			}
+			var dirty bool
+			if err := admin.QueryRow(ctx, `SELECT dirty FROM cv_summary WHERE user_id=$1 AND job_id=$2`, user, job).Scan(&dirty); err != nil || !dirty {
+				t.Fatalf("existing summary not invalidated: dirty=%v err=%v", dirty, err)
+			}
+			// Exercise the actual rollback SQL under the same restricted migration role.
+			source, err := os.ReadFile("migrations/" + tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			down := strings.SplitN(string(source), "-- +goose Down", 2)[1]
+			conn, err := pgx.Connect(ctx, migrationURL.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close(ctx)
+			if err := pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error { _, err := tx.Exec(ctx, down); return err }); err != nil {
+				t.Fatalf("rollback as non-inheriting schema owner: %v", err)
+			}
+			var hasCap bool
+			if err := admin.QueryRow(ctx, `SELECT platform.summary_settings() ? $1`, tc.setting).Scan(&hasCap); err != nil || hasCap {
+				t.Fatalf("rollback did not restore summary settings: hasCap=%v err=%v", hasCap, err)
+			}
+
+		})
 	}
 }

@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	"github.com/riverqueue/river"
 
 	"github.com/diegohh0411/zapply/internal/api"
 	"github.com/diegohh0411/zapply/internal/auth"
@@ -34,9 +36,12 @@ import (
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
 	"github.com/diegohh0411/zapply/internal/logx"
+	"github.com/diegohh0411/zapply/internal/mail"
+	"github.com/diegohh0411/zapply/internal/mail/google"
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/relay"
+	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/telemetry"
@@ -148,7 +153,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	defer hub.Close()
 
-	webCfg := webui.Config{SupabaseURL: cfg.Web.SupabaseURL, SupabaseAnonKey: cfg.Web.SupabaseAnonKey}
+	webCfg := webui.Config{SupabaseURL: cfg.Web.SupabaseURL, SupabaseAnonKey: cfg.Web.SupabaseAnonKey, BuildCommit: os.Getenv("HEROKU_BUILD_COMMIT"), BuiltAt: webui.BuiltAt}
 	var devToken func(string) (string, error)
 	if cfg.Env == config.Development && cfg.Auth.DevSecret != "" {
 		webCfg.DevLogin = true
@@ -171,6 +176,8 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		Drain:    srv.DrainC(),
 		Web:      webui.Handler(webCfg),
 		DevToken: devToken,
+		TypstDir: cfg.TypstDir,
+		Google:   cfg.Google,
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }
@@ -217,9 +224,42 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	matcher := match.New(st, q)
-	runtime.OnTerminal = matcher.OnTerminal
-	runtime.AddWorkers = matcher.AddWorkers
-	runtime.RecoverFeatures = matcher.Recover
+	var provider mail.Provider
+	if cfg.Google.Enabled() {
+		provider = google.New(google.Config{ClientID: cfg.Google.ClientID, ClientSecret: cfg.Google.ClientSecret, RedirectURL: cfg.Google.RedirectURL(), Topic: cfg.Google.PubSubTopic})
+	}
+	mailer := mail.New(st, q, keys, provider, cfg.Google.PubSubTopic != "", cfg.Google.ReconcileInterval, log)
+	runtime.OnTerminal = func(ctx context.Context, tx pgx.Tx, op worker.Operation) error {
+		if handled, err := mailer.OnTerminal(ctx, tx, op); handled || err != nil {
+			return err
+		}
+		return matcher.OnTerminal(ctx, tx, op)
+	}
+	runtime.AddWorkers = func(w *river.Workers) {
+		matcher.AddWorkers(w)
+		mailer.AddWorkers(w)
+	}
+	runtime.RecoverFeatures = func(ctx context.Context, c *river.Client[pgx.Tx]) error {
+		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c))
+	}
+	summaries := render.NewService(st, nil)
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				check, done := context.WithTimeout(ctx, 10*time.Second)
+				err := summaries.RefreshSummaries(check)
+				done()
+				if err != nil && ctx.Err() == nil {
+					log.Error("summary refresh failed", "err", err)
+				}
+			}
+		}
+	}()
 	client, err := runtime.Client(cfg.Worker.Concurrency)
 	if err != nil {
 		return err

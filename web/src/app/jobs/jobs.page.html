@@ -1,149 +1,158 @@
-<div class="flex h-full flex-col">
-  <header class="flex flex-col gap-3 border-b px-4 pb-3 pt-4">
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="mr-auto">
-        <h1 class="text-xl font-semibold tracking-tight">Jobs</h1>
-        <p class="text-sm text-muted-foreground">
-          {{ counts().total }} tracked · {{ counts().active }} in process · {{ counts().offer }} {{ counts().offer === 1 ? 'offer' : 'offers' }}
-        </p>
-      </div>
-      <button z-button zType="outline" type="button" (click)="statusesOpen.set(true)">
-        <ng-icon name="lucideSettings2" /> Columns
-      </button>
-      <button z-button type="button" (click)="newJob()"><ng-icon name="lucidePlus" /> New job</button>
+@if (!sheetOpen()) {
+<app-database
+  [views]="store.views()"
+  [activeViewId]="activeView()?.id ?? null"
+  defaultViewName="All jobs"
+  [layout]="state().layout"
+  [modified]="modified()"
+  [content]="databaseContent"
+  (viewChange)="selectViewId($event)"
+  (layoutChange)="setLayout($event)"
+  (save)="openSave()"
+  (remove)="deleteView($event)"
+  (addView)="openNewView($event)"
+  (renameView)="renameView($event.id, $event.name)"
+  (duplicateView)="duplicateView($event)"
+  (add)="newJob()"
+  [properties]="properties"
+  [propertyEditor]="propertyEditor"
+>
+  <div databaseHeader class="flex flex-wrap items-center gap-3">
+    <div class="mr-auto">
+      <h1 class="text-xl font-semibold tracking-tight">Jobs</h1>
+      <p class="text-sm text-muted-foreground">
+        {{ counts().total }} tracked · {{ counts().active }} in process · {{ counts().offer }}
+        {{ counts().offer === 1 ? 'offer' : 'offers' }}
+      </p>
     </div>
+  </div>
 
-    <nav class="-mb-1 flex items-center gap-1 overflow-x-auto" aria-label="Saved views">
-      <button
-        type="button"
-        class="view-tab"
-        [class.view-tab-active]="!activeView()"
-        [attr.aria-current]="!activeView() ? 'page' : null"
-        (click)="selectView(null)"
-      >
-        All jobs
-      </button>
-      @for (v of store.views(); track v.id) {
-        <button
-          type="button"
-          class="view-tab"
-          [class.view-tab-active]="activeView()?.id === v.id"
-          [attr.aria-current]="activeView()?.id === v.id ? 'page' : null"
-          (click)="selectView(v)"
-        >
-          {{ v.name }}
-        </button>
-      }
-      @if (modified()) {
-        <button z-button zType="ghost" zSize="sm" type="button" class="ml-1 text-brand" (click)="openSave()">
-          {{ activeView() ? 'Save changes…' : 'Save as view…' }}
-        </button>
-      }
-      @if (activeView(); as v) {
-        <z-dropdown-menu class="ml-auto">
-          <button dropdown-trigger z-button zType="ghost" zSize="icon-sm" type="button" [attr.aria-label]="'Options for view ' + v.name">
-            <ng-icon name="lucideEllipsis" />
-          </button>
-          <z-dropdown-menu-item (click)="openSave()">Rename or update…</z-dropdown-menu-item>
-          <z-dropdown-menu-item zType="destructive" (click)="deleteView()">Delete view</z-dropdown-menu-item>
-        </z-dropdown-menu>
-      }
-    </nav>
-
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="relative w-full sm:w-64">
-        <ng-icon name="lucideSearch" class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          z-input
-          class="pl-8"
-          type="search"
-          placeholder="Search title or company"
-          aria-label="Search jobs"
-          [ngModel]="state().filters.q ?? ''"
-          (ngModelChange)="setQ($event)"
-        />
-      </div>
-      <div class="flex flex-wrap gap-1" role="group" aria-label="Filter by stage">
-        @for (s of stages; track s.value) {
-          <button type="button" class="chip" [class.chip-on]="hasStage(s.value)" [attr.aria-pressed]="hasStage(s.value)" (click)="toggleStage(s.value)">
-            {{ s.label }}
-          </button>
-        }
-      </div>
-      <label class="flex items-center gap-2 text-sm text-muted-foreground">
-        <z-switch zSize="sm" [zChecked]="!!state().filters.include_archived" (zCheckedChange)="setArchived($event)" />
-        Archived
-      </label>
-      @if (modified() && !activeView()) {
-        <button z-button zType="ghost" zSize="sm" type="button" (click)="clearFilters()"><ng-icon name="lucideX" /> Clear</button>
-      }
-      <div class="ml-auto flex rounded-md border p-0.5" role="group" aria-label="Layout">
-        <button
-          type="button"
-          class="seg"
-          [class.seg-on]="state().layout === 'board'"
-          [attr.aria-pressed]="state().layout === 'board'"
-          (click)="setLayout('board')"
-        >
-          <ng-icon name="lucideSquareKanban" class="size-4" /> Board
-        </button>
-        <button
-          type="button"
-          class="seg"
-          [class.seg-on]="state().layout === 'table'"
-          [attr.aria-pressed]="state().layout === 'table'"
-          (click)="setLayout('table')"
-        >
-          <ng-icon name="lucideTable" class="size-4" /> Table
-        </button>
-      </div>
+  <div databaseFilters class="flex flex-wrap items-center gap-2">
+    <div class="relative w-full sm:w-64">
+      <ng-icon
+        name="lucideSearch"
+        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        z-input
+        class="pl-8"
+        type="search"
+        placeholder="Search title or company"
+        aria-label="Search jobs"
+        [ngModel]="state().filters.q ?? ''"
+        (ngModelChange)="setQ($event)"
+      />
     </div>
-  </header>
-
-  <section class="min-h-0 flex-1 overflow-auto pt-2">
-    @if (store.loading() && store.jobs().length === 0) {
-      <div class="flex gap-3 p-4">
-        @for (i of [1, 2, 3, 4]; track i) {
-          <z-skeleton class="h-64 w-72 shrink-0 rounded-xl" />
-        }
-      </div>
-    } @else if (store.error()) {
-      <p class="p-6 text-sm text-destructive" role="alert">Could not load jobs: {{ store.error() }}</p>
-    } @else if (store.jobs().length === 0 && !state().filters.include_archived) {
-      <div class="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-20 text-center">
-        <img src="icon.svg" alt="" class="size-12 rounded-xl opacity-90" />
-        <h2 class="text-lg font-semibold">Track your first application</h2>
-        <p class="text-sm text-muted-foreground">
-          Save a posting you like. Drag it across the board as you apply, interview and hear back; zapply keeps the timeline.
-        </p>
-        <button z-button type="button" (click)="newJob()"><ng-icon name="lucidePlus" /> New job</button>
-      </div>
-    } @else if (state().layout === 'board') {
-      <app-job-board [statuses]="columns()" [jobs]="filtered()" (open)="open($event)" (add)="newJob($event)" (move)="move($event)" />
-    } @else {
-      <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" />
+    <div class="flex flex-wrap gap-1" role="group" aria-label="Filter by stage">
+      @for (s of stages; track s.value) {
+        <button
+          type="button"
+          class="chip"
+          [class.chip-on]="hasStage(s.value)"
+          [attr.aria-pressed]="hasStage(s.value)"
+          (click)="toggleStage(s.value)"
+        >
+          {{ s.label }}
+        </button>
+      }
+    </div>
+    <label class="flex items-center gap-2 text-sm text-muted-foreground">
+      <z-switch
+        zSize="sm"
+        [zChecked]="!!state().filters.include_archived"
+        (zCheckedChange)="setArchived($event)"
+      />
+      Archived
+    </label>
+    @if (modified() && !activeView()) {
+      <button z-button zType="ghost" zSize="sm" type="button" (click)="clearFilters()">
+        <ng-icon name="lucideX" /> Clear
+      </button>
     }
-  </section>
-</div>
+  </div>
+</app-database>
 
-<app-job-sheet [target]="sheetTarget()" [visible]="sheetOpen()" (visibleChange)="sheetVisible($event)" (opened)="open($event)" />
-<app-statuses-dialog [(visible)]="statusesOpen" />
+<ng-template #databaseContent let-layout>
+  @if (store.loading() && store.jobs().length === 0) {
+    <div class="flex gap-3 p-4">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <z-skeleton class="h-64 w-72 shrink-0 rounded-xl" />
+      }
+    </div>
+  } @else if (store.error()) {
+    <p class="p-6 text-sm text-destructive" role="alert">
+      Could not load jobs: {{ store.error() }}
+    </p>
+  } @else if (store.jobs().length === 0 && !state().filters.include_archived) {
+    <div class="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-20 text-center">
+      <img src="icon.svg" alt="" class="size-12 rounded-xl opacity-90" />
+      <h2 class="text-lg font-semibold">Track your first application</h2>
+      <p class="text-sm text-muted-foreground">
+        Save a posting you like. Drag it across the board as you apply, interview and hear back;
+        zapply keeps the timeline.
+      </p>
+      <button z-button type="button" (click)="newJob()">
+        <ng-icon name="lucidePlus" /> New job
+      </button>
+    </div>
+  } @else if (layout === 'board') {
+    <app-job-board
+      [statuses]="columns()"
+      [jobs]="filtered()"
+      (open)="open($event)"
+      (add)="newJob($event)"
+      (move)="move($event)"
+      (editProperty)="database()?.editProperty('status')"
+    />
+  } @else {
+    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" (editProperty)="database()?.editProperty('status')" />
+  }
+</ng-template>
+
+<ng-template #propertyEditor><app-status-property /></ng-template>
+
+}
+
+<app-job-sheet
+  [target]="sheetTarget()"
+  [visible]="sheetOpen()"
+  (visibleChange)="sheetVisible($event)"
+  (opened)="open($event)"
+/>
 
 <z-dialog [(zVisible)]="saveOpen" zWidth="min(420px, 95vw)">
   <z-dialog-header>
-    <z-dialog-title>{{ activeView() ? 'Update view' : 'Save view' }}</z-dialog-title>
-    <z-dialog-description>Keeps the current layout and filters one click away.</z-dialog-description>
+    <z-dialog-title>{{ newLayout() ? 'New view' : activeView() ? 'Update view' : 'Save view' }}</z-dialog-title>
+    <z-dialog-description
+      >Keeps the current layout and filters one click away.</z-dialog-description
+    >
   </z-dialog-header>
-  <form class="flex flex-col gap-4" (ngSubmit)="activeView() ? updateView() : saveAsNew()">
+  <form class="flex flex-col gap-4" (ngSubmit)="activeView() && !newLayout() ? updateView() : saveAsNew()">
     <label class="field">
       <span>Name</span>
-      <input z-input name="viewName" [(ngModel)]="viewName" placeholder="e.g. Interviewing, remote" required />
+      <input
+        z-input
+        name="viewName"
+        [(ngModel)]="viewName"
+        placeholder="e.g. Interviewing, remote"
+        required
+      />
     </label>
     <z-dialog-footer class="gap-2">
-      @if (activeView()) {
-        <button z-button zType="outline" type="button" [zDisabled]="!viewName.trim()" (click)="saveAsNew()">Save as new</button>
+      @if (activeView() && !newLayout()) {
+        <button
+          z-button
+          zType="outline"
+          type="button"
+          [zDisabled]="!viewName.trim()"
+          (click)="saveAsNew()"
+        >
+          Save as new
+        </button>
       }
-      <button z-button type="submit" [zDisabled]="!viewName.trim()">{{ activeView() ? 'Update' : 'Save' }}</button>
+      <button z-button type="submit" [zDisabled]="!viewName.trim()">
+        {{ activeView() ? 'Update' : 'Save' }}
+      </button>
     </z-dialog-footer>
   </form>
 </z-dialog>

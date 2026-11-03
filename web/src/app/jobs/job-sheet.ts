@@ -30,12 +30,13 @@ import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSelectImports } from '@/shared/components/select';
-import { ZardSheetImports } from '@/shared/components/sheet';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
+import { CvTab } from './cv/cv-tab';
+import { MailTab } from './mail-tab';
 import { MatchTab } from './match/match-tab';
 import { StatusSelect } from './status-select';
 import { AuthService } from '../core/auth.service';
@@ -86,6 +87,8 @@ const emptyForm = (statusId = ''): Form => ({
 @Component({
   selector: 'app-job-sheet',
   imports: [
+    CvTab,
+    MailTab,
     MatchTab,
     StatusSelect,
     DatePipe,
@@ -96,7 +99,6 @@ const emptyForm = (statusId = ''): Form => ({
     ZardInputComponent,
     ZardTextareaComponent,
     ZardSkeletonComponent,
-    ...ZardSheetImports,
     ...ZardSelectImports,
     ...ZardTabsImports,
     ...ZardDropdownImports,
@@ -135,6 +137,7 @@ export class JobSheet {
   protected readonly job = signal<Job | null>(null);
   protected readonly isNew = signal(false);
   protected readonly loading = signal(false);
+  protected readonly matchActive = signal(false);
   protected readonly saving = signal(false);
   protected readonly dirty = signal(false);
   protected readonly errors = signal<Record<string, string>>({});
@@ -162,6 +165,7 @@ export class JobSheet {
         this.dirty.set(false);
         this.saving.set(false);
         this.loading.set(false);
+        this.matchActive.set(false);
         this.isNew.set(false);
         this.editingNote.set(null);
         this.note = '';
@@ -191,6 +195,7 @@ export class JobSheet {
     const generation = ++this.generation;
     this.activitiesRequest++;
     if (!quiet) {
+      this.matchActive.set(false);
       this.errors.set({});
       this.dirty.set(false);
       this.editingNote.set(null);

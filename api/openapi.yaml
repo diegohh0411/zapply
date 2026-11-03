@@ -1053,6 +1053,38 @@ paths:
         -
           "$ref": "#/components/parameters/ID"
 
+  /v1/admin/text-model-endpoints:
+    get:
+      operationId: listTextModelEndpoints
+      parameters:
+        - name: model
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$' }
+      responses:
+        '200':
+          description: Compatible provider endpoints for a text model (owner only).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [tag, name]
+                  properties:
+                    tag: { type: string }
+                    name: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/text-models:
+    get:
+      operationId: listTextModels
+      responses:
+        '200':
+          description: Available OpenRouter text models (owner only).
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DecisionModel' } }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/decision-models:
     get:
       operationId: listDecisionModels
@@ -1086,6 +1118,10 @@ paths:
               required: [decision_model]
               properties:
                 decision_model: { type: string, nullable: true }
+                summary_model: { type: string, nullable: true }
+                summary_endpoint: { type: string, nullable: true }
+                summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
+                summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
       responses:
         '200':
           description: Updated settings.
@@ -1137,6 +1173,10 @@ paths:
           in: header
           required: true
           schema: { type: string, minLength: 1, maxLength: 255 }
+        - name: pipeline
+          in: query
+          description: Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis.
+          schema: { type: integer, minimum: 1, maximum: 3 }
       responses:
         '202':
           description: Success.
@@ -1191,7 +1231,7 @@ paths:
               type: object
               required: [class]
               properties:
-                class: { type: string, enum: [must, preferred, duty, ignore] }
+                class: { type: string, enum: [must, preferred, duty, trait, ignore] }
       responses:
         '204':
           description: Success.
@@ -1202,6 +1242,273 @@ paths:
         '204':
           description: Success.
         default: { $ref: '#/components/responses/Problem' }
+
+  /v1/cv-templates:
+    get:
+      operationId: listCvTemplates
+      tags: [cv]
+      description: Every CV template version, with the files a browser compiles it with.
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CvTemplate" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/cv:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCv
+      tags: [cv]
+      description: |
+        The job's CV draft and its content before fitting, built from the
+        library, the latest completed match run and the draft's picks. The
+        draft is created on first read. The ETag is the draft's version.
+      responses:
+        "200":
+          description: Success.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvPreview" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putCv
+      tags: [cv]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CvDraftInput" }
+      responses:
+        "200":
+          description: The saved draft, rebuilt.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvPreview" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/cv/exports:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: listCvExports
+      tags: [cv]
+      description: The job's exports, newest first, without their content.
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExportPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCvExport
+      tags: [cv]
+      description: |
+        Stores an immutable snapshot of the CV the client fitted: the draft's
+        content, rebuilt on the server, without the dropped items. A stale
+        draft version fails with 412; a different content hash (the library
+        changed since the preview) with 409.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CvExportInput" }
+      responses:
+        "201":
+          description: The snapshot, with its content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExport" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/cv-exports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCvExport
+      tags: [cv]
+      responses:
+        "200":
+          description: The snapshot, with its content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvExport" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/cv-exports/{id}/pdf:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getCvExportPdf
+      tags: [cv]
+      description: |
+        Compiles the snapshot on the server, for clients without a browser.
+        Nothing is stored. 503 when the server lacks the template's Typst
+        version.
+      responses:
+        "200":
+          description: The PDF.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts:
+    get:
+      operationId: listMailAccounts
+      tags: [mail]
+      description: |
+        Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
+        when the server has no Google OAuth client, in which case connecting
+        answers 503.
+      responses:
+        "200":
+          description: The member's mail accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccountList" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/google/start:
+    post:
+      operationId: startGoogleConnect
+      tags: [mail]
+      description: |
+        Begins the Gmail consent flow. Send the browser to `url`; Google returns
+        to the server's `/oauth/google/callback`, which redirects to the app, which
+        calls `completeGoogleConnect`.
+      responses:
+        "200":
+          description: Where to send the browser.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailConnect" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/google/complete:
+    post:
+      operationId: completeGoogleConnect
+      tags: [mail]
+      description: |
+        Finishes the consent flow with the `state` and `code` the server's
+        callback passed to the app. The state must belong to the caller, who is
+        the member that started it; 422 on `state` otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailConnectComplete" }
+      responses:
+        "200":
+          description: The connected account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateMailAccount
+      tags: [mail]
+      description: Pause or resume reading an account. A paused account is not read and nothing is sent to the model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailAccountUpdate" }
+      responses:
+        "200":
+          description: The updated account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: disconnectMailAccount
+      tags: [mail]
+      description: Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account.
+      responses:
+        "204": { description: Disconnected. }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/accounts/{id}/sync:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: syncMailAccount
+      tags: [mail]
+      description: |
+        Checks the mailbox now and retries mail still waiting to be classified.
+        409 unless the account is active. A sync held back by Gmail's rate limit
+        still waits; `retry_at` says until when.
+      responses:
+        "200":
+          description: The account, with its current progress.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailAccount" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/messages:
+    get:
+      operationId: listMailMessages
+      tags: [mail]
+      description: Mail classified as relevant to a job application, newest first.
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: "#/components/schemas/MailCategory" }
+        - name: job_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: A page of messages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailMessagePage" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/mail/messages/{id}/status-change:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    post:
+      operationId: resolveMailStatusChange
+      tags: [mail]
+      description: >
+        Acts on the job status a message proposed. `apply` moves the job to the
+        proposed status and `dismiss` declines it; both need an outcome of
+        `review`. `undo` moves an applied job back to its earlier status, and
+        fails with 409 if the job's status was changed since.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailStatusChangeAction" }
+      responses:
+        "200":
+          description: The updated message.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailMessage" }
+        default: { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
@@ -1239,6 +1546,128 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    CvTemplate:
+      type: object
+      required: [name, version, typst, locales, published, assets]
+      properties:
+        name: { type: string }
+        version: { type: integer }
+        typst: { type: string, description: The Typst version the template compiles with. }
+        locales: { type: array, items: { type: string } }
+        published: { type: boolean }
+        assets:
+          type: object
+          required: [main, strings, fonts]
+          properties:
+            main: { type: string }
+            strings: { type: string }
+            fonts: { type: array, items: { type: string } }
+    CvPicks:
+      type: object
+      required: [include, exclude]
+      properties:
+        include: { type: array, maxItems: 1000, items: { type: string, format: uuid }, description: Evidence or highlight IDs, pinned. }
+        exclude: { type: array, maxItems: 1000, items: { type: string, format: uuid } }
+    CvDraft:
+      type: object
+      required: [job_id, template, template_version, locale, page_budget, picks, version, updated_at]
+      properties:
+        summary: { type: string, nullable: true, maxLength: 500 }
+        job_id: { type: string, format: uuid }
+        template: { type: string }
+        template_version: { type: integer, nullable: true, description: Null follows the latest version. }
+        locale: { type: string }
+        page_budget: { type: integer, minimum: 1, maximum: 3 }
+        picks: { $ref: "#/components/schemas/CvPicks" }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    CvDraftInput:
+      type: object
+      required: [template, locale, page_budget, picks]
+      properties:
+        summary: { type: string, nullable: true, maxLength: 500 }
+        template: { type: string }
+        template_version: { type: integer, nullable: true }
+        locale: { type: string }
+        page_budget: { type: integer, minimum: 1, maximum: 3 }
+        picks: { $ref: "#/components/schemas/CvPicks" }
+    CvPreview:
+      type: object
+      required: [draft, template, content, content_hash, trim, available, match]
+      properties:
+        summary_status: { type: string }
+        summary_suggestion: { type: string }
+        summary_reason: { type: string }
+        draft: { $ref: "#/components/schemas/CvDraft" }
+        template: { $ref: "#/components/schemas/CvTemplate" }
+        content: { type: object, additionalProperties: true, description: The template's content (templates/README.md). }
+        content_hash: { type: string }
+        trim: { type: array, items: { type: string }, description: Optional item IDs, least relevant first. }
+        available:
+          type: object
+          required: [entries, highlights]
+          properties:
+            entries:
+              type: array
+              items:
+                type: object
+                required: [id, title, kind, section, reason]
+                properties:
+                  id: { type: string }
+                  title: { type: string }
+                  kind: { type: string }
+                  section: { type: string }
+                  reason: { type: string, enum: [excluded, suggested, not_selected] }
+            highlights:
+              type: array
+              items:
+                type: object
+                required: [id, evidence_id, text, excluded]
+                properties:
+                  id: { type: string }
+                  evidence_id: { type: string }
+                  text: { type: string }
+                  excluded: { type: boolean }
+        match:
+          type: object
+          nullable: true
+          required: [run_id, stale]
+          properties:
+            run_id: { type: string, format: uuid }
+            stale: { type: boolean }
+    CvExportInput:
+      type: object
+      required: [draft_version, content_hash, dropped, pages]
+      properties:
+        draft_version: { type: integer }
+        content_hash: { type: string }
+        dropped: { type: array, items: { type: string } }
+        pages: { type: integer, minimum: 1, maximum: 50 }
+        client_sha256: { type: string, pattern: '^[0-9a-fA-F]{64}$' }
+    CvExport:
+      type: object
+      required: [id, job_id, match_run_id, template, template_version, locale, document_date, page_budget, pages, overflow, content_hash, dropped, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        job_id: { type: string, format: uuid }
+        match_run_id: { type: string, format: uuid, nullable: true }
+        template: { type: string }
+        template_version: { type: integer }
+        locale: { type: string }
+        document_date: { type: string, format: date }
+        page_budget: { type: integer }
+        pages: { type: integer }
+        overflow: { type: boolean }
+        content_hash: { type: string }
+        client_sha256: { type: string, nullable: true }
+        dropped: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        content: { type: object, additionalProperties: true }
+    CvExportPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CvExport" } }
     Problem:
       type: object
       required: [title, status]
@@ -1719,6 +2148,8 @@ components:
         - usage.changed
         - model_operation.changed
         - match_run.changed
+        - mail.account.updated
+        - mail.message.classified
 
     "Plan":
       "type": "object"
@@ -2041,11 +2472,23 @@ components:
         context_length: { type: integer }
         pricing: { type: object, additionalProperties: true }
         compatibility_reason: { type: string }
+    SummaryMaxCharacters:
+      type: integer
+      enum: [100, 200, 300, 400, 500]
+      description: Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+    SummaryMaxOutputTokens:
+      type: integer
+      enum: [1024, 2048, 4096, 8192]
+      description: Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
     ModelSettings:
       type: object
-      required: [version, decision_model, updated_at]
+      required: [version, decision_model, summary_max_output_tokens, summary_max_characters, updated_at]
       properties:
         decision_model: { type: string, nullable: true }
+        summary_model: { type: string, nullable: true }
+        summary_endpoint: { type: string, nullable: true }
+        summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
+        summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:
@@ -2134,14 +2577,14 @@ components:
       type: object
       required: [score, must_met, must_total, partial, seniority, relevant_years, scoring_version, requirements, evidence, selection, suggestions, skills, insights]
       properties:
-        score: { type: number, nullable: true }
-        must_met: { type: integer }
-        must_total: { type: integer }
+        score: { type: number, nullable: true, description: "Historical coverage score; null for whole-posting matching." }
+        must_met: { type: integer, description: "Historical requirement count; zero for whole-posting matching." }
+        must_total: { type: integer, description: "Historical requirement count; zero for whole-posting matching." }
         partial: { type: boolean }
         seniority: { type: string }
         relevant_years: { type: number }
         scoring_version: { type: integer }
-        requirements: { type: array, items: { $ref: '#/components/schemas/Coverage' } }
+        requirements: { type: array, description: 'Historical requirement analysis; empty for whole-posting matching.', items: { $ref: '#/components/schemas/Coverage' } }
         evidence: { type: array, items: { $ref: '#/components/schemas/EvidenceMatch' } }
         selection: { type: array, items: { $ref: '#/components/schemas/Selection' } }
         suggestions: { type: array, items: { $ref: '#/components/schemas/Selection' } }
@@ -2164,6 +2607,7 @@ components:
         status: { type: string }
         stage: { type: string }
         model: { type: string, nullable: true }
+        pipeline: { type: integer }
         trigger: { type: string }
         blocked_reason: { type: string }
         next_eligible_at: { type: string, format: date-time, nullable: true }
@@ -2201,4 +2645,94 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/MatchRun' } }
+        next_cursor: { type: string, format: uuid }
+
+    MailCategory:
+      type: string
+      enum: [received, assessment, interview, rejection, offer]
+    MailAccount:
+      type: object
+      required: [id, provider, address, status, last_error, retry_at, mails_done, mails_total, mails_relevant, version, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [google] }
+        address: { type: string }
+        status: { type: string, enum: [active, paused, needs_reconnect, disconnected] }
+        last_synced_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string }
+        retry_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a sync held back by Gmail's rate limit resumes by itself.
+        mails_done: { type: integer, description: Messages classified so far. }
+        mails_total:
+          type: integer
+          description: Messages found so far, classified or not. Grows while a backlog is being read.
+        mails_relevant: { type: integer, description: Classified messages that concern an application. }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+    MailAccountList:
+      type: object
+      required: [configured, items]
+      properties:
+        configured: { type: boolean }
+        items: { type: array, items: { $ref: '#/components/schemas/MailAccount' } }
+    MailAccountUpdate:
+      type: object
+      required: [paused]
+      properties:
+        paused: { type: boolean }
+    MailConnect:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+    MailConnectComplete:
+      type: object
+      required: [state, code]
+      properties:
+        state: { type: string, minLength: 1, maxLength: 512 }
+        code: { type: string, minLength: 1, maxLength: 2048 }
+    MailMessage:
+      type: object
+      required: [id, account_id, category, from, subject, snippet, received_at, classified_at, gmail_url]
+      properties:
+        id: { type: string, format: uuid }
+        account_id: { type: string, format: uuid }
+        category: { $ref: '#/components/schemas/MailCategory' }
+        job_id: { type: string, format: uuid, nullable: true }
+        from: { type: string }
+        subject: { type: string }
+        snippet: { type: string }
+        received_at: { type: string, format: date-time }
+        classified_at: { type: string, format: date-time }
+        gmail_url: { type: string, format: uri }
+        status_change:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/MailStatusChange' }]
+    MailStatusChange:
+      type: object
+      description: >
+        The job status a message proposed, once it was linked to a job.
+        `no_change` leaves the job as it is; `review` waits for the member;
+        `applied` moved the job (`auto` when no one had to confirm it);
+        `dismissed` and `undone` are the member declining or reverting it.
+      required: [outcome, proposed_status_id, previous_status_id, confidence, auto]
+      properties:
+        outcome: { type: string, enum: [no_change, review, applied, dismissed, undone] }
+        proposed_status_id: { type: string, format: uuid, nullable: true }
+        previous_status_id: { type: string, format: uuid, nullable: true }
+        confidence: { type: number, nullable: true }
+        auto: { type: boolean }
+    MailStatusChangeAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [apply, dismiss, undo] }
+    MailMessagePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/MailMessage' } }
         next_cursor: { type: string, format: uuid }

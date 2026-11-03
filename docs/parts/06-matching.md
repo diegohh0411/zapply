@@ -1,10 +1,9 @@
 # Part 6: Matching pipeline
 
-Status: implemented with fake-provider integration coverage. The
-[implementation plan](06-matching-plan.md) records the design and verification.
-Live decision dispatch remains disabled until a model adapter has documented
-billing and input bounds and the owner completes the live probe. The model
-catalogue and owner selection work independently of that dispatch gate.
+Status: historical pipeline 1 reference. New runs use CVD-style whole-posting
+matching in [06-matching-v3.md](06-matching-v3.md), without requirement
+extraction or gap analysis. Stored pipeline 1 and 2 runs retain their original
+rules; the UI prompts a re-run to produce current rankings.
 
 The library (part 2) holds what a person can claim, and a job (part 4) holds
 what an employer asks for. Matching reads both and answers four questions:
@@ -90,9 +89,11 @@ creates the requirements used by scoring: that is a real dependency.
 Within each phase, independent questions sharing a state go into one request
 when they fit. Degree/language questions are asked speculatively with line
 classification; highlight questions accompany evidence questions. Go ignores
-speculative answers that do not apply. Requests run one at a time under the
-part 5 gateway. Packing follows verified model/context and local payload
-budgets; there is no assumed API limit of 128 questions.
+speculative answers that do not apply. Every request of a phase is sent at
+once, each as its own operation and worker job, and the phase ends when all of
+them are ingested. The part 5 gateway still reserves each request before it is
+sent. Packing follows verified model/context and local payload budgets; there
+is no assumed API limit of 128 questions.
 
 A phase with every answer cached sends nothing. A fully cached run finishes
 without a provider call.
@@ -275,8 +276,8 @@ Part 7 is being built at the same time, so this is the boundary between them.
 - **The selection is ranked, not trimmed.** Part 7 fits a CV to pages, so it
   keeps items from the top until the page is full.
 - **Part 6 stores no user picks.** Pinning and excluding items belong to the
-  CV document in part 7, seeded from the selection. Re-running a match never
-  overwrites a user's picks.
+  CV document in part 7, seeded from the selection. Starting a new match
+  clears those picks so the new ranking can select the CV content.
 - **Part 7 must work without part 6.** With no completed run for a job,
   rendering falls back to `auto_include`.
 - Shape of `GET /v1/match-runs/{id}` → selection fields (ids only; part 7
@@ -309,19 +310,17 @@ existing holds (`usage_limit`).
 
 ## Running automatically
 
-A match runs on its own when a job is saved:
+A match runs on its own when a job is created:
 
-- **When:** a job is created with a description, or its `content_hash` changes.
+- **When:** a job is created with a description.
   The run is queued in the same transaction as the job write, so it starts
   immediately and is never queued for a rolled-back write.
 - **Which jobs:** only jobs in `saved`, `active` or `offer` stages.
 - **Who:** any member with `auto_match` on. Members without a plan get a run
   that waits as `blocked` with the gateway's reason, and proceeds once a plan is
   assigned. No call is made until the allowance covers it.
-- **Superseded runs:** a new automatic run replaces one that hasn't dispatched
-  a request yet. A run that has dispatched finishes, and its answers are cached.
-- **Library edits don't start runs.** One edit would otherwise re-score that
-  item against every saved job. The jobs show as stale, with a one-click re-run.
+- **Edits don't start runs.** Changes to the job or library make existing
+  matches stale; users can re-run them from the Match tab.
 - **A setting:** `auto_match` on the profile, on by default.
 
 Manual runs work the same way, from the Match tab.
@@ -390,9 +389,9 @@ The selection is a persisted platform setting, independent of the chat
 diagnostic's `LLM_MODEL`. Only owners can change it. A run snapshots its model
 when created; an unconfigured run waits as `blocked/model_not_configured` and
 binds the first configured model when resumed. Changing the selection affects
-new runs only. Missing models or unsupported pricing block calls explicitly;
-there is no silent model fallback. The MVP supports models whose pricing can
-be bounded by the gateway; the picker explains any unavailable option.
+new runs only. Missing models block calls explicitly; there is no silent model
+fallback. Pricing components the reservation cannot bound, such as web search,
+make a model unavailable; the picker explains any unavailable option.
 
 ## Untrusted text
 

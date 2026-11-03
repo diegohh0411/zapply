@@ -69,7 +69,7 @@ export class MatchStore {
     this.sync(); const generation = this.generation;
     const params = { path: { id, text_hash: hash } };
     if (value === 'reset') Api.ok(await this.api.DELETE('/v1/jobs/{id}/match-overrides/{text_hash}', { params }));
-    else Api.ok(await this.api.PUT('/v1/jobs/{id}/match-overrides/{text_hash}', { params, body: { class: value as 'must' | 'preferred' | 'duty' | 'ignore' } }));
+    else Api.ok(await this.api.PUT('/v1/jobs/{id}/match-overrides/{text_hash}', { params, body: { class: value as 'must' | 'preferred' | 'duty' | 'trait' | 'ignore' } }));
     this.sync(); if (generation === this.generation) await this.load(id);
   }
 }

@@ -58,16 +58,32 @@ export const sidebarInnerVariants = cva(
  * drawer out of the tab order and the accessibility tree.
  */
 export const sidebarMobileBackdropVariants = cva(
-  'fixed inset-0 z-50 bg-black/50 transition-opacity duration-150 ease-in-out data-closed:pointer-events-none data-closed:opacity-0 data-open:opacity-100',
+  'fixed inset-0 z-50 bg-black/50 transition-opacity duration-150 ease-in-out data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=open]:opacity-100 motion-reduce:transition-none',
 );
 
 export const sidebarMobileVariants = cva(
-  'fixed inset-y-0 z-50 flex h-full w-(--sidebar-width) flex-col bg-sidebar p-0 text-sidebar-foreground shadow-lg transition-transform ease-in-out data-closed:duration-300 data-open:duration-500',
+  'fixed inset-y-0 z-[51] flex h-dvh w-(--sidebar-width) max-w-[85vw] flex-col bg-sidebar p-0 text-sidebar-foreground shadow-lg transition-transform ease-in-out data-[state=closed]:pointer-events-none data-[state=closed]:duration-300 data-[state=open]:duration-500 motion-reduce:transition-none',
   {
     variants: {
       zSide: {
-        left: 'left-0 data-closed:-translate-x-full',
-        right: 'right-0 data-closed:translate-x-full',
+        left: 'left-0 data-[state=closed]:-translate-x-full',
+        right: 'right-0 data-[state=closed]:translate-x-full',
+      },
+    },
+    defaultVariants: {
+      zSide: 'left',
+    },
+  },
+);
+
+/** Sits over the header row, level with the logo. 40px, like the mobile menu rows. */
+export const sidebarMobileCloseVariants = cva(
+  'absolute top-3 z-10 flex size-10 items-center justify-center rounded-md text-sidebar-foreground outline-hidden hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring active:bg-sidebar-accent',
+  {
+    variants: {
+      zSide: {
+        left: 'right-2',
+        right: 'left-2',
       },
     },
     defaultVariants: {
@@ -81,10 +97,12 @@ export const sidebarMobileVariants = cva(
  * svg it renders with higher specificity, so the icon fell back to the 14px font size — 2px short of
  * shadcn. Targeting `ng-icon` with `!` is the same escape hatch the menu button needs.
  */
-export const sidebarTriggerVariants = cva("size-7 [&_ng-icon:not([class*='size-'])]:size-4!");
+export const sidebarTriggerVariants = cva(
+  "size-10 md:size-7 [&_ng-icon:not([class*='size-'])]:size-5! md:[&_ng-icon:not([class*='size-'])]:size-4!",
+);
 
 export const sidebarRailVariants = cva([
-  'absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex',
+  'absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border md:flex',
   'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
   '[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize',
   'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar',
@@ -93,7 +111,7 @@ export const sidebarRailVariants = cva([
 ]);
 
 export const sidebarInsetVariants = cva([
-  'relative flex w-full flex-1 flex-col bg-background',
+  'relative z-0 flex w-full flex-1 flex-col bg-background',
   'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2',
 ]);
 
@@ -139,7 +157,7 @@ export const sidebarMenuButtonVariants = cva(
           'bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]',
       },
       zSize: {
-        default: 'h-8 text-sm',
+        default: 'h-10 text-sm md:h-8',
         sm: 'h-7 text-xs',
         lg: 'h-12 text-sm group-data-[collapsible=icon]:p-0!',
       },

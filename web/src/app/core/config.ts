@@ -5,6 +5,8 @@ export interface AppConfig {
   supabase_url: string;
   supabase_anon_key: string;
   dev_login: boolean;
+  build_commit?: string;
+  built_at?: string;
 }
 
 @Injectable({ providedIn: 'root' })

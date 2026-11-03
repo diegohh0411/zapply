@@ -1,20 +1,24 @@
-import { A11yModule } from '@angular/cdk/a11y';
-import { NgTemplateOutlet } from '@angular/common';
+import { A11yModule, CdkTrapFocus } from '@angular/cdk/a11y';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import {
+  afterRenderEffect,
   booleanAttribute,
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
+  ElementRef,
   inject,
   input,
   type OnInit,
   output,
+  viewChild,
   ViewEncapsulation,
 } from '@angular/core';
 
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePanelLeft } from '@ng-icons/lucide';
+import { lucidePanelLeft, lucideX } from '@ng-icons/lucide';
 import type { ClassValue } from 'clsx';
 
 import { buttonVariants } from '@/shared/components/button/button.variants';
@@ -30,6 +34,7 @@ import {
   sidebarInnerVariants,
   sidebarInsetVariants,
   sidebarMobileBackdropVariants,
+  sidebarMobileCloseVariants,
   sidebarMobileVariants,
   sidebarNoneVariants,
   sidebarRailVariants,
@@ -41,6 +46,8 @@ import {
   type ZardSidebarVariantVariants,
 } from '@/shared/components/sidebar/sidebar.variants';
 import { mergeClasses } from '@/shared/utils/merge-classes';
+
+const SWIPE_CLOSE_DISTANCE_PX = 50;
 
 @Component({
   selector: 'z-sidebar-provider',
@@ -110,7 +117,8 @@ export class ZardSidebarProviderComponent implements OnInit {
 
 @Component({
   selector: 'z-sidebar',
-  imports: [A11yModule, NgTemplateOutlet],
+  imports: [A11yModule, NgIcon, NgTemplateOutlet],
+  viewProviders: [provideIcons({ lucideX })],
   template: `
     <ng-template #projected>
       <ng-content />
@@ -139,15 +147,30 @@ export class ZardSidebarProviderComponent implements OnInit {
         role="dialog"
         aria-modal="true"
         aria-label="Sidebar"
-        cdkTrapFocusAutoCapture
+        #mobileDrawer
+        [id]="sidebarService.mobileId"
         [cdkTrapFocus]="sidebarService.openMobile()"
         [attr.data-state]="mobileState()"
         [attr.data-side]="zSide()"
         [attr.inert]="sidebarService.openMobile() ? null : ''"
         [class]="mobileClasses()"
         [style]="mobileStyle"
+        (keydown.escape)="onEscape($event)"
+        (touchcancel)="onDrawerTouchCancel()"
+        (touchstart)="onDrawerTouchStart($event)"
+        (touchend)="onDrawerTouchEnd($event)"
       >
-        <div class="flex size-full flex-col">
+        <button
+          type="button"
+          cdkFocusInitial
+          data-slot="sidebar-close"
+          aria-label="Close Sidebar"
+          [class]="closeClasses()"
+          (click)="sidebarService.setOpenMobile(false)"
+        >
+          <ng-icon name="lucideX" class="size-5" />
+        </button>
+        <div class="flex size-full min-h-0 flex-col">
           <ng-container [ngTemplateOutlet]="projected" />
         </div>
       </div>
@@ -171,7 +194,6 @@ export class ZardSidebarProviderComponent implements OnInit {
     '[attr.data-collapsible]': 'isDesktop() ? desktopCollapsible() : null',
     '[attr.data-variant]': 'isDesktop() ? zVariant() : null',
     '[attr.data-side]': 'isDesktop() ? zSide() : null',
-    '(document:keydown.escape)': 'onEscape()',
   },
   exportAs: 'zSidebar',
 })
@@ -183,6 +205,38 @@ export class ZardSidebarComponent {
   readonly zCollapsible = input<ZardSidebarCollapsibleVariants>('offcanvas');
   readonly class = input<ClassValue>('');
   readonly dir = input<'ltr' | 'rtl' | undefined>(undefined);
+
+  private readonly document = inject(DOCUMENT);
+  private readonly drawer = viewChild('mobileDrawer', { read: ElementRef<HTMLElement> });
+  private readonly focusTrap = viewChild('mobileDrawer', { read: CdkTrapFocus });
+  private touchStart?: { x: number; y: number; id: number };
+  private restoreFocus?: HTMLElement;
+
+  constructor() {
+    // CDK auto-capture restores focus on destruction only. This drawer stays mounted for animation.
+    // Wait for inert bindings to update before moving focus on each open and close.
+    effect(() => {
+      if (this.sidebarService.isMobile() && this.sidebarService.openMobile() && !this.restoreFocus) {
+        this.restoreFocus = this.document.activeElement as HTMLElement;
+      }
+    });
+    afterRenderEffect(() => {
+      const drawer = this.drawer()?.nativeElement;
+      if (drawer && this.sidebarService.openMobile()) {
+        this.focusTrap()?.focusTrap?.focusInitialElement();
+      } else {
+        this.returnFocus();
+        this.touchStart = undefined;
+      }
+    });
+    inject(DestroyRef).onDestroy(() => this.returnFocus());
+  }
+
+  private returnFocus(): void {
+    const target = this.restoreFocus;
+    this.restoreFocus = undefined;
+    if (target?.isConnected) target.focus({ preventScroll: true });
+  }
 
   protected readonly mobileStyle = `--sidebar-width: ${ZARD_SIDEBAR_WIDTH_MOBILE}`;
 
@@ -210,6 +264,8 @@ export class ZardSidebarComponent {
     mergeClasses(sidebarMobileVariants({ zSide: this.zSide() }), this.class()),
   );
 
+  protected readonly closeClasses = computed(() => sidebarMobileCloseVariants({ zSide: this.zSide() }));
+
   protected readonly gapClasses = computed(() => sidebarGapVariants({ zVariant: this.zVariant() }));
 
   protected readonly containerClasses = computed(() =>
@@ -218,8 +274,38 @@ export class ZardSidebarComponent {
 
   protected readonly innerClasses = computed(() => sidebarInnerVariants());
 
-  protected onEscape(): void {
-    if (this.sidebarService.openMobile()) {
+  /** Remembers where a touch began, so its end can tell a swipe from a tap or a vertical scroll. */
+  protected onDrawerTouchStart(event: TouchEvent): void {
+    const touch = event.touches.length === 1 ? event.changedTouches[0] : undefined;
+    this.touchStart = touch ? { x: touch.clientX, y: touch.clientY, id: touch.identifier } : undefined;
+  }
+
+  /** Swiping the drawer back towards its edge closes it. */
+  protected onDrawerTouchEnd(event: TouchEvent): void {
+    const touch = event.changedTouches[0];
+    const start = this.touchStart;
+    this.touchStart = undefined;
+    if (!touch || !start || touch.identifier !== start.id || event.touches.length > 0) {
+      return;
+    }
+
+    const deltaX = touch.clientX - start.x;
+    const towardsEdge = this.zSide() === 'left' ? -deltaX : deltaX;
+    if (towardsEdge >= SWIPE_CLOSE_DISTANCE_PX && towardsEdge > Math.abs(touch.clientY - start.y)) {
+      // A swipe that starts on a link must not also trigger a synthetic click/navigation.
+      if (event.cancelable) event.preventDefault();
+      this.sidebarService.setOpenMobile(false);
+    }
+  }
+
+  protected onDrawerTouchCancel(): void {
+    this.touchStart = undefined;
+  }
+
+  protected onEscape(event: Event): void {
+    if (!event.defaultPrevented && this.sidebarService.openMobile()) {
+      event.preventDefault();
+      event.stopPropagation();
       this.sidebarService.setOpenMobile(false);
     }
   }
@@ -240,6 +326,8 @@ export class ZardSidebarComponent {
     'data-sidebar': 'trigger',
     type: 'button',
     '[class]': 'classes()',
+    '[attr.aria-expanded]': 'sidebarService.isMobile() ? sidebarService.openMobile() : sidebarService.open()',
+    '[attr.aria-controls]': 'sidebarService.isMobile() ? sidebarService.mobileId : null',
     '(click)': 'sidebarService.toggleSidebar()',
   },
   exportAs: 'zSidebarTrigger',
@@ -288,11 +376,13 @@ export class ZardSidebarRailComponent {
   encapsulation: ViewEncapsulation.None,
   host: {
     'data-slot': 'sidebar-inset',
+    '[attr.inert]': "sidebarService.isMobile() && sidebarService.openMobile() ? '' : null",
     '[class]': 'classes()',
   },
   exportAs: 'zSidebarInset',
 })
 export class ZardSidebarInsetComponent {
+  readonly sidebarService = inject(ZardSidebarService);
   readonly class = input<ClassValue>('');
 
   protected readonly classes = computed(() => mergeClasses(sidebarInsetVariants(), this.class()));

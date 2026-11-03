@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -33,6 +34,27 @@ func (e Category) Valid() bool {
 	case CategoryPaid:
 		return true
 	case CategoryUnpaid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CvPreviewAvailableEntriesReason.
+const (
+	Excluded    CvPreviewAvailableEntriesReason = "excluded"
+	NotSelected CvPreviewAvailableEntriesReason = "not_selected"
+	Suggested   CvPreviewAvailableEntriesReason = "suggested"
+)
+
+// Valid indicates whether the value is a known member of the CvPreviewAvailableEntriesReason enum.
+func (e CvPreviewAvailableEntriesReason) Valid() bool {
+	switch e {
+	case Excluded:
+		return true
+	case NotSelected:
+		return true
+	case Suggested:
 		return true
 	default:
 		return false
@@ -93,6 +115,8 @@ const (
 	JobViewCreated        EventTopic = "job_view.created"
 	JobViewDeleted        EventTopic = "job_view.deleted"
 	JobViewUpdated        EventTopic = "job_view.updated"
+	MailAccountUpdated    EventTopic = "mail.account.updated"
+	MailMessageClassified EventTopic = "mail.message.classified"
 	MatchRunChanged       EventTopic = "match_run.changed"
 	MembershipChanged     EventTopic = "membership.changed"
 	ModelOperationChanged EventTopic = "model_operation.changed"
@@ -153,6 +177,10 @@ func (e EventTopic) Valid() bool {
 	case JobViewDeleted:
 		return true
 	case JobViewUpdated:
+		return true
+	case MailAccountUpdated:
+		return true
+	case MailMessageClassified:
 		return true
 	case MatchRunChanged:
 		return true
@@ -330,6 +358,120 @@ func (e JobViewLayout) Valid() bool {
 	}
 }
 
+// Defines values for MailAccountProvider.
+const (
+	Google MailAccountProvider = "google"
+)
+
+// Valid indicates whether the value is a known member of the MailAccountProvider enum.
+func (e MailAccountProvider) Valid() bool {
+	switch e {
+	case Google:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailAccountStatus.
+const (
+	MailAccountStatusActive         MailAccountStatus = "active"
+	MailAccountStatusDisconnected   MailAccountStatus = "disconnected"
+	MailAccountStatusNeedsReconnect MailAccountStatus = "needs_reconnect"
+	MailAccountStatusPaused         MailAccountStatus = "paused"
+)
+
+// Valid indicates whether the value is a known member of the MailAccountStatus enum.
+func (e MailAccountStatus) Valid() bool {
+	switch e {
+	case MailAccountStatusActive:
+		return true
+	case MailAccountStatusDisconnected:
+		return true
+	case MailAccountStatusNeedsReconnect:
+		return true
+	case MailAccountStatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailCategory.
+const (
+	MailCategoryAssessment MailCategory = "assessment"
+	MailCategoryInterview  MailCategory = "interview"
+	MailCategoryOffer      MailCategory = "offer"
+	MailCategoryReceived   MailCategory = "received"
+	MailCategoryRejection  MailCategory = "rejection"
+)
+
+// Valid indicates whether the value is a known member of the MailCategory enum.
+func (e MailCategory) Valid() bool {
+	switch e {
+	case MailCategoryAssessment:
+		return true
+	case MailCategoryInterview:
+		return true
+	case MailCategoryOffer:
+		return true
+	case MailCategoryReceived:
+		return true
+	case MailCategoryRejection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailStatusChangeOutcome.
+const (
+	Applied   MailStatusChangeOutcome = "applied"
+	Dismissed MailStatusChangeOutcome = "dismissed"
+	NoChange  MailStatusChangeOutcome = "no_change"
+	Review    MailStatusChangeOutcome = "review"
+	Undone    MailStatusChangeOutcome = "undone"
+)
+
+// Valid indicates whether the value is a known member of the MailStatusChangeOutcome enum.
+func (e MailStatusChangeOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Dismissed:
+		return true
+	case NoChange:
+		return true
+	case Review:
+		return true
+	case Undone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailStatusChangeActionAction.
+const (
+	Apply   MailStatusChangeActionAction = "apply"
+	Dismiss MailStatusChangeActionAction = "dismiss"
+	Undo    MailStatusChangeActionAction = "undo"
+)
+
+// Valid indicates whether the value is a known member of the MailStatusChangeActionAction enum.
+func (e MailStatusChangeActionAction) Valid() bool {
+	switch e {
+	case Apply:
+		return true
+	case Dismiss:
+		return true
+	case Undo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MePlatformRole.
 const (
 	MePlatformRoleMember MePlatformRole = "member"
@@ -492,6 +634,57 @@ func (e SkillType) Valid() bool {
 	}
 }
 
+// Defines values for SummaryMaxCharacters.
+const (
+	N100 SummaryMaxCharacters = 100
+	N200 SummaryMaxCharacters = 200
+	N300 SummaryMaxCharacters = 300
+	N400 SummaryMaxCharacters = 400
+	N500 SummaryMaxCharacters = 500
+)
+
+// Valid indicates whether the value is a known member of the SummaryMaxCharacters enum.
+func (e SummaryMaxCharacters) Valid() bool {
+	switch e {
+	case N100:
+		return true
+	case N200:
+		return true
+	case N300:
+		return true
+	case N400:
+		return true
+	case N500:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SummaryMaxOutputTokens.
+const (
+	N1024 SummaryMaxOutputTokens = 1024
+	N2048 SummaryMaxOutputTokens = 2048
+	N4096 SummaryMaxOutputTokens = 4096
+	N8192 SummaryMaxOutputTokens = 8192
+)
+
+// Valid indicates whether the value is a known member of the SummaryMaxOutputTokens enum.
+func (e SummaryMaxOutputTokens) Valid() bool {
+	switch e {
+	case N1024:
+		return true
+	case N2048:
+		return true
+	case N4096:
+		return true
+	case N8192:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkMode.
 const (
 	Hybrid WorkMode = "hybrid"
@@ -519,6 +712,7 @@ const (
 	Ignore    PutMatchOverrideJSONBodyClass = "ignore"
 	Must      PutMatchOverrideJSONBodyClass = "must"
 	Preferred PutMatchOverrideJSONBodyClass = "preferred"
+	Trait     PutMatchOverrideJSONBodyClass = "trait"
 )
 
 // Valid indicates whether the value is a known member of the PutMatchOverrideJSONBodyClass enum.
@@ -531,6 +725,8 @@ func (e PutMatchOverrideJSONBodyClass) Valid() bool {
 	case Must:
 		return true
 	case Preferred:
+		return true
+	case Trait:
 		return true
 	default:
 		return false
@@ -600,6 +796,126 @@ type Coverage struct {
 	Text          string   `json:"text"`
 	TextHash      string   `json:"text_hash"`
 	Type          string   `json:"type"`
+}
+
+// CvDraft defines model for CvDraft.
+type CvDraft struct {
+	JobId      openapi_types.UUID `json:"job_id"`
+	Locale     string             `json:"locale"`
+	PageBudget int                `json:"page_budget"`
+	Picks      CvPicks            `json:"picks"`
+	Summary    *string            `json:"summary,omitempty"`
+	Template   string             `json:"template"`
+
+	// TemplateVersion Null follows the latest version.
+	TemplateVersion *int      `json:"template_version"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Version         int       `json:"version"`
+}
+
+// CvDraftInput defines model for CvDraftInput.
+type CvDraftInput struct {
+	Locale          string  `json:"locale"`
+	PageBudget      int     `json:"page_budget"`
+	Picks           CvPicks `json:"picks"`
+	Summary         *string `json:"summary,omitempty"`
+	Template        string  `json:"template"`
+	TemplateVersion *int    `json:"template_version,omitempty"`
+}
+
+// CvExport defines model for CvExport.
+type CvExport struct {
+	ClientSha256    *string                 `json:"client_sha256,omitempty"`
+	Content         *map[string]interface{} `json:"content,omitempty"`
+	ContentHash     string                  `json:"content_hash"`
+	CreatedAt       time.Time               `json:"created_at"`
+	DocumentDate    openapi_types.Date      `json:"document_date"`
+	Dropped         []string                `json:"dropped"`
+	Id              openapi_types.UUID      `json:"id"`
+	JobId           openapi_types.UUID      `json:"job_id"`
+	Locale          string                  `json:"locale"`
+	MatchRunId      *openapi_types.UUID     `json:"match_run_id"`
+	Overflow        bool                    `json:"overflow"`
+	PageBudget      int                     `json:"page_budget"`
+	Pages           int                     `json:"pages"`
+	Template        string                  `json:"template"`
+	TemplateVersion int                     `json:"template_version"`
+}
+
+// CvExportInput defines model for CvExportInput.
+type CvExportInput struct {
+	ClientSha256 *string  `json:"client_sha256,omitempty"`
+	ContentHash  string   `json:"content_hash"`
+	DraftVersion int      `json:"draft_version"`
+	Dropped      []string `json:"dropped"`
+	Pages        int      `json:"pages"`
+}
+
+// CvExportPage defines model for CvExportPage.
+type CvExportPage struct {
+	Items []CvExport `json:"items"`
+}
+
+// CvPicks defines model for CvPicks.
+type CvPicks struct {
+	Exclude []openapi_types.UUID `json:"exclude"`
+
+	// Include Evidence or highlight IDs
+	Include []openapi_types.UUID `json:"include"`
+}
+
+// CvPreview defines model for CvPreview.
+type CvPreview struct {
+	Available struct {
+		Entries []struct {
+			Id      string                          `json:"id"`
+			Kind    string                          `json:"kind"`
+			Reason  CvPreviewAvailableEntriesReason `json:"reason"`
+			Section string                          `json:"section"`
+			Title   string                          `json:"title"`
+		} `json:"entries"`
+		Highlights []struct {
+			EvidenceId string `json:"evidence_id"`
+			Excluded   bool   `json:"excluded"`
+			Id         string `json:"id"`
+			Text       string `json:"text"`
+		} `json:"highlights"`
+	} `json:"available"`
+
+	// Content The template's content (templates/README.md).
+	Content     map[string]interface{} `json:"content"`
+	ContentHash string                 `json:"content_hash"`
+	Draft       CvDraft                `json:"draft"`
+	Match       *struct {
+		RunId openapi_types.UUID `json:"run_id"`
+		Stale bool               `json:"stale"`
+	} `json:"match"`
+	SummaryReason     *string    `json:"summary_reason,omitempty"`
+	SummaryStatus     *string    `json:"summary_status,omitempty"`
+	SummarySuggestion *string    `json:"summary_suggestion,omitempty"`
+	Template          CvTemplate `json:"template"`
+
+	// Trim Optional item IDs
+	Trim []string `json:"trim"`
+}
+
+// CvPreviewAvailableEntriesReason defines model for CvPreview.Available.Entries.Reason.
+type CvPreviewAvailableEntriesReason string
+
+// CvTemplate defines model for CvTemplate.
+type CvTemplate struct {
+	Assets struct {
+		Fonts   []string `json:"fonts"`
+		Main    string   `json:"main"`
+		Strings string   `json:"strings"`
+	} `json:"assets"`
+	Locales   []string `json:"locales"`
+	Name      string   `json:"name"`
+	Published bool     `json:"published"`
+
+	// Typst The Typst version the template compiles with.
+	Typst   string `json:"typst"`
+	Version int    `json:"version"`
 }
 
 // DecisionModel defines model for DecisionModel.
@@ -986,6 +1302,102 @@ type Link struct {
 	Url   string `json:"url"`
 }
 
+// MailAccount defines model for MailAccount.
+type MailAccount struct {
+	Address      string             `json:"address"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+	LastError    string             `json:"last_error"`
+	LastSyncedAt *time.Time         `json:"last_synced_at,omitempty"`
+
+	// MailsDone Messages classified so far.
+	MailsDone int `json:"mails_done"`
+
+	// MailsRelevant Classified messages that concern an application.
+	MailsRelevant int `json:"mails_relevant"`
+
+	// MailsTotal Messages found so far, classified or not. Grows while a backlog is being read.
+	MailsTotal int                 `json:"mails_total"`
+	Provider   MailAccountProvider `json:"provider"`
+
+	// RetryAt When a sync held back by Gmail's rate limit resumes by itself.
+	RetryAt *time.Time        `json:"retry_at"`
+	Status  MailAccountStatus `json:"status"`
+	Version int               `json:"version"`
+}
+
+// MailAccountProvider defines model for MailAccount.Provider.
+type MailAccountProvider string
+
+// MailAccountStatus defines model for MailAccount.Status.
+type MailAccountStatus string
+
+// MailAccountList defines model for MailAccountList.
+type MailAccountList struct {
+	Configured bool          `json:"configured"`
+	Items      []MailAccount `json:"items"`
+}
+
+// MailAccountUpdate defines model for MailAccountUpdate.
+type MailAccountUpdate struct {
+	Paused bool `json:"paused"`
+}
+
+// MailCategory defines model for MailCategory.
+type MailCategory string
+
+// MailConnect defines model for MailConnect.
+type MailConnect struct {
+	Url string `json:"url"`
+}
+
+// MailConnectComplete defines model for MailConnectComplete.
+type MailConnectComplete struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+// MailMessage defines model for MailMessage.
+type MailMessage struct {
+	AccountId    openapi_types.UUID  `json:"account_id"`
+	Category     MailCategory        `json:"category"`
+	ClassifiedAt time.Time           `json:"classified_at"`
+	From         string              `json:"from"`
+	GmailUrl     string              `json:"gmail_url"`
+	Id           openapi_types.UUID  `json:"id"`
+	JobId        *openapi_types.UUID `json:"job_id,omitempty"`
+	ReceivedAt   time.Time           `json:"received_at"`
+	Snippet      string              `json:"snippet"`
+	StatusChange *MailStatusChange   `json:"status_change,omitempty"`
+	Subject      string              `json:"subject"`
+}
+
+// MailMessagePage defines model for MailMessagePage.
+type MailMessagePage struct {
+	Items      []MailMessage       `json:"items"`
+	NextCursor *openapi_types.UUID `json:"next_cursor,omitempty"`
+}
+
+// MailStatusChange The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it.
+type MailStatusChange struct {
+	Auto             bool                    `json:"auto"`
+	Confidence       *float32                `json:"confidence"`
+	Outcome          MailStatusChangeOutcome `json:"outcome"`
+	PreviousStatusId *openapi_types.UUID     `json:"previous_status_id"`
+	ProposedStatusId *openapi_types.UUID     `json:"proposed_status_id"`
+}
+
+// MailStatusChangeOutcome defines model for MailStatusChange.Outcome.
+type MailStatusChangeOutcome string
+
+// MailStatusChangeAction defines model for MailStatusChangeAction.
+type MailStatusChangeAction struct {
+	Action MailStatusChangeActionAction `json:"action"`
+}
+
+// MailStatusChangeActionAction defines model for MailStatusChangeAction.Action.
+type MailStatusChangeActionAction string
+
 // MatchEstimate defines model for MatchEstimate.
 type MatchEstimate struct {
 	Available       bool    `json:"available"`
@@ -999,17 +1411,25 @@ type MatchEstimate struct {
 
 // MatchResult defines model for MatchResult.
 type MatchResult struct {
-	Evidence       []EvidenceMatch `json:"evidence"`
-	Insights       []Insight       `json:"insights"`
-	MustMet        int             `json:"must_met"`
-	MustTotal      int             `json:"must_total"`
-	Partial        bool            `json:"partial"`
-	RelevantYears  float32         `json:"relevant_years"`
-	Requirements   []Coverage      `json:"requirements"`
-	Score          *float32        `json:"score"`
-	ScoringVersion int             `json:"scoring_version"`
-	Selection      []Selection     `json:"selection"`
-	Seniority      string          `json:"seniority"`
+	Evidence []EvidenceMatch `json:"evidence"`
+	Insights []Insight       `json:"insights"`
+
+	// MustMet Historical requirement count; zero for whole-posting matching.
+	MustMet int `json:"must_met"`
+
+	// MustTotal Historical requirement count; zero for whole-posting matching.
+	MustTotal     int     `json:"must_total"`
+	Partial       bool    `json:"partial"`
+	RelevantYears float32 `json:"relevant_years"`
+
+	// Requirements Historical requirement analysis; empty for whole-posting matching.
+	Requirements []Coverage `json:"requirements"`
+
+	// Score Historical coverage score; null for whole-posting matching.
+	Score          *float32    `json:"score"`
+	ScoringVersion int         `json:"scoring_version"`
+	Selection      []Selection `json:"selection"`
+	Seniority      string      `json:"seniority"`
 	Skills         []struct {
 		Name      *string `json:"name,omitempty"`
 		Relevance float32 `json:"relevance"`
@@ -1035,6 +1455,7 @@ type MatchRun struct {
 	MustTotal         *int               `json:"must_total,omitempty"`
 	NextEligibleAt    *time.Time         `json:"next_eligible_at,omitempty"`
 	ObsoleteOverrides *[]string          `json:"obsolete_overrides,omitempty"`
+	Pipeline          *int               `json:"pipeline,omitempty"`
 	Removed           int                `json:"removed"`
 	Result            *MatchResult       `json:"result,omitempty"`
 	Score             *float32           `json:"score,omitempty"`
@@ -1127,9 +1548,17 @@ type ModelOperationStatus string
 
 // ModelSettings defines model for ModelSettings.
 type ModelSettings struct {
-	DecisionModel *string   `json:"decision_model"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Version       int       `json:"version"`
+	DecisionModel   *string `json:"decision_model"`
+	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
+
+	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+	SummaryMaxCharacters SummaryMaxCharacters `json:"summary_max_characters"`
+
+	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+	SummaryMaxOutputTokens SummaryMaxOutputTokens `json:"summary_max_output_tokens"`
+	SummaryModel           *string                `json:"summary_model,omitempty"`
+	UpdatedAt              time.Time              `json:"updated_at"`
+	Version                int                    `json:"version"`
 }
 
 // Organization defines model for Organization.
@@ -1272,6 +1701,12 @@ type SkillMerge struct {
 // SkillType defines model for SkillType.
 type SkillType string
 
+// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+type SummaryMaxCharacters int
+
+// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+type SummaryMaxOutputTokens int
+
 // SystemKey defines model for SystemKey.
 type SystemKey struct {
 	Active      bool               `json:"active"`
@@ -1355,7 +1790,15 @@ type ResolveModelAttemptParams struct {
 
 // PutModelSettingsJSONBody defines parameters for PutModelSettings.
 type PutModelSettingsJSONBody struct {
-	DecisionModel *string `json:"decision_model"`
+	DecisionModel   *string `json:"decision_model"`
+	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
+
+	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+	SummaryMaxCharacters *SummaryMaxCharacters `json:"summary_max_characters,omitempty"`
+
+	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+	SummaryMaxOutputTokens *SummaryMaxOutputTokens `json:"summary_max_output_tokens,omitempty"`
+	SummaryModel           *string                 `json:"summary_model,omitempty"`
 }
 
 // PutModelSettingsParams defines parameters for PutModelSettings.
@@ -1374,6 +1817,11 @@ type UpdatePlanParams struct {
 type ActivateSystemKeyParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ListTextModelEndpointsParams defines parameters for ListTextModelEndpoints.
+type ListTextModelEndpointsParams struct {
+	Model string `form:"model" json:"model"`
 }
 
 // ListEvidencesParams defines parameters for ListEvidences.
@@ -1429,6 +1877,18 @@ type PutJobParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// PutCvParams defines parameters for PutCv.
+type PutCvParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// CreateCvExportParams defines parameters for CreateCvExport.
+type CreateCvExportParams struct {
+	// IdempotencyKey Retrying with the same key and body returns the original result.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // PutMatchOverrideJSONBody defines parameters for PutMatchOverride.
 type PutMatchOverrideJSONBody struct {
 	Class PutMatchOverrideJSONBodyClass `json:"class"`
@@ -1445,7 +1905,17 @@ type ListMatchRunsParams struct {
 
 // CreateMatchRunParams defines parameters for CreateMatchRun.
 type CreateMatchRunParams struct {
+	// Pipeline Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis.
+	Pipeline       *int   `form:"pipeline,omitempty" json:"pipeline,omitempty"`
 	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// ListMailMessagesParams defines parameters for ListMailMessages.
+type ListMailMessagesParams struct {
+	Category *MailCategory       `form:"category,omitempty" json:"category,omitempty"`
+	JobId    *openapi_types.UUID `form:"job_id,omitempty" json:"job_id,omitempty"`
+	Before   *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit    *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // PutProfileParams defines parameters for PutProfile.
@@ -1517,11 +1987,26 @@ type CreateJobNoteJSONRequestBody = JobNoteInput
 // UpdateJobNoteJSONRequestBody defines body for UpdateJobNote for application/json ContentType.
 type UpdateJobNoteJSONRequestBody = JobNoteInput
 
+// PutCvJSONRequestBody defines body for PutCv for application/json ContentType.
+type PutCvJSONRequestBody = CvDraftInput
+
+// CreateCvExportJSONRequestBody defines body for CreateCvExport for application/json ContentType.
+type CreateCvExportJSONRequestBody = CvExportInput
+
 // PutMatchOverrideJSONRequestBody defines body for PutMatchOverride for application/json ContentType.
 type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
 
 // MoveJobJSONRequestBody defines body for MoveJob for application/json ContentType.
 type MoveJobJSONRequestBody = JobMove
+
+// CompleteGoogleConnectJSONRequestBody defines body for CompleteGoogleConnect for application/json ContentType.
+type CompleteGoogleConnectJSONRequestBody = MailConnectComplete
+
+// UpdateMailAccountJSONRequestBody defines body for UpdateMailAccount for application/json ContentType.
+type UpdateMailAccountJSONRequestBody = MailAccountUpdate
+
+// ResolveMailStatusChangeJSONRequestBody defines body for ResolveMailStatusChange for application/json ContentType.
+type ResolveMailStatusChangeJSONRequestBody = MailStatusChangeAction
 
 // CreateOrganizationJSONRequestBody defines body for CreateOrganization for application/json ContentType.
 type CreateOrganizationJSONRequestBody = OrganizationInput
@@ -1588,6 +2073,21 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(w http.ResponseWriter, r *http.Request, id ID, params ActivateSystemKeyParams)
+
+	// (GET /v1/admin/text-model-endpoints)
+	ListTextModelEndpoints(w http.ResponseWriter, r *http.Request, params ListTextModelEndpointsParams)
+
+	// (GET /v1/admin/text-models)
+	ListTextModels(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/cv-exports/{id})
+	GetCvExport(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/cv-exports/{id}/pdf)
+	GetCvExportPdf(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/cv-templates)
+	ListCvTemplates(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/evidences)
 	ListEvidences(w http.ResponseWriter, r *http.Request, params ListEvidencesParams)
@@ -1670,6 +2170,18 @@ type ServerInterface interface {
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(w http.ResponseWriter, r *http.Request, id ID)
 
+	// (GET /v1/jobs/{id}/cv)
+	GetCv(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (PUT /v1/jobs/{id}/cv)
+	PutCv(w http.ResponseWriter, r *http.Request, id ID, params PutCvParams)
+
+	// (GET /v1/jobs/{id}/cv/exports)
+	ListCvExports(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/jobs/{id}/cv/exports)
+	CreateCvExport(w http.ResponseWriter, r *http.Request, id ID, params CreateCvExportParams)
+
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
@@ -1693,6 +2205,30 @@ type ServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/mail/accounts)
+	ListMailAccounts(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/mail/accounts/google/complete)
+	CompleteGoogleConnect(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/mail/accounts/google/start)
+	StartGoogleConnect(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /v1/mail/accounts/{id})
+	DisconnectMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (PATCH /v1/mail/accounts/{id})
+	UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/mail/accounts/{id}/sync)
+	SyncMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/mail/messages)
+	ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams)
+
+	// (POST /v1/mail/messages/{id}/status-change)
+	ResolveMailStatusChange(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -2254,6 +2790,119 @@ func (siw *ServerInterfaceWrapper) ActivateSystemKey(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ActivateSystemKey(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTextModelEndpoints operation middleware
+func (siw *ServerInterfaceWrapper) ListTextModelEndpoints(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTextModelEndpointsParams
+
+	// ------------- Required query parameter "model" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "model", r.URL.Query(), &params.Model, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "model"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "model", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTextModelEndpoints(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTextModels operation middleware
+func (siw *ServerInterfaceWrapper) ListTextModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTextModels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCvExport operation middleware
+func (siw *ServerInterfaceWrapper) GetCvExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCvExport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCvExportPdf operation middleware
+func (siw *ServerInterfaceWrapper) GetCvExportPdf(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCvExportPdf(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCvTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListCvTemplates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCvTemplates(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3209,6 +3858,162 @@ func (siw *ServerInterfaceWrapper) ArchiveJob(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetCv operation middleware
+func (siw *ServerInterfaceWrapper) GetCv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCv(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutCv operation middleware
+func (siw *ServerInterfaceWrapper) PutCv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutCvParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutCv(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCvExports operation middleware
+func (siw *ServerInterfaceWrapper) ListCvExports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCvExports(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCvExport operation middleware
+func (siw *ServerInterfaceWrapper) CreateCvExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateCvExportParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCvExport(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMatchEstimate operation middleware
 func (siw *ServerInterfaceWrapper) GetMatchEstimate(w http.ResponseWriter, r *http.Request) {
 
@@ -3378,6 +4183,19 @@ func (siw *ServerInterfaceWrapper) CreateMatchRun(w http.ResponseWriter, r *http
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateMatchRunParams
 
+	// ------------- Optional query parameter "pipeline" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pipeline", r.URL.Query(), &params.Pipeline, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pipeline"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pipeline", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Required header parameter "Idempotency-Key" -------------
@@ -3471,6 +4289,224 @@ func (siw *ServerInterfaceWrapper) ListKinds(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMailAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListMailAccounts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMailAccounts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteGoogleConnect operation middleware
+func (siw *ServerInterfaceWrapper) CompleteGoogleConnect(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteGoogleConnect(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartGoogleConnect operation middleware
+func (siw *ServerInterfaceWrapper) StartGoogleConnect(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartGoogleConnect(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) SyncMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMailMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListMailMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMailMessagesParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "job_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "job_id", r.URL.Query(), &params.JobId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "job_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "job_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMailMessages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveMailStatusChange operation middleware
+func (siw *ServerInterfaceWrapper) ResolveMailStatusChange(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveMailStatusChange(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4054,6 +5090,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/model-attempts/{id}/resolve", wrapper.ResolveModelAttempt)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/gateway-tests", wrapper.CreateGatewayTest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/gateway-tests/{id}", wrapper.GetGatewayTest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/text-model-endpoints", wrapper.ListTextModelEndpoints)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/text-models", wrapper.ListTextModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/decision-models", wrapper.ListDecisionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
@@ -4064,6 +5102,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/match-runs/{id}/cancel", wrapper.CancelMatchRun)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.DeleteMatchOverride)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/match-overrides/{text_hash}", wrapper.PutMatchOverride)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-templates", wrapper.ListCvTemplates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.GetCv)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.PutCv)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.ListCvExports)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.CreateCvExport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}", wrapper.GetCvExport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}/pdf", wrapper.GetCvExportPdf)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/accounts", wrapper.ListMailAccounts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/start", wrapper.StartGoogleConnect)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/google/complete", wrapper.CompleteGoogleConnect)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.DisconnectMailAccount)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/sync", wrapper.SyncMailAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/messages/{id}/status-change", wrapper.ResolveMailStatusChange)
 
 	return m
 }
@@ -4677,6 +5730,216 @@ type ActivateSystemKeydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ActivateSystemKeydefaultApplicationProblemPlusJSONResponse) VisitActivateSystemKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelEndpointsRequestObject struct {
+	Params ListTextModelEndpointsParams
+}
+
+type ListTextModelEndpointsResponseObject interface {
+	VisitListTextModelEndpointsResponse(w http.ResponseWriter) error
+}
+
+type ListTextModelEndpoints200JSONResponse []struct {
+	Name string `json:"name"`
+	Tag  string `json:"tag"`
+}
+
+func (response ListTextModelEndpoints200JSONResponse) VisitListTextModelEndpointsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelEndpointsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListTextModelEndpointsdefaultApplicationProblemPlusJSONResponse) VisitListTextModelEndpointsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelsRequestObject struct {
+}
+
+type ListTextModelsResponseObject interface {
+	VisitListTextModelsResponse(w http.ResponseWriter) error
+}
+
+type ListTextModels200JSONResponse []DecisionModel
+
+func (response ListTextModels200JSONResponse) VisitListTextModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTextModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListTextModelsdefaultApplicationProblemPlusJSONResponse) VisitListTextModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvExportResponseObject interface {
+	VisitGetCvExportResponse(w http.ResponseWriter) error
+}
+
+type GetCvExport200JSONResponse CvExport
+
+func (response GetCvExport200JSONResponse) VisitGetCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvExportdefaultApplicationProblemPlusJSONResponse) VisitGetCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvExportPdfRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvExportPdfResponseObject interface {
+	VisitGetCvExportPdfResponse(w http.ResponseWriter) error
+}
+
+type GetCvExportPdf200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type GetCvExportPdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	Headers       GetCvExportPdf200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetCvExportPdf200ApplicationpdfResponse) VisitGetCvExportPdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetCvExportPdfdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvExportPdfdefaultApplicationProblemPlusJSONResponse) VisitGetCvExportPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvTemplatesRequestObject struct {
+}
+
+type ListCvTemplatesResponseObject interface {
+	VisitListCvTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListCvTemplates200JSONResponse []CvTemplate
+
+func (response ListCvTemplates200JSONResponse) VisitListCvTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvTemplatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCvTemplatesdefaultApplicationProblemPlusJSONResponse) VisitListCvTemplatesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5824,6 +7087,186 @@ func (response ArchiveJobdefaultApplicationProblemPlusJSONResponse) VisitArchive
 	return err
 }
 
+type GetCvRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetCvResponseObject interface {
+	VisitGetCvResponse(w http.ResponseWriter) error
+}
+
+type GetCv200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetCv200JSONResponse struct {
+	Body    CvPreview
+	Headers GetCv200ResponseHeaders
+}
+
+func (response GetCv200JSONResponse) VisitGetCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCvdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCvdefaultApplicationProblemPlusJSONResponse) VisitGetCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutCvRequestObject struct {
+	Id     ID `json:"id"`
+	Params PutCvParams
+	Body   *PutCvJSONRequestBody
+}
+
+type PutCvResponseObject interface {
+	VisitPutCvResponse(w http.ResponseWriter) error
+}
+
+type PutCv200ResponseHeaders struct {
+	ETag *string
+}
+
+type PutCv200JSONResponse struct {
+	Body    CvPreview
+	Headers PutCv200ResponseHeaders
+}
+
+func (response PutCv200JSONResponse) VisitPutCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutCvdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutCvdefaultApplicationProblemPlusJSONResponse) VisitPutCvResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvExportsRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type ListCvExportsResponseObject interface {
+	VisitListCvExportsResponse(w http.ResponseWriter) error
+}
+
+type ListCvExports200JSONResponse CvExportPage
+
+func (response ListCvExports200JSONResponse) VisitListCvExportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCvExportsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCvExportsdefaultApplicationProblemPlusJSONResponse) VisitListCvExportsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCvExportRequestObject struct {
+	Id     ID `json:"id"`
+	Params CreateCvExportParams
+	Body   *CreateCvExportJSONRequestBody
+}
+
+type CreateCvExportResponseObject interface {
+	VisitCreateCvExportResponse(w http.ResponseWriter) error
+}
+
+type CreateCvExport201JSONResponse CvExport
+
+func (response CreateCvExport201JSONResponse) VisitCreateCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCvExportdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCvExportdefaultApplicationProblemPlusJSONResponse) VisitCreateCvExportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMatchEstimateRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -6138,6 +7581,312 @@ type ListKindsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListKindsdefaultApplicationProblemPlusJSONResponse) VisitListKindsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailAccountsRequestObject struct {
+}
+
+type ListMailAccountsResponseObject interface {
+	VisitListMailAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListMailAccounts200JSONResponse MailAccountList
+
+func (response ListMailAccounts200JSONResponse) VisitListMailAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailAccountsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMailAccountsdefaultApplicationProblemPlusJSONResponse) VisitListMailAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteGoogleConnectRequestObject struct {
+	Body *CompleteGoogleConnectJSONRequestBody
+}
+
+type CompleteGoogleConnectResponseObject interface {
+	VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error
+}
+
+type CompleteGoogleConnect200JSONResponse MailAccount
+
+func (response CompleteGoogleConnect200JSONResponse) VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteGoogleConnectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CompleteGoogleConnectdefaultApplicationProblemPlusJSONResponse) VisitCompleteGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartGoogleConnectRequestObject struct {
+}
+
+type StartGoogleConnectResponseObject interface {
+	VisitStartGoogleConnectResponse(w http.ResponseWriter) error
+}
+
+type StartGoogleConnect200JSONResponse MailConnect
+
+func (response StartGoogleConnect200JSONResponse) VisitStartGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartGoogleConnectdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartGoogleConnectdefaultApplicationProblemPlusJSONResponse) VisitStartGoogleConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisconnectMailAccountRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type DisconnectMailAccountResponseObject interface {
+	VisitDisconnectMailAccountResponse(w http.ResponseWriter) error
+}
+
+type DisconnectMailAccount204Response struct {
+}
+
+func (response DisconnectMailAccount204Response) VisitDisconnectMailAccountResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisconnectMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DisconnectMailAccountdefaultApplicationProblemPlusJSONResponse) VisitDisconnectMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMailAccountRequestObject struct {
+	Id   ID `json:"id"`
+	Body *UpdateMailAccountJSONRequestBody
+}
+
+type UpdateMailAccountResponseObject interface {
+	VisitUpdateMailAccountResponse(w http.ResponseWriter) error
+}
+
+type UpdateMailAccount200JSONResponse MailAccount
+
+func (response UpdateMailAccount200JSONResponse) VisitUpdateMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMailAccountdefaultApplicationProblemPlusJSONResponse) VisitUpdateMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SyncMailAccountRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type SyncMailAccountResponseObject interface {
+	VisitSyncMailAccountResponse(w http.ResponseWriter) error
+}
+
+type SyncMailAccount200JSONResponse MailAccount
+
+func (response SyncMailAccount200JSONResponse) VisitSyncMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SyncMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SyncMailAccountdefaultApplicationProblemPlusJSONResponse) VisitSyncMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailMessagesRequestObject struct {
+	Params ListMailMessagesParams
+}
+
+type ListMailMessagesResponseObject interface {
+	VisitListMailMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListMailMessages200JSONResponse MailMessagePage
+
+func (response ListMailMessages200JSONResponse) VisitListMailMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMailMessagesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMailMessagesdefaultApplicationProblemPlusJSONResponse) VisitListMailMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveMailStatusChangeRequestObject struct {
+	Id   ID `json:"id"`
+	Body *ResolveMailStatusChangeJSONRequestBody
+}
+
+type ResolveMailStatusChangeResponseObject interface {
+	VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error
+}
+
+type ResolveMailStatusChange200JSONResponse MailMessage
+
+func (response ResolveMailStatusChange200JSONResponse) VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResolveMailStatusChangedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResolveMailStatusChangedefaultApplicationProblemPlusJSONResponse) VisitResolveMailStatusChangeResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6861,6 +8610,21 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/system-keys/{id}/activation)
 	ActivateSystemKey(ctx context.Context, request ActivateSystemKeyRequestObject) (ActivateSystemKeyResponseObject, error)
 
+	// (GET /v1/admin/text-model-endpoints)
+	ListTextModelEndpoints(ctx context.Context, request ListTextModelEndpointsRequestObject) (ListTextModelEndpointsResponseObject, error)
+
+	// (GET /v1/admin/text-models)
+	ListTextModels(ctx context.Context, request ListTextModelsRequestObject) (ListTextModelsResponseObject, error)
+
+	// (GET /v1/cv-exports/{id})
+	GetCvExport(ctx context.Context, request GetCvExportRequestObject) (GetCvExportResponseObject, error)
+
+	// (GET /v1/cv-exports/{id}/pdf)
+	GetCvExportPdf(ctx context.Context, request GetCvExportPdfRequestObject) (GetCvExportPdfResponseObject, error)
+
+	// (GET /v1/cv-templates)
+	ListCvTemplates(ctx context.Context, request ListCvTemplatesRequestObject) (ListCvTemplatesResponseObject, error)
+
 	// (GET /v1/evidences)
 	ListEvidences(ctx context.Context, request ListEvidencesRequestObject) (ListEvidencesResponseObject, error)
 
@@ -6942,6 +8706,18 @@ type StrictServerInterface interface {
 	// (POST /v1/jobs/{id}/archive)
 	ArchiveJob(ctx context.Context, request ArchiveJobRequestObject) (ArchiveJobResponseObject, error)
 
+	// (GET /v1/jobs/{id}/cv)
+	GetCv(ctx context.Context, request GetCvRequestObject) (GetCvResponseObject, error)
+
+	// (PUT /v1/jobs/{id}/cv)
+	PutCv(ctx context.Context, request PutCvRequestObject) (PutCvResponseObject, error)
+
+	// (GET /v1/jobs/{id}/cv/exports)
+	ListCvExports(ctx context.Context, request ListCvExportsRequestObject) (ListCvExportsResponseObject, error)
+
+	// (POST /v1/jobs/{id}/cv/exports)
+	CreateCvExport(ctx context.Context, request CreateCvExportRequestObject) (CreateCvExportResponseObject, error)
+
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(ctx context.Context, request GetMatchEstimateRequestObject) (GetMatchEstimateResponseObject, error)
 
@@ -6965,6 +8741,30 @@ type StrictServerInterface interface {
 
 	// (GET /v1/kinds)
 	ListKinds(ctx context.Context, request ListKindsRequestObject) (ListKindsResponseObject, error)
+
+	// (GET /v1/mail/accounts)
+	ListMailAccounts(ctx context.Context, request ListMailAccountsRequestObject) (ListMailAccountsResponseObject, error)
+
+	// (POST /v1/mail/accounts/google/complete)
+	CompleteGoogleConnect(ctx context.Context, request CompleteGoogleConnectRequestObject) (CompleteGoogleConnectResponseObject, error)
+
+	// (POST /v1/mail/accounts/google/start)
+	StartGoogleConnect(ctx context.Context, request StartGoogleConnectRequestObject) (StartGoogleConnectResponseObject, error)
+
+	// (DELETE /v1/mail/accounts/{id})
+	DisconnectMailAccount(ctx context.Context, request DisconnectMailAccountRequestObject) (DisconnectMailAccountResponseObject, error)
+
+	// (PATCH /v1/mail/accounts/{id})
+	UpdateMailAccount(ctx context.Context, request UpdateMailAccountRequestObject) (UpdateMailAccountResponseObject, error)
+
+	// (POST /v1/mail/accounts/{id}/sync)
+	SyncMailAccount(ctx context.Context, request SyncMailAccountRequestObject) (SyncMailAccountResponseObject, error)
+
+	// (GET /v1/mail/messages)
+	ListMailMessages(ctx context.Context, request ListMailMessagesRequestObject) (ListMailMessagesResponseObject, error)
+
+	// (POST /v1/mail/messages/{id}/status-change)
+	ResolveMailStatusChange(ctx context.Context, request ResolveMailStatusChangeRequestObject) (ResolveMailStatusChangeResponseObject, error)
 
 	// (GET /v1/match-runs/{id})
 	GetMatchRun(ctx context.Context, request GetMatchRunRequestObject) (GetMatchRunResponseObject, error)
@@ -7481,6 +9281,132 @@ func (sh *strictHandler) ActivateSystemKey(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ActivateSystemKeyResponseObject); ok {
 		if err := validResponse.VisitActivateSystemKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTextModelEndpoints operation middleware
+func (sh *strictHandler) ListTextModelEndpoints(w http.ResponseWriter, r *http.Request, params ListTextModelEndpointsParams) {
+	var request ListTextModelEndpointsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTextModelEndpoints(ctx, request.(ListTextModelEndpointsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTextModelEndpoints")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTextModelEndpointsResponseObject); ok {
+		if err := validResponse.VisitListTextModelEndpointsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTextModels operation middleware
+func (sh *strictHandler) ListTextModels(w http.ResponseWriter, r *http.Request) {
+	var request ListTextModelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTextModels(ctx, request.(ListTextModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTextModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTextModelsResponseObject); ok {
+		if err := validResponse.VisitListTextModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCvExport operation middleware
+func (sh *strictHandler) GetCvExport(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvExportRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCvExport(ctx, request.(GetCvExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCvExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvExportResponseObject); ok {
+		if err := validResponse.VisitGetCvExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCvExportPdf operation middleware
+func (sh *strictHandler) GetCvExportPdf(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvExportPdfRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCvExportPdf(ctx, request.(GetCvExportPdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCvExportPdf")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvExportPdfResponseObject); ok {
+		if err := validResponse.VisitGetCvExportPdfResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCvTemplates operation middleware
+func (sh *strictHandler) ListCvTemplates(w http.ResponseWriter, r *http.Request) {
+	var request ListCvTemplatesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCvTemplates(ctx, request.(ListCvTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCvTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCvTemplatesResponseObject); ok {
+		if err := validResponse.VisitListCvTemplatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8270,6 +10196,126 @@ func (sh *strictHandler) ArchiveJob(w http.ResponseWriter, r *http.Request, id I
 	}
 }
 
+// GetCv operation middleware
+func (sh *strictHandler) GetCv(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetCvRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCv(ctx, request.(GetCvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCv")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCvResponseObject); ok {
+		if err := validResponse.VisitGetCvResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutCv operation middleware
+func (sh *strictHandler) PutCv(w http.ResponseWriter, r *http.Request, id ID, params PutCvParams) {
+	var request PutCvRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body PutCvJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutCv(ctx, request.(PutCvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutCv")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutCvResponseObject); ok {
+		if err := validResponse.VisitPutCvResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCvExports operation middleware
+func (sh *strictHandler) ListCvExports(w http.ResponseWriter, r *http.Request, id ID) {
+	var request ListCvExportsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCvExports(ctx, request.(ListCvExportsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCvExports")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCvExportsResponseObject); ok {
+		if err := validResponse.VisitListCvExportsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCvExport operation middleware
+func (sh *strictHandler) CreateCvExport(w http.ResponseWriter, r *http.Request, id ID, params CreateCvExportParams) {
+	var request CreateCvExportRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body CreateCvExportJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCvExport(ctx, request.(CreateCvExportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCvExport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCvExportResponseObject); ok {
+		if err := validResponse.VisitCreateCvExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMatchEstimate operation middleware
 func (sh *strictHandler) GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request GetMatchEstimateRequestObject
@@ -8487,6 +10533,229 @@ func (sh *strictHandler) ListKinds(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListKindsResponseObject); ok {
 		if err := validResponse.VisitListKindsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMailAccounts operation middleware
+func (sh *strictHandler) ListMailAccounts(w http.ResponseWriter, r *http.Request) {
+	var request ListMailAccountsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMailAccounts(ctx, request.(ListMailAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMailAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMailAccountsResponseObject); ok {
+		if err := validResponse.VisitListMailAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteGoogleConnect operation middleware
+func (sh *strictHandler) CompleteGoogleConnect(w http.ResponseWriter, r *http.Request) {
+	var request CompleteGoogleConnectRequestObject
+
+	var body CompleteGoogleConnectJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteGoogleConnect(ctx, request.(CompleteGoogleConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteGoogleConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteGoogleConnectResponseObject); ok {
+		if err := validResponse.VisitCompleteGoogleConnectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartGoogleConnect operation middleware
+func (sh *strictHandler) StartGoogleConnect(w http.ResponseWriter, r *http.Request) {
+	var request StartGoogleConnectRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartGoogleConnect(ctx, request.(StartGoogleConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartGoogleConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartGoogleConnectResponseObject); ok {
+		if err := validResponse.VisitStartGoogleConnectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisconnectMailAccount operation middleware
+func (sh *strictHandler) DisconnectMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request DisconnectMailAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisconnectMailAccount(ctx, request.(DisconnectMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisconnectMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisconnectMailAccountResponseObject); ok {
+		if err := validResponse.VisitDisconnectMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMailAccount operation middleware
+func (sh *strictHandler) UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request UpdateMailAccountRequestObject
+
+	request.Id = id
+
+	var body UpdateMailAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMailAccount(ctx, request.(UpdateMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMailAccountResponseObject); ok {
+		if err := validResponse.VisitUpdateMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SyncMailAccount operation middleware
+func (sh *strictHandler) SyncMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request SyncMailAccountRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SyncMailAccount(ctx, request.(SyncMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SyncMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SyncMailAccountResponseObject); ok {
+		if err := validResponse.VisitSyncMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMailMessages operation middleware
+func (sh *strictHandler) ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams) {
+	var request ListMailMessagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMailMessages(ctx, request.(ListMailMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMailMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMailMessagesResponseObject); ok {
+		if err := validResponse.VisitListMailMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResolveMailStatusChange operation middleware
+func (sh *strictHandler) ResolveMailStatusChange(w http.ResponseWriter, r *http.Request, id ID) {
+	var request ResolveMailStatusChangeRequestObject
+
+	request.Id = id
+
+	var body ResolveMailStatusChangeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResolveMailStatusChange(ctx, request.(ResolveMailStatusChangeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResolveMailStatusChange")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResolveMailStatusChangeResponseObject); ok {
+		if err := validResponse.VisitResolveMailStatusChangeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

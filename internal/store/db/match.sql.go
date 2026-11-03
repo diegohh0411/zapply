@@ -12,7 +12,7 @@ import (
 )
 
 const getMatchRun = `-- name: GetMatchRun :one
-SELECT id, user_id, job_id, idempotency_key, trigger, status, stage, model, job_hash, library_fingerprint, skills_hash, snapshot, result, score, must_met, must_total, blocked_reason, next_eligible_at, rerun_requested, version, total, answered, cached, unanswered, created_at, finished_at FROM match_run WHERE user_id=$1 AND id=$2
+SELECT id, user_id, job_id, idempotency_key, trigger, status, stage, model, job_hash, library_fingerprint, skills_hash, snapshot, result, score, must_met, must_total, blocked_reason, next_eligible_at, rerun_requested, version, total, answered, cached, unanswered, created_at, finished_at, pipeline FROM match_run WHERE user_id=$1 AND id=$2
 `
 
 type GetMatchRunParams struct {
@@ -50,12 +50,13 @@ func (q *Queries) GetMatchRun(ctx context.Context, arg GetMatchRunParams) (Match
 		&i.Unanswered,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Pipeline,
 	)
 	return i, err
 }
 
 const getMatchRunForUpdate = `-- name: GetMatchRunForUpdate :one
-SELECT id, user_id, job_id, idempotency_key, trigger, status, stage, model, job_hash, library_fingerprint, skills_hash, snapshot, result, score, must_met, must_total, blocked_reason, next_eligible_at, rerun_requested, version, total, answered, cached, unanswered, created_at, finished_at FROM match_run WHERE user_id=$1 AND id=$2 FOR UPDATE
+SELECT id, user_id, job_id, idempotency_key, trigger, status, stage, model, job_hash, library_fingerprint, skills_hash, snapshot, result, score, must_met, must_total, blocked_reason, next_eligible_at, rerun_requested, version, total, answered, cached, unanswered, created_at, finished_at, pipeline FROM match_run WHERE user_id=$1 AND id=$2 FOR UPDATE
 `
 
 type GetMatchRunForUpdateParams struct {
@@ -93,6 +94,7 @@ func (q *Queries) GetMatchRunForUpdate(ctx context.Context, arg GetMatchRunForUp
 		&i.Unanswered,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Pipeline,
 	)
 	return i, err
 }

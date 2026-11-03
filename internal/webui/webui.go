@@ -17,7 +17,12 @@ var dist embed.FS
 
 // Config is served as /config.json. Everything in it is public: the
 // Supabase URL and publishable (anon) key are meant for browsers.
+// BuiltAt is set at image compilation time.
+var BuiltAt string
+
 type Config struct {
+	BuildCommit     string `json:"build_commit,omitempty"`
+	BuiltAt         string `json:"built_at,omitempty"`
 	SupabaseURL     string `json:"supabase_url"`
 	SupabaseAnonKey string `json:"supabase_anon_key"`
 	// DevLogin lets the app mint tokens through POST /dev/token.
@@ -31,9 +36,13 @@ func Built() bool {
 }
 
 // Handler serves static files, falling back to index.html for app routes.
-// Hashed build assets are cached for a year; everything else revalidates.
+// Hashed build assets and versioned WASM are cached for a year; other files revalidate.
 func Handler(cfg Config) http.Handler {
 	root, _ := fs.Sub(dist, "dist")
+	return handler(cfg, root)
+}
+
+func handler(cfg Config, root fs.FS) http.Handler {
 	files := http.FileServerFS(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -61,7 +70,7 @@ func Handler(cfg Config) http.Handler {
 			name = "index.html"
 		}
 		if name == "index.html" {
-			if !Built() {
+			if _, err := fs.Stat(root, "index.html"); err != nil {
 				httpx.WriteProblem(w, r, http.StatusNotFound, "the web app is not built into this binary (make web)")
 				return
 			}
@@ -71,10 +80,24 @@ func Handler(cfg Config) http.Handler {
 			files.ServeHTTP(w, r2)
 			return
 		}
-		if isHashed(name) {
+		if isHashed(name) || isVersionedWasm(name) {
 			h.Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			h.Set("Cache-Control", "no-cache")
+		}
+		if isVersionedWasm(name) {
+			// Keep the WASM MIME type for streaming compilation, even when
+			// FileServer serves a precompressed representation.
+			h.Set("Content-Type", "application/wasm")
+			h.Add("Vary", "Accept-Encoding")
+			if encoding := wasmEncoding(root, name, r.Header.Get("Accept-Encoding")); encoding != "" {
+				h.Set("Content-Encoding", encoding)
+				if encoding == "gzip" {
+					name += ".gz"
+				} else {
+					name += ".br"
+				}
+			}
 		}
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = "/" + name

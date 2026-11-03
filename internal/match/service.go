@@ -12,6 +12,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/store/db"
@@ -24,9 +25,14 @@ import (
 	"sort"
 )
 
+// AdvanceArgs is unique per run and triggering operation. River keeps a running
+// job unique, so a run-only key would drop the wake-up from a request that
+// finishes while another request's Advance is running. Jobs for one run
+// serialize on the job lock.
 type AdvanceArgs struct {
-	UserID uuid.UUID `json:"user_id" river:"unique"`
-	RunID  uuid.UUID `json:"run_id" river:"unique"`
+	UserID      uuid.UUID `json:"user_id" river:"unique"`
+	RunID       uuid.UUID `json:"run_id" river:"unique"`
+	OperationID uuid.UUID `json:"operation_id" river:"unique"`
 }
 
 func (AdvanceArgs) Kind() string { return "match_advance" }
@@ -48,6 +54,7 @@ type Run struct {
 	Status             string     `json:"status"`
 	Stage              string     `json:"stage"`
 	Model              *string    `json:"model"`
+	Pipeline           int        `json:"pipeline"`
 	Trigger            string     `json:"trigger"`
 	BlockedReason      string     `json:"blocked_reason"`
 	NextEligibleAt     *time.Time `json:"next_eligible_at"`
@@ -121,11 +128,6 @@ func snapshot(ctx context.Context, tx pgx.Tx, u, job uuid.UUID) (Snapshot, strin
 	if e = json.Unmarshal(raw, &s.Skills); e != nil {
 		return s, "", "", "", e
 	}
-	text := s.Description
-	if strings.TrimSpace(text) == "" {
-		text = s.Title
-	}
-	s.Lines, s.Truncated = SplitLines(text)
 	sh, e := systemone.Hash(s.Skills)
 	if e != nil {
 		return s, "", "", "", e
@@ -146,12 +148,17 @@ func emitRun(ctx context.Context, tx pgx.Tx, u, id, job uuid.UUID) error {
 	return e
 }
 func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
+	return s.wake(ctx, tx, u, id, uuid.Nil)
+}
+
+// wake enqueues an Advance for the run, keyed by the operation that triggered it.
+func (s *Service) wake(ctx context.Context, tx pgx.Tx, u, id, op uuid.UUID) error {
 	if s.queue == nil {
 		return errors.New("matching queue unavailable")
 	}
-	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id})
+	return s.queue.InsertTx(ctx, tx, AdvanceArgs{u, id, op})
 }
-func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, trigger string) (Run, error) {
+func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, trigger string, version int) (Run, error) {
 	if key == "" || len(key) > 255 || strings.ContainsAny(key, "\x00\r\n") {
 		return Run{}, &library.ValidationError{Fields: []library.FieldError{{Field: "Idempotency-Key", Message: "must be 1 to 255 characters"}}}
 	}
@@ -183,6 +190,9 @@ func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, 
 	if e != nil {
 		return Run{}, e
 	}
+	if version < PipelineV3 {
+		snap = legacyLines(snap)
+	}
 	limited := len(snap.Evidence) > 300
 	if limited {
 		snap.Evidence = snap.Evidence[:300]
@@ -192,9 +202,30 @@ func (s *Service) create(ctx context.Context, tx pgx.Tx, u, job uuid.UUID, key, 
 	if e = tx.QueryRow(ctx, `SELECT platform.selected_decision_model()`).Scan(&model); e != nil {
 		return Run{}, e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO match_run(id,user_id,job_id,idempotency_key,trigger,model,job_hash,skills_hash,library_fingerprint,snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, u, job, key, trigger, model, jh, sh, fp, systemone.Raw(snap))
+	_, e = tx.Exec(ctx, `INSERT INTO match_run(id,user_id,job_id,idempotency_key,trigger,model,job_hash,skills_hash,library_fingerprint,snapshot,pipeline) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, u, job, key, trigger, model, jh, sh, fp, systemone.Raw(snap), version)
 	if e != nil {
 		return Run{}, e
+	}
+	// A new run replaces the previous match's user adjustments. Keep draft
+	// presentation settings and immutable exports, but reset selection picks.
+	// The idempotency and active-run checks above ensure retries and conflicts
+	// cannot erase changes made after a run was started.
+	var previous bool
+	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM match_run WHERE user_id=$1 AND job_id=$2 AND id<>$3)`, u, job, id).Scan(&previous); e != nil {
+		return Run{}, e
+	}
+	if previous {
+		if _, e = tx.Exec(ctx, `DELETE FROM match_override WHERE user_id=$1 AND job_id=$2`, u, job); e != nil {
+			return Run{}, e
+		}
+		if _, e = tx.Exec(ctx, `WITH updated AS (
+			UPDATE cv_draft SET picks='{"include":[],"exclude":[]}'::jsonb, version=version+1, updated_at=now()
+			WHERE user_id=$1 AND job_id=$2 AND picks <> '{"include":[],"exclude":[]}'::jsonb
+			RETURNING job_id,version
+		) INSERT INTO outbox(id,user_id,topic,payload)
+		SELECT $3,$1,'cv_draft.updated',jsonb_build_object('id',job_id,'version',version) FROM updated`, u, job, uuid.Must(uuid.NewV7())); e != nil {
+			return Run{}, e
+		}
 	}
 	for _, item := range snap.Evidence {
 		if _, e = tx.Exec(ctx, `INSERT INTO match_run_item(user_id,run_id,evidence_id,content_hash,facts) VALUES($1,$2,$3,$4,$5)`, u, id, item.ID, item.ContentHash, systemone.Raw(item)); e != nil {
@@ -219,13 +250,26 @@ func translate(e error) error {
 	}
 	return membership.Translate(e)
 }
-func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string) (Run, error) {
+
+// Start queues a manual run. A zero version selects DefaultPipeline.
+// Historical pipelines retain their original rules.
+func (s *Service) Start(ctx context.Context, u, job uuid.UUID, key string, version int) (Run, error) {
+	if version == 0 {
+		version = DefaultPipeline
+	}
+	if _, ok := pipelines[version]; !ok {
+		return Run{}, &library.ValidationError{Fields: []library.FieldError{{Field: "pipeline", Message: "must be 1, 2 or 3"}}}
+	}
 	r := Run{Result: emptyResult()}
-	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error { var e error; r, e = s.create(ctx, tx, u, job, key, "manual"); return e })
+	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		var e error
+		r, e = s.create(ctx, tx, u, job, key, "manual", version)
+		return e
+	})
 	return r, translate(e)
 }
-func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job, created, hashChanged bool) error {
-	if !created && !hashChanged || created && strings.TrimSpace(job.Description) == "" {
+func (s *Service) JobCreated(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.Job) error {
+	if strings.TrimSpace(job.Description) == "" {
 		return nil
 	}
 	var eligible bool
@@ -235,28 +279,7 @@ func (s *Service) JobSaved(ctx context.Context, tx pgx.Tx, u uuid.UUID, job db.J
 	if !eligible {
 		return nil
 	}
-	var id uuid.UUID
-	e := tx.QueryRow(ctx, `SELECT id FROM match_run WHERE user_id=$1 AND job_id=$2 AND status IN ('pending','running','blocked','needs_review') FOR UPDATE`, u, job.ID).Scan(&id)
-	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-		return e
-	}
-	if e == nil {
-		var dispatched bool
-		if e = tx.QueryRow(ctx, `SELECT platform.match_operations_dispatched(COALESCE(array_agg(operation_id),'{}'::uuid[])) FROM match_run_operation WHERE user_id=$1 AND run_id=$2`, u, id).Scan(&dispatched); e != nil {
-			return e
-		}
-		if dispatched {
-			_, e = tx.Exec(ctx, `UPDATE match_run SET rerun_requested=true,version=version+1 WHERE user_id=$1 AND id=$2`, u, id)
-			if e != nil {
-				return e
-			}
-			return emitRun(ctx, tx, u, id, job.ID)
-		}
-		if e = s.cancelTx(ctx, tx, u, id); e != nil {
-			return e
-		}
-	}
-	_, e = s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto")
+	_, e := s.create(ctx, tx, u, job.ID, "auto:"+uuid.NewString(), "auto", DefaultPipeline)
 	return e
 }
 func (s *Service) cancelTx(ctx context.Context, tx pgx.Tx, u, id uuid.UUID) error {
@@ -290,6 +313,27 @@ func (s *Service) Cancel(ctx context.Context, u, id uuid.UUID) error {
 		return s.cancelTx(ctx, tx, u, id)
 	}))
 }
+
+// LatestCompleted returns the job's newest completed run, with Stale set when
+// the job or library changed since it ran. ok is false when there is none.
+// Rendering (part 7) ranks a CV with it.
+func LatestCompleted(ctx context.Context, tx pgx.Tx, u, job uuid.UUID) (r Run, ok bool, e error) {
+	var id uuid.UUID
+	e = tx.QueryRow(ctx, `SELECT id FROM match_run WHERE user_id=$1 AND job_id=$2 AND status='completed' ORDER BY created_at DESC,id DESC LIMIT 1`, u, job).Scan(&id)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return r, false, nil
+	}
+	if e != nil {
+		return r, false, e
+	}
+	if r, e = loadRun(ctx, tx, u, id, false); e != nil {
+		return r, false, e
+	}
+	_, jh, _, fp, e := snapshot(ctx, tx, u, job)
+	r.Stale = r.Pipeline != DefaultPipeline || jh != r.JobHash || fp != r.LibraryFingerprint
+	return r, e == nil, e
+}
+
 func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 	var out Run
 	e := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
@@ -302,9 +346,12 @@ func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 		if e != nil {
 			return e
 		}
-		out.Stale = jh != out.JobHash || fp != out.LibraryFingerprint
+		out.Stale = out.Pipeline != DefaultPipeline || jh != out.JobHash || fp != out.LibraryFingerprint
 		out.Truncated = out.Snapshot.Truncated
 		out.ObsoleteOverrides = []string{}
+		if out.Pipeline < PipelineV3 {
+			cur = legacyLines(cur)
+		}
 		currentLines := map[string]bool{}
 		for _, line := range cur.Lines {
 			h, _ := systemone.Hash(strings.ToLower(strings.Join(strings.Fields(line.Text), " ")))
@@ -315,7 +362,7 @@ func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 			return e
 		}
 		for hash := range corrections {
-			if !currentLines[hash] {
+			if out.Pipeline < PipelineV3 && !currentLines[hash] {
 				out.ObsoleteOverrides = append(out.ObsoleteOverrides, hash)
 			}
 		}
@@ -333,8 +380,9 @@ func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 			if out.FinishedAt != nil {
 				asOf = *out.FinishedAt
 			}
-			req, incomplete := Requirements(out.Snapshot, a, corrections)
-			out.Result = Compute(out.Snapshot, req, a, corrections, asOf, incomplete)
+			p := pipelineFor(out.Pipeline)
+			req, incomplete := p.requirements(out.Snapshot, a, corrections)
+			out.Result = p.compute(out.Snapshot, req, a, corrections, asOf, incomplete)
 			out.Score = out.Result.Score
 			out.MustMet = out.Result.MustMet
 			out.MustTotal = out.Result.MustTotal
@@ -488,7 +536,7 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		return e
 	}
 	for _, id := range ids {
-		if e = s.enqueue(ctx, tx, op.UserID, id); e != nil {
+		if e = s.wake(ctx, tx, op.UserID, id, op.ID); e != nil {
 			return e
 		}
 	}
@@ -564,8 +612,8 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 	if _, e := hex.DecodeString(hash); e != nil {
 		return &library.ValidationError{Fields: []library.FieldError{{Field: "text_hash", Message: "invalid requirement hash"}}}
 	}
-	if class != nil && *class != "must" && *class != "preferred" && *class != "duty" && *class != "ignore" {
-		return &library.ValidationError{Fields: []library.FieldError{{Field: "class", Message: "must be must, preferred, duty or ignore"}}}
+	if class != nil && *class != "must" && *class != "preferred" && *class != "duty" && *class != "trait" && *class != "ignore" {
+		return &library.ValidationError{Fields: []library.FieldError{{Field: "class", Message: "must be must, preferred, duty, trait or ignore"}}}
 	}
 	return translate(s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
 		var exists uuid.UUID
@@ -593,14 +641,12 @@ func (s *Service) Override(ctx context.Context, u, job uuid.UUID, hash string, c
 		if e != nil {
 			return e
 		}
-		return s.finalize(ctx, tx, u, r, false)
+		return s.finalize(ctx, tx, u, r)
 	}))
 }
 
-// Estimate uses a fresh verified quote and cache hits. Before reading completes,
-// all lines may qualify; scoring reserves for up to 40 longest source lines and
-// deliberately assumes no score-cache hits so an unknown classification cannot
-// make the upper estimate smaller than the requests actually needed.
+// Estimate prices the whole-posting question batches after cache hits, using
+// the same request packing and billing rules as dispatch.
 type Estimate struct {
 	Available    bool    `json:"available"`
 	Reason       string  `json:"reason"`
@@ -649,80 +695,44 @@ func (s *Service) Estimate(ctx context.Context, u, job uuid.UUID) (Estimate, err
 		if e = json.Unmarshal(raw, &quote); e != nil {
 			return e
 		}
-		if !quote.Decision || quote.BoundReference == "" || quote.MaxInput <= 0 || quote.MaxRequestBytes <= 0 || time.Since(quote.FetchedAt) > 15*time.Minute {
+		if !quote.Decision || quote.Sheet == nil || quote.MaxRequestBytes <= 0 || time.Since(quote.FetchedAt) > 15*time.Minute {
 			return nil
 		}
-		read, e := ReadQuestions(snap)
+		var calibration []byte
+		if e = tx.QueryRow(ctx, `SELECT platform.model_calibration($1)`, *model).Scan(&calibration); e != nil {
+			return e
+		}
+		p := pipelineFor(DefaultPipeline)
+		read, e := p.read(snap)
 		if e != nil {
 			return e
 		}
-		cached := map[string]systemone.Answer{}
+		found, e := decide.LookupAll(ctx, tx, u, *model, read)
+		if e != nil {
+			return e
+		}
 		pending := []decide.Pending{}
-		for _, p := range read {
-			a, e := decide.Lookup(ctx, tx, u, *model, p)
-			if e != nil {
-				return e
-			}
-			if a == nil {
-				pending = append(pending, p)
-			} else {
-				cached[p.Subject] = *a
+		for i, q := range read {
+			if found[i] == nil {
+				pending = append(pending, q)
 			}
 		}
-		requirements, incomplete := Requirements(snap, cached)
-		if incomplete {
-			lines := append([]Line{}, snap.Lines...)
-			sort.SliceStable(lines, func(i, j int) bool { return len(lines[i].Text) > len(lines[j].Text) })
-			if len(lines) > 40 {
-				lines = lines[:40]
-			}
-			requirements = []Requirement{}
-			for i, l := range lines {
-				h, _ := systemone.Hash(strings.ToLower(strings.Join(strings.Fields(l.Text), " ")))
-				requirements = append(requirements, Requirement{Text: l.Text, TextHash: h, Line: i, Class: "must"})
-			}
-		}
-		scores, e := ScoreQuestions(snap, requirements)
-		if e != nil {
-			return e
-		}
-		for _, p := range scores {
-			if !incomplete {
-				a, e := decide.Lookup(ctx, tx, u, *model, p)
-				if e != nil {
-					return e
-				}
-				if a != nil {
-					continue
-				}
-			}
-			pending = append(pending, p)
-		}
-		packed, e := decide.Pack(*model, pending, quote.MaxRequestBytes, quote.MaxQuestions)
+		packed, e := decide.Pack(*model, pending, quote.MaxRequestBytes, requestQuestions(quote.MaxQuestions))
 		if e != nil {
 			return nil
 		}
 		var total int64
+		// Each request is priced exactly as the gateway will reserve it.
 		for _, request := range packed {
-			evaluations, fees := 1, 1
-			if quote.PerQuestion {
-				evaluations = len(request.Items)
-			}
-			if quote.RequestFeePerQuestion {
-				fees = len(request.Items)
-			}
-			if quote.MaxInput > math.MaxInt/evaluations {
-				return nil
-			}
-			cost, e := modelapi.QuoteCost(quote.InputRate, "0", "0", quote.MaxInput*evaluations, 0)
+			raw, e := json.Marshal(request.Request)
 			if e != nil {
+				return e
+			}
+			p, e := billing.Predict(*quote.Sheet, billing.Shape{RequestBytes: len(raw), Questions: len(request.Items)}, modelapi.CalibrationOf(calibration))
+			if e != nil || total > math.MaxInt64-p.Reserved {
 				return nil
 			}
-			fee, e := modelapi.QuoteCost(quote.RequestRate, "0", "0", fees, 0)
-			if e != nil || cost > math.MaxInt64-fee || total > math.MaxInt64-cost-fee {
-				return nil
-			}
-			total += cost + fee
+			total += p.Reserved
 		}
 		cost := modelapi.USD(total)
 		out.Available = true
@@ -753,7 +763,7 @@ func (s *Service) Summaries(ctx context.Context, u uuid.UUID, jobs []uuid.UUID) 
 		if e != nil {
 			return e
 		}
-		rows, e := tx.Query(ctx, `SELECT DISTINCT ON (r.job_id) r.job_id,r.id,r.status,r.score,r.job_hash<>encode(j.content_hash,'hex') OR r.library_fingerprint<>$3 FROM match_run r JOIN job j ON j.user_id=r.user_id AND j.id=r.job_id WHERE r.user_id=$1 AND r.job_id=ANY($2) ORDER BY r.job_id,r.created_at DESC,r.id DESC`, u, jobs, fp)
+		rows, e := tx.Query(ctx, `SELECT DISTINCT ON (r.job_id) r.job_id,r.id,r.status,CASE WHEN r.pipeline=3 THEN r.score ELSE NULL END,r.pipeline<>3 OR r.job_hash<>encode(j.content_hash,'hex') OR r.library_fingerprint<>$3 FROM match_run r JOIN job j ON j.user_id=r.user_id AND j.id=r.job_id WHERE r.user_id=$1 AND r.job_id=ANY($2) ORDER BY r.job_id,r.created_at DESC,r.id DESC`, u, jobs, fp)
 		if e != nil {
 			return e
 		}

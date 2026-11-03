@@ -18,14 +18,18 @@ import (
 
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/auth"
+	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/logx"
+	"github.com/diegohh0411/zapply/internal/mail"
+	"github.com/diegohh0411/zapply/internal/mail/google"
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/worker"
@@ -51,6 +55,14 @@ type Deps struct {
 	// DevToken mints a token for a subject (POST /dev/token, development
 	// only); nil disables the route.
 	DevToken func(subject string) (string, error)
+	// TypstDir holds the Typst CLIs for server-side CV compiles
+	// (render.Compiler); empty uses typst on PATH.
+	TypstDir string
+	// Google configures Gmail (part 10); the zero value leaves mail unconfigured.
+	Google config.Google
+	// PushVerifier checks the Pub/Sub push token; nil verifies against Google's
+	// published keys when push is configured.
+	PushVerifier auth.Verifier
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -65,7 +77,16 @@ func Handler(d Deps) http.Handler {
 	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue}
 	srv.matcher = match.New(d.Store, queue)
 	srv.jobs.Matcher = srv.matcher
+	srv.cv = render.NewService(d.Store, render.NewCompiler(d.TypstDir))
 	srv.decisionModels = openrouter.New("", "")
+	var provider mail.Provider
+	if d.Google.Enabled() {
+		provider = google.New(google.Config{ClientID: d.Google.ClientID, ClientSecret: d.Google.ClientSecret, RedirectURL: d.Google.RedirectURL(), Topic: d.Google.PubSubTopic})
+	}
+	srv.mail = mail.New(d.Store, queue, d.Keys, provider, d.Google.PubSubTopic != "", d.Google.ReconcileInterval, d.Logger)
+	if srv.pushVerifier = d.PushVerifier; srv.pushVerifier == nil && d.Google.PubSubTopic != "" {
+		srv.pushVerifier = &lazyVerifier{audience: d.Google.PubSubAudience}
+	}
 	v1 := http.NewServeMux()
 	gen.HandlerWithOptions(
 		gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
@@ -86,6 +107,9 @@ func Handler(d Deps) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	root.HandleFunc("GET /readyz", d.ready)
+	root.Handle("GET "+render.AssetsPath, templateAssets())
+	root.HandleFunc("GET /oauth/google/callback", srv.googleCallback)
+	root.HandleFunc("POST /hooks/google/pubsub", srv.googlePush)
 	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), srv.ownerOnly, limitBody))
 	if d.DevToken != nil {
 		root.Handle("POST /dev/token", httpx.Chain(http.HandlerFunc(d.devToken), limitBody))
@@ -214,6 +238,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeValidation(w, r, invalid.Fields)
 	case errors.As(err, &conflict):
 		httpx.WriteProblem(w, r, http.StatusConflict, conflict.Message)
+	case errors.Is(err, mail.ErrNotConfigured):
+		httpx.WriteProblem(w, r, http.StatusServiceUnavailable, "mail is not configured on this server")
 	case errors.Is(err, library.ErrNotFound):
 		httpx.WriteProblem(w, r, http.StatusNotFound, "")
 	case errors.Is(err, library.ErrVersionMismatch):

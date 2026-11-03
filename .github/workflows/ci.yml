@@ -6,7 +6,7 @@ on:
   merge_group:
 
 jobs:
-  go:
+  go-checks:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -24,8 +24,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+        id: go
         with:
           go-version-file: go.mod
+          cache: false
+      - name: Locate Go caches
+        id: go-cache
+        run: |
+          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.go-cache.outputs.modules }}
+          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-mod-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+      # Save new compilation work on each commit, even when dependencies are unchanged.
+      - name: Cache Go build outputs
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.go-cache.outputs.build }}
+          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}-
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
       - name: Validate migration catalog
         run: go test -count=1 ./internal/store -run '^TestMigrationCatalogValid$'
       - name: Create runtime role
@@ -39,10 +62,54 @@ jobs:
         run: |
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
+      # The native half of the rendering determinism gate (templates/gate_test.go).
+      # Keep the version in step with the typst field of templates/*/*/manifest.json.
+      - name: Install Typst and poppler
+        run: |
+          curl -fsSL https://github.com/typst/typst/releases/download/v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz \
+            | tar -xJ -C "$RUNNER_TEMP"
+          echo "ZAPPLY_TYPST=$RUNNER_TEMP/typst-x86_64-unknown-linux-musl/typst" >> "$GITHUB_ENV"
+          # On PATH too, for the API's server-side compile (internal/render).
+          echo "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Test
+        env:
+          ZAPPLY_REQUIRE_TYPST: "1"
         run: go test -race -count=1 ./...
+
+  image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build image
-        run: docker build -t zapply .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: zapply
+          cache-from: type=gha,scope=ci-image
+          cache-to: type=gha,scope=ci-image,mode=max
+
+  # Preserve the required Go check; the image is built on pushes to main.
+  go:
+    if: always()
+    needs: [go-checks, image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          GO_CHECKS_RESULT: ${{ needs.go-checks.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          test "$GO_CHECKS_RESULT" = success
+          if [ "$EVENT_NAME" = push ]; then
+            test "$IMAGE_RESULT" = success
+          else
+            test "$IMAGE_RESULT" = skipped
+          fi
 
   web:
     runs-on: ubuntu-latest
@@ -52,10 +119,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        id: node
         with:
           node-version-file: web/package.json
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Cache Angular build outputs
+        uses: actions/cache@v4
+        with:
+          path: web/.angular/cache
+          key: angular-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json', 'web/angular.json', 'web/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            angular-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json', 'web/angular.json', 'web/tsconfig*.json') }}-
       - run: npm ci --no-audit --no-fund
       - name: API types are up to date
         run: |

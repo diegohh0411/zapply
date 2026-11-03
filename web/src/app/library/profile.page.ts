@@ -41,7 +41,7 @@ import { fieldMap, onChanges } from './live';
             <textarea z-textarea name="summary" rows="5" [(ngModel)]="p.summary"></textarea>
           </label>
 
-          <label class="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="auto_match" [(ngModel)]="p.auto_match" (ngModelChange)="dirty.set(true)" /> Match automatically when a saved job changes</label>
+          <label class="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="auto_match" [(ngModel)]="p.auto_match" (ngModelChange)="dirty.set(true)" /> Match automatically when a job is created</label>
           <fieldset class="flex flex-col gap-2 sm:col-span-2">
             <legend class="mb-1.5 text-sm font-medium">Links</legend>
             @for (l of p.links; track $index; let i = $index) {

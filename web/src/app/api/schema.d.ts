@@ -704,6 +704,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/text-model-endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTextModelEndpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/text-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTextModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/decision-models": {
         parameters: {
             query?: never;
@@ -827,10 +859,367 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cv-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every CV template version, with the files a browser compiles it with. */
+        get: operations["listCvTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/cv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The job's CV draft and its content before fitting, built from the
+         *     library, the latest completed match run and the draft's picks. The
+         *     draft is created on first read. The ETag is the draft's version.
+         */
+        get: operations["getCv"];
+        put: operations["putCv"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/jobs/{id}/cv/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /** @description The job's exports, newest first, without their content. */
+        get: operations["listCvExports"];
+        put?: never;
+        /**
+         * @description Stores an immutable snapshot of the CV the client fitted: the draft's
+         *     content, rebuilt on the server, without the dropped items. A stale
+         *     draft version fails with 412; a different content hash (the library
+         *     changed since the preview) with 409.
+         */
+        post: operations["createCvExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cv-exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCvExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cv-exports/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description Compiles the snapshot on the server, for clients without a browser.
+         *     Nothing is stored. 503 when the server lacks the template's Typst
+         *     version.
+         */
+        get: operations["getCvExportPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
+         *     when the server has no Google OAuth client, in which case connecting
+         *     answers 503.
+         */
+        get: operations["listMailAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Begins the Gmail consent flow. Send the browser to `url`; Google returns
+         *     to the server's `/oauth/google/callback`, which redirects to the app, which
+         *     calls `completeGoogleConnect`.
+         */
+        post: operations["startGoogleConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/google/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Finishes the consent flow with the `state` and `code` the server's
+         *     callback passed to the app. The state must belong to the caller, who is
+         *     the member that started it; 422 on `state` otherwise.
+         */
+        post: operations["completeGoogleConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account. */
+        delete: operations["disconnectMailAccount"];
+        options?: never;
+        head?: never;
+        /** @description Pause or resume reading an account. A paused account is not read and nothing is sent to the model. */
+        patch: operations["updateMailAccount"];
+        trace?: never;
+    };
+    "/v1/mail/accounts/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Checks the mailbox now and retries mail still waiting to be classified.
+         *     409 unless the account is active. A sync held back by Gmail's rate limit
+         *     still waits; `retry_at` says until when.
+         */
+        post: operations["syncMailAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Mail classified as relevant to a job application, newest first. */
+        get: operations["listMailMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail/messages/{id}/status-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Acts on the job status a message proposed. `apply` moves the job to the proposed status and `dismiss` declines it; both need an outcome of `review`. `undo` moves an applied job back to its earlier status, and fails with 409 if the job's status was changed since. */
+        post: operations["resolveMailStatusChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CvTemplate: {
+            name: string;
+            version: number;
+            /** @description The Typst version the template compiles with. */
+            typst: string;
+            locales: string[];
+            published: boolean;
+            assets: {
+                main: string;
+                strings: string;
+                fonts: string[];
+            };
+        };
+        CvPicks: {
+            /** @description Evidence or highlight IDs */
+            include: string[];
+            exclude: string[];
+        };
+        CvDraft: {
+            summary?: string | null;
+            /** Format: uuid */
+            job_id: string;
+            template: string;
+            /** @description Null follows the latest version. */
+            template_version: number | null;
+            locale: string;
+            page_budget: number;
+            picks: components["schemas"]["CvPicks"];
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CvDraftInput: {
+            summary?: string | null;
+            template: string;
+            template_version?: number | null;
+            locale: string;
+            page_budget: number;
+            picks: components["schemas"]["CvPicks"];
+        };
+        CvPreview: {
+            summary_status?: string;
+            summary_suggestion?: string;
+            summary_reason?: string;
+            draft: components["schemas"]["CvDraft"];
+            template: components["schemas"]["CvTemplate"];
+            /** @description The template's content (templates/README.md). */
+            content: {
+                [key: string]: unknown;
+            };
+            content_hash: string;
+            /** @description Optional item IDs */
+            trim: string[];
+            available: {
+                entries: {
+                    id: string;
+                    title: string;
+                    kind: string;
+                    section: string;
+                    /** @enum {string} */
+                    reason: "excluded" | "suggested" | "not_selected";
+                }[];
+                highlights: {
+                    id: string;
+                    evidence_id: string;
+                    text: string;
+                    excluded: boolean;
+                }[];
+            };
+            match: {
+                /** Format: uuid */
+                run_id: string;
+                stale: boolean;
+            } | null;
+        };
+        CvExportInput: {
+            draft_version: number;
+            content_hash: string;
+            dropped: string[];
+            pages: number;
+            client_sha256?: string;
+        };
+        CvExport: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            job_id: string;
+            /** Format: uuid */
+            match_run_id: string | null;
+            template: string;
+            template_version: number;
+            locale: string;
+            /** Format: date */
+            document_date: string;
+            page_budget: number;
+            pages: number;
+            overflow: boolean;
+            content_hash: string;
+            client_sha256?: string | null;
+            dropped: string[];
+            /** Format: date-time */
+            created_at: string;
+            content?: {
+                [key: string]: unknown;
+            };
+        };
+        CvExportPage: {
+            items: components["schemas"]["CvExport"][];
+        };
         Problem: {
             type?: string;
             title: string;
@@ -1229,7 +1618,7 @@ export interface components {
          * @description The SSE `event` name of a change event.
          * @enum {string}
          */
-        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed";
+        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed" | "mail.account.updated" | "mail.message.classified";
         Plan: {
             /** Format: uuid */
             id: string;
@@ -1351,8 +1740,22 @@ export interface components {
             };
             compatibility_reason: string;
         };
+        /**
+         * @description Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
+         * @enum {integer}
+         */
+        SummaryMaxCharacters: 100 | 200 | 300 | 400 | 500;
+        /**
+         * @description Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+         * @enum {integer}
+         */
+        SummaryMaxOutputTokens: 1024 | 2048 | 4096 | 8192;
         ModelSettings: {
             decision_model: string | null;
+            summary_model?: string | null;
+            summary_endpoint?: string | null;
+            summary_max_output_tokens: components["schemas"]["SummaryMaxOutputTokens"];
+            summary_max_characters: components["schemas"]["SummaryMaxCharacters"];
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -1424,13 +1827,17 @@ export interface components {
             evidence_id?: string;
         };
         MatchResult: {
+            /** @description Historical coverage score; null for whole-posting matching. */
             score: number | null;
+            /** @description Historical requirement count; zero for whole-posting matching. */
             must_met: number;
+            /** @description Historical requirement count; zero for whole-posting matching. */
             must_total: number;
             partial: boolean;
             seniority: string;
             relevant_years: number;
             scoring_version: number;
+            /** @description Historical requirement analysis; empty for whole-posting matching. */
             requirements: components["schemas"]["Coverage"][];
             evidence: components["schemas"]["EvidenceMatch"][];
             selection: components["schemas"]["Selection"][];
@@ -1450,6 +1857,7 @@ export interface components {
             status: string;
             stage: string;
             model: string | null;
+            pipeline?: number;
             trigger: string;
             blocked_reason: string;
             /** Format: date-time */
@@ -1484,6 +1892,87 @@ export interface components {
         };
         MatchRunPage: {
             items: components["schemas"]["MatchRun"][];
+            /** Format: uuid */
+            next_cursor?: string;
+        };
+        /** @enum {string} */
+        MailCategory: "received" | "assessment" | "interview" | "rejection" | "offer";
+        MailAccount: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "google";
+            address: string;
+            /** @enum {string} */
+            status: "active" | "paused" | "needs_reconnect" | "disconnected";
+            /** Format: date-time */
+            last_synced_at?: string | null;
+            last_error: string;
+            /**
+             * Format: date-time
+             * @description When a sync held back by Gmail's rate limit resumes by itself.
+             */
+            retry_at: string | null;
+            /** @description Messages classified so far. */
+            mails_done: number;
+            /** @description Messages found so far, classified or not. Grows while a backlog is being read. */
+            mails_total: number;
+            /** @description Classified messages that concern an application. */
+            mails_relevant: number;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        MailAccountList: {
+            configured: boolean;
+            items: components["schemas"]["MailAccount"][];
+        };
+        MailAccountUpdate: {
+            paused: boolean;
+        };
+        MailConnect: {
+            url: string;
+        };
+        MailConnectComplete: {
+            state: string;
+            code: string;
+        };
+        MailMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            account_id: string;
+            category: components["schemas"]["MailCategory"];
+            /** Format: uuid */
+            job_id?: string | null;
+            from: string;
+            subject: string;
+            snippet: string;
+            /** Format: date-time */
+            received_at: string;
+            /** Format: date-time */
+            classified_at: string;
+            /** Format: uri */
+            gmail_url: string;
+            status_change?: components["schemas"]["MailStatusChange"] | null;
+        };
+        /** @description The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it. */
+        MailStatusChange: {
+            /** @enum {string} */
+            outcome: "no_change" | "review" | "applied" | "dismissed" | "undone";
+            /** Format: uuid */
+            proposed_status_id: string | null;
+            /** Format: uuid */
+            previous_status_id: string | null;
+            confidence: number | null;
+            auto: boolean;
+        };
+        MailStatusChangeAction: {
+            /** @enum {string} */
+            action: "apply" | "dismiss" | "undo";
+        };
+        MailMessagePage: {
+            items: components["schemas"]["MailMessage"][];
             /** Format: uuid */
             next_cursor?: string;
         };
@@ -2977,6 +3466,53 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listTextModelEndpoints: {
+        parameters: {
+            query: {
+                model: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compatible provider endpoints for a text model (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tag: string;
+                        name: string;
+                    }[];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTextModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available OpenRouter text models (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionModel"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listDecisionModels: {
         parameters: {
             query?: never;
@@ -3033,6 +3569,10 @@ export interface operations {
             content: {
                 "application/json": {
                     decision_model: string | null;
+                    summary_model?: string | null;
+                    summary_endpoint?: string | null;
+                    summary_max_output_tokens?: components["schemas"]["SummaryMaxOutputTokens"];
+                    summary_max_characters?: components["schemas"]["SummaryMaxCharacters"];
                 };
             };
         };
@@ -3100,7 +3640,10 @@ export interface operations {
     };
     createMatchRun: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis. */
+                pipeline?: number;
+            };
             header: {
                 "Idempotency-Key": string;
             };
@@ -3181,7 +3724,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    class: "must" | "preferred" | "duty" | "ignore";
+                    class: "must" | "preferred" | "duty" | "trait" | "ignore";
                 };
             };
         };
@@ -3214,6 +3757,373 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCvTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvTemplate"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putCv: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvDraftInput"];
+            };
+        };
+        responses: {
+            /** @description The saved draft, rebuilt. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listCvExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExportPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createCvExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Retrying with the same key and body returns the original result. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvExportInput"];
+            };
+        };
+        responses: {
+            /** @description The snapshot, with its content. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCvExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot, with its content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCvExportPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMailAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The member's mail accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccountList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startGoogleConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the browser. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailConnect"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeGoogleConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailConnectComplete"];
+            };
+        };
+        responses: {
+            /** @description The connected account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    disconnectMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailAccountUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    syncMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, with its current progress. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listMailMessages: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["MailCategory"];
+                job_id?: string;
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessagePage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resolveMailStatusChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailStatusChangeAction"];
+            };
+        };
+        responses: {
+            /** @description The updated message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
+                };
             };
             default: components["responses"]["Problem"];
         };

@@ -17,10 +17,12 @@ The fake HTTP fixture in `internal/model/openrouter/decisions_test.go` verifies 
 stable `/api/v1/systemone` route, response accounting, JSON-only decoding,
 per-question billing expansion and request rejection before sending. It is a
 fixture contract, not proof of OpenRouter's live billing behavior. Any catalogue
-model the owner selects can dispatch. Without a known bound it gets
-`ownerSelectedBound`, which conservatively assumes full context and the
-request fee charged once per question. These billing assumptions are not
-provider-verified. Generation lookup is off for these models, so an uncertain attempt
+model the owner selects can dispatch. Settled usage showed input billed once per
+request (96 questions on a 62 KB request billed 12,705 input tokens), so the
+earlier per-question context multiplier over-reserved about 250 times. Since
+#20, reservations predict cost from request size instead of reserving the full
+context; see the [billing prediction plan](10-billing-prediction-plan.md). The
+worker logs any charge above its reservation. Generation lookup is off for these models, so an uncertain attempt
 waits for the owner to resolve it.
 
 `internal/match/service_test.go` covers cold and fully cached runs, discarded
@@ -242,9 +244,10 @@ version retention on attempts. Never expose it to the browser.
 bytes alone do not bound provider-side expansion, repeated state evaluation,
 or output billing across every decision model.
 
-For the MVP, enable only pricing profiles with zero completion rate and
-supported prompt/request charges; reject nonzero unknown pricing components.
-A model adapter must document whether billable input is bounded per request
+Superseded by the [billing prediction plan](10-billing-prediction-plan.md):
+every positive pricing component is priced or makes the model incompatible,
+and the reservation is a calibrated prediction capped by the context bound
+below. A model adapter must document whether billable input is bounded per request
 or per independently evaluated question. Conservatively reserve the advertised
 context times the prompt rate for each billable evaluation, plus the bounded
 request charge. If evaluation is per question, multiply the context allowance

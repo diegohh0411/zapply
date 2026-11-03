@@ -4,35 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"slices"
 	"strings"
 	"time"
 
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
-// BillingBound describes how a decision model bills and how large a request
-// it accepts. Quotes use it to size the budget reservation for each call.
+// BillingBound holds the request limits and accounting support a decision
+// model has beyond what the catalogue reports.
 type BillingBound struct {
-	Reference             string
-	PerQuestion           bool
-	RequestFeePerQuestion bool
-	MaxRequestBytes       int
-	MaxQuestions          int // zero means no documented count limit
-	LookupSupported       bool
+	MaxRequestBytes int
+	MaxQuestions    int // zero means no documented count limit
+	LookupSupported bool
 }
 
-// ownerSelectedBound applies to any model the owner selects. It assumes the
-// full context and request fee charged per question to size a conservative
-// reservation. These billing assumptions are not provider-verified.
-var ownerSelectedBound = BillingBound{
-	Reference:             "owner-selected model, worst-case billing assumed",
-	PerQuestion:           true,
-	RequestFeePerQuestion: true,
-	MaxRequestBytes:       systemone.RequestBudget,
-}
+// ownerSelectedBound applies to any model the owner selects.
+var ownerSelectedBound = BillingBound{MaxRequestBytes: systemone.RequestBudget}
+
+// Decision models bill input once per request (OpenRouter's System One docs;
+// settled usage agrees: 96 questions on a 62 KB request billed 12,705 input
+// tokens) and the request fee once per question. The priors assume one token
+// per byte, about 5× the observed rate, until settlements calibrate a model.
+var decisionPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 1024, OutputPerQ: 16}
 
 type DecisionModel struct {
 	FetchedAt    time.Time                  `json:"-"`
@@ -98,81 +94,44 @@ func (c *Client) bound(model string) BillingBound {
 	return ownerSelectedBound
 }
 func (c *Client) compatibility(m DecisionModel) string {
-	if m.Context <= 0 {
-		return "invalid_context"
-	}
-	if _, ok := m.Pricing["prompt"]; !ok {
-		return "unsupported_pricing"
-	}
-	if _, ok := m.Pricing["completion"]; !ok {
-		return "unsupported_pricing"
-	}
-	for k, v := range m.Pricing {
-		n, e := modelapi.Cost(v)
-		if e != nil {
-			return "unsupported_pricing"
-		}
-		if k != "prompt" && k != "request" && n != 0 {
-			return "unsupported_pricing"
-		}
-	}
-	return ""
+	_, reason := c.sheet(m)
+	return reason
 }
-func (c *Client) QuoteDecision(ctx context.Context, r systemone.Request) (modelapi.Quote, error) {
-	if r.Model == "" {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "model_not_configured", Uncharged: true}
+
+// sheet prices every catalogue component or names the one it cannot price.
+func (c *Client) sheet(m DecisionModel) (billing.Sheet, string) {
+	if m.Context <= 0 {
+		return billing.Sheet{}, "invalid_context"
 	}
-	if len(r.Questions) == 0 {
-		return modelapi.Quote{}, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
+	b := c.bound(m.ID)
+	s := billing.Sheet{Provider: "openrouter", Model: m.ID, RequestPerQuestion: true, Context: m.Context,
+		MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget),
+		MaxQuestions:    b.MaxQuestions, Prior: decisionPrior, FetchedAt: m.FetchedAt, Components: []billing.Component{}}
+	// System One takes no output-token limit, and answers are only
+	// size-checked after they are billed, so output cannot be bounded.
+	if reason := price(&s, m.Pricing); reason != "" {
+		return billing.Sheet{}, reason
 	}
+	return s, ""
+}
+
+// DecisionSheet describes a catalogue model's billing for the gateway.
+func (c *Client) DecisionSheet(ctx context.Context, model string) (billing.Sheet, error) {
 	models, e := c.DecisionModels(ctx, "", false)
 	if e != nil {
-		return modelapi.Quote{}, e
+		return billing.Sheet{}, e
 	}
 	for _, m := range models {
-		if m.ID != r.Model {
+		if m.ID != model {
 			continue
 		}
-		if reason := c.compatibility(m); reason != "" {
-			return modelapi.Quote{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
+		s, reason := c.sheet(m)
+		if reason != "" {
+			return billing.Sheet{}, &modelapi.ProviderError{Code: reason, Uncharged: true}
 		}
-		b := c.bound(m.ID)
-		raw, e := json.Marshal(r)
-		if e != nil {
-			return modelapi.Quote{}, e
-		}
-
-		rate := func(k string) string {
-			if len(m.Pricing[k]) == 0 {
-				return "0"
-			}
-			return strings.Trim(string(m.Pricing[k]), `"`)
-		}
-		evals, fees := 1, 1
-		if b.PerQuestion {
-			evals = len(r.Questions)
-		}
-		if b.RequestFeePerQuestion {
-			fees = len(r.Questions)
-		}
-		if m.Context > math.MaxInt/evals {
-			return modelapi.Quote{}, errors.New("quote overflow")
-		}
-		cost, e := modelapi.QuoteCost(rate("prompt"), "0", "0", m.Context*evals, 0)
-		if e != nil {
-			return modelapi.Quote{}, e
-		}
-		fee, e := modelapi.QuoteCost(rate("request"), "0", "0", fees, 0)
-		if e != nil || cost > math.MaxInt64-fee {
-			return modelapi.Quote{}, errors.New("quote overflow")
-		}
-		quote := modelapi.Quote{Decision: true, PerQuestion: b.PerQuestion, RequestFeePerQuestion: b.RequestFeePerQuestion, MaxRequestBytes: min(b.MaxRequestBytes, systemone.RequestBudget), MaxQuestions: b.MaxQuestions, BoundReference: b.Reference, Model: r.Model, Endpoint: "systemone", InputRate: rate("prompt"), OutputRate: "0", RequestRate: rate("request"), MaxInput: m.Context, Reserved: cost + fee, FetchedAt: m.FetchedAt}
-		if len(r.Questions) == 0 || len(raw) > min(b.MaxRequestBytes, systemone.RequestBudget) || (b.MaxQuestions > 0 && len(r.Questions) > b.MaxQuestions) {
-			return quote, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
-		}
-		return quote, nil
+		return s, nil
 	}
-	return modelapi.Quote{}, &modelapi.ProviderError{Code: "decision_model_unavailable", Uncharged: true}
+	return billing.Sheet{}, &modelapi.ProviderError{Code: "decision_model_unavailable", Uncharged: true}
 }
 func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q modelapi.Quote) (modelapi.Result, error) {
 	if q.Model != r.Model || time.Since(q.FetchedAt) > 15*time.Minute {
@@ -180,7 +139,11 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 	}
 	// Revalidate against fresh metadata immediately before dispatch. A changed
 	// bound/price cannot consume more than the reservation captured by the gateway.
-	fresh, e := c.QuoteDecision(ctx, r)
+	var calibration billing.Calibration
+	if q.Calibration != nil {
+		calibration = *q.Calibration
+	}
+	fresh, e := modelapi.QuoteDecision(ctx, c, r, calibration)
 	if e != nil {
 		return modelapi.Result{}, e
 	}

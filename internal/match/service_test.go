@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
+	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -44,12 +46,9 @@ func (p *provider) Lookup(context.Context, string, string) (modelapi.Result, err
 	return modelapi.Result{}, errors.New("lookup unsupported")
 }
 func (p *provider) DecisionLookupSupported(string) bool { return false }
-func (p *provider) QuoteDecision(_ context.Context, r systemone.Request) (modelapi.Quote, error) {
-	q := modelapi.Quote{Model: r.Model, Reserved: 1000, FetchedAt: time.Now(), Decision: true, InputRate: "0.000000000001", RequestRate: "0", MaxInput: 1000, MaxRequestBytes: systemone.RequestBudget, BoundReference: "fake provider fixture", MaxQuestions: p.maxQuestions}
-	if p.maxQuestions > 0 && len(r.Questions) > p.maxQuestions {
-		return q, &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
-	}
-	return q, nil
+func (p *provider) DecisionSheet(_ context.Context, model string) (billing.Sheet, error) {
+	return billing.Sheet{Provider: "fake", Model: model, InputRate: 1, Context: 1000, MaxRequestBytes: systemone.RequestBudget,
+		MaxQuestions: p.maxQuestions, Prior: billing.Tokenization{TokensPerKB: 1000}, FetchedAt: time.Now()}, nil
 }
 func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ modelapi.Quote) (modelapi.Result, error) {
 	p.calls++
@@ -70,11 +69,22 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "choice":
 			var options map[string]string
 			json.Unmarshal(q.Criteria, &options)
-			chosen := "not_specified"
-			if _, ok := options["must"]; ok {
-				chosen = "must"
-			} else if _, ok := options["skill"]; ok {
-				chosen = "skill"
+			// Prefer a qualifying reading, then the first library option.
+			chosen := ""
+			for _, want := range []string{"must", "skill", "other", "not_specified"} {
+				if _, ok := options[want]; ok && chosen == "" {
+					chosen = want
+				}
+			}
+			if chosen == "" {
+				keys := []string{}
+				for key := range options {
+					if key != "none" {
+						keys = append(keys, key)
+					}
+				}
+				sort.Strings(keys)
+				chosen = keys[0]
 			}
 			a.Choice = chosen
 			a.Probabilities = map[string]float64{}
@@ -85,13 +95,15 @@ func (p *provider) Decide(_ context.Context, key string, r systemone.Request, _ 
 		case "score":
 			var criteria []json.RawMessage
 			json.Unmarshal(q.Criteria, &criteria)
-			score := 3.
+			score := float64(len(criteria) - 1)
 			a.Score = &score
 			a.Legend = map[string]json.RawMessage{}
-			a.Probabilities = map[string]float64{"0": 0, "1": 0, "2": 0, "3": 1}
+			a.Probabilities = map[string]float64{}
 			for i, c := range criteria {
 				a.Legend[string(rune('0'+i))] = c
+				a.Probabilities[string(rune('0'+i))] = 0
 			}
+			a.Probabilities[string(rune('0'+len(criteria)-1))] = 1
 		}
 		if !p.discard {
 			answers[k] = a
@@ -175,11 +187,15 @@ func setup(t *testing.T) *fixture {
 }
 func (f *fixture) start(t *testing.T) match.Run {
 	t.Helper()
+	return f.startPipeline(t, 0)
+}
+func (f *fixture) startPipeline(t *testing.T, version int) match.Run {
+	t.Helper()
 	q, e := worker.NewQueue(f.db.Store)
 	if e != nil {
 		t.Fatal(e)
 	}
-	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString())
+	r, e := match.New(f.db.Store, q).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), version)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -230,16 +246,19 @@ func (f *fixture) run(t *testing.T, id uuid.UUID) match.Run {
 func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
-	if r.Status != "completed" || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 2 {
+	// Two rounds, each with a posting-only state and a posting-plus-library state.
+	c := r.Result.Requirements
+	if r.Status != "completed" || r.Pipeline != match.PipelineV2 || r.Score == nil || *r.Score != 100 || len(r.Result.Selection) != 1 || f.p.calls != 4 ||
+		len(c) != 1 || c[0].Status != "met" || c[0].EvidenceID != f.evidence.ID.String() || len(c[0].Citations) != 1 {
 		t.Fatalf("cold run: %#v, calls %d", r, f.p.calls)
 	}
 	// Completion hook can be lost: Advance itself ingests terminal operations.
 	f.runtime.OnTerminal = nil
-	r = f.start(t)
+	r = f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
-	if f.p.calls != 2 || r.Cached != r.Total {
+	if f.p.calls != 4 || r.Cached != r.Total {
 		t.Fatalf("warm run called model: %d %#v", f.p.calls, r)
 	}
 	ignore := "ignore"
@@ -270,26 +289,100 @@ func TestColdWarmRunsCorrectionsAndIsolation(t *testing.T) {
 		t.Fatalf("stale %v %#v", e, r)
 	}
 }
+
+func TestRerunResetsAdjustmentsOnce(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	hash := strings.Repeat("a", 64)
+	setAdjustments := func() {
+		t.Helper()
+		e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			if _, e := tx.Exec(ctx, `INSERT INTO match_override(user_id,job_id,text_hash,class) VALUES($1,$2,$3,'ignore') ON CONFLICT(user_id,job_id,text_hash) DO UPDATE SET class='ignore'`, f.u, f.job.ID, hash); e != nil {
+				return e
+			}
+			_, e := tx.Exec(ctx, `INSERT INTO cv_draft(user_id,job_id,locale,page_budget,picks) VALUES($1,$2,'es',2,'{"include":["item"],"exclude":[]}') ON CONFLICT(user_id,job_id) DO UPDATE SET picks=EXCLUDED.picks`, f.u, f.job.ID)
+			return e
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	check := func(wantOverrides int, wantPicks string, wantVersion int) {
+		t.Helper()
+		e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			var count, version, budget int
+			var picks []byte
+			var locale string
+			if e := tx.QueryRow(ctx, `SELECT count(*) FROM match_override WHERE user_id=$1 AND job_id=$2`, f.u, f.job.ID).Scan(&count); e != nil {
+				return e
+			}
+			if e := tx.QueryRow(ctx, `SELECT picks,version,locale,page_budget FROM cv_draft WHERE user_id=$1 AND job_id=$2`, f.u, f.job.ID).Scan(&picks, &version, &locale, &budget); e != nil {
+				return e
+			}
+			var got, want any
+			if e := json.Unmarshal(picks, &got); e != nil {
+				return e
+			}
+			if e := json.Unmarshal([]byte(wantPicks), &want); e != nil {
+				return e
+			}
+			if count != wantOverrides || version != wantVersion || locale != "es" || budget != 2 || !bytes.Equal(systemone.Raw(got), systemone.Raw(want)) {
+				t.Fatalf("adjustments: count=%d picks=%s version=%d locale=%s budget=%d", count, picks, version, locale, budget)
+			}
+			return nil
+		})
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	setAdjustments()
+	first := f.start(t)
+	check(1, `{"include":["item"],"exclude":[]}`, 1)
+	f.run(t, first.ID)
+	q, e := worker.NewQueue(f.db.Store)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := match.New(f.db.Store, q)
+	key := uuid.NewString()
+	r, e := s.Start(ctx, f.u, f.job.ID, key, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	check(0, `{"include":[],"exclude":[]}`, 2)
+	setAdjustments()
+	if _, e = s.Start(ctx, f.u, f.job.ID, key, 0); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Start(ctx, f.u, f.job.ID, uuid.NewString(), 0); e == nil {
+		t.Fatal("expected active run conflict")
+	}
+	check(1, `{"include":["item"],"exclude":[]}`, 2)
+	if e = s.Cancel(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+}
 func TestDiscardRetryThenPartialAndCancel(t *testing.T) {
 	f := setup(t)
 	f.p.discard = true
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV2)
 	r = f.run(t, r.ID)
-	if r.Status != "partial" || r.Score != nil || f.p.calls != 2 {
+	// Both read requests are retried once, then their questions are unanswered.
+	if r.Status != "partial" || r.Score != nil || f.p.calls != 4 {
 		t.Fatalf("discard %#v calls %d", r, f.p.calls)
 	}
-	r = f.start(t)
+	r = f.startPipeline(t, match.PipelineV2)
 	if e := f.s.Cancel(context.Background(), f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
 	if e := f.s.Advance(context.Background(), f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
-	if f.p.calls != 2 {
+	if f.p.calls != 4 {
 		t.Fatal("cancel dispatched")
 	}
 }
-func TestAutoRunsSupersedeAndUnconfigured(t *testing.T) {
+func TestAutoMatchOnlyOnCreation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.js.Matcher = f.s
@@ -302,20 +395,61 @@ func TestAutoRunsSupersedeAndUnconfigured(t *testing.T) {
 		t.Fatalf("auto create %v %#v", e, runs)
 	}
 	first := runs[0].ID
+	// Simulate a follow-up requested by an older version while this run was active.
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		if _, e := tx.Exec(ctx, `UPDATE match_run SET rerun_requested=true WHERE user_id=$1 AND id=$2`, f.u, first); e != nil {
+			return e
+		}
+		_, e := tx.Exec(ctx, `INSERT INTO cv_draft(user_id,job_id,picks) VALUES($1,$2,'{"include":["item"],"exclude":[]}')`, f.u, job.ID)
+		return e
+	}); e != nil {
+		t.Fatal(e)
+	}
 	job, e = f.js.UpdateJob(ctx, f.u, job.ID, job.Version, jobs.JobInput{Title: "Changed", Description: "Go"})
 	if e != nil {
 		t.Fatal(e)
 	}
 	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
-	if e != nil || len(runs) != 2 || runs[1].Status != "cancelled" {
-		t.Fatalf("supersede %v %#v", e, runs)
+	if e != nil || len(runs) != 1 || runs[0].ID != first || runs[0].Status != "pending" {
+		t.Fatalf("job edit changed active run %v %#v", e, runs)
 	}
-	if e = f.s.Advance(ctx, f.u, first); e != nil {
+	if _, e = f.lib.UpdateEvidence(ctx, f.u, f.evidence.ID, f.evidence.Version, library.EvidenceInput{Kind: "project", Category: library.Paid, Title: "Updated Go service"}); e != nil {
 		t.Fatal(e)
 	}
-	if f.p.calls != 0 {
-		t.Fatal("superseded dispatch")
+	run := f.run(t, first)
+	if !run.Stale || run.RerunRequested {
+		t.Fatal("edits during the run should make it stale")
 	}
+	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
+	if e != nil || len(runs) != 1 {
+		t.Fatalf("edits or legacy follow-up created a run: %v %#v", e, runs)
+	}
+	job, e = f.js.UpdateJob(ctx, f.u, job.ID, job.Version, jobs.JobInput{Title: "Changed again", Description: "Go"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	runs, e = f.s.List(ctx, f.u, job.ID, nil, 10)
+	if e != nil || len(runs) != 1 {
+		t.Fatalf("completed job edit created a run: %v %#v", e, runs)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		var preserved bool
+		if e := tx.QueryRow(ctx, `SELECT picks->'include' = '["item"]'::jsonb FROM cv_draft WHERE user_id=$1 AND job_id=$2`, f.u, job.ID).Scan(&preserved); e != nil {
+			return e
+		}
+		if !preserved {
+			t.Fatal("edits reset manual CV picks")
+		}
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestUnconfiguredMatch(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	var e error
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error { _, e := tx.Exec(ctx, `SELECT platform.save_model_settings(NULL,2)`); return e }); e != nil {
 		t.Fatal(e)
 	}
@@ -343,7 +477,8 @@ func TestUncertainAccountingResumesWithNewOperation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	f.p.uncertain = true
-	r := f.start(t)
+	// Pipeline 1 reads in a single request, so one operation carries the round.
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -398,6 +533,47 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 	if e != nil || !estimate.Available || estimate.Requests != 0 || estimate.CostUSD == nil || *estimate.CostUSD != "0.000000000000" {
 		t.Fatalf("warm estimate %v %#v", e, estimate)
 	}
+	// Settled attempts calibrate the model: the fake bills 10 input tokens.
+	var raw []byte
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	calibration := modelapi.CalibrationOf(raw)
+	if calibration.Samples == 0 || calibration.TokensPerKB <= 0 || calibration.CostPermil <= 0 || calibration.Exceeded {
+		t.Fatalf("calibration %s", raw)
+	}
+	// A settlement first recorded without tokens and then corrected with them
+	// still calibrates from the corrected payload.
+	admin := f.db.Admin(t)
+	if _, e = admin.Exec(ctx, `WITH a AS (SELECT a.id FROM platform.model_attempt a WHERE a.model='test/decision' AND a.state='settled' LIMIT 1),
+		cleared AS (UPDATE platform.model_usage u SET usage='{}' FROM a WHERE u.attempt_id=a.id RETURNING u.attempt_id,u.user_id)
+		INSERT INTO platform.model_usage(attempt_id,user_id,amount,accounted_at,source,dedup_key,usage)
+		SELECT attempt_id,user_id,0,now(),'generation_lookup','correction:test','{"input_tokens":10}' FROM cleared LIMIT 1`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if corrected := modelapi.CalibrationOf(raw); corrected.Samples != calibration.Samples {
+		t.Fatalf("corrected settlement dropped from calibration: %s", raw)
+	}
+	// Chat usage names its tokens prompt_tokens/completion_tokens.
+	if _, e = admin.Exec(ctx, `UPDATE platform.model_usage SET usage='{"prompt_tokens":10,"completion_tokens":3}'
+		WHERE attempt_id IN (SELECT id FROM platform.model_attempt WHERE model='test/decision' AND state='settled')`); e != nil {
+		t.Fatal(e)
+	}
+	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.model_calibration('test/decision')`).Scan(&raw)
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if chat := modelapi.CalibrationOf(raw); chat.Samples != calibration.Samples || chat.OutputPerQ <= 0 {
+		t.Fatalf("chat usage not calibrated: %s", raw)
+	}
 	old := f.start(t)
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
 		_, e := tx.Exec(ctx, `SELECT platform.save_model_settings('test/new-model',2)`)
@@ -418,7 +594,7 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 func TestCancelRacesReservation(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	r := f.start(t)
+	r := f.startPipeline(t, match.PipelineV1)
 	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
 		t.Fatal(e)
 	}
@@ -463,8 +639,52 @@ func TestCancelRacesReservation(t *testing.T) {
 }
 func TestVerifiedPackingLimitsSplitBeforeDispatch(t *testing.T) {
 	f := setup(t)
+	ctx := context.Background()
 	f.p.maxQuestions = 1
 	r := f.start(t)
+	// The first request learns the question limit from the quote; once known,
+	// every request of the round is sent at once, not one per Advance.
+	var ops []uuid.UUID
+	inFlight := func() {
+		ops = nil
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			rows, e := tx.Query(ctx, `SELECT operation_id FROM match_run_operation WHERE user_id=$1 AND run_id=$2 AND NOT ingested`, f.u, r.ID)
+			if e != nil {
+				return e
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var op uuid.UUID
+				if e = rows.Scan(&op); e != nil {
+					return e
+				}
+				ops = append(ops, op)
+			}
+			return rows.Err()
+		}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	for _, op := range ops {
+		if e := f.runtime.Process(ctx, worker.Args{UserID: f.u, OperationID: op}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := f.s.Advance(ctx, f.u, r.ID); e != nil {
+		t.Fatal(e)
+	}
+	r, e := f.s.Detail(ctx, f.u, r.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	inFlight()
+	if r.Status != "running" || r.Total < 2 || len(ops) != r.Total {
+		t.Fatalf("round not dispatched in parallel: %d requests for %d questions, status %s", len(ops), r.Total, r.Status)
+	}
 	r = f.run(t, r.ID)
 	if r.Status != "completed" || f.p.calls != r.Total || r.Unanswered != 0 {
 		t.Fatalf("packing limits not applied: %#v calls %d", r, f.p.calls)
@@ -496,5 +716,75 @@ func TestDisplayFlagsReuseAnswersAndNewSkillsOnlyAskNewQuestion(t *testing.T) {
 	r = f.run(t, r.ID)
 	if f.p.calls != calls+1 || r.Total-r.Cached != 1 {
 		t.Fatalf("new skill invalidated existing questions: %#v calls %d", r, f.p.calls)
+	}
+}
+
+func TestMemberHoldsUpToEightCallsInFlight(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	reasons := []string{}
+	for i := range 9 {
+		op := uuid.Must(uuid.NewV7())
+		if e := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `INSERT INTO model_operation(id,user_id,kind,idempotency_key,request_hash) VALUES($1,$2,'decision',$3,'hash')`, op, f.u, "in-flight:"+op.String())
+			return e
+		}); e != nil {
+			t.Fatal(e)
+		}
+		var reservation struct {
+			Reason string `json:"reason"`
+		}
+		if e := f.runtime.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+			var raw []byte
+			if e := tx.QueryRow(ctx, `SELECT platform.reserve($1,$2,$3,$4,$5,$6,$7)`, uuid.New(), op, "test/decision", "request-hash", json.RawMessage(`{}`), int64(1000), time.Now().Add(time.Minute)).Scan(&raw); e != nil {
+				return e
+			}
+			return json.Unmarshal(raw, &reservation)
+		}); e != nil {
+			t.Fatalf("reserve %d: %v", i, e)
+		}
+		reasons = append(reasons, reservation.Reason)
+	}
+	for i, reason := range reasons[:8] {
+		if reason != "" {
+			t.Fatalf("call %d refused with %q while under the cap", i, reason)
+		}
+	}
+	if reasons[8] != "in_flight" {
+		t.Fatalf("ninth call: %q, want in_flight", reasons[8])
+	}
+}
+
+func TestPipelineV1RemainsAvailableForComparison(t *testing.T) {
+	f := setup(t)
+	r := f.startPipeline(t, match.PipelineV1)
+	r = f.run(t, r.ID)
+	if r.Status != "completed" || r.Pipeline != match.PipelineV1 || r.Result.ScoringVersion != 1 || r.Score == nil || *r.Score != 100 || f.p.calls != 2 {
+		t.Fatalf("v1 run: %#v calls %d", r, f.p.calls)
+	}
+	if _, e := match.New(f.db.Store, nil).Start(context.Background(), f.u, f.job.ID, uuid.NewString(), 99); e == nil {
+		t.Fatal("unknown pipeline accepted")
+	}
+}
+
+func TestDefaultWholePostingRunAndWarmCache(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	r := f.run(t, f.start(t).ID)
+	if r.Status != "completed" || r.Pipeline != match.PipelineV3 || r.Result.ScoringVersion != 3 || r.Score != nil || r.MustTotal != 0 || r.Stale || r.Truncated || len(r.Result.Requirements) != 0 || len(r.Result.Selection) != 1 || f.p.calls != 1 {
+		t.Fatalf("whole-posting run: %#v calls %d", r, f.p.calls)
+	}
+	var requirements, scoringQuestions int
+	if err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM match_run_requirement WHERE user_id=$1 AND run_id=$2`, f.u, r.ID).Scan(&requirements); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*) FROM match_run_question WHERE user_id=$1 AND run_id=$2 AND stage='score'`, f.u, r.ID).Scan(&scoringQuestions)
+	}); err != nil || requirements != 0 || scoringQuestions != 0 {
+		t.Fatalf("requirement analysis dispatched: requirements %d score questions %d err %v", requirements, scoringQuestions, err)
+	}
+	r = f.run(t, f.start(t).ID)
+	if f.p.calls != 1 || r.Cached != r.Total {
+		t.Fatalf("warm run missed cache: %#v calls %d", r, f.p.calls)
 	}
 }

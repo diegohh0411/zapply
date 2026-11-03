@@ -76,9 +76,19 @@ Setup, accounting rules, conservative reservations, and recovery commands are in
 [`docs/parts/05-worker.md`](docs/parts/05-worker.md). Optional tracing uses standard
 `OTEL_EXPORTER_OTLP_*` configuration and exports only when an endpoint is set.
 
+## Mail
+
+Part 10 connects a Gmail account, finds the mail about your applications (received,
+assessment, interview, rejection, offer) and links it to the matching job. It uses
+`gmail.readonly` through Google OAuth, Pub/Sub push notifications and a periodic
+reconcile scan. Mail not about an application is discarded after classification;
+only its identifier is kept. Setup, environment variables and design:
+[`docs/parts/10-mail-plan.md`](docs/parts/10-mail-plan.md). Set the Google variables in
+`.env.example` to enable it; without them the Mail page says it is not configured.
+
 ## Matching
 
-Part 6 adds automatic matching when saved jobs change, reusable decision-answer
+Part 6 adds automatic matching when jobs are created, reusable decision-answer
 caching, deterministic coverage and CV selections, corrections, run history and
 staleness. Open a saved job's **Match** tab; automatic matching can be turned off
 in Profile. Apply migrations through 00012 before deploying the updated API and worker.
@@ -95,3 +105,23 @@ Shared gateway code is under `internal/model`. Migration 00012 preserves existin
 accounting data while renaming shared gateway objects to `model_*`; administration
 uses `/v1/admin/model-attempts` and `model_operation.changed` events. Text diagnostic
 configuration retains the LLM-specific `LLM_MODEL`/`LLM_ENDPOINT` names.
+
+## CV rendering
+
+Open a job's **CV** tab to preview and export a PDF from your library. Matching
+ranks the content when available; otherwise the CV uses auto-included items.
+Pin or remove items, choose English or Spanish and a 1–3 page budget, then
+export. The browser compiles with Typst WASM; Postgres stores immutable content
+snapshots, and previous exports download identically after library edits.
+Apply migration 00016 before deploying.
+
+The image includes Typst 0.14.2 for `GET /v1/cv-exports/{id}/pdf`, which streams
+a PDF without storing it. For local server rendering, put that CLI on PATH or
+set `TYPST_DIR` to a directory containing `0.14.2/typst`. Browser rendering
+needs no local CLI. The native determinism tests also need `pdftotext`
+(poppler); run them with `ZAPPLY_REQUIRE_TYPST=1 make test-integration`.
+Details: [Part 7](docs/parts/07-rendering.md).
+
+Heroku deployments can show their source commit in the sidebar by enabling both
+`runtime-dyno-metadata` and `runtime-dyno-build-metadata` labs features on the app.
+The build time is embedded in the image and shown in the browser’s local time.

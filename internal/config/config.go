@@ -41,8 +41,12 @@ type Config struct {
 	Relay                  Relay
 	Web                    Web
 	Worker                 Worker
+	Google                 Google
 	SystemKeyRing          string
 	SystemKeyActiveVersion string
+	// TypstDir holds a Typst CLI per version, TypstDir/<version>/typst, for
+	// server-side CV compiles. Empty uses typst on PATH.
+	TypstDir string
 }
 
 type Worker struct {
@@ -52,6 +56,37 @@ type Worker struct {
 	Model       string
 	Endpoint    string
 }
+
+// Google configures the Gmail connection (part 10). All of it is optional: with
+// no client ID the mail endpoints answer that mail is not configured.
+type Google struct {
+	ClientID     string
+	ClientSecret string
+	// PublicURL is this deployment's origin, e.g. https://zapply.example.com. The
+	// OAuth redirect and the Pub/Sub push endpoint are built from it.
+	PublicURL string
+	// PubSubTopic is the full topic name Gmail publishes to
+	// (projects/<project>/topics/<topic>). Empty disables push; the reconcile
+	// scan then carries all syncing.
+	PubSubTopic string
+	// PubSubAudience and PubSubServiceAccount check the OIDC token on the push
+	// subscription: its audience and the service account that signs it.
+	PubSubAudience       string
+	PubSubServiceAccount string
+	// ReconcileInterval is how long an account may go without a sync before the
+	// worker syncs it anyway, in case a notification was dropped.
+	ReconcileInterval time.Duration
+}
+
+func (g Google) Enabled() bool { return g.ClientID != "" && g.ClientSecret != "" && g.PublicURL != "" }
+
+// RedirectURL is the OAuth redirect URI to register on the client.
+func (g Google) RedirectURL() string {
+	return strings.TrimRight(g.PublicURL, "/") + "/oauth/google/callback"
+}
+
+// PushURL is the endpoint the Pub/Sub push subscription targets.
+func (g Google) PushURL() string { return strings.TrimRight(g.PublicURL, "/") + "/hooks/google/pubsub" }
 
 // Web is public configuration for the browser app (served as /config.json).
 type Web struct {
@@ -91,7 +126,16 @@ func Load() (Config, error) {
 		NATSURL:                get("NATS_URL", "nats://127.0.0.1:4222"),
 		SystemKeyRing:          os.Getenv("SYSTEM_KEY_RING"),
 		SystemKeyActiveVersion: os.Getenv("SYSTEM_KEY_ACTIVE_VERSION"),
+		TypstDir:               os.Getenv("TYPST_DIR"),
 		Worker:                 Worker{DatabaseURL: os.Getenv("WORKER_DATABASE_URL"), AdminAddr: get("WORKER_ADMIN_ADDR", ":8082"), Model: os.Getenv("LLM_MODEL"), Endpoint: os.Getenv("LLM_ENDPOINT")},
+		Google: Google{
+			ClientID:             os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+			ClientSecret:         os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+			PublicURL:            os.Getenv("PUBLIC_URL"),
+			PubSubTopic:          os.Getenv("GOOGLE_PUBSUB_TOPIC"),
+			PubSubAudience:       os.Getenv("GOOGLE_PUBSUB_AUDIENCE"),
+			PubSubServiceAccount: os.Getenv("GOOGLE_PUBSUB_SERVICE_ACCOUNT"),
+		},
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),
 			AdminAddr:   get("RELAY_ADMIN_ADDR", ":8081"),
@@ -110,7 +154,7 @@ func Load() (Config, error) {
 
 	var errs []error
 	var workerErr error
-	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "4")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
+	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "10")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
 		errs = append(errs, errors.New("WORKER_CONCURRENCY must be between 1 and 64"))
 	}
 	if c.Env != Development && c.Env != Production {
@@ -138,6 +182,20 @@ func Load() (Config, error) {
 	}
 	c.DrainDelay = d
 
+	if c.Google.ReconcileInterval, err = time.ParseDuration(get("MAIL_RECONCILE_INTERVAL", "6h")); err != nil || c.Google.ReconcileInterval < time.Second {
+		errs = append(errs, fmt.Errorf("MAIL_RECONCILE_INTERVAL must be a duration of at least 1s, got %q", get("MAIL_RECONCILE_INTERVAL", "")))
+	}
+	if g := c.Google; g.ClientID != "" || g.ClientSecret != "" {
+		if g.ClientID == "" || g.ClientSecret == "" || g.PublicURL == "" {
+			errs = append(errs, errors.New("GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET and PUBLIC_URL are set together"))
+		}
+		if g.PubSubTopic != "" && g.PubSubServiceAccount == "" {
+			errs = append(errs, errors.New("GOOGLE_PUBSUB_SERVICE_ACCOUNT is required with GOOGLE_PUBSUB_TOPIC"))
+		}
+	}
+	if c.Google.PubSubAudience == "" && c.Google.PublicURL != "" {
+		c.Google.PubSubAudience = c.Google.PushURL()
+	}
 	if c.Relay.Interval, err = time.ParseDuration(get("RELAY_INTERVAL", "200ms")); err != nil || c.Relay.Interval <= 0 {
 		errs = append(errs, fmt.Errorf("RELAY_INTERVAL must be a positive duration, got %q", get("RELAY_INTERVAL", "")))
 	}

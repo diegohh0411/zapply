@@ -1,0 +1,286 @@
+<section class="space-y-5 py-4" aria-label="CV">
+  <header class="flex items-start justify-between gap-3">
+    <div>
+      <h2 class="font-semibold">CV for this job</h2>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Built from your selected library evidence, with a tailored summary.
+      </p>
+    </div>
+    <button
+      z-button
+      zSize="sm"
+      class="shrink-0"
+      [zDisabled]="busy() || fitting() || !pdfCurrent()"
+      [zLoading]="busy()"
+      (click)="export()"
+    >
+      <ng-icon name="lucideDownload" /> Export PDF
+    </button>
+  </header>
+
+  @if (preview(); as p) {
+    <section class="space-y-2 rounded-xl border p-4" aria-label="Summary" [attr.aria-busy]="summaryGenerating()">
+      <h3 class="font-medium">Summary</h3>
+      <p role="status" aria-live="polite" class="flex items-center gap-2 text-xs text-muted-foreground">
+        @if (summaryGenerating()) {<span aria-hidden="true" class="inline-block size-4 shrink-0 animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-r-transparent"></span>}
+        {{ summaryMessage() }}
+      </p>
+      @if (summaryGenerating()) {
+        <div aria-hidden="true" class="space-y-3 rounded border p-3 motion-safe:animate-pulse">
+          <div class="h-4 w-full rounded bg-muted"></div>
+          <div class="h-4 w-11/12 rounded bg-muted"></div>
+          <div class="h-4 w-3/4 rounded bg-muted"></div>
+        </div>
+      } @else {
+      <textarea class="w-full rounded border bg-background p-2" rows="4" [(ngModel)]="summaryText" aria-label="Edit summary" aria-describedby="summary-character-count"></textarea>
+      <p id="summary-character-count" class="text-xs" [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit">{{ summaryCharacterCount }} / {{ summaryCharacterLimit }} characters</p>
+      <div class="flex gap-2">
+        <button z-button zSize="sm" zType="outline" [zDisabled]="summaryGenerating()" [zLoading]="summaryGenerating()" (click)="regenerateSummary()">{{ summaryGenerating() ? 'Generating…' : 'Regenerate' }}</button>
+        <button z-button zSize="sm" [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit" (click)="save({summary: summaryText})">Save summary</button>
+        <button z-button zSize="sm" zType="outline" [zDisabled]="busy()" (click)="save({summary: null})">Use automatic summary</button>
+      </div>
+      @if (p.draft.summary !== null && p.draft.summary !== undefined && p.summary_suggestion) {
+        <p class="text-sm">{{ p.summary_suggestion }}</p>
+        <button z-button zSize="sm" zType="outline" [zDisabled]="busy()" (click)="save({summary: p.summary_suggestion})">Apply suggestion</button>
+      }
+      }
+    </section>
+  }
+
+  @if (error()) {
+    <p
+      role="alert"
+      class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+    >
+      {{ error() }}
+    </p>
+  }
+  @if (notice()) {
+    <p role="status" class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+      {{ notice() }}
+    </p>
+  }
+
+  @if (preview(); as p) {
+    @if (!p.match) {
+      <p class="text-xs text-muted-foreground">
+        No completed match for this job yet, so the CV shows your auto-included items, most recent
+        first. Run a match to rank them for this posting.
+      </p>
+    } @else if (p.match.stale) {
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        Your library or this posting changed since the last match. Re-run it to rank the CV again.
+      </p>
+    }
+
+    <div class="flex flex-wrap items-end gap-3 text-xs">
+      <p class="self-center text-muted-foreground">
+        Template: {{ p.template.name }} v{{ p.template.version }}
+      </p>
+      <label class="space-y-1">
+        <span class="block text-muted-foreground">Language</span>
+        <select
+          class="rounded-md border bg-background px-2 py-1.5"
+          [ngModel]="p.draft.locale"
+          (ngModelChange)="save({ locale: $event })"
+          [disabled]="busy()"
+        >
+          @for (l of p.template.locales; track l) {
+            <option [value]="l">{{ l === 'es' ? 'Español' : l === 'en' ? 'English' : l }}</option>
+          }
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="block text-muted-foreground">Length</span>
+        <select
+          class="rounded-md border bg-background px-2 py-1.5"
+          [ngModel]="p.draft.page_budget"
+          (ngModelChange)="save({ page_budget: +$event })"
+          [disabled]="busy()"
+        >
+          @for (n of [1, 2, 3]; track n) {
+            <option [ngValue]="n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</option>
+          }
+        </select>
+      </label>
+      <p class="ml-auto text-muted-foreground" aria-live="polite">
+        @if (fitting() && !fitted()) {
+          Fitting…
+        } @else if (fitted(); as f) {
+          {{ f.pages }} {{ f.pages === 1 ? 'page' : 'pages' }}
+          @if (trimmedCount()) {
+            · {{ trimmedCount() }} {{ trimmedCount() === 1 ? 'item' : 'items' }} trimmed to fit
+          }
+        }
+      </p>
+    </div>
+    @if (overflow()) {
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        The CV is longer than {{ p.draft.page_budget }}
+        {{ p.draft.page_budget === 1 ? 'page' : 'pages' }} even with every optional item trimmed.
+        Unpin or remove items, or allow more pages.
+      </p>
+    }
+
+    <div class="grid items-start gap-6 lg:grid-cols-2">
+      <div class="min-w-0 space-y-4">
+    <details class="group rounded-xl border" open>
+      <summary
+        class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium"
+      >
+        What's in this CV
+        <ng-icon
+          name="lucideChevronDown"
+          class="shrink-0 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div class="space-y-4 border-t p-4">
+        <p class="text-xs text-muted-foreground">
+          Pinned items are never trimmed. Use the eye to show or hide items in this job's CV.
+        </p>
+        @for (section of rows(); track section.key) {
+          <div>
+            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {{ section.label }}
+            </h3>
+            <ul class="divide-y">
+              @for (row of section.rows; track row.id) {
+                <li
+                  class="flex items-start gap-2 py-1.5 text-sm"
+                  [style.padding-left.rem]="row.depth"
+                >
+                  <span
+                    class="min-w-0 flex-1"
+                    [class.text-muted-foreground]="row.state === 'trimmed' || row.state === 'hidden'"
+                    [class.line-through]="row.state === 'trimmed'"
+                    [class.font-medium]="!row.highlight"
+                    >{{ row.highlight ? '• ' : '' }}{{ row.label }}</span
+                  >
+                  @if (!row.highlight && relevance()[row.id] !== undefined) {
+                    <app-relevance-indicator [itemId]="row.id" [relevance]="relevance()[row.id]" />
+                  }
+                  @if (row.state === 'trimmed') {
+                    <span class="shrink-0 text-[11px] text-muted-foreground">Trimmed to fit</span>
+                  }
+                  @if (row.state === 'pinned') {
+                    <button
+                      type="button"
+                      class="shrink-0 rounded px-1.5 text-[11px] text-brand hover:underline"
+                      [disabled]="busy()"
+                      (click)="pick(row.id, 'reset')"
+                      [attr.aria-label]="'Unpin ' + row.label"
+                    >
+                      <ng-icon name="lucidePin" /> Pinned
+                    </button>
+                  } @else if (row.state !== 'hidden') {
+                    <button
+                      type="button"
+                      class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                      [disabled]="busy()"
+                      (click)="pick(row.id, 'include')"
+                      [attr.aria-label]="'Pin ' + row.label"
+                    >
+                      <ng-icon name="lucidePin" />
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    [disabled]="busy()"
+                    (click)="pick(row.id, row.state === 'hidden' || row.state === 'trimmed' ? 'include' : 'exclude')"
+                    [attr.aria-label]="(row.state === 'hidden' || row.state === 'trimmed' ? 'Show ' : 'Hide ') + row.label"
+                  >
+                    <ng-icon [name]="row.state === 'hidden' || row.state === 'trimmed' ? 'lucideEyeOff' : 'lucideEye'" />
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        } @empty {
+          <p class="text-sm text-muted-foreground">Nothing from your library is selected yet.</p>
+        }
+        @if (content()?.skills?.length) {
+          <div>
+            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Skills and languages
+            </h3>
+            <ul class="flex flex-wrap gap-2 text-xs">
+              @for (skill of content()!.skills; track skill.id) {
+                <li
+                  class="rounded border px-2 py-1"
+                  [class.line-through]="dropped().has(skill.id)"
+                  [class.text-muted-foreground]="dropped().has(skill.id)"
+                >
+                  {{ skill.name }}
+                  @if (dropped().has(skill.id)) {
+                    · Trimmed to fit
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    </details>
+
+    @if (exports().length) {
+      <details class="group rounded-xl border">
+        <summary
+          class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm text-muted-foreground"
+        >
+          Exported CVs ({{ exports().length }})
+          <ng-icon
+            name="lucideChevronDown"
+            class="shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <ul class="divide-y border-t px-4">
+          @for (x of exports(); track x.id) {
+            <li class="flex items-center gap-2 py-2 text-sm">
+              <span class="min-w-0 flex-1"
+                >{{ x.created_at | date: 'medium' }}
+                <span class="text-xs text-muted-foreground"
+                  >· {{ x.pages }} {{ x.pages === 1 ? 'page' : 'pages' }} ·
+                  {{ x.locale === 'es' ? 'Español' : 'English' }}
+                  @if (x.overflow) {
+                    · over length
+                  }
+                </span></span
+              >
+              <button
+                type="button"
+                class="shrink-0 text-xs text-brand hover:underline"
+                [disabled]="busy()"
+                (click)="download(x)"
+              >
+                <ng-icon name="lucideDownload" /> Download
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="border-t px-4 py-2 text-[11px] text-muted-foreground">
+          Each export is rebuilt from a saved snapshot and downloads identically every time.
+        </p>
+      </details>
+    }
+      </div>
+      <div class="min-w-0 lg:sticky lg:top-0">
+    <div class="overflow-hidden rounded-xl border bg-muted/30">
+      @if (fitted(); as f) {
+        <iframe class="h-[70vh] w-full bg-white" [src]="f.url" title="CV preview"></iframe>
+      } @else {
+        <div class="flex h-48 items-center justify-center text-sm text-muted-foreground">
+          {{ fitting() ? 'Compiling your CV…' : 'Preview unavailable' }}
+        </div>
+      }
+    </div>
+
+      </div>
+    </div>
+  } @else if (!error()) {
+    <div class="space-y-2" aria-busy="true">
+      <div class="h-9 animate-pulse rounded bg-muted"></div>
+      <div class="h-48 animate-pulse rounded bg-muted"></div>
+    </div>
+  }
+</section>

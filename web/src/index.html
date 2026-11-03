@@ -12,18 +12,15 @@
       (function () {
         const html = document.documentElement;
 
-        try {
-          const theme = localStorage.theme;
-          const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-
-          const isSystem = theme === 'system' || !('theme' in localStorage);
-          const isDark = theme === 'dark' || (isSystem && prefersDark);
-          const resolvedTheme = isDark ? 'dark' : 'light';
+        const query = window.matchMedia('(prefers-color-scheme: dark)');
+        const applyTheme = (isDark) => {
           html.classList.toggle('dark', isDark);
           html.classList.toggle('dark-theme', isDark);
-          html.setAttribute('data-theme', theme ?? 'system');
-          html.style.colorScheme = resolvedTheme;
-        } catch (_) {}
+          html.setAttribute('data-theme', 'system');
+          html.style.colorScheme = isDark ? 'dark' : 'light';
+        };
+        applyTheme(query.matches);
+        query.addEventListener('change', (event) => applyTheme(event.matches));
       })();
     </script>
 

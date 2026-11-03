@@ -36,6 +36,11 @@ function fixture(file) {
   const events = { changes: new Subject(), resync: new Subject() };
   const api = {
     client: {
+      PUT(url, options) {
+        const d = deferred();
+        requests.push({ url, options, ...d });
+        return d.promise;
+      },
       GET(url, options) {
         const d = deferred();
         requests.push({ url, options, ...d });
@@ -174,4 +179,61 @@ test('a late charge page cannot repopulate a refreshed usage list', async (t) =>
   await older;
   assert.equal(page.entries().length, 1);
   assert.equal(page.entries()[0].id, 'new-charge');
+});
+
+test('summary provider dropdown discards stale model responses and selects the sole endpoint', async () => {
+  const f = fixture('admin/model-settings.ts');
+  const settings = new f.types.ModelSettings();
+  settings.selectSummaryModel('first/model');
+  settings.selectSummaryModel('second/model');
+  f.requests[1].resolve(ok([{tag:'second/fp8',name:'Second provider'}]));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint,'second/fp8');
+  f.requests[0].resolve(ok([{tag:'first/fp8',name:'First provider'}]));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint,'second/fp8');
+  assert.equal(settings.endpoints()[0].tag,'second/fp8');
+});
+
+test('summary provider dropdown preserves saved choices and clears unavailable ones', async () => {
+  const f = fixture('admin/model-settings.ts');
+  const settings = new f.types.ModelSettings();
+  settings.summaryModel='test/model'; settings.summaryEndpoint='saved/fp8';
+  const loading=settings.loadEndpoints();
+  f.requests[0].resolve(ok([{tag:'saved/fp8',name:'Saved'},{tag:'other/fp8',name:'Other'}]));
+  await loading;
+  assert.equal(settings.summaryEndpoint,'saved/fp8');
+  const refresh=settings.loadEndpoints();
+  f.requests[1].resolve(ok([])); await refresh;
+  assert.equal(settings.summaryEndpoint,'');
+  assert.equal(settings.endpointLoading(),false);
+});
+
+
+test('summary caps load the saved values and save the owner selections', async (t) => {
+  const f = fixture('admin/model-settings.ts');
+  t.after(f.close);
+  const settings = new f.types.ModelSettings();
+  assert.equal(settings.summaryMaxOutputTokens, 2048);
+  assert.equal(settings.summaryMaxCharacters, 500);
+  const loading = settings.load();
+  f.requests[0].resolve(ok({version: 1, decision_model: null, summary_model: null, summary_endpoint: null, summary_max_output_tokens: 4096, summary_max_characters: 300}));
+  await new Promise(resolve => setImmediate(resolve));
+  f.requests[1].resolve(ok([]));
+  await new Promise(resolve => setImmediate(resolve));
+  f.requests[2].resolve(ok([]));
+  await loading;
+  assert.equal(settings.summaryMaxOutputTokens, 4096);
+  assert.equal(settings.summaryMaxCharacters, 300);
+  settings.summaryMaxOutputTokens = 8192;
+  settings.summaryMaxCharacters = 100;
+  const saving = settings.save();
+  assert.equal(f.requests[3].options.body.summary_max_output_tokens, 8192);
+  assert.equal(f.requests[3].options.body.summary_max_characters, 100);
+  assert.equal(f.requests[3].options.params.header['If-Match'], '"1"');
+  f.requests[3].resolve(ok({version: 2, summary_max_output_tokens: 8192, summary_max_characters: 100}));
+  await saving;
+  assert.equal(settings.settings().summary_max_output_tokens, 8192);
+  assert.equal(settings.settings().summary_max_characters, 100);
+  assert.equal(settings.busy(), false);
 });
