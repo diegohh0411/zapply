@@ -9,12 +9,20 @@ import {
   model,
   output,
   signal,
+  viewChild,
+  type ElementRef,
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
+  lucideArrowLeft,
+  lucideFileText,
+  lucideScanSearch,
+  lucideMail,
+  lucideHistory,
+  lucideBriefcaseBusiness,
   lucideArchive,
   lucideArchiveRestore,
   lucideArrowRight,
@@ -32,7 +40,6 @@ import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSelectImports } from '@/shared/components/select';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
-import { ZardTabsImports } from '@/shared/components/tabs';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 
 import { CvTab } from './cv/cv-tab';
@@ -45,7 +52,16 @@ import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, WORK_MODES } from './format';
 import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
 
-/** What the sheet shows: an existing job, or a new one in a status. */
+export type JobTab = 'details' | 'match' | 'cv' | 'mail' | 'activity';
+const workspaceTabs = [
+  { id: 'details', label: 'Details', icon: 'lucideBriefcaseBusiness' },
+  { id: 'match', label: 'Match', icon: 'lucideScanSearch' },
+  { id: 'cv', label: 'CV', icon: 'lucideFileText' },
+  { id: 'mail', label: 'Mail', icon: 'lucideMail' },
+  { id: 'activity', label: 'Activity', icon: 'lucideHistory' },
+] as const;
+
+/** What the workspace shows: an existing job, or a new one in a status. */
 export type SheetTarget = { id: string } | { new: true; statusId?: string };
 
 interface Form {
@@ -100,11 +116,16 @@ const emptyForm = (statusId = ''): Form => ({
     ZardTextareaComponent,
     ZardSkeletonComponent,
     ...ZardSelectImports,
-    ...ZardTabsImports,
     ...ZardDropdownImports,
   ],
   providers: [
     provideIcons({
+      lucideArrowLeft,
+      lucideFileText,
+      lucideScanSearch,
+      lucideMail,
+      lucideHistory,
+      lucideBriefcaseBusiness,
       lucideExternalLink,
       lucideEllipsis,
       lucideArchive,
@@ -118,6 +139,7 @@ const emptyForm = (statusId = ''): Form => ({
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './job-sheet.html',
+  styleUrl: './job-sheet.css',
 })
 export class JobSheet {
   private readonly auth = inject(AuthService);
@@ -127,6 +149,12 @@ export class JobSheet {
 
   readonly target = input<SheetTarget | null>(null);
   readonly visible = model(false);
+  readonly tab = input<string>();
+  readonly tabChange = output<JobTab>();
+  protected readonly tabs = workspaceTabs;
+  private readonly navigation = viewChild<ElementRef<HTMLElement>>('workspaceNavigation');
+  protected readonly activeTab = signal<JobTab>('details');
+  protected readonly visitedTabs = signal<ReadonlySet<JobTab>>(new Set(['details']));
   readonly opened = output<string>(); // a job id to switch to (duplicates)
 
   protected readonly workModes = WORK_MODES;
@@ -137,11 +165,12 @@ export class JobSheet {
   protected readonly job = signal<Job | null>(null);
   protected readonly isNew = signal(false);
   protected readonly loading = signal(false);
-  protected readonly matchActive = signal(false);
   protected readonly saving = signal(false);
   protected readonly dirty = signal(false);
   protected readonly errors = signal<Record<string, string>>({});
   protected readonly activities = signal<JobActivity[]>([]);
+  protected readonly activityError = signal('');
+  protected readonly activityLoading = signal(false);
   protected note = '';
   protected readonly editingNote = signal<string | null>(null);
   protected noteEdit = '';
@@ -150,6 +179,11 @@ export class JobSheet {
   private activitiesRequest = 0;
 
   constructor() {
+    effect(() => {
+      const tab = this.tab();
+      const isNew = this.isNew();
+      untracked(() => this.selectTab(isNew ? 'details' : this.validTab(tab), false));
+    });
     let identity = this.auth.identity();
     effect(() => {
       const next = this.auth.identity();
@@ -161,11 +195,14 @@ export class JobSheet {
         this.job.set(null);
         this.form = emptyForm();
         this.activities.set([]);
+        this.activityError.set('');
+        this.activityLoading.set(false);
         this.errors.set({});
         this.dirty.set(false);
         this.saving.set(false);
         this.loading.set(false);
-        this.matchActive.set(false);
+        this.activeTab.set('details');
+        this.visitedTabs.set(new Set(['details']));
         this.isNew.set(false);
         this.editingNote.set(null);
         this.note = '';
@@ -195,18 +232,24 @@ export class JobSheet {
     const generation = ++this.generation;
     this.activitiesRequest++;
     if (!quiet) {
-      this.matchActive.set(false);
+      this.note = '';
+      this.noteEdit = '';
+      this.activeTab.set(this.validTab(this.tab()));
+      this.visitedTabs.set(new Set(['details', this.activeTab()]));
       this.errors.set({});
       this.dirty.set(false);
       this.editingNote.set(null);
       this.saving.set(false);
       this.job.set(null);
       this.activities.set([]);
+      this.activityError.set('');
+      this.activityLoading.set(false);
       this.loading.set(false);
     }
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
+      this.selectTab('details', false);
       this.form = emptyForm(t.statusId ?? this.store.statuses()[0]?.id ?? '');
       return;
     }
@@ -247,9 +290,58 @@ export class JobSheet {
   private async loadActivities(id: string): Promise<void> {
     const generation = this.generation;
     const seq = ++this.activitiesRequest;
-    const rows = await this.store.activities(id);
-    if (generation === this.generation && seq === this.activitiesRequest && this.job()?.id === id)
-      this.activities.set(rows);
+    this.activityLoading.set(true);
+    this.activityError.set('');
+    const current = () =>
+      generation === this.generation && seq === this.activitiesRequest && this.job()?.id === id;
+    try {
+      const rows = await this.store.activities(id);
+      if (current()) this.activities.set(rows);
+    } catch (e) {
+      if (current())
+        this.activityError.set(e instanceof Error ? e.message : 'Could not load activity.');
+    } finally {
+      if (current()) this.activityLoading.set(false);
+    }
+  }
+
+  protected refreshActivity(): void {
+    const id = this.job()?.id;
+    if (id) void this.loadActivities(id);
+  }
+
+  private validTab(tab: string | undefined): JobTab {
+    return this.tabs.find((t) => t.id === tab)?.id ?? 'details';
+  }
+
+  protected selectTab(tab: JobTab, notify = true): void {
+    if (this.isNew() && tab !== 'details') return;
+    this.activeTab.set(tab);
+    this.visitedTabs.update((tabs) => new Set([...tabs, tab]));
+    if (notify) {
+      this.tabChange.emit(tab);
+      this.navigation()?.nativeElement.scrollIntoView({ block: 'start' });
+    }
+  }
+
+  protected tabKeydown(event: KeyboardEvent, tab: JobTab): void {
+    const index = this.tabs.findIndex((t) => t.id === tab);
+    const last = this.tabs.length - 1;
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowRight'
+            ? (index + 1) % this.tabs.length
+            : event.key === 'ArrowLeft'
+              ? (index + last) % this.tabs.length
+              : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    this.selectTab(this.tabs[next].id);
+    const nav = (event.currentTarget as HTMLElement).parentElement;
+    nav?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
   protected touch(): void {

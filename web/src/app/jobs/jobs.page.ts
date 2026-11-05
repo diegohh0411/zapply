@@ -23,7 +23,7 @@ import { ZardSwitchComponent } from '@/shared/components/switch';
 
 import { ConfirmService } from '../core/confirm.service';
 import { type BoardMove, JobBoard } from './job-board';
-import { JobSheet, type SheetTarget } from './job-sheet';
+import { JobSheet, type JobTab, type SheetTarget } from './job-sheet';
 import { JobTable } from './job-table';
 import {
   type JobFilters,
@@ -81,7 +81,13 @@ export class JobsPage {
   /** ?job=<id> opens a job; ?job=new a blank one. ?view=<id> selects a saved view. */
   readonly job = input<string>();
   readonly view = input<string>();
+  readonly tab = input<string>();
 
+  protected readonly hasFilters = computed(() =>
+    Object.values(this.state().filters).some((value) =>
+      Array.isArray(value) ? value.length > 0 : !!value,
+    ),
+  );
   protected readonly stages = STAGES;
   protected readonly state = signal<ViewState>(DEFAULT_STATE);
   protected readonly sheetTarget = signal<SheetTarget | null>(null);
@@ -308,7 +314,17 @@ export class JobsPage {
   // Jobs
 
   protected open(id: string): void {
-    void this.router.navigate([], { queryParams: { job: id }, queryParamsHandling: 'merge' });
+    void this.router.navigate([], {
+      queryParams: { job: id, tab: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected changeTab(tab: JobTab): void {
+    void this.router.navigate([], {
+      queryParams: { tab: tab === 'details' ? null : tab },
+      queryParamsHandling: 'merge',
+    });
   }
 
   protected newJob(statusId?: string): void {
@@ -320,7 +336,10 @@ export class JobsPage {
   protected sheetVisible(v: boolean): void {
     this.sheetOpen.set(v);
     if (!v)
-      void this.router.navigate([], { queryParams: { job: null }, queryParamsHandling: 'merge' });
+      void this.router.navigate([], {
+        queryParams: { job: null, tab: null },
+        queryParamsHandling: 'merge',
+      });
   }
 
   protected async move(m: BoardMove): Promise<void> {

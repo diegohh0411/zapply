@@ -8,7 +8,7 @@ import {
   signal,
   DestroyRef,
 } from '@angular/core';
-import { DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
+import { DecimalPipe, DatePipe } from '@angular/common';
 import { ZardButtonComponent } from '@/shared/components/button';
 import { MatchStore } from './match.store';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -16,7 +16,7 @@ import { lucideChevronDown, lucideSearch, lucideRefreshCw } from '@ng-icons/luci
 import { relevanceLabel } from './match-presentation';
 @Component({
   selector: 'app-match-tab',
-  imports: [DecimalPipe, DatePipe, SlicePipe, ZardButtonComponent, NgIcon],
+  imports: [DecimalPipe, DatePipe, ZardButtonComponent, NgIcon],
   viewProviders: [
     provideIcons({
       lucideChevronDown,

@@ -74,6 +74,7 @@ function load(file, core) {
     exports: module.exports,
     require: requireStub,
     console,
+    Error,
     Map,
     Set,
     Promise,
@@ -204,19 +205,100 @@ test('412 recovery releases Save and preserves edits with the new ETag', async (
   assert.equal(sheet.etag, '"2"');
 });
 
-test('Match activation resets for a newly opened job while quiet refreshes preserve it', async (t) => {
+test('workspace tabs reset for new jobs and accounts while quiet refreshes preserve visited panels', async (t) => {
   const f = await fixture(t);
   const sheet = f.create('jobs/job-sheet.ts', 'JobSheet');
   f.flush();
   await sheet.load({ id: 'first' });
-  assert.equal(sheet.matchActive(), false);
-  sheet.matchActive.set(true);
+  assert.equal(sheet.activeTab(), 'details');
+  sheet.selectTab('match');
   await sheet.load({ id: 'first' }, true);
-  assert.equal(sheet.matchActive(), true);
+  assert.equal(sheet.activeTab(), 'match');
   await sheet.load({ id: 'second' });
-  assert.equal(sheet.matchActive(), false);
-  sheet.matchActive.set(true);
+  assert.equal(sheet.activeTab(), 'details');
+  sheet.selectTab('match');
   f.auth.identity.set('bob');
   f.flush();
-  assert.equal(sheet.matchActive(), false);
+  assert.equal(sheet.activeTab(), 'details');
+});
+
+test('tab links restore the requested panel and history changes retain local drafts', async (t) => {
+  const f = await fixture(t);
+  const sheet = f.create('jobs/job-sheet.ts', 'JobSheet');
+  sheet.tab = f.core.signal('cv');
+  f.flush();
+  await sheet.load({ id: 'job' });
+  f.flush();
+  assert.equal(sheet.activeTab(), 'cv');
+  assert.equal(sheet.visitedTabs().has('cv'), true);
+  sheet.form.notes = 'unsaved details';
+  sheet.dirty.set(true);
+  sheet.note = 'unsaved follow-up';
+  sheet.tab.set('activity');
+  f.flush();
+  assert.equal(sheet.activeTab(), 'activity');
+  assert.equal(sheet.visitedTabs().has('cv'), true);
+  assert.equal(sheet.form.notes, 'unsaved details');
+  assert.equal(sheet.note, 'unsaved follow-up');
+  sheet.tab.set('unknown');
+  f.flush();
+  assert.equal(sheet.activeTab(), 'details');
+  await sheet.load({ new: true });
+  sheet.selectTab('cv');
+  assert.equal(sheet.activeTab(), 'details');
+});
+
+test('keyboard tab navigation wraps, moves focus and leaves ordinary keys alone', async (t) => {
+  const f = await fixture(t);
+  const sheet = f.create('jobs/job-sheet.ts', 'JobSheet');
+  f.flush();
+  const focused = [];
+  const emitted = [];
+  sheet.tabChange.subscribe((tab) => emitted.push(tab));
+  const event = (key) => ({
+    key,
+    preventDefault() {
+      this.prevented = true;
+    },
+    currentTarget: {
+      parentElement: {
+        querySelectorAll: () => sheet.tabs.map((tab) => ({ focus: () => focused.push(tab.id) })),
+      },
+    },
+  });
+  const left = event('ArrowLeft');
+  sheet.tabKeydown(left, 'details');
+  assert.equal(left.prevented, true);
+  assert.equal(sheet.activeTab(), 'activity');
+  sheet.tabKeydown(event('ArrowRight'), 'activity');
+  assert.equal(sheet.activeTab(), 'details');
+  sheet.tabKeydown(event('End'), 'details');
+  sheet.tabKeydown(event('Home'), 'activity');
+  assert.deepEqual(focused, ['activity', 'details', 'activity', 'details']);
+  assert.deepEqual(emitted, focused);
+  const enter = event('Enter');
+  sheet.tabKeydown(enter, 'details');
+  assert.equal(enter.prevented, undefined);
+});
+
+test('a timeline error keeps the job open and can be retried', async (t) => {
+  let fail = true;
+  const f = await fixture(t, {
+    activities: async () => {
+      if (fail) throw new Error('Timeline unavailable');
+      return [{ id: 'restored-note' }];
+    },
+  });
+  const sheet = f.create('jobs/job-sheet.ts', 'JobSheet');
+  f.flush();
+  sheet.visible.set(true);
+  await sheet.load({ id: 'job' });
+  assert.equal(sheet.visible(), true);
+  assert.equal(sheet.job().id, 'job');
+  assert.equal(sheet.activityError(), 'Timeline unavailable');
+  assert.equal(sheet.activityLoading(), false);
+  fail = false;
+  await sheet.loadActivities('job');
+  assert.equal(sheet.activityError(), '');
+  assert.equal(sheet.activities()[0].id, 'restored-note');
 });
