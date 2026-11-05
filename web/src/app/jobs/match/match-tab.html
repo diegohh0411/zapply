@@ -1,43 +1,78 @@
-<section class="space-y-5 py-4" aria-label="Job match">
+<section class="space-y-4 py-4" aria-label="Job match">
   <header class="flex items-start justify-between gap-3">
     <div>
       <h2 class="font-semibold">Your match</h2>
-      <p class="mt-1 text-xs text-muted-foreground">How this posting compares with the experience in your library.</p>
-      @if (run() && !active()) {
-        <p class="mt-1 text-xs text-muted-foreground">Re-running resets your match corrections and manual CV selections.</p>
-      }
+      <p class="mt-1 text-xs text-muted-foreground">Your library’s fit for this posting.</p>
     </div>
     @if (active()) {
-      <button z-button zType="outline" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">Cancel match</button>
+      <button z-button zType="outline" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">
+        Cancel match
+      </button>
     } @else if (run()) {
-      <button z-button zType="ghost" zSize="sm" class="shrink-0" [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')"><ng-icon name="lucideRefreshCw" /> Re-run</button>
+      <button
+        z-button
+        zType="ghost"
+        zSize="sm"
+        class="shrink-0"
+        [zDisabled]="busy()"
+        [zLoading]="busy()"
+        (click)="action('start')"
+      >
+        <ng-icon name="lucideRefreshCw" /> Re-run
+      </button>
     }
   </header>
 
   @if (error() || store.errors().get(jobId())) {
-    <p role="alert" class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{{ error() || store.errors().get(jobId()) }}</p>
+    <p
+      role="alert"
+      class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+    >
+      {{ error() || store.errors().get(jobId()) }}
+    </p>
   }
 
   @if (run(); as r) {
     @if (r.stale && (!result() || wholePosting())) {
-      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">These results need updating. Re-run to compare the current posting and library.</p>
+      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        These results need updating. Re-run to compare the current posting and library.
+      </p>
     }
     @if (active() || !result()) {
       <div class="space-y-3 rounded-xl border bg-muted/30 p-5" aria-live="polite">
         <h3 class="font-medium">{{ statusLabel() }}</h3>
         <p class="text-sm text-muted-foreground">
           @switch (r.status) {
-            @case ('pending') { Your match will start when processing is available. }
-            @case ('running') { Ranking your experience and highlights against the full posting. }
-            @case ('blocked') { Processing is waiting for configuration or available allowance. }
-            @case ('needs_review') { This match needs a review before it can continue. }
-            @default { Re-run the match to try again. }
+            @case ('pending') {
+              Your match will start when processing is available.
+            }
+            @case ('running') {
+              Ranking your experience and highlights against the full posting.
+            }
+            @case ('blocked') {
+              Processing is waiting for configuration or available allowance.
+            }
+            @case ('needs_review') {
+              This match needs a review before it can continue.
+            }
+            @default {
+              Re-run the match to try again.
+            }
           }
         </p>
         @if (active()) {
-          <progress class="h-1.5 w-full accent-brand" [value]="r.answered + r.unanswered" [max]="r.total || 1" aria-label="Match progress"></progress>
+          <progress
+            class="h-1.5 w-full accent-brand"
+            [value]="r.answered + r.unanswered"
+            [max]="r.total || 1"
+            aria-label="Match progress"
+          ></progress>
         }
-        @if (r.next_eligible_at) { <p class="text-xs text-muted-foreground">Next attempt {{ r.next_eligible_at | date:'medium' }}</p> }
+        @if (r.next_eligible_at) {
+          <p class="text-xs text-muted-foreground">
+            Next attempt {{ r.next_eligible_at | date: 'medium' }}
+          </p>
+        }
       </div>
     }
 
@@ -45,24 +80,52 @@
       @if (!wholePosting()) {
         <div class="rounded-xl border bg-muted/30 p-5 text-sm">
           <h3 class="font-medium">Update this match</h3>
-          <p class="mt-2 text-muted-foreground">This result used the earlier requirement analysis. Re-run to rank your experience against the full posting.</p>
+          <p class="mt-2 text-muted-foreground">
+            This result used the earlier requirement analysis. Re-run to rank your experience
+            against the full posting.
+          </p>
         </div>
       } @else {
         @if (r.status === 'partial') {
-          <p class="rounded-lg border p-4 text-sm">Some comparisons could not finish. These rankings are incomplete; re-run to try again.</p>
+          <p class="rounded-lg border p-4 text-sm">
+            Some comparisons could not finish. These rankings are incomplete; re-run to try again.
+          </p>
         }
         @if (result.skills.length) {
           <section class="space-y-3" aria-label="Ranked skills">
             <h3 class="text-sm font-semibold">Skills for this posting</h3>
-            <div class="flex flex-wrap gap-2">@for (skill of result.skills | slice:0:8; track skill.skill_id) { <span class="rounded-full bg-muted px-2.5 py-1 text-xs">{{ skill.name || 'Skill' }}</span> }</div>
+            <div class="flex flex-wrap gap-2">
+              @for (skill of result.skills | slice: 0 : 8; track skill.skill_id) {
+                <span class="rounded-md bg-brand/10 px-2 py-1 text-xs text-brand">{{
+                  skill.name || 'Skill'
+                }}</span>
+              }
+            </div>
           </section>
         }
         @if (result.suggestions.length) {
           <details class="group rounded-xl border">
-            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium">Also relevant <ng-icon name="lucideChevronDown" class="shrink-0 transition-transform group-open:rotate-180" /></summary>
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium"
+            >
+              Also relevant
+              <ng-icon
+                name="lucideChevronDown"
+                class="shrink-0 transition-transform group-open:rotate-180"
+              />
+            </summary>
             <div class="space-y-3 border-t p-4">
-              <p class="text-xs text-muted-foreground">These items are excluded from automatic CVs by your library settings.</p>
-              @for (item of result.suggestions; track item.evidence_id) { <p class="text-sm">{{ item.title || 'Saved experience' }} <span class="text-xs text-muted-foreground">· {{ relevanceLabel(item.relevance) }}</span></p> }
+              <p class="text-xs text-muted-foreground">
+                These items are excluded from automatic CVs by your library settings.
+              </p>
+              @for (item of result.suggestions; track item.evidence_id) {
+                <p class="text-sm">
+                  {{ item.title || 'Saved experience' }}
+                  <span class="text-xs text-muted-foreground"
+                    >· {{ relevanceLabel(item.relevance) }}</span
+                  >
+                </p>
+              }
             </div>
           </details>
         }
@@ -70,19 +133,43 @@
     }
 
     <details class="group text-xs text-muted-foreground">
-      <summary class="flex w-fit cursor-pointer list-none items-center gap-2 py-2">Match details <ng-icon name="lucideChevronDown" class="transition-transform group-open:rotate-180" /></summary>
+      <summary class="flex w-fit cursor-pointer list-none items-center gap-2 py-2">
+        Match details
+        <ng-icon name="lucideChevronDown" class="transition-transform group-open:rotate-180" />
+      </summary>
+      <p class="mt-2 leading-relaxed">
+        Re-running resets match corrections and manual CV selections.
+      </p>
       <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg border p-3">
-        <dt>Status</dt><dd>{{ statusLabel() }}</dd>
-        <dt>Processing stage</dt><dd>{{ r.stage.replaceAll('_', ' ') }}</dd>
-        @if (r.blocked_reason) { <dt>Waiting on</dt><dd>{{ r.blocked_reason.replaceAll('_', ' ') }}</dd> }
-        <dt>Comparisons</dt><dd>{{ r.answered }} of {{ r.total }} answered · {{ r.cached }} reused · {{ r.unanswered }} unanswered</dd>
-        <dt>Cost</dt><dd>{{ r.cost_usd ? ('$' + (r.cost_usd | number:'1.2-4')) : '$0.00' }}</dd>
-        <dt>Model</dt><dd class="break-all">{{ r.model || 'Not configured' }}</dd>
-        @if (r.finished_at) { <dt>Updated</dt><dd>{{ r.finished_at | date:'medium' }}</dd> }
+        <dt>Status</dt>
+        <dd>{{ statusLabel() }}</dd>
+        <dt>Processing stage</dt>
+        <dd>{{ r.stage.replaceAll('_', ' ') }}</dd>
+        @if (r.blocked_reason) {
+          <dt>Waiting on</dt>
+          <dd>{{ r.blocked_reason.replaceAll('_', ' ') }}</dd>
+        }
+        <dt>Comparisons</dt>
+        <dd>
+          {{ r.answered }} of {{ r.total }} answered · {{ r.cached }} reused ·
+          {{ r.unanswered }} unanswered
+        </dd>
+        <dt>Cost</dt>
+        <dd>{{ r.cost_usd ? '$' + (r.cost_usd | number: '1.2-4') : '$0.00' }}</dd>
+        <dt>Model</dt>
+        <dd class="break-all">{{ r.model || 'Not configured' }}</dd>
+        @if (r.finished_at) {
+          <dt>Updated</dt>
+          <dd>{{ r.finished_at | date: 'medium' }}</dd>
+        }
         @if (result(); as result) {
           @if (wholePosting()) {
-          @if (result.seniority) { <dt>Role level</dt><dd>{{ result.seniority.replaceAll('_', ' ') }}</dd> }
-          <dt>Relevant experience</dt><dd>{{ result.relevant_years | number:'1.1-1' }} years in your library</dd>
+            @if (result.seniority) {
+              <dt>Role level</dt>
+              <dd>{{ result.seniority.replaceAll('_', ' ') }}</dd>
+            }
+            <dt>Relevant experience</dt>
+            <dd>{{ result.relevant_years | number: '1.1-1' }} years in your library</dd>
           }
         }
       </dl>
@@ -91,11 +178,21 @@
     <div class="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
       <ng-icon name="lucideSearch" class="mb-4 size-7 text-muted-foreground" />
       <h3 class="text-base font-medium">See where your experience fits</h3>
-      <p class="mb-5 mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">Find the experience, highlights, and skills most relevant to this posting.</p>
-      <button z-button [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')">Check my match</button>
+      <p class="mb-5 mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
+        Find the experience, highlights, and skills most relevant to this posting.
+      </p>
+      <button z-button [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')">
+        Check my match
+      </button>
     </div>
   }
   @if (!result() && estimate(); as e) {
-    <p class="text-xs text-muted-foreground">{{ e.available ? 'Estimated cost: $' + (e.cost_usd | number:'1.2-4') : 'Cost estimate unavailable. Processing may wait for available allowance.' }}</p>
+    <p class="text-xs text-muted-foreground">
+      {{
+        e.available
+          ? 'Estimated cost: $' + (e.cost_usd | number: '1.2-4')
+          : 'Cost estimate unavailable. Processing may wait for available allowance.'
+      }}
+    </p>
   }
 </section>

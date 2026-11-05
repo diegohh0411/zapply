@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/membership"
@@ -406,6 +407,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	var result modelapi.Result
+	summaryReason := ""
 	if decision != nil {
 		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
 	} else if chat != nil {
@@ -421,6 +423,15 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		})
 		stop()
 		if err != nil {
+			switch {
+			case errors.Is(err, summary.ErrCharacterLimit):
+				summaryReason = "summary_character_limit"
+			case errors.Is(err, summary.ErrEmptyOutput):
+				summaryReason = "summary_empty_output"
+			}
+			if r.Log != nil {
+				r.Log.Warn("summary generation failed", "operation_id", args.OperationID, "job_id", chat.JobID, "model", chat.Model, "reason", summaryReason, "output_characters", utf8.RuneCountInString(result.Text), "max_characters", chat.characterCap())
+			}
 			result.Text = ""
 		}
 	} else {
@@ -435,7 +446,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if *result.Amount > quote.Reserved && r.Log != nil {
 			r.Log.Error("provider charge exceeded reservation", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "reserved_usd", modelapi.USD(quote.Reserved), "actual_usd", modelapi.USD(*result.Amount))
 		}
-		return r.settleCharged(ctx, args, id, result)
+		return r.settleCharged(ctx, args, id, result, summaryReason)
 	}
 	var pe *modelapi.ProviderError
 	if errors.As(err, &pe) && pe.Uncharged {
@@ -502,13 +513,13 @@ func stripNUL(s string) string { return strings.ReplaceAll(s, "\x00", "") }
 // known cost into a manual resolution, so transient database failures are
 // retried; if the charge still cannot be saved, the generation ID is kept so the
 // reconciliation lookup can recover the cost.
-func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result modelapi.Result) error {
+func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, result modelapi.Result, reason string) error {
 	text := stripNUL(result.Text)
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer stop()
 	var err error
 	for wait := 250 * time.Millisecond; ; wait *= 2 {
-		if err = r.settle(cleanup, args, id, result, text, "provider_response", false, ""); err == nil {
+		if err = r.settle(cleanup, args, id, result, text, "provider_response", false, reason); err == nil {
 			return nil
 		}
 		var pe *pgconn.PgError

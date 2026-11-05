@@ -58,6 +58,7 @@ interface Row {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',
+  styles: [`.summary-failed { border-inline-start: 3px solid #b7791f; background: light-dark(#fff8e8, #332713); color: light-dark(#805517, #f3cc82); }`],
 })
 export class CvTab {
   readonly jobId = input.required<string>();
@@ -83,7 +84,10 @@ export class CvTab {
     const p = this.preview();
     switch (p?.summary_status) {
       case 'completed': return 'Summary updated from the selected evidence.';
-      case 'failed': return 'We couldn’t generate a summary. Your current text is preserved. Try Regenerate.';
+      case 'failed':
+        if (p.summary_reason === 'summary_character_limit') return 'The generated summary exceeded the configured length. Your text is preserved. Try Regenerate.';
+        if (p.summary_reason === 'summary_empty_output') return 'The model returned no summary text. Your text is preserved. Try Regenerate.';
+        return 'We couldn’t generate a summary. Your current text is preserved. Try Regenerate.';
       case 'blocked': return p.summary_reason === 'usage_limit' ? 'Summary generation is paused because your USD allowance is exhausted.' : 'Summary generation is waiting. It will retry automatically when available.';
       case 'needs_review': return 'Summary generation needs an administrator’s review. Your current text is preserved.';
       case 'not_configured': return 'An administrator needs to configure a summary model before generation is available.';
