@@ -1,0 +1,41 @@
+.capture-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.capture-section summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.9rem 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  list-style: none;
+}
+
+.capture-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.capture-section summary::before {
+  content: '›';
+  display: inline-block;
+  color: var(--muted-foreground);
+}
+
+.capture-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.capture-section summary span {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.capture-section summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}

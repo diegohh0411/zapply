@@ -1,10 +1,266 @@
-@if (visible()) {
+<z-dialog
+  #captureDialog="zDialog"
+  [zVisible]="captureOpen()"
+  (zVisibleChange)="captureVisibility($event, captureDialog)"
+  [zClosable]="false"
+  [zMaskClosable]="false"
+  zWidth="min(680px, calc(100vw - 1rem))"
+  class="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[680px]"
+>
+  <z-dialog-header class="flex-row items-center justify-between border-b px-5 py-3">
+    <z-dialog-title class="text-sm font-medium">New job</z-dialog-title>
+    <button
+      z-button
+      zType="ghost"
+      zSize="icon-sm"
+      type="button"
+      aria-label="Close new job"
+      [zDisabled]="saving()"
+      (click)="close()"
+    >
+      <ng-icon name="lucideX" />
+    </button>
+  </z-dialog-header>
+  <div class="min-h-0 overflow-y-auto px-5 py-6 sm:px-8">
+    <z-dialog-description class="mb-5 block"
+      >Start with a title. Everything else can wait.</z-dialog-description
+    >
+    <form
+      ngNativeValidate
+      id="capture-form"
+      class="flex flex-col gap-5"
+      (ngSubmit)="save()"
+      (input)="touch()"
+      (keydown)="captureKeydown($event)"
+    >
+      <label class="flex flex-col gap-1">
+        <span class="sr-only">Job title (required)</span>
+        <input
+          cdkFocusInitial
+          class="w-full rounded-sm bg-transparent py-1 text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring sm:text-3xl"
+          name="title"
+          [(ngModel)]="form.title"
+          required
+          maxlength="300"
+          placeholder="Job title"
+          [attr.aria-invalid]="!!errors()['title']"
+          aria-describedby="capture-title-error"
+        />
+        @if (errors()['title']; as e) {
+          <small id="capture-title-error" class="err" role="alert">{{ e }}</small>
+        }
+      </label>
+      <div class="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center">
+        <label for="capture-company" class="text-sm text-muted-foreground">Company</label>
+        <div>
+          <input
+            z-input
+            id="capture-company"
+            name="company"
+            [(ngModel)]="form.company"
+            placeholder="Add a company"
+          />
+          @if (errors()['company']; as e) {
+            <small class="err" role="alert">{{ e }}</small>
+          }
+        </div>
+        <label for="capture-url" class="text-sm text-muted-foreground">Posting link</label>
+        <div>
+          <input
+            z-input
+            id="capture-url"
+            name="url"
+            type="url"
+            [(ngModel)]="form.url"
+            placeholder="https://…"
+            [attr.aria-invalid]="!!errors()['url']"
+            aria-describedby="capture-url-error"
+          />
+          @if (errors()['url']; as e) {
+            <small id="capture-url-error" class="err" role="alert">{{ e }}</small>
+          }
+        </div>
+        <span class="text-sm text-muted-foreground">Status</span>
+        <div class="py-1">
+          <app-status-select
+            [statuses]="store.statuses()"
+            [value]="form.status_id"
+            (selectionChange)="changeStatus($event)"
+          />
+        </div>
+      </div>
+      <div class="border-t">
+        <details class="capture-section" [open]="!!errors()['description']">
+          <summary>Job description <span>For matching your experience</span></summary>
+          <label class="field pb-4">
+            <span class="sr-only">Job description</span>
+            <textarea
+              z-textarea
+              name="description"
+              rows="6"
+              [(ngModel)]="form.description"
+              placeholder="Paste the job posting here"
+            ></textarea>
+            @if (errors()['description']; as e) {
+              <small class="err" role="alert">{{ e }}</small>
+            }
+          </label>
+        </details>
+        <details class="capture-section" [open]="hasPropertyErrors()">
+          <summary>More properties <span>Location, salary, application details</span></summary>
+          <div class="grid grid-cols-1 gap-4 pb-5 sm:grid-cols-6">
+            <label class="field sm:col-span-6"
+              ><span>Location</span
+              ><input
+                z-input
+                name="location"
+                [(ngModel)]="form.location"
+                placeholder="City or region"
+            /></label>
+            <div class="field sm:col-span-3">
+              <span>Work mode</span>
+              <z-select
+                name="work_mode"
+                [(ngModel)]="form.work_mode"
+                (zSelectionChange)="touch()"
+                zPlaceholder="—"
+              >
+                <z-select-item zValue="">—</z-select-item>
+                @for (o of workModes; track o.value) {
+                  <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
+                }
+              </z-select>
+            </div>
+            <div class="field sm:col-span-3">
+              <span>Employment</span>
+              <z-select
+                name="employment_type"
+                [(ngModel)]="form.employment_type"
+                (zSelectionChange)="touch()"
+                zPlaceholder="—"
+              >
+                <z-select-item zValue="">—</z-select-item>
+                @for (o of employmentTypes; track o.value) {
+                  <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
+                }
+              </z-select>
+            </div>
+
+            <fieldset class="grid grid-cols-2 gap-3 sm:col-span-6 sm:grid-cols-4">
+              <legend class="mb-1.5 text-sm font-medium">Salary</legend>
+              <label class="field">
+                <span class="sr-only">Minimum</span>
+                <input
+                  z-input
+                  name="salary_min"
+                  type="number"
+                  min="0"
+                  [(ngModel)]="form.salary_min"
+                  placeholder="Min"
+                />
+              </label>
+              <label class="field">
+                <span class="sr-only">Maximum</span>
+                <input
+                  z-input
+                  name="salary_max"
+                  type="number"
+                  min="0"
+                  [(ngModel)]="form.salary_max"
+                  placeholder="Max"
+                />
+              </label>
+              <label class="field">
+                <span class="sr-only">Currency</span>
+                <input
+                  z-input
+                  name="salary_currency"
+                  maxlength="3"
+                  class="uppercase"
+                  [(ngModel)]="form.salary_currency"
+                  placeholder="USD"
+                />
+              </label>
+              <div class="field">
+                <span class="sr-only">Period</span>
+                <z-select
+                  name="salary_period"
+                  [(ngModel)]="form.salary_period"
+                  (zSelectionChange)="touch()"
+                  zPlaceholder="Period"
+                >
+                  <z-select-item zValue="">—</z-select-item>
+                  @for (o of salaryPeriods; track o.value) {
+                    <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
+                  }
+                </z-select>
+              </div>
+              @for (f of ['salary_min', 'salary_max', 'salary_currency']; track f) {
+                @if (errors()[f]; as e) {
+                  <small class="err col-span-full">{{ f.replace('salary_', '') }}: {{ e }}</small>
+                }
+              }
+            </fieldset>
+
+            <label class="field sm:col-span-3">
+              <span>Source</span>
+              <input
+                z-input
+                name="source"
+                [(ngModel)]="form.source"
+                placeholder="LinkedIn, referral…"
+              />
+            </label>
+            <label class="field sm:col-span-3">
+              <span>Applied on</span>
+              <input z-input name="applied_on" type="date" [(ngModel)]="form.applied_on" />
+              <small class="text-xs text-muted-foreground"
+                >Set automatically when the job first moves to an active stage.</small
+              >
+            </label>
+          </div>
+        </details>
+        <details class="capture-section">
+          <summary>Notes <span>Contacts, reminders, anything useful</span></summary>
+          <label class="field pb-4"
+            ><span class="sr-only">Notes</span
+            ><textarea
+              z-textarea
+              name="notes"
+              rows="3"
+              [(ngModel)]="form.notes"
+              placeholder="What would you like to remember?"
+            ></textarea>
+          </label>
+        </details>
+      </div>
+      @if (propertyErrors().length) {
+        <ul class="err" role="alert">
+          @for (error of propertyErrors(); track error[0]) {
+            <li>{{ error[0].replaceAll('_', ' ') }}: {{ error[1] }}</li>
+          }
+        </ul>
+      }
+    </form>
+  </div>
+  <div class="flex items-center justify-between gap-3 border-t bg-muted/30 px-5 py-4 sm:px-8">
+    <span class="text-xs text-muted-foreground">You can edit all details later.</span>
+    <button
+      z-button
+      type="submit"
+      form="capture-form"
+      [zLoading]="saving()"
+      [zDisabled]="saving() || !form.title.trim()"
+    >
+      Save job
+    </button>
+  </div>
+</z-dialog>
+
+@if (visible() && !isNew()) {
   <section class="flex min-h-full flex-col" aria-label="Job workspace">
     <header class="flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4">
-      @if (isNew()) {
-        <h1 class="text-lg font-semibold">New job</h1>
-        <p class="text-sm text-muted-foreground">Save a posting. Only the title is required.</p>
-      } @else if (job(); as j) {
+      @if (job(); as j) {
         <div class="min-w-0 flex-1 basis-48">
           <h1 class="text-xl font-semibold leading-snug tracking-tight">{{ j.title }}</h1>
           <p class="text-sm text-muted-foreground">
@@ -71,7 +327,7 @@
       } @else {
         <z-tab-group (zTabChange)="matchActive.set($event.label === 'Match')">
           <z-tab label="Details">
-            <ng-container *ngTemplateOutlet="details" />
+            <ng-container *ngTemplateOutlet="editDetails" />
           </z-tab>
           @if (!isNew()) {
             <z-tab label="Match">
@@ -96,13 +352,13 @@
     </div>
 
     <footer class="flex justify-end gap-2 border-t p-4">
-      <button z-button zType="outline" type="button" (click)="visible.set(false)">Close</button>
+      <button z-button zType="outline" type="button" (click)="close()">Close</button>
       <button
         z-button
         type="submit"
         form="job-form"
         [zLoading]="saving()"
-        [zDisabled]="!isNew() && !dirty()"
+        [zDisabled]="saving() || !dirty()"
       >
         {{ isNew() ? 'Save job' : 'Save changes' }}
       </button>
@@ -110,7 +366,7 @@
   </section>
 }
 
-<ng-template #details>
+<ng-template #editDetails>
   <form
     id="job-form"
     class="grid max-w-4xl grid-cols-1 gap-4 pt-3 sm:grid-cols-6"

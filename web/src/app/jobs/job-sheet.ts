@@ -24,9 +24,11 @@ import {
   lucidePencil,
   lucidePlus,
   lucideTrash2,
+  lucideX,
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
+import { ZardDialogComponent, ZardDialogImports } from '@/shared/components/dialog';
 import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSelectImports } from '@/shared/components/select';
@@ -102,6 +104,7 @@ const emptyForm = (statusId = ''): Form => ({
     ...ZardSelectImports,
     ...ZardTabsImports,
     ...ZardDropdownImports,
+    ...ZardDialogImports,
   ],
   providers: [
     provideIcons({
@@ -114,10 +117,12 @@ const emptyForm = (statusId = ''): Form => ({
       lucideArrowRight,
       lucidePlus,
       lucidePencil,
+      lucideX,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './job-sheet.html',
+  styleUrl: './job-sheet.css',
 })
 export class JobSheet {
   private readonly auth = inject(AuthService);
@@ -136,6 +141,8 @@ export class JobSheet {
   protected form: Form = emptyForm();
   protected readonly job = signal<Job | null>(null);
   protected readonly isNew = signal(false);
+  protected readonly captureOpen = signal(false);
+  private closing = false;
   protected readonly loading = signal(false);
   protected readonly matchActive = signal(false);
   protected readonly saving = signal(false);
@@ -150,6 +157,9 @@ export class JobSheet {
   private activitiesRequest = 0;
 
   constructor() {
+    effect(() => {
+      this.captureOpen.set(this.visible() && this.isNew());
+    });
     let identity = this.auth.identity();
     effect(() => {
       const next = this.auth.identity();
@@ -207,7 +217,12 @@ export class JobSheet {
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
-      this.form = emptyForm(t.statusId ?? this.store.statuses()[0]?.id ?? '');
+      this.form = emptyForm(
+        t.statusId ??
+          this.store.statuses().find((s) => s.stage === 'saved')?.id ??
+          this.store.statuses()[0]?.id ??
+          '',
+      );
       return;
     }
     this.isNew.set(false);
@@ -256,7 +271,58 @@ export class JobSheet {
     this.dirty.set(true);
   }
 
+  protected async close(): Promise<void> {
+    if (this.saving() || this.closing) return;
+    this.closing = true;
+    const generation = this.generation;
+    try {
+      if (
+        this.dirty() &&
+        !(await this.confirm.ask({
+          title: this.isNew() ? 'Discard this job draft?' : 'Discard unsaved changes?',
+          description: 'Your unsaved changes will be lost.',
+          okText: 'Discard',
+        }))
+      )
+        return;
+      if (generation === this.generation) this.visible.set(false);
+    } finally {
+      this.closing = false;
+    }
+  }
+
+  protected async captureVisibility(open: boolean, dialog: ZardDialogComponent): Promise<void> {
+    if (open) return;
+    await this.close();
+    // Escape uses the dialog's internal model; restore it if closing was cancelled.
+    dialog.zVisible.set(this.visible() && this.isNew());
+  }
+
+  protected captureKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      (event.target as HTMLElement).closest('form')?.requestSubmit();
+    }
+  }
+
+  protected propertyErrors(): [string, string][] {
+    return Object.entries(this.errors()).filter(
+      ([key]) => !['title', 'company', 'url', 'description'].includes(key),
+    );
+  }
+
+  protected hasPropertyErrors(): boolean {
+    return Object.keys(this.errors()).some(
+      (key) => !['title', 'company', 'url', 'description', 'form'].includes(key),
+    );
+  }
+
   protected async save(): Promise<void> {
+    if (this.saving()) return;
+    if (!this.form.title.trim()) {
+      this.errors.set({ title: 'Enter a job title.' });
+      return;
+    }
     const generation = this.generation;
     this.saving.set(true);
     this.errors.set({});
@@ -288,6 +354,7 @@ export class JobSheet {
   protected async changeStatus(statusId: string): Promise<void> {
     const generation = this.generation;
     if (this.isNew()) {
+      this.touch();
       this.form.status_id = statusId;
       return;
     }
@@ -448,7 +515,7 @@ function toInput(f: Form): JobInput {
     v === null || (v as unknown) === '' || Number.isNaN(+v) ? undefined : Math.round(+v);
   return {
     status_id: f.status_id || undefined,
-    title: f.title,
+    title: f.title.trim(),
     company: f.company,
     url: f.url,
     location: f.location,
