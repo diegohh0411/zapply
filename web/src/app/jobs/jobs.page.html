@@ -64,7 +64,7 @@
       />
       Archived
     </label>
-    @if (modified() && !activeView()) {
+    @if (hasFilters()) {
       <button z-button zType="ghost" zSize="sm" type="button" (click)="clearFilters()">
         <ng-icon name="lucideX" /> Clear
       </button>
@@ -95,6 +95,15 @@
         <ng-icon name="lucidePlus" /> New job
       </button>
     </div>
+  } @else if (!filtered().length) {
+    <div class="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center">
+      <ng-icon name="lucideSearch" class="size-8 text-muted-foreground" />
+      <h2 class="text-lg font-semibold">No jobs match this view</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Try another title or company, or clear the filters to see all your jobs.
+      </p>
+      <button z-button zType="outline" (click)="clearFilters()">Clear filters</button>
+    </div>
   } @else if (layout === 'board') {
     <app-job-board
       [statuses]="columns()"
@@ -116,6 +125,8 @@
 <app-job-sheet
   [target]="sheetTarget()"
   [visible]="sheetOpen()"
+  [tab]="tab()"
+  (tabChange)="changeTab($event)"
   (visibleChange)="sheetVisible($event)"
   (opened)="open($event)"
 />

@@ -9,9 +9,15 @@ import {
   signal,
 } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronRight, lucideExternalLink } from '@ng-icons/lucide';
+import {
+  lucideChevronRight,
+  lucideExternalLink,
+  lucideRefreshCw,
+  lucideMail,
+} from '@ng-icons/lucide';
 import { RouterLink } from '@angular/router';
 
+import { ZardButtonComponent } from '@/shared/components/button';
 import { Api, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { EventsService } from '../core/events.service';
@@ -21,82 +27,12 @@ import { MailStatusChange } from '../mail/status-change';
 /** Mail about one application: the messages classified into this job. */
 @Component({
   selector: 'app-mail-tab',
-  imports: [DatePipe, MailStatusChange, NgIcon, RouterLink],
-  providers: [provideIcons({ lucideChevronRight, lucideExternalLink })],
+  imports: [DatePipe, MailStatusChange, NgIcon, RouterLink, ZardButtonComponent],
+  providers: [
+    provideIcons({ lucideChevronRight, lucideExternalLink, lucideRefreshCw, lucideMail }),
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="space-y-3 pt-3">
-      @if (error()) {
-        <p role="alert" class="text-sm text-destructive">{{ error() }}</p>
-      }
-      <ul class="divide-y rounded-lg border">
-        @for (m of messages(); track m.id) {
-          <li class="pr-2">
-            <div class="flex items-start gap-1">
-              <button
-                type="button"
-                class="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted/50"
-                [attr.aria-expanded]="isOpen(m.id)"
-                (click)="toggle(m.id)"
-              >
-                <ng-icon
-                  name="lucideChevronRight"
-                  size="16"
-                  class="mt-0.5 shrink-0 text-muted-foreground transition-transform"
-                  [class.rotate-90]="isOpen(m.id)"
-                />
-                <span class="min-w-0 flex-1 space-y-1">
-                  <span class="flex items-center gap-2">
-                    <span class="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{{
-                      label(m.category)
-                    }}</span>
-                    <span class="truncate font-medium">{{ m.subject || '(no subject)' }}</span>
-                    <time
-                      class="ml-auto shrink-0 text-xs text-muted-foreground"
-                      [attr.datetime]="m.received_at"
-                      >{{ m.received_at | date: 'MMM d, y' }}</time
-                    >
-                  </span>
-                  @if (isOpen(m.id)) {
-                    <span class="block text-xs text-muted-foreground">
-                      {{ m.from }} · {{ m.received_at | date: 'medium' }}
-                    </span>
-                    <span class="block text-sm text-muted-foreground">{{ m.snippet }}</span>
-                  }
-                </span>
-              </button>
-              <a
-                [href]="m.gmail_url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="mt-1.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Open in Gmail"
-                title="Open in Gmail"
-              >
-                <ng-icon name="lucideExternalLink" size="16" />
-              </a>
-            </div>
-            <app-mail-status-change
-              class="block pb-2 pl-9 empty:hidden"
-              [message]="m"
-              (changed)="replace($event)"
-            />
-          </li>
-        } @empty {
-          <li class="p-4 text-center text-sm text-muted-foreground">
-            @if (loading()) {
-              Loading…
-            } @else {
-              No mail linked to this job yet.
-            }
-          </li>
-        }
-      </ul>
-      <p class="text-xs text-muted-foreground">
-        Connect Gmail on the <a routerLink="/mail" class="underline">Mail</a> page to fill this in.
-      </p>
-    </div>
-  `,
+  templateUrl: './mail-tab.html',
 })
 export class MailTab {
   readonly jobId = input.required<string>();
@@ -114,6 +50,7 @@ export class MailTab {
     effect(() => {
       this.auth.identity();
       this.messages.set([]);
+      this.open.set(new Set());
       void this.load(this.jobId());
     });
     const change = this.events.changes.subscribe((e) => {
@@ -125,6 +62,10 @@ export class MailTab {
       change.unsubscribe();
       resync.unsubscribe();
     });
+  }
+
+  protected refresh(): void {
+    void this.load(this.jobId());
   }
 
   protected replace(m: Schemas['MailMessage']): void {
