@@ -107,3 +107,24 @@ func TestRunEnforcesConfiguredCharacterCap(t *testing.T) {
 		}
 	}
 }
+
+func TestShortSummaryPromptHasNoConflictingWordTarget(t *testing.T) {
+	instruction := InstructionFor(200)
+	if strings.Contains(instruction, "50–75 words") || !strings.Contains(instruction, "about 150 characters") {
+		t.Fatal(instruction)
+	}
+}
+
+func TestAdapterDistinguishesEmptyAndOversizedOutput(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want error
+	}{{"   ", ErrEmptyOutput}, {strings.Repeat("é", 201), ErrCharacterLimit}} {
+		a := &Adapter{Model: "test/model", MaxCharacters: 200, Generate: func(context.Context, string, []Message) (string, error) { return tc.text, nil }}
+		for response, err := range a.GenerateContent(context.Background(), &model.LLMRequest{}, false) {
+			if response != nil || !errors.Is(err, tc.want) {
+				t.Fatalf("response=%v err=%v", response, err)
+			}
+		}
+	}
+}

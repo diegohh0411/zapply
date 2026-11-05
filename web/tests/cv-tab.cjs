@@ -297,3 +297,11 @@ test('failed and blocked summary runs show actionable messages without a spinner
   assert.match(f.tab.summaryMessage(), /allowance/);
   f.destroy();
 });
+
+test('summary failures distinguish length validation from empty model output', () => {
+  const f = fixture({});
+  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_character_limit' });
+  assert.match(f.tab.summaryMessage(), /exceeded the configured length/);
+  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_empty_output' });
+  assert.match(f.tab.summaryMessage(), /returned no summary text/);
+});

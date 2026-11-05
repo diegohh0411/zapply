@@ -36,6 +36,8 @@ type Client struct {
 	cached          modelapi.Quote
 	models          []DecisionModel
 	modelsAt        time.Time
+	reasoningModels map[string]reasoningOptions
+	reasoningAt     time.Time
 	// DecisionBounds is for fake HTTP tests only. Production uses ownerSelectedBound.
 	DecisionBounds map[string]BillingBound
 }
@@ -177,20 +179,34 @@ func million(s string) json.Number {
 	return json.Number(r.FloatString(12))
 }
 func (c *Client) Generate(ctx context.Context, key string, q modelapi.Quote) (modelapi.Result, error) {
-	return c.GenerateMessages(ctx, key, q, diagnosticMessages)
+	return c.generateMessages(ctx, key, q, diagnosticMessages, false)
 }
 
 // GenerateMessages uses the same bounded endpoint and cost accounting as diagnostic calls.
 // Callers must reserve allowance for the quoted request before invoking it.
 func (c *Client) GenerateMessages(ctx context.Context, key string, q modelapi.Quote, messages any) (modelapi.Result, error) {
+	return c.generateMessages(ctx, key, q, messages, true)
+}
+
+func (c *Client) generateMessages(ctx context.Context, key string, q modelapi.Quote, messages any, summary bool) (modelapi.Result, error) {
 	if time.Since(q.FetchedAt) > 15*time.Minute {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "stale_quote", Uncharged: true}
 	}
-	raw, err := c.request(ctx, "POST", "/chat/completions", key, map[string]any{
+	body := map[string]any{
 		"model": q.Model, "messages": messages, "stream": false, "max_tokens": q.MaxOutput,
 		"provider": map[string]any{"only": []string{q.Endpoint}, "allow_fallbacks": false, "require_parameters": true,
 			"max_price": map[string]any{"prompt": million(q.InputRate), "completion": million(q.OutputRate), "request": json.Number(q.RequestRate)}},
-	})
+	}
+	if summary {
+		reasoning, err := c.summaryReasoning(ctx, q.Model)
+		if err != nil {
+			return modelapi.Result{}, &modelapi.ProviderError{Code: "reasoning_config_unavailable", Uncharged: true}
+		}
+		if reasoning != nil {
+			body["reasoning"] = reasoning
+		}
+	}
+	raw, err := c.request(ctx, "POST", "/chat/completions", key, body)
 	var response struct {
 		ID      string `json:"id"`
 		Choices []struct {
