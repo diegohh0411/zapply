@@ -1,0 +1,118 @@
+<section class="mx-auto max-w-5xl space-y-6" aria-label="Job mail">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold tracking-tight">Mail for this application</h2>
+      <p class="mt-1 max-w-prose text-sm leading-relaxed text-muted-foreground">
+        Read updates and review suggested status changes from your connected mailbox.
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a
+        routerLink="/mail"
+        class="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+        >Manage mailbox</a
+      >
+      <button
+        z-button
+        zType="outline"
+        zSize="sm"
+        [zDisabled]="loading()"
+        [zLoading]="loading()"
+        (click)="refresh()"
+      >
+        <ng-icon name="lucideRefreshCw" /> Refresh
+      </button>
+    </div>
+  </header>
+  @if (error()) {
+    <p
+      role="alert"
+      class="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+    >
+      {{ error() }} Use Refresh to try again.
+    </p>
+  }
+  @if (messages().length) {
+    <p class="text-xs text-muted-foreground" role="status">
+      {{ messages().length }} {{ messages().length === 1 ? 'message' : 'messages' }} shown. Open a
+      message to read its preview.
+    </p>
+    <ul class="divide-y rounded-xl border">
+      @for (m of messages(); track m.id) {
+        <li class="p-1 sm:p-2">
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-lg p-3 text-left hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring"
+            [attr.aria-expanded]="isOpen(m.id)"
+            [attr.aria-controls]="'mail-preview-' + m.id"
+            (click)="toggle(m.id)"
+          >
+            <ng-icon
+              name="lucideChevronRight"
+              class="mt-1 shrink-0 text-muted-foreground motion-safe:transition-transform"
+              [class.rotate-90]="isOpen(m.id)"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+                ><span class="break-all text-xs text-muted-foreground">{{ m.from }}</span
+                ><time class="text-xs text-muted-foreground" [attr.datetime]="m.received_at">{{
+                  m.received_at | date: 'MMM d, y'
+                }}</time></span
+              >
+              <span class="mt-1 block text-sm font-medium leading-relaxed">{{
+                m.subject || '(no subject)'
+              }}</span>
+              @if (!isOpen(m.id)) {
+                <span class="mt-1 block truncate text-sm text-muted-foreground">{{
+                  m.snippet
+                }}</span>
+              }
+              <span class="mt-2 inline-block rounded-md bg-muted px-2 py-0.5 text-xs">{{
+                label(m.category)
+              }}</span>
+            </span>
+          </button>
+          <div
+            [id]="'mail-preview-' + m.id"
+            [hidden]="!isOpen(m.id)"
+            class="ml-9 space-y-3 px-3 pb-4 sm:ml-10"
+          >
+            <p
+              class="max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground"
+            >
+              {{ m.snippet || 'No text preview is available for this message.' }}
+            </p>
+            <a
+              [href]="m.gmail_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-md py-1 text-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >Read full message in Gmail <ng-icon name="lucideExternalLink"
+            /></a>
+          </div>
+          <app-mail-status-change
+            class="block px-3 pb-2 pl-12 empty:hidden sm:pl-13"
+            [message]="m"
+            (changed)="replace($event)"
+          />
+        </li>
+      }
+    </ul>
+  } @else if (loading()) {
+    <div class="space-y-3 rounded-xl border p-5" aria-busy="true" aria-label="Loading mail">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="h-16 rounded-lg bg-muted motion-safe:animate-pulse"></div>
+      }
+    </div>
+  } @else if (!error()) {
+    <div class="flex flex-col items-center rounded-xl border border-dashed px-6 py-14 text-center">
+      <ng-icon name="lucideMail" class="mb-4 size-8 text-muted-foreground" />
+      <h3 class="font-semibold">Keep the conversation here</h3>
+      <p class="mb-5 mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+        No messages are linked to this job yet. Connect Gmail or check your mailbox sync to bring
+        application updates into this workspace.
+      </p>
+      <a z-button zType="outline" routerLink="/mail">Open mailbox settings</a>
+    </div>
+  }
+</section>

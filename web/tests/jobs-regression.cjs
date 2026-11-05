@@ -396,3 +396,26 @@ test('capture cannot close while its save is in flight', async () => {
   pending.resolve(job());
   await saving;
 });
+
+test('job tab URLs preserve the saved view and clear when switching or closing a job', () => {
+  currentStore = { ensureLoaded: async () => {}, views: signal([]) };
+  const { JobsPage } = load('web/src/app/jobs/jobs.page.ts');
+  const page = new JobsPage();
+  const calls = [];
+  page.router = {
+    navigate: (_, options) => {
+      calls.push(options);
+      return Promise.resolve(true);
+    },
+  };
+  page.changeTab('cv');
+  page.changeTab('details');
+  page.open('another-job');
+  page.sheetVisible(false);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { queryParams: { tab: 'cv' }, queryParamsHandling: 'merge' },
+    { queryParams: { tab: null }, queryParamsHandling: 'merge' },
+    { queryParams: { job: 'another-job', tab: null }, queryParamsHandling: 'merge' },
+    { queryParams: { job: null, tab: null }, queryParamsHandling: 'merge' },
+  ]);
+});

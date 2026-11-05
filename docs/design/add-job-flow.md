@@ -25,7 +25,7 @@ The distinctive element is the job title itself. Avoid additional cards, a wizar
 3. Enter the title. Company, posting link, and status are immediately available in compact property rows.
 4. Optionally expand Job description, More properties, or Notes. More properties contains location, work mode, employment, salary, source, and applied date. All existing creation fields remain available.
 5. Choose Save job, or use Cmd/Ctrl+Enter. The title is required; an empty/whitespace title cannot be saved. Browser validation checks posting URL and numeric constraints. Repeated submission is blocked while saving.
-6. On success, open the saved job workspace with Details, Match, Mail, and Activity. The existing duplicate-posting warning can open the previously saved job. Server errors keep the draft, expose the relevant optional section, and display the error.
+6. On success, open the saved job workspace with Details, Match, CV, Mail, and Activity. The existing duplicate-posting warning can open the previously saved job. Server errors keep the draft, expose the relevant optional section, and display the error.
 7. Close or Escape on an edited draft asks whether to discard it. Cancelling preserves the input. Backdrop clicks do not dismiss capture. Focus trapping and restoration use the application's dialog component.
 
 This keeps creation to one screen. Users can save immediately or enrich a record in the same place. Salary and application dates no longer compete with the title.

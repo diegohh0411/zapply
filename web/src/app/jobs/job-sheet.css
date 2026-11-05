@@ -1,3 +1,191 @@
+:host {
+  display: block;
+}
+.job-workspace {
+  max-width: 96rem;
+  margin-inline: auto;
+  min-height: 100%;
+}
+.workspace-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem 0;
+}
+.workspace-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.workspace-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding-inline: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  scrollbar-width: thin;
+}
+.workspace-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.85rem 1rem;
+  border-bottom: 2px solid transparent;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.workspace-tabs button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.workspace-tabs button[aria-selected='true'] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+.workspace-tabs button:focus-visible,
+[role='tabpanel']:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.tab-count {
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+.workspace-content {
+  padding: 1.75rem 1.5rem 3rem;
+}
+.tab-heading {
+  margin-bottom: 1.75rem;
+}
+.tab-heading h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.tab-heading p,
+.section-heading p {
+  margin-top: 0.35rem;
+  max-width: 65ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.details-layout {
+  display: grid;
+  gap: 2rem;
+}
+.workspace-section {
+  min-width: 0;
+}
+.section-heading {
+  margin-bottom: 1rem;
+}
+.section-heading h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.details-layout aside {
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--muted) 45%, var(--background));
+}
+.workspace-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.85rem 1.5rem;
+  background: var(--background);
+  border-top: 1px solid var(--border);
+}
+.match-layout {
+  display: grid;
+  gap: 2rem;
+}
+.next-step {
+  align-self: start;
+  padding: 1.5rem;
+  border-inline-start: 2px solid var(--brand);
+  background: color-mix(in oklch, var(--brand) 4%, var(--background));
+}
+.next-step h3 {
+  margin-top: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.next-step p {
+  margin-block: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+.activity-layout {
+  display: grid;
+  align-items: start;
+  gap: 2.5rem;
+}
+.activity-composer {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+@media (min-width: 64rem) {
+  .details-layout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(19rem, 1fr);
+    gap: 3rem;
+  }
+  .activity-layout {
+    grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
+  }
+  .activity-composer {
+    position: sticky;
+    top: 5rem;
+  }
+  .match-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  }
+}
+@media (max-width: 40rem) {
+  .workspace-header {
+    padding: 1rem;
+  }
+  .workspace-topbar {
+    padding-inline: 0.5rem;
+  }
+  .workspace-tabs {
+    padding-inline: 0.5rem;
+  }
+  .workspace-tabs button {
+    gap: 0.35rem;
+    padding-inline: 0.75rem;
+  }
+  .workspace-content {
+    padding: 1.25rem 1rem 2rem;
+  }
+  .workspace-footer {
+    padding-inline: 1rem;
+  }
+}
+
 .capture-section {
   border-bottom: 1px solid var(--border);
 }
