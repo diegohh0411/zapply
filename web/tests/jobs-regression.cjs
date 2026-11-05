@@ -323,6 +323,80 @@ test('database tabs select views without opening settings and keep layout contro
   assert.equal(database.layout(), 'table');
 });
 
+test('new job capture defaults to a saved stage and preserves a board column choice', async () => {
+  const sheet = sheetStore({
+    statuses: signal([
+      { id: 'interview', stage: 'active' },
+      { id: 'bookmarked', stage: 'saved' },
+    ]),
+  });
+  await sheet.load({ new: true });
+  assert.equal(sheet.form.status_id, 'bookmarked');
+  await sheet.load({ new: true, statusId: 'interview' });
+  assert.equal(sheet.form.status_id, 'interview');
+  await sheet.changeStatus('bookmarked');
+  assert.equal(sheet.dirty(), true);
+});
+
+test('capture rejects blank titles, saves minimal input once, and opens the saved job', async () => {
+  const pending = deferred();
+  const inputs = [],
+    opened = [];
+  const sheet = sheetStore({
+    create: async (input) => {
+      inputs.push(input);
+      return pending.promise;
+    },
+  });
+  sheet.opened = { emit: (id) => opened.push(id) };
+  await sheet.load({ new: true });
+  sheet.form.title = '   ';
+  await sheet.save();
+  assert.equal(inputs.length, 0);
+  assert.equal(sheet.errors().title, 'Enter a job title.');
+  sheet.form.title = '  Platform engineer  ';
+  const saving = sheet.save();
+  await sheet.save();
+  assert.equal(inputs.length, 1);
+  assert.equal(inputs[0].title, 'Platform engineer');
+  pending.resolve(job(1, 'created'));
+  await saving;
+  assert.deepEqual(opened, ['created']);
+  assert.equal(sheet.saving(), false);
+});
+
+test('closing capture preserves a rejected draft and restores the dialog after Escape', async () => {
+  const sheet = sheetStore();
+  await sheet.load({ new: true });
+  sheet.visible.set(true);
+  sheet.form.title = 'Draft';
+  sheet.touch();
+  sheet.confirm = { ask: async () => false };
+  const dialog = { zVisible: signal(false) };
+  await sheet.captureVisibility(false, dialog);
+  assert.equal(sheet.visible(), true);
+  assert.equal(dialog.zVisible(), true);
+  assert.equal(sheet.form.title, 'Draft');
+  sheet.confirm = { ask: async () => true };
+  await sheet.close();
+  assert.equal(sheet.visible(), false);
+});
+
+test('capture cannot close while its save is in flight', async () => {
+  const pending = deferred();
+  const sheet = sheetStore({ create: () => pending.promise });
+  await sheet.load({ new: true });
+  sheet.visible.set(true);
+  sheet.form.title = 'Draft';
+  const saving = sheet.save();
+  const dialog = { zVisible: signal(false) };
+  await sheet.captureVisibility(false, dialog);
+  assert.equal(sheet.visible(), true);
+  assert.equal(dialog.zVisible(), true);
+  pending.resolve(job());
+  await saving;
+});
+
 test('job tab URLs preserve the saved view and clear when switching or closing a job', () => {
   currentStore = { ensureLoaded: async () => {}, views: signal([]) };
   const { JobsPage } = load('web/src/app/jobs/jobs.page.ts');

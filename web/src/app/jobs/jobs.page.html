@@ -1,4 +1,4 @@
-@if (!sheetOpen()) {
+@if (!sheetOpen() || job() === 'new') {
 <app-database
   [views]="store.views()"
   [activeViewId]="activeView()?.id ?? null"
