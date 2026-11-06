@@ -5751,7 +5751,10 @@ type ListTextModelEndpointsResponseObject interface {
 
 type ListTextModelEndpoints200JSONResponse []struct {
 	Name string `json:"name"`
-	Tag  string `json:"tag"`
+
+	// ServiceTier Endpoint capacity tier; default for standard endpoints.
+	ServiceTier string `json:"service_tier"`
+	Tag         string `json:"tag"`
 }
 
 func (response ListTextModelEndpoints200JSONResponse) VisitListTextModelEndpointsResponse(w http.ResponseWriter) error {

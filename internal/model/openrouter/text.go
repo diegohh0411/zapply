@@ -31,8 +31,9 @@ func (c *Client) TextModels(ctx context.Context, key string) ([]DecisionModel, e
 
 // TextEndpoint is a selectable provider route whose output and pricing can be bounded.
 type TextEndpoint struct {
-	Tag  string `json:"tag"`
-	Name string `json:"name"`
+	Tag         string `json:"tag"`
+	Name        string `json:"name"`
+	ServiceTier string `json:"service_tier"`
 }
 
 func (c *Client) TextEndpoints(ctx context.Context, model string) ([]TextEndpoint, error) {
@@ -46,13 +47,14 @@ func (c *Client) TextEndpoints(ctx context.Context, model string) ([]TextEndpoin
 	var response struct {
 		Data struct {
 			Endpoints []struct {
-				Tag       string                     `json:"tag"`
-				Name      string                     `json:"name"`
-				Provider  string                     `json:"provider_name"`
-				Context   int                        `json:"context_length"`
-				MaxOutput *int                       `json:"max_completion_tokens"`
-				Supported []string                   `json:"supported_parameters"`
-				Pricing   map[string]json.RawMessage `json:"pricing"`
+				Tag         string                     `json:"tag"`
+				ServiceTier string                     `json:"service_tier"`
+				Name        string                     `json:"name"`
+				Provider    string                     `json:"provider_name"`
+				Context     int                        `json:"context_length"`
+				MaxOutput   *int                       `json:"max_completion_tokens"`
+				Supported   []string                   `json:"supported_parameters"`
+				Pricing     map[string]json.RawMessage `json:"pricing"`
 			} `json:"endpoints"`
 		} `json:"data"`
 	}
@@ -76,7 +78,14 @@ func (c *Client) TextEndpoints(ctx context.Context, model string) ([]TextEndpoin
 		if name == "" {
 			name = e.Tag
 		}
-		out = append(out, TextEndpoint{e.Tag, name})
+		tier := e.ServiceTier
+		if tier == "" || tier == "standard" {
+			tier = "default"
+		}
+		if tier == "fast" {
+			tier = "priority"
+		}
+		out = append(out, TextEndpoint{Tag: e.Tag, Name: name, ServiceTier: tier})
 		seen[e.Tag] = true
 	}
 	return out, nil

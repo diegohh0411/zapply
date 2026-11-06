@@ -1070,8 +1070,9 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [tag, name]
+                  required: [tag, name, service_tier]
                   properties:
+                    service_tier: { type: string, description: "Endpoint capacity tier; default for standard endpoints." }
                     tag: { type: string }
                     name: { type: string }
         default: { $ref: '#/components/responses/Problem' }

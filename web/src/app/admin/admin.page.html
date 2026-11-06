@@ -24,7 +24,7 @@
       z-button
       [zType]="section() === 'system-keys' ? 'default' : 'outline'"
       routerLink="/admin/system-keys"
-      >System keys</a
+      >Models & keys</a
     >
     <a z-button [zType]="section() === 'usage' ? 'default' : 'outline'" routerLink="/admin/usage"
       >Unresolved usage</a
@@ -38,7 +38,10 @@
   @if (loading()) {
     <p role="status" class="text-sm text-muted-foreground">Loading…</p>
   }
-  @if (section() === 'system-keys') { <app-model-settings /> }
+  @if (section() === 'system-keys') {
+    <div class="space-y-1"><h2 class="text-2xl font-semibold tracking-tight">Models &amp; keys</h2><p class="max-w-2xl text-sm text-muted-foreground">Choose how AI runs, manage provider credentials, and check access.</p></div>
+    <app-model-settings />
+  }
   @switch (section()) {
     @case ('plans') {
       <section class="space-y-4 rounded-xl border p-5">
@@ -205,8 +208,8 @@
       }
     }
     @case ('system-keys') {
-      <section class="space-y-4 rounded-xl border p-5">
-        <h2 class="font-medium">Add an OpenRouter key</h2>
+      <details class="space-y-4 rounded-xl border p-5">
+        <summary class="cursor-pointer font-medium">Add an OpenRouter key</summary>
         <p class="text-sm text-muted-foreground">
           New keys are inactive until you activate them. Activating a key replaces the key used for
           new model calls.
@@ -229,9 +232,10 @@
           /></label>
           <button z-button type="submit" [zDisabled]="busy() || !keyForm.key">Save key</button>
         </form>
-      </section>
+      </details>
       <div class="overflow-x-auto rounded-lg border">
         <table class="w-full text-left text-sm">
+          <caption class="p-4 text-left font-medium">OpenRouter keys</caption>
           <thead class="bg-muted">
             <tr>
               <th class="p-3">Label</th>

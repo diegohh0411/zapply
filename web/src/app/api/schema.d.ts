@@ -3484,6 +3484,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Endpoint capacity tier; default for standard endpoints. */
+                        service_tier: string;
                         tag: string;
                         name: string;
                     }[];
