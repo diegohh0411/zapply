@@ -16,20 +16,27 @@ func TestTextEndpointsOnlyOffersBoundedRoutes(t *testing.T) {
 	unsupported["supported_parameters"] = []string{}
 	unbounded := valid("unbounded")
 	unbounded["pricing"] = map[string]string{"web_search": "1"}
+	flex := valid("provider/flex")
+	flex["service_tier"] = "flex"
+	priority := valid("provider/turbo")
+	priority["service_tier"] = "priority"
 	zero := valid("zero")
 	zero["max_completion_tokens"] = 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models/test/model/endpoints" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"endpoints": []any{valid("provider/fp8"), valid("provider/fp8"), unsupported, unbounded, zero}}})
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"endpoints": []any{valid("provider/fp8"), valid("provider/fp8"), unsupported, unbounded, zero, flex, priority}}})
 	}))
 	defer server.Close()
 	c := New("", "")
 	c.BaseURL = server.URL
 	endpoints, err := c.TextEndpoints(context.Background(), "test/model")
-	if err != nil || len(endpoints) != 1 || endpoints[0].Tag != "provider/fp8" || endpoints[0].Name != "Provider" {
+	if err != nil || len(endpoints) != 3 || endpoints[0].Tag != "provider/fp8" || endpoints[0].Name != "Provider" {
 		t.Fatalf("endpoints=%+v err=%v", endpoints, err)
+	}
+	if endpoints[0].ServiceTier != "default" || endpoints[1].ServiceTier != "flex" || endpoints[1].Tag != "provider/flex" || endpoints[2].ServiceTier != "priority" {
+		t.Fatalf("tier metadata lost: %+v", endpoints)
 	}
 	if _, err = c.TextEndpoints(context.Background(), "../invalid"); err == nil {
 		t.Fatal("accepted invalid model")

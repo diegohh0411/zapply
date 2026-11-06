@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 			if r.Header.Get("Authorization") != "" {
 				t.Error("key sent to public catalog")
 			}
-			_, _ = w.Write([]byte(catalog))
+			_, _ = w.Write([]byte(strings.Replace(catalog, `"tag":"test"`, `"tag":"test/flex","service_tier":"flex"`, 1)))
 		case "/chat/completions":
 			calls.Add(1)
 			if r.Header.Get("Authorization") != "Bearer secret" {
@@ -43,7 +44,7 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 			if json.NewDecoder(r.Body).Decode(&body) != nil {
 				t.Error("invalid request")
 			}
-			if body.MaxTokens != 128 || body.Provider.Fallbacks || !body.Provider.Require || len(body.Provider.Only) != 1 || body.Provider.Only[0] != "test" || body.Provider.Max["prompt"].String() != "0.400000000000" {
+			if body.MaxTokens != 128 || body.Provider.Fallbacks || !body.Provider.Require || len(body.Provider.Only) != 1 || body.Provider.Only[0] != "test/flex" || body.Provider.Max["prompt"].String() != "0.400000000000" {
 				t.Errorf("routing: %+v", body)
 			}
 			_, _ = w.Write([]byte(`{"id":"gen-test","choices":[{"message":{"content":"OK"}}],"usage":{"cost":0.0001,"cost_details":{"upstream_inference_cost":99}}}`))
@@ -53,7 +54,7 @@ func TestRoutingReservationAndBilledCost(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	c := New("test/model", "test")
+	c := New("test/model", "test/flex")
 	c.BaseURL = server.URL
 	c.HTTP = server.Client()
 	q, err := c.Quote(context.Background())
