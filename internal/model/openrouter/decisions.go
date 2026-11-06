@@ -160,7 +160,9 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 		Answers json.RawMessage `json:"answers"`
 		Usage   json.RawMessage `json:"usage"`
 	}
-	if json.Unmarshal(raw, &body) != nil {
+	parseErr := json.Unmarshal(raw, &body)
+	logResponse(ctx, "/systemone", raw, parseErr)
+	if parseErr != nil {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
 	result := modelapi.Result{Usage: body.Usage}
