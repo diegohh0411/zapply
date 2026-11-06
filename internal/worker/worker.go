@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/library"
+	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/model/billing"
@@ -406,6 +407,11 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		return nil
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	logger := r.Log
+	if logger == nil {
+		logger = logx.From(ctx)
+	}
+	callCtx = logx.With(callCtx, logger.With("operation_id", args.OperationID, "attempt_id", id, "model", quote.Model))
 	var result modelapi.Result
 	summaryReason := ""
 	if decision != nil {
@@ -470,6 +476,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	if result.GenerationID != "" {
 		generation = &result.GenerationID
 	}
+	logger.WarnContext(cleanup, "model request accounting uncertain", "operation_id", args.OperationID, "attempt_id", id, "model", quote.Model, "reason", code, "generation_id", result.GenerationID, "has_result", result.Text != "")
 	if e := r.uncertain(cleanup, args, id, generation, code, result.Text); e != nil {
 		return e
 	}
