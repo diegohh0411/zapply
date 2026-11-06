@@ -95,6 +95,8 @@ export interface Fit {
   /** How many trim-order items to drop. */
   k: number;
   pages: number;
+  /** Exact optional IDs omitted after backfilling. */
+  dropped?: string[];
 }
 
 /**
@@ -126,6 +128,49 @@ export async function fit(
     }
   }
   return { k: hi, pages: hiPages };
+}
+
+/**
+ * Fit a prefix quickly, then refill spare space in priority order. A large
+ * entry that cannot fit must not prevent a smaller entry or bullet fitting.
+ * IDs masked by a dropped ancestor are deferred until that ancestor returns.
+ */
+export async function fitContent(
+  content: CvContent,
+  trim: string[],
+  budget: number,
+  pages: (dropped: string[]) => Promise<number>,
+): Promise<Fit> {
+  const initial = await fit(trim.length, budget, (k) => pages(trim.slice(0, k)));
+  const dropped = new Set(trim.slice(0, initial.k));
+  if (initial.pages > budget || !initial.k) return { ...initial, dropped: [...dropped] };
+  let count = initial.pages;
+  const ancestors = new Map<string, string[]>();
+  const walk = (entry: CvEntry, parents: string[]) => {
+    ancestors.set(entry.id, parents);
+    for (const h of entry.highlights ?? []) ancestors.set(h.id, [...parents, entry.id]);
+    for (const child of entry.children ?? []) walk(child, [...parents, entry.id]);
+  };
+  content.sections.forEach((s) => s.entries.forEach((e) => walk(e, [])));
+  const remaining = trim.slice(0, initial.k).reverse();
+  // Multiple passes handle equally ranked parents that sort before children.
+  let restored = true;
+  while (restored) {
+    restored = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const id = remaining[i];
+      if ((ancestors.get(id) ?? []).some((parent) => dropped.has(parent))) continue;
+      const candidate = [...dropped].filter((x) => x !== id);
+      const result = await pages(candidate);
+      remaining.splice(i--, 1);
+      if (result <= budget) {
+        dropped.delete(id);
+        count = result;
+        restored = true;
+      }
+    }
+  }
+  return { k: dropped.size, pages: count, dropped: trim.filter((id) => dropped.has(id)) };
 }
 
 /** "<person> - <company>.pdf", as the server names it (render.Filename). */

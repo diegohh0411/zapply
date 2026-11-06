@@ -1,311 +1,310 @@
-<section class="space-y-6" aria-label="CV">
-  <header class="flex flex-wrap items-start justify-between gap-3">
+<section class="grid gap-6" aria-label="Match and CV">
+  <header class="cv-toolbar">
     <div>
-      <h2 class="text-xl font-semibold tracking-tight">CV for this job</h2>
-      <p class="mt-1 text-sm text-muted-foreground">
-        Edit your summary, choose your experience, then export.
-      </p>
+      <h2>Your match & CV</h2>
+      <p>Review your match, choose what to include, then export.</p>
     </div>
-    <button
-      z-button
-      zSize="sm"
-      class="shrink-0"
-      [zDisabled]="busy() || fitting() || !pdfCurrent()"
-      [zLoading]="busy()"
-      (click)="export()"
-    >
-      <ng-icon name="lucideDownload" /> Export PDF
-    </button>
+    <div class="export-action">
+      <span role="status">{{
+        exporting()
+          ? 'Preparing PDF…'
+          : busy()
+            ? 'Saving…'
+            : fitting()
+              ? 'Updating preview…'
+              : hasSummaryEdits
+                ? 'Save your summary to export'
+                : pdfCurrent()
+                  ? 'Preview up to date'
+                  : ''
+      }}</span>
+      <button
+        z-button
+        zSize="sm"
+        [zDisabled]="busy() || fitting() || !pdfCurrent() || hasSummaryEdits"
+        (click)="export()"
+      >
+        <ng-icon name="lucideDownload" /> Export PDF
+      </button>
+    </div>
   </header>
 
+  <app-match-tab class="block" [jobId]="jobId()" />
+
   @if (error()) {
-    <p
-      role="alert"
-      class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-    >
-      {{ error() }}
-    </p>
+    <p role="alert" class="cv-alert text-destructive">{{ error() }}</p>
   }
   @if (notice()) {
-    <p role="status" class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-      {{ notice() }}
-    </p>
+    <p role="status" class="cv-alert">{{ notice() }}</p>
   }
 
   @if (preview(); as p) {
-    @if (!p.match) {
-      <p class="text-xs text-muted-foreground">
-        No completed match for this job yet, so the CV shows your auto-included items, most recent
-        first. Run a match to rank them for this posting.
-      </p>
-    } @else if (p.match.stale) {
-      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-        Your library or this posting changed since the last match. Re-run it to rank the CV again.
-      </p>
-    }
-
-    <div class="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-3 text-xs">
-      <p class="self-center text-muted-foreground">
-        Template: {{ p.template.name }} v{{ p.template.version }}
-      </p>
-      <label class="space-y-1">
-        <span class="block text-muted-foreground">Language</span>
-        <select
-          class="rounded-md border bg-background px-2 py-1.5"
-          [ngModel]="p.draft.locale"
-          (ngModelChange)="save({ locale: $event })"
-          [disabled]="busy()"
-        >
-          @for (l of p.template.locales; track l) {
-            <option [value]="l">{{ l === 'es' ? 'Español' : l === 'en' ? 'English' : l }}</option>
-          }
-        </select>
-      </label>
-      <label class="space-y-1">
-        <span class="block text-muted-foreground">Length</span>
-        <select
-          class="rounded-md border bg-background px-2 py-1.5"
-          [ngModel]="p.draft.page_budget"
-          (ngModelChange)="save({ page_budget: +$event })"
-          [disabled]="busy()"
-        >
-          @for (n of [1, 2, 3]; track n) {
-            <option [ngValue]="n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</option>
-          }
-        </select>
-      </label>
-      <p class="ml-auto text-muted-foreground" aria-live="polite">
-        @if (fitting() && !fitted()) {
-          Fitting…
-        } @else if (fitted(); as f) {
-          {{ f.pages }} {{ f.pages === 1 ? 'page' : 'pages' }}
-          @if (trimmedCount()) {
-            · {{ trimmedCount() }} {{ trimmedCount() === 1 ? 'item' : 'items' }} trimmed to fit
-          }
-        }
-      </p>
-    </div>
-    @if (overflow()) {
-      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-        The CV is longer than {{ p.draft.page_budget }}
-        {{ p.draft.page_budget === 1 ? 'page' : 'pages' }} even with every optional item trimmed.
-        Unpin or remove items, or allow more pages.
-      </p>
-    }
-
-    <div class="grid items-start gap-8 xl:grid-cols-[minmax(20rem,1fr)_minmax(0,1.2fr)]">
-      <div class="min-w-0 space-y-5">
-        <section class="space-y-3" aria-label="Summary" [attr.aria-busy]="summaryGenerating()">
-          <div class="flex items-center justify-between gap-2">
-            <h3 class="text-sm font-semibold">Professional summary</h3>
-            <span class="text-xs text-muted-foreground">{{
-              p.draft.summary == null ? 'Automatic' : 'Custom'
-            }}</span>
+    <div class="cv-columns">
+      <div class="grid min-w-0 gap-6">
+        <section aria-labelledby="selection-heading">
+          <div class="editor-heading">
+            <h3 id="selection-heading">Choose your experience</h3>
+            <span role="status">{{ selectionCount() }} in your CV</span>
           </div>
-          <p
-            role="status"
-            aria-live="polite"
-            class="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
-            [class.summary-failed]="p.summary_status === 'failed'"
-          >
-            @if (summaryGenerating()) {
-              <span
-                aria-hidden="true"
-                class="inline-block size-4 shrink-0 animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-r-transparent"
-              ></span>
-            }
-            {{ summaryMessage() }}
+          <p class="editor-help">
+            We fill the available pages with your library experience, keeping stronger matches
+            first. Check an item to always keep it.
           </p>
-          @if (summaryGenerating()) {
-            <div aria-hidden="true" class="space-y-3 rounded border p-3 motion-safe:animate-pulse">
-              <div class="h-4 w-full rounded bg-muted"></div>
-              <div class="h-4 w-11/12 rounded bg-muted"></div>
-              <div class="h-4 w-3/4 rounded bg-muted"></div>
-            </div>
-          } @else {
-            <textarea
-              class="min-h-40 w-full resize-y rounded-md border bg-background p-3 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
-              rows="6"
-              [(ngModel)]="summaryText"
-              aria-label="Edit summary"
-              aria-describedby="summary-character-count"
-            ></textarea>
-            <p
-              id="summary-character-count"
-              class="text-xs"
-              [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit"
-            >
-              {{ summaryCharacterCount }} / {{ summaryCharacterLimit }} characters
-            </p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                z-button
-                zSize="sm"
-                [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit"
-                (click)="save({ summary: summaryText })"
-              >
-                Save summary
-              </button>
-              <button
-                z-button
-                zSize="sm"
-                zType="outline"
-                [zDisabled]="summaryGenerating()"
-                [zLoading]="summaryGenerating()"
-                (click)="regenerateSummary()"
-              >
-                {{ summaryGenerating() ? 'Generating…' : 'Regenerate' }}
-              </button>
-              <button
-                z-button
-                zSize="sm"
-                zType="ghost"
-                [zDisabled]="busy()"
-                (click)="save({ summary: null })"
-              >
-                Use automatic
-              </button>
-            </div>
-            @if (
-              p.draft.summary !== null && p.draft.summary !== undefined && p.summary_suggestion
-            ) {
-              <p class="text-sm">{{ p.summary_suggestion }}</p>
-              <button
-                z-button
-                zSize="sm"
-                zType="outline"
-                [zDisabled]="busy()"
-                (click)="save({ summary: p.summary_suggestion })"
-              >
-                Apply suggestion
-              </button>
-            }
+          @if (!p.match) {
+            <p class="editor-help">Until a match is complete, items are prioritized by recency.</p>
+          }
+          @for (section of selectionGroups(); track section.key) {
+            <section class="mt-6" [attr.aria-label]="section.label">
+              <h4 class="mb-2.5 text-[13px] font-semibold">{{ section.label }}</h4>
+              <ul class="grid gap-2.5">
+                @for (item of section.entries; track item.entry.id) {
+                  <li
+                    class="experience-card"
+                    [class.entry-omitted]="
+                      item.entry.state === 'trimmed' || item.entry.state === 'hidden'
+                    "
+                    [style.margin-left.rem]="item.entry.depth * 0.5"
+                  >
+                    <div class="entry-heading">
+                      <label class="entry-check">
+                        <input
+                          type="checkbox"
+                          [checked]="item.entry.state === 'shown' || item.entry.state === 'pinned'"
+                          [disabled]="busy()"
+                          (change)="toggle(item.entry, $any($event.target).checked)"
+                        />
+                        <span
+                          ><span
+                            class="block text-sm font-medium leading-snug"
+                            [class.text-muted-foreground]="
+                              item.entry.state === 'trimmed' || item.entry.state === 'hidden'
+                            "
+                            >{{ item.entry.label }}</span
+                          >
+                          @if (item.entry.organization) {
+                            <span class="mt-0.5 block text-xs text-muted-foreground">{{
+                              item.entry.organization
+                            }}</span>
+                          }
+                        </span>
+                      </label>
+                      @if (relevance()[item.entry.id] !== undefined) {
+                        <app-relevance-indicator
+                          [itemId]="item.entry.id"
+                          [relevance]="relevance()[item.entry.id]"
+                        />
+                      }
+                    </div>
+                    <div class="entry-options">
+                      <span
+                        class="text-[11px] text-muted-foreground"
+                        [class.fit-omitted]="item.entry.state === 'trimmed'"
+                      >
+                        @switch (item.entry.state) {
+                          @case ('pinned') {
+                            Always kept
+                          }
+                          @case ('trimmed') {
+                            Left out to fit
+                          }
+                          @case ('hidden') {
+                            {{
+                              item.entry.reason === 'excluded' ? 'Removed by you' : 'Not included'
+                            }}
+                          }
+                          @default {
+                            Included automatically
+                          }
+                        }
+                      </span>
+                      <select
+                        [attr.aria-label]="'Selection for ' + item.entry.label"
+                        [ngModel]="
+                          p.draft.picks.include.includes(item.entry.id)
+                            ? 'include'
+                            : p.draft.picks.exclude.includes(item.entry.id)
+                              ? 'exclude'
+                              : 'reset'
+                        "
+                        (ngModelChange)="pick(item.entry.id, $event)"
+                        [disabled]="busy()"
+                      >
+                        <option value="reset">Automatic</option>
+                        <option value="include">Always keep</option>
+                        <option value="exclude">Leave out</option>
+                      </select>
+                    </div>
+                    @if (item.highlights.length) {
+                      <details
+                        class="highlight-details"
+                        [open]="item.entry.state === 'shown' || item.entry.state === 'pinned'"
+                      >
+                        <summary>
+                          {{ item.highlights.length }}
+                          {{ item.highlights.length === 1 ? 'highlight' : 'highlights' }}
+                        </summary>
+                        <ul class="highlight-list">
+                          @for (row of item.highlights; track row.id) {
+                            <li>
+                              <label
+                                class="highlight-check"
+                                [class.text-muted-foreground]="
+                                  row.state === 'trimmed' || row.state === 'hidden'
+                                "
+                              >
+                                <input
+                                  type="checkbox"
+                                  [checked]="row.state === 'shown' || row.state === 'pinned'"
+                                  [disabled]="busy()"
+                                  (change)="toggle(row, $any($event.target).checked)"
+                                />
+                                <span
+                                  >{{ row.label }}
+                                  @if (row.state === 'trimmed') {
+                                    <small>Left out to fit</small>
+                                  }
+                                  @if (row.state === 'pinned') {
+                                    <small>Always kept</small>
+                                  }
+                                </span>
+                              </label>
+                              @if (
+                                p.draft.picks.include.includes(row.id) ||
+                                p.draft.picks.exclude.includes(row.id)
+                              ) {
+                                <button
+                                  type="button"
+                                  class="ml-6 mt-1 block cursor-pointer text-[11px] text-brand hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                                  [disabled]="busy()"
+                                  (click)="pick(row.id, 'reset')"
+                                  [attr.aria-label]="'Use automatic selection for ' + row.label"
+                                >
+                                  Use automatic
+                                </button>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      </details>
+                    }
+                  </li>
+                }
+              </ul>
+            </section>
+          } @empty {
+            <p class="cv-alert">Add experience to your library to build your CV.</p>
+          }
+          @if (content()?.skills?.length) {
+            <details class="supporting-details mt-6">
+              <summary>
+                Skills and languages <span>{{ content()!.skills.length }}</span>
+              </summary>
+              <ul class="flex flex-wrap gap-x-3 gap-y-1.5 pb-2 text-xs">
+                @for (skill of content()!.skills; track skill.id) {
+                  <li [class.text-muted-foreground]="dropped().has(skill.id)">
+                    {{ skill.name }}
+                    @if (dropped().has(skill.id)) {
+                      <small> (left out to fit)</small>
+                    }
+                  </li>
+                }
+              </ul>
+            </details>
           }
         </section>
-        <details class="group rounded-xl border" open>
-          <summary
-            class="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-medium"
-          >
-            What's in this CV
-            <ng-icon
-              name="lucideChevronDown"
-              class="shrink-0 transition-transform group-open:rotate-180"
-            />
+        <details
+          class="supporting-details"
+          [open]="hasSummaryEdits || p.summary_status === 'failed'"
+        >
+          <summary>
+            Edit professional summary
+            <span>{{ p.draft.summary == null ? 'Automatic' : 'Custom' }}</span>
           </summary>
-          <div class="space-y-4 border-t p-4">
-            <p class="text-xs text-muted-foreground">
-              Pinned items are never trimmed. Use the eye to show or hide items in this job's CV.
+          <div class="space-y-3" aria-label="Summary" [attr.aria-busy]="summaryGenerating()">
+            <p
+              role="status"
+              aria-live="polite"
+              class="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+              [class.summary-failed]="p.summary_status === 'failed'"
+            >
+              @if (summaryGenerating()) {
+                <span
+                  aria-hidden="true"
+                  class="inline-block size-4 shrink-0 animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-r-transparent"
+                ></span>
+              }
+              {{ summaryMessage() }}
             </p>
-            @for (section of rows(); track section.key) {
-              <div>
-                <h3 class="mb-2 text-xs font-semibold text-muted-foreground">
-                  {{ section.label }}
-                </h3>
-                <ul class="divide-y">
-                  @for (row of section.rows; track row.id) {
-                    <li
-                      class="flex items-start gap-2 py-1.5 text-sm"
-                      [style.padding-left.rem]="row.depth"
-                    >
-                      <span
-                        class="min-w-0 flex-1"
-                        [class.text-muted-foreground]="
-                          row.state === 'trimmed' || row.state === 'hidden'
-                        "
-                        [class.line-through]="row.state === 'trimmed'"
-                        [class.font-medium]="!row.highlight"
-                        >{{ row.highlight ? '• ' : '' }}{{ row.label }}</span
-                      >
-                      @if (!row.highlight && relevance()[row.id] !== undefined) {
-                        <app-relevance-indicator
-                          [itemId]="row.id"
-                          [relevance]="relevance()[row.id]"
-                        />
-                      }
-                      @if (row.state === 'trimmed') {
-                        <span class="shrink-0 text-[11px] text-muted-foreground"
-                          >Trimmed to fit</span
-                        >
-                      }
-                      @if (row.state === 'pinned') {
-                        <button
-                          type="button"
-                          class="shrink-0 rounded px-1.5 text-[11px] text-brand hover:underline"
-                          [disabled]="busy()"
-                          (click)="pick(row.id, 'reset')"
-                          [attr.aria-label]="'Unpin ' + row.label"
-                        >
-                          <ng-icon name="lucidePin" /> Pinned
-                        </button>
-                      } @else if (row.state !== 'hidden') {
-                        <button
-                          type="button"
-                          class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                          [disabled]="busy()"
-                          (click)="pick(row.id, 'include')"
-                          [attr.aria-label]="'Pin ' + row.label"
-                        >
-                          <ng-icon name="lucidePin" />
-                        </button>
-                      }
-                      <button
-                        type="button"
-                        class="shrink-0 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                        [disabled]="busy()"
-                        (click)="
-                          pick(
-                            row.id,
-                            row.state === 'hidden' || row.state === 'trimmed'
-                              ? 'include'
-                              : 'exclude'
-                          )
-                        "
-                        [attr.aria-label]="
-                          (row.state === 'hidden' || row.state === 'trimmed' ? 'Show ' : 'Hide ') +
-                          row.label
-                        "
-                      >
-                        <ng-icon
-                          [name]="
-                            row.state === 'hidden' || row.state === 'trimmed'
-                              ? 'lucideEyeOff'
-                              : 'lucideEye'
-                          "
-                        />
-                      </button>
-                    </li>
-                  }
-                </ul>
+            @if (summaryGenerating()) {
+              <div
+                aria-hidden="true"
+                class="space-y-3 rounded border p-3 motion-safe:animate-pulse"
+              >
+                <div class="h-4 w-full rounded bg-muted"></div>
+                <div class="h-4 w-11/12 rounded bg-muted"></div>
+                <div class="h-4 w-3/4 rounded bg-muted"></div>
               </div>
-            } @empty {
-              <p class="text-sm text-muted-foreground">
-                Nothing from your library is selected yet.
+            } @else {
+              <textarea
+                class="min-h-40 w-full resize-y rounded-md border bg-background p-3 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
+                rows="6"
+                [(ngModel)]="summaryText"
+                aria-label="Edit summary"
+                aria-describedby="summary-character-count"
+              ></textarea>
+              <p
+                id="summary-character-count"
+                class="text-xs"
+                [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit"
+              >
+                {{ summaryCharacterCount }} / {{ summaryCharacterLimit }} characters
               </p>
-            }
-            @if (content()?.skills?.length) {
-              <div>
-                <h3 class="mb-2 text-xs font-semibold text-muted-foreground">
-                  Skills and languages
-                </h3>
-                <ul class="flex flex-wrap gap-2 text-xs">
-                  @for (skill of content()!.skills; track skill.id) {
-                    <li
-                      class="rounded border px-2 py-1"
-                      [class.line-through]="dropped().has(skill.id)"
-                      [class.text-muted-foreground]="dropped().has(skill.id)"
-                    >
-                      {{ skill.name }}
-                      @if (dropped().has(skill.id)) {
-                        · Trimmed to fit
-                      }
-                    </li>
-                  }
-                </ul>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  z-button
+                  zSize="sm"
+                  [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit"
+                  (click)="save({ summary: summaryText })"
+                >
+                  Save summary
+                </button>
+                <button
+                  z-button
+                  zSize="sm"
+                  zType="outline"
+                  [zDisabled]="busy() || summaryGenerating()"
+                  [zLoading]="summaryGenerating()"
+                  (click)="regenerateSummary()"
+                >
+                  {{ summaryGenerating() ? 'Generating…' : 'Regenerate' }}
+                </button>
+                <button
+                  z-button
+                  zSize="sm"
+                  zType="ghost"
+                  [zDisabled]="busy()"
+                  (click)="save({ summary: null })"
+                >
+                  Use automatic
+                </button>
               </div>
+              @if (
+                p.draft.summary !== null && p.draft.summary !== undefined && p.summary_suggestion
+              ) {
+                <p class="text-sm">{{ p.summary_suggestion }}</p>
+                <button
+                  z-button
+                  zSize="sm"
+                  zType="outline"
+                  [zDisabled]="busy()"
+                  (click)="save({ summary: p.summary_suggestion })"
+                >
+                  Apply suggestion
+                </button>
+              }
             }
           </div>
         </details>
-
         @if (exports().length) {
           <details class="group rounded-xl border">
             <summary
@@ -347,27 +346,75 @@
           </details>
         }
       </div>
-      <div class="min-w-0 xl:sticky xl:top-20">
-        <h3 class="mb-3 text-sm font-semibold">Document preview</h3>
-        <div class="overflow-hidden rounded-xl border bg-muted/30">
+      <aside class="cv-preview min-w-0" aria-label="Document preview">
+        <div class="preview-settings">
+          <h3>PDF preview</h3>
+          <label
+            >Language
+            <select
+              [ngModel]="p.draft.locale"
+              (ngModelChange)="save({ locale: $event })"
+              [disabled]="busy()"
+            >
+              @for (l of p.template.locales; track l) {
+                <option [value]="l">
+                  {{ l === 'es' ? 'Español' : l === 'en' ? 'English' : l }}
+                </option>
+              }
+            </select>
+          </label>
+          <label
+            >Length
+            <select
+              [ngModel]="p.draft.page_budget"
+              (ngModelChange)="save({ page_budget: +$event })"
+              [disabled]="busy()"
+            >
+              @for (n of [1, 2, 3]; track n) {
+                <option [ngValue]="n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        <p class="my-2.5 text-[11px] leading-normal text-muted-foreground" role="status">
+          @if (fitting()) {
+            Updating preview…
+          } @else if (fitted(); as f) {
+            {{ f.pages }} of {{ p.draft.page_budget }}
+            {{ p.draft.page_budget === 1 ? 'page' : 'pages' }}
+            @if (trimmedCount()) {
+              · {{ trimmedCount() }} optional items left out to fit
+            }
+          }
+        </p>
+        @if (overflow()) {
+          <p class="cv-alert" role="status">
+            This CV exceeds the page limit. Increase the length or switch “Always keep” items to
+            automatic.
+          </p>
+        }
+        <div class="pdf-frame" [attr.aria-busy]="fitting()">
           @if (fitted(); as f) {
-            <iframe
-              class="h-[75vh] min-h-96 w-full bg-white"
-              [src]="f.url"
-              title="CV preview"
-            ></iframe>
+            <iframe [src]="f.url" title="CV preview"></iframe>
           } @else {
-            <div class="flex h-48 items-center justify-center text-sm text-muted-foreground">
-              {{ fitting() ? 'Compiling your CV…' : 'Preview unavailable' }}
+            <div class="preview-empty">
+              {{
+                fitting()
+                  ? 'Preparing your PDF…'
+                  : 'Preview unavailable. Try changing a selection to rebuild it.'
+              }}
             </div>
           }
         </div>
-      </div>
+        <p class="my-2.5 text-[11px] leading-normal text-muted-foreground">
+          {{ p.template.name }} · Changes save automatically. Summary edits need saving.
+        </p>
+      </aside>
     </div>
   } @else if (!error()) {
-    <div class="space-y-2" aria-busy="true">
-      <div class="h-9 animate-pulse rounded bg-muted"></div>
-      <div class="h-48 animate-pulse rounded bg-muted"></div>
+    <div class="space-y-2" aria-busy="true" aria-label="Loading your CV">
+      <div class="h-9 motion-safe:animate-pulse rounded bg-muted"></div>
+      <div class="h-48 motion-safe:animate-pulse rounded bg-muted"></div>
     </div>
   }
 </section>

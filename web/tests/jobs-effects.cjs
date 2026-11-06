@@ -213,7 +213,8 @@ test('workspace tabs reset for new jobs and accounts while quiet refreshes prese
   assert.equal(sheet.activeTab(), 'details');
   sheet.selectTab('match');
   await sheet.load({ id: 'first' }, true);
-  assert.equal(sheet.activeTab(), 'match');
+  assert.equal(sheet.activeTab(), 'cv');
+  assert.equal(sheet.visitedTabs().has('match'), false);
   await sheet.load({ id: 'second' });
   assert.equal(sheet.activeTab(), 'details');
   sheet.selectTab('match');

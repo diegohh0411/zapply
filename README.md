@@ -90,7 +90,7 @@ only its identifier is kept. Setup, environment variables and design:
 
 Part 6 adds automatic matching when jobs are created, reusable decision-answer
 caching, deterministic coverage and CV selections, corrections, run history and
-staleness. Open a saved job's **Match** tab; automatic matching can be turned off
+staleness. Open a saved job's **Match & CV** tab; automatic matching can be turned off
 in Profile. Apply migrations through 00012 before deploying the updated API and worker.
 
 Choose the decision model under **Administration → System keys**. It uses the
@@ -108,11 +108,14 @@ configuration retains the LLM-specific `LLM_MODEL`/`LLM_ENDPOINT` names.
 
 ## CV rendering
 
-Open a job's **CV** tab to preview and export a PDF from your library. Matching
-ranks the content when available; otherwise the CV uses auto-included items.
-Pin or remove items, choose English or Spanish and a 1–3 page budget, then
-export. The browser compiles with Typst WASM; Postgres stores immutable content
-snapshots, and previous exports download identically after library edits.
+Open a job's **Match & CV** tab to preview and export a PDF from your library. Matching
+ranks the content when available; all eligible library experience is offered
+to the page fitter, including less relevant entries. Check items to always keep
+them, leave items out, or use automatic selection. Choose English or Spanish
+and a 1–3 page budget, then export. The fitter restores smaller entries and
+highlights into spare space without exceeding the budget. The browser compiles
+with Typst WASM; Postgres stores immutable content snapshots, and previous
+exports download identically after library edits.
 Apply migration 00016 before deploying.
 
 The image includes Typst 0.14.2 for `GET /v1/cv-exports/{id}/pdf`, which streams

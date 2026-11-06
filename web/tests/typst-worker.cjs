@@ -164,16 +164,18 @@ test(
       ).outputText,
       { module, exports: module.exports },
     );
-    const { fit, applyDrops } = module.exports;
+    const { fitContent, applyDrops } = module.exports;
     const trim = content.sections.flatMap((s) => s.entries.map((e) => e.id));
-    const result = await fit(
-      trim.length,
-      1,
-      async (k) => (await compile(applyDrops(content, trim.slice(0, k)))).pages,
-    );
+    const result = await fitContent(content, trim, 1,
+      async dropped => (await compile(applyDrops(content, dropped))).pages);
     assert.ok(before.pages > 1, 'fixture must need fitting');
     assert.ok(result.pages <= 1);
-    if (result.k > 0)
-      assert.ok((await compile(applyDrops(content, trim.slice(0, result.k - 1)))).pages > 1);
+    assert.equal((await compile(applyDrops(content, result.dropped))).pages, result.pages);
+    // Every remaining omitted top-level entry was tried: none can be added
+    // back to the final PDF without overflowing the selected page budget.
+    for (const id of result.dropped) {
+      const restored = result.dropped.filter(x => x !== id);
+      assert.ok((await compile(applyDrops(content, restored))).pages > 1);
+    }
   },
 );

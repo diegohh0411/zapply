@@ -223,7 +223,7 @@ type AvailableHighlight struct {
 type Built struct {
 	Content Content `json:"content"`
 	// Trim lists optional item IDs, least relevant first. Fitting drops a
-	// prefix of it.
+	// prefix of it, then tries restoring items into spare space.
 	Trim      []string  `json:"trim"`
 	Available Available `json:"available"`
 }
@@ -237,7 +237,6 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 	// Which evidence appears, and how relevant each is.
 	relevance := map[string]float64{}
 	ranked := map[string][]string{} // evidence → highlight IDs, most relevant first
-	matched := map[string]bool{}
 	selected := map[string]bool{}
 	suggested := map[string]bool{}
 	supports := map[string]bool{}
@@ -245,9 +244,6 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 		for _, s := range ranking.Evidence {
 			relevance[s.EvidenceID] = s.Relevance
 			ranked[s.EvidenceID] = s.HighlightIDs
-		}
-		for _, s := range ranking.Selection {
-			matched[s.EvidenceID] = true
 		}
 		for _, s := range ranking.Suggestions {
 			suggested[s.EvidenceID] = true
@@ -260,17 +256,16 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 	}
 	for _, e := range lib.Evidence {
 		if _, ok := relevance[e.ID]; !ok {
-			relevance[e.ID] = recency(e, date)
+			if ranking == nil {
+				relevance[e.ID] = recency(e, date)
+			} else {
+				relevance[e.ID] = 0
+			}
 		}
+		// Matching ranks eligible library material; it must not discard
+		// lower-scoring experience before the page fitter can consider it.
+		// Library opt-outs and career breaks still require an explicit pick.
 		baseline := e.AutoInclude && e.Kind != "career_break"
-		if ranking != nil {
-			// A CV without its degrees reads as an error, so they stay even
-			// when matching found them irrelevant. They can still be trimmed.
-			baseline = matched[e.ID] || baseline && e.Kind == "degree_program" && e.ParentID == nil
-		}
-		if e.Kind == "career_break" {
-			baseline = false
-		}
 		// Including a highlight also selects its entry, unless the entry
 		// itself is explicitly excluded.
 		baseline = baseline || slices.ContainsFunc(e.Highlights, func(h Highlight) bool { return include[h.ID] })
@@ -288,17 +283,19 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 		if !selected[e.ID] {
 			continue
 		}
-		order, ok := ranked[e.ID]
-		if !ok {
-			for _, h := range e.Highlights {
-				if h.AutoInclude {
-					order = append(order, h.ID)
-				}
+		order := slices.Clone(ranked[e.ID])
+		// The match may rank only a subset of highlights. Offer every
+		// enabled highlight to the fitter, after the ranked ones.
+		for _, h := range e.Highlights {
+			if h.AutoInclude && !slices.Contains(order, h.ID) {
+				order = append(order, h.ID)
 			}
 		}
 		text := map[string]string{}
 		for _, h := range e.Highlights {
-			text[h.ID] = h.Text
+			if h.AutoInclude || include[h.ID] {
+				text[h.ID] = h.Text
+			}
 			if include[h.ID] && !slices.Contains(order, h.ID) {
 				order = append(order, h.ID)
 			}
@@ -376,40 +373,44 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 	return Built{Content: content, Trim: trimOrder(content, relevance, include, supports), Available: available(lib, selected, exclude, suggested, highlights)}
 }
 
-// trimOrder: highlights first (never an entry's first), then whole entries,
-// keeping the evidence for met must-haves for last, then skills past
-// KeptSkills. Pins protect both the item and its containing entries.
+// trimOrder drops optional skills first, then mixes highlights and entries
+// by relevance so weak entries do not displace strong supporting detail.
+// An entry retains its first highlight. Pins protect all containing entries;
+// a parent's score is at least its strongest descendant's score.
 func trimOrder(c Content, relevance map[string]float64, pinned, supports map[string]bool) []string {
 	type item struct {
 		id    string
 		score float64
+		depth int
 	}
-	var hs, es []item
-	var walk func(e Entry) (bool, bool)
-	walk = func(e Entry) (bool, bool) {
+	var items []item
+	var walk func(e Entry, depth int) (bool, bool, float64)
+	walk = func(e Entry, depth int) (bool, bool, float64) {
+		score := relevance[e.ID]
 		protected, supporting := pinned[e.ID], supports[e.ID]
 		for i, h := range e.Highlights {
 			protected = protected || pinned[h.ID]
 			if i > 0 && !pinned[h.ID] {
-				hs = append(hs, item{h.ID, relevance[e.ID] * math.Pow(0.7, float64(i))})
+				items = append(items, item{h.ID, relevance[e.ID] * math.Pow(0.7, float64(i)), depth + 1})
 			}
 		}
 		for _, child := range e.Children {
-			pin, support := walk(child)
+			pin, support, childScore := walk(child, depth+1)
 			protected, supporting = protected || pin, supporting || support
+			score = math.Max(score, childScore)
 		}
 		if !protected {
-			s := relevance[e.ID]
+			s := score
 			if supporting {
 				s += 1000
 			}
-			es = append(es, item{e.ID, s})
+			items = append(items, item{e.ID, s, depth})
 		}
-		return protected, supporting
+		return protected, supporting, score
 	}
 	for _, s := range c.Sections {
 		for _, e := range s.Entries {
-			walk(e)
+			walk(e, 0)
 		}
 	}
 	byScore := func(xs []item) {
@@ -417,18 +418,16 @@ func trimOrder(c Content, relevance map[string]float64, pinned, supports map[str
 			if xs[i].score != xs[j].score {
 				return xs[i].score < xs[j].score
 			}
+			if xs[i].depth != xs[j].depth {
+				// Drop descendants before equal-priority containers; refill
+				// reverses this order to make the containers available first.
+				return xs[i].depth > xs[j].depth
+			}
 			return xs[i].id < xs[j].id
 		})
 	}
-	byScore(hs)
-	byScore(es)
+	byScore(items)
 	out := []string{}
-	for _, h := range hs {
-		out = append(out, h.id)
-	}
-	for _, e := range es {
-		out = append(out, e.id)
-	}
 	var other []string
 	for _, s := range c.Skills {
 		if s.Type != "language" {
@@ -437,6 +436,9 @@ func trimOrder(c Content, relevance map[string]float64, pinned, supports map[str
 	}
 	for i := len(other) - 1; i >= KeptSkills; i-- {
 		out = append(out, other[i])
+	}
+	for _, candidate := range items {
+		out = append(out, candidate.id)
 	}
 	return out
 }

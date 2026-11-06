@@ -19,7 +19,6 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
   lucideFileText,
-  lucideScanSearch,
   lucideMail,
   lucideHistory,
   lucideBriefcaseBusiness,
@@ -46,7 +45,6 @@ import { ZardTextareaComponent } from '@/shared/components/textarea';
 
 import { CvTab } from './cv/cv-tab';
 import { MailTab } from './mail-tab';
-import { MatchTab } from './match/match-tab';
 import { StatusSelect } from './status-select';
 import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
@@ -54,11 +52,10 @@ import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, WORK_MODES } from './format';
 import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
 
-export type JobTab = 'details' | 'match' | 'cv' | 'mail' | 'activity';
+export type JobTab = 'details' | 'cv' | 'mail' | 'activity';
 const workspaceTabs = [
   { id: 'details', label: 'Details', icon: 'lucideBriefcaseBusiness' },
-  { id: 'match', label: 'Match', icon: 'lucideScanSearch' },
-  { id: 'cv', label: 'CV', icon: 'lucideFileText' },
+  { id: 'cv', label: 'Match & CV', icon: 'lucideFileText' },
   { id: 'mail', label: 'Mail', icon: 'lucideMail' },
   { id: 'activity', label: 'Activity', icon: 'lucideHistory' },
 ] as const;
@@ -107,7 +104,6 @@ const emptyForm = (statusId = ''): Form => ({
   imports: [
     CvTab,
     MailTab,
-    MatchTab,
     StatusSelect,
     DatePipe,
     NgTemplateOutlet,
@@ -125,7 +121,6 @@ const emptyForm = (statusId = ''): Form => ({
     provideIcons({
       lucideArrowLeft,
       lucideFileText,
-      lucideScanSearch,
       lucideMail,
       lucideHistory,
       lucideBriefcaseBusiness,
@@ -325,10 +320,13 @@ export class JobSheet {
   }
 
   private validTab(tab: string | undefined): JobTab {
+    // Keep existing bookmarks to the old Match tab working.
+    if (tab === 'match') return 'cv';
     return this.tabs.find((t) => t.id === tab)?.id ?? 'details';
   }
 
-  protected selectTab(tab: JobTab, notify = true): void {
+  protected selectTab(tab: JobTab | 'match', notify = true): void {
+    tab = this.validTab(tab);
     if (this.isNew() && tab !== 'details') return;
     this.activeTab.set(tab);
     this.visitedTabs.update((tabs) => new Set([...tabs, tab]));

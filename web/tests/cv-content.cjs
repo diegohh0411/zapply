@@ -63,3 +63,72 @@ test('download filenames keep names while removing file-system separators', () =
   assert.equal(filename(' Ada ', 'Acme/Labs'), 'Ada - AcmeLabs.pdf');
   assert.equal(filename('', ''), 'CV.pdf');
 });
+
+const { fitContent } = compiled.exports;
+const fittingContent = {
+  schema: 1,
+  date: '2026-11-06',
+  locale: 'en',
+  profile: { name: 'Ada' },
+  skills: [],
+  sections: [
+    {
+      key: 'experience',
+      entries: [
+        {
+          id: 'small',
+          title: 'Older role',
+          highlights: [{ id: 'detail', text: 'A useful detail' }],
+        },
+        { id: 'large', title: 'Long role' },
+        { id: 'strong', title: 'Best match' },
+      ],
+    },
+  ],
+};
+
+test('backfilling restores smaller lower-ranked experience when a larger entry cannot fit', async () => {
+  const sizes = { small: 2, detail: 1, large: 7, strong: 7 };
+  const result = await fitContent(
+    fittingContent,
+    ['detail', 'small', 'large', 'strong'],
+    1,
+    async (dropped) => {
+      const c = applyDrops(fittingContent, dropped);
+      const size = c.sections
+        .flatMap((s) => s.entries)
+        .reduce(
+          (n, e) => n + sizes[e.id] + (e.highlights ?? []).reduce((n, h) => n + sizes[h.id], 0),
+          0,
+        );
+      return Math.max(1, Math.ceil(size / 10));
+    },
+  );
+  assert.equal(result.pages, 1);
+  assert.deepEqual(plain(result.dropped), ['large']);
+  assert.deepEqual(
+    plain(applyDrops(fittingContent, result.dropped).sections[0].entries.map((e) => e.id)),
+    ['small', 'strong'],
+  );
+});
+
+test('backfilling does not restore invisible highlights under an omitted entry', async () => {
+  const calls = [];
+  const result = await fitContent(fittingContent, ['detail', 'small'], 1, async (dropped) => {
+    calls.push([...dropped]);
+    return dropped.includes('small') ? 1 : 2;
+  });
+  assert.deepEqual(plain(result.dropped), ['detail', 'small']);
+  assert.ok(
+    calls.every((dropped) => !dropped.includes('small') || dropped.includes('detail')),
+    'never restore an invisible highlight alone',
+  );
+});
+
+test('fitting preserves all content when it fits and preserves mandatory overflow', async () => {
+  for (const pages of [1, 3]) {
+    const result = await fitContent(fittingContent, [], 1, async () => pages);
+    assert.equal(result.pages, pages);
+    assert.deepEqual(plain(result.dropped), []);
+  }
+});
