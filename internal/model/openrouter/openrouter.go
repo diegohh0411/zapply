@@ -65,17 +65,25 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
+	started := time.Now()
 	res, err := c.HTTP.Do(req)
 	if err != nil {
+		logHTTPFailure(ctx, method, path, "transport", started, res, 0, err)
 		return nil, &modelapi.ProviderError{Code: "transport_uncertain"}
 	}
 	defer res.Body.Close()
 	span.SetAttributes(attribute.Int("http.response.status_code", res.StatusCode))
 	b, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
 	if err != nil || len(b) > maxBody {
+		reason := "body_read"
+		if len(b) > maxBody {
+			reason = "body_too_large"
+		}
+		logHTTPFailure(ctx, method, path, reason, started, res, len(b), err)
 		return nil, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		logHTTPFailure(ctx, method, path, "http_status", started, res, len(b), nil)
 		code := "provider_error"
 		uncharged := false
 		switch res.StatusCode {
@@ -97,6 +105,20 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 			retry = time.Until(t)
 		}
 		return b, &modelapi.ProviderError{Code: code, Uncharged: uncharged, RetryAfter: retry}
+	}
+	if method == "POST" && (path == "/systemone" || path == "/chat/completions") {
+		var envelope struct {
+			ID string `json:"id"`
+		}
+		reason := ""
+		if json.Unmarshal(b, &envelope) != nil {
+			reason = "invalid_response_json"
+		} else if !generationID.MatchString(envelope.ID) {
+			reason = "generation_id_missing_or_invalid"
+		}
+		if reason != "" {
+			logHTTPFailure(ctx, method, path, reason, started, res, len(b), nil)
+		}
 	}
 	return b, nil
 }
@@ -217,7 +239,9 @@ func (c *Client) generateMessages(ctx context.Context, key string, q modelapi.Qu
 		Usage json.RawMessage `json:"usage"`
 		Error json.RawMessage `json:"error"`
 	}
-	if json.Unmarshal(raw, &response) != nil {
+	parseErr := json.Unmarshal(raw, &response)
+	logResponse(ctx, "/chat/completions", raw, parseErr)
+	if parseErr != nil {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
 	if !regexp.MustCompile(`^gen-[0-9A-Za-z-]{1,124}$`).MatchString(response.ID) {
