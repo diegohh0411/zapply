@@ -89,9 +89,9 @@ found:
 	if len(b.Available.Highlights) != 1 || b.Available.Highlights[0].ID != "h3" {
 		t.Fatalf("available highlights %+v", b.Available.Highlights)
 	}
-	// Older highlights trim first; then entries, oldest first. No entry's
-	// first highlight is ever listed.
-	if want := []string{"h5", "h2", "deg", "old", "proj", "cert", "job"}; !slices.Equal(b.Trim, want) {
+	// Lower-priority entries trim before details from stronger experience.
+	// No entry's first highlight is ever listed.
+	if want := []string{"h5", "deg", "old", "proj", "cert", "h2", "job"}; !slices.Equal(b.Trim, want) {
 		t.Fatalf("trim %v, want %v", b.Trim, want)
 	}
 }
@@ -117,8 +117,8 @@ func TestBuildWithRunAndPicks(t *testing.T) {
 	if got := ids(exp.Entries); !slices.Equal(got, []string{"job", "old"}) {
 		t.Fatalf("experience %v", got)
 	}
-	if exp.Entries[0].Children != nil {
-		t.Fatal("the project wasn't selected by the run")
+	if len(exp.Entries[0].Children) != 1 || exp.Entries[0].Children[0].ID != "proj" {
+		t.Fatal("lower-ranked project must remain available for page filling")
 	}
 	if hs := exp.Entries[1].Highlights; hs[0].ID != "h5" {
 		t.Fatalf("highlights follow the run's order: %+v", hs)
@@ -126,20 +126,17 @@ func TestBuildWithRunAndPicks(t *testing.T) {
 	if hs := exp.Entries[0].Highlights; len(hs) != 2 || hs[0].ID != "h1" || hs[1].ID != "h3" {
 		t.Fatalf("excluded h2 gone, picked h3 added: %+v", hs)
 	}
-	if section(c, "education") == nil || section(c, "unpaid") == nil || section(c, "credentials") != nil {
-		t.Fatalf("degree kept, picked break shown, unselected cert left out: %+v", c.Sections)
+	if section(c, "education") == nil || section(c, "unpaid") == nil || section(c, "credentials") == nil {
+		t.Fatalf("degree and low-ranked cert kept, picked break shown: %+v", c.Sections)
 	}
 	if len(c.Skills) != 2 || c.Skills[0].ID != "s2" || c.Skills[1].ID != "s3" {
 		t.Fatalf("relevant skills then languages: %+v", c.Skills)
 	}
-	for _, e := range b.Available.Entries {
-		if e.ID == "cert" && e.Reason != "suggested" {
-			t.Fatalf("cert reason %s", e.Reason)
-		}
+	if slices.ContainsFunc(b.Available.Entries, func(e AvailableEntry) bool { return e.ID == "cert" }) {
+		t.Fatal("an eligible low-ranked cert should be offered to the fitter")
 	}
-	// Pinned h3 and brk never trim; the job supports a met must-have, so it
-	// goes last.
-	if want := []string{"h4", "deg", "old"}; !slices.Equal(b.Trim, want) {
+	// Pinned h3 and brk never trim. Lower-ranked entries trim before h4.
+	if want := []string{"deg", "proj", "cert", "h4", "old"}; !slices.Equal(b.Trim, want) {
 		t.Fatalf("trim %v, want %v", b.Trim, want)
 	}
 }
@@ -169,7 +166,7 @@ func TestSkillsTrimPastKept(t *testing.T) {
 		lib.Skills = append(lib.Skills, Skill{ID: string(rune('a' + i)), Name: "x", Type: "tool"})
 	}
 	b := Build(lib, nil, Picks{}, "en", today)
-	if got := b.Trim[len(b.Trim)-3:]; !slices.Equal(got, []string{"k", "j", "i"}) {
+	if got := b.Trim[:3]; !slices.Equal(got, []string{"k", "j", "i"}) {
 		t.Fatalf("skills past the first %d trim from the end: %v", KeptSkills, b.Trim)
 	}
 }
@@ -209,7 +206,7 @@ func TestIncludeHighlightSelectsEntryAndCareerBreakNeedsPick(t *testing.T) {
 	ranking := &match.Result{Selection: []match.Selection{{EvidenceID: "brk"}}}
 	b := Build(sample(), ranking, Picks{Include: []string{"h3"}}, "en", today)
 	exp := section(b.Content, "experience")
-	if exp == nil || len(exp.Entries) != 1 || exp.Entries[0].ID != "job" {
+	if exp == nil || !slices.Contains(ids(exp.Entries), "job") {
 		t.Fatalf("including a highlight must select its entry: %+v", b.Content)
 	}
 	if section(b.Content, "unpaid") != nil {
@@ -234,5 +231,44 @@ func TestStaleMatchParentDoesNotHideActiveChild(t *testing.T) {
 		if len(pins) > 0 && slices.Contains(b.Trim, "proj") {
 			t.Fatalf("pins %v: pinned child can be trimmed", pins)
 		}
+	}
+}
+
+func TestMatchFillsFromEligibleLibraryWithoutOverridingOptOuts(t *testing.T) {
+	lib := sample()
+	lib.Evidence[2].AutoInclude = false // Even a stale match selection cannot override this.
+	ranking := &match.Result{
+		Evidence: []match.Selection{
+			{EvidenceID: "job", Relevance: .9, HighlightIDs: []string{"h1", "h3"}},
+			{EvidenceID: "proj", Relevance: .05},
+			{EvidenceID: "cert", Relevance: .1},
+		},
+		Selection: []match.Selection{{EvidenceID: "job"}, {EvidenceID: "old"}},
+	}
+	b := Build(lib, ranking, Picks{Exclude: []string{"cert"}}, "en", today)
+	exp := section(b.Content, "experience")
+	if exp == nil || !slices.Equal(ids(exp.Entries), []string{"job"}) || len(exp.Entries[0].Children) != 1 {
+		t.Fatalf("fill must include low-ranked children and respect library opt-outs: %+v", b.Content)
+	}
+	if hs := exp.Entries[0].Highlights; len(hs) != 2 || hs[0].ID != "h1" || hs[1].ID != "h2" {
+		t.Fatalf("unranked enabled highlights must fill; disabled ranked highlights stay out: %+v", hs)
+	}
+	if section(b.Content, "credentials") != nil || section(b.Content, "unpaid") != nil {
+		t.Fatal("filling must respect explicit exclusions and career-break opt-in")
+	}
+}
+
+func TestTrimProtectsStrongDescendantAndDropsWeakEntriesBeforeStrongDetails(t *testing.T) {
+	lib := sample()
+	ranking := &match.Result{Evidence: []match.Selection{
+		{EvidenceID: "job", Relevance: .1}, {EvidenceID: "proj", Relevance: .95},
+		{EvidenceID: "old", Relevance: .9}, {EvidenceID: "cert", Relevance: .05},
+	}}
+	b := Build(lib, ranking, Picks{}, "en", today)
+	if slices.Index(b.Trim, "cert") > slices.Index(b.Trim, "h5") {
+		t.Fatalf("weak entries should trim before a strong job's details: %v", b.Trim)
+	}
+	if slices.Index(b.Trim, "job") < slices.Index(b.Trim, "proj") {
+		t.Fatalf("a weak parent must not remove a stronger child early: %v", b.Trim)
 	}
 }

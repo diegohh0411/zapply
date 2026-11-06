@@ -13,7 +13,6 @@ import { ZardButtonComponent } from '@/shared/components/button';
 import { MatchStore } from './match.store';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideSearch, lucideRefreshCw } from '@ng-icons/lucide';
-import { relevanceLabel } from './match-presentation';
 @Component({
   selector: 'app-match-tab',
   imports: [DecimalPipe, DatePipe, ZardButtonComponent, NgIcon],
@@ -33,6 +32,7 @@ export class MatchTab {
   protected readonly run = computed(() => this.store.runs().get(this.jobId()));
   protected readonly estimate = computed(() => this.store.estimates().get(this.jobId()));
   protected readonly busy = signal(false);
+  protected readonly confirmRematch = signal(false);
   protected readonly error = signal('');
   protected readonly active = computed(() =>
     ['pending', 'running', 'blocked', 'needs_review'].includes(this.run()?.status ?? ''),
@@ -41,7 +41,9 @@ export class MatchTab {
     ['completed', 'partial'].includes(this.run()?.status ?? '') ? this.run()?.result : undefined,
   );
   protected readonly wholePosting = computed(() => (this.result()?.scoring_version ?? 0) >= 3);
-  protected readonly relevanceLabel = relevanceLabel;
+  protected readonly relevantCount = computed(
+    () => this.result()?.evidence.filter((e) => e.relevance >= 0.375).length ?? 0,
+  );
   protected readonly statusLabel = computed(
     () =>
       (
@@ -61,6 +63,9 @@ export class MatchTab {
   constructor() {
     effect((onCleanup) => {
       const id = this.jobId();
+      this.confirmRematch.set(false);
+      this.busy.set(false);
+      this.error.set('');
       this.store.watch(id);
       onCleanup(() => this.store.unwatch(id));
     });
@@ -70,6 +75,7 @@ export class MatchTab {
     const id = this.jobId();
     this.busy.set(true);
     this.error.set('');
+    this.confirmRematch.set(false);
     try {
       if (kind === 'start') await this.store.start(id);
       else await this.store.cancel(id, this.run()!.id);

@@ -73,10 +73,11 @@ templates/<name>/<version>/
 `internal/render` builds the content for a draft:
 
 1. **Selection.** Start from the latest completed match run for the job:
-   `selection`, with highlights in the run's order, and ranked `skills`.
-   Without one, fall back to `auto_include` items in library order, which is
-   how cvd behaved. If the library changed after the run (its
-   `library_fingerprint` differs), the draft says so and offers a new run.
+   evidence ranking, with highlights in the run's order, and ranked `skills`.
+   Every auto-included library entry and highlight is a fitting candidate,
+   including those below the match relevance threshold. Library opt-outs stay
+   out unless explicitly included. Without a run, prioritize by recency.
+   If the library changed after the run, the draft says so and offers a new run.
 2. **Picks.** Apply the user's includes and excludes. An included item is
    pinned and is never trimmed. Career breaks appear only when included
    (part 2). Starting a new match for a previously matched job clears these
@@ -84,10 +85,12 @@ templates/<name>/<version>/
 3. **Sections.** Group items by category and kind into the template's
    sections, and sort entries by date within each section.
 4. **Trim order.** List optional items from least to most relevant:
-   - highlights first, always keeping at least one on any entry that remains
-   - then whole entries, last of all those that are the supporting evidence
-     for a met must-have
-   - then skills beyond the top N
+   - skills beyond the first eight, keeping languages
+   - highlights and whole entries together by relevance, retaining the first
+     highlight on any entry that remains; weaker entries leave before stronger
+     entries' supporting detail
+   - parent entries inherit their strongest child's priority, with descendants
+     before containers on ties; evidence supporting a met must-have goes last
 
 The content is canonical JSON with a `content_hash` (SHA-256), like
 `job.content_hash`.
@@ -100,7 +103,11 @@ Fitting runs where the CV is compiled, which is normally the browser:
 2. Otherwise binary-search `k`, the number of trim-order items to drop, for
    the smallest `k` that fits. That takes about `log₂(n)` compiles, each
    tens of milliseconds incremental.
-3. If the content still overflows after dropping every optional item, it
+3. After finding a fitting prefix, try restoring omitted items from most to
+   least relevant. Keep every restoration that fits, and skip highlights or
+   children whose containers remain omitted. This fills space left by a large
+   entry that could not fit. Cache identical compiled content within the fit.
+4. If the content still overflows after dropping every optional item, it
    exports anyway with an overflow warning. Pinned items are the user's call.
 
 The export records the dropped item IDs, not `k`. Rendering a snapshot never
@@ -176,7 +183,7 @@ Outbox topics: `cv_draft.updated`, `cv_export.created`.
 
 ## Web
 
-The job sheet gets a **CV** tab next to Match:
+The job sheet combines matching, selection editing, and export in **Match & CV**:
 
 - A live preview with a page count, the page budget, the template and locale.
 - An item list grouped by section: what is in, what was trimmed to fit, and
@@ -266,20 +273,21 @@ The job sheet gets a **CV** tab next to Match:
 
 - `internal/render` selects library content with the latest completed match,
   applies draft picks and builds a deterministic trim order. Without a match,
-  it uses auto-included entries and highlights. Auto-included degrees remain
-  available in the CV even when a match does not rank them. Career breaks
-  require a pick. Pinning a highlight or nested entry also protects its
+  it uses auto-included entries and highlights. All eligible auto-included
+  material remains available to the fitter even when a match does not rank it.
+  Career breaks require a pick. Pinning a highlight or nested entry also protects its
   containing entries from trimming.
 - Non-language skills follow match relevance (library order without a match),
   capped at 20. The first eight and all language skills remain when fitting;
-  skills beyond eight trim after optional entries.
+  skills beyond eight trim before optional entries.
 - Migration 00016 adds tenant-scoped drafts and insert-only snapshots. Drafts
   use ETags; exports check the preview's content hash so library changes or a
   new document date require fitting again. The server copies library text and
   validates dropped IDs. It stores the client PDF digest as supplied, without
   scheduling verification. Outbox writes accompany draft updates and exports.
-- The job sheet's CV tab compiles in a lazy Web Worker, fits to 1–3 pages,
-  previews the PDF, exposes pins and exclusions, and downloads snapshots from
+- The job sheet's combined Match & CV tab compiles in a lazy Web Worker, fits to 1–3 pages,
+  previews the PDF beside checkbox selections, offers automatic / always keep /
+  leave out choices, and downloads snapshots from
   export history. Compilation uses only bundled fonts and same-origin assets;
   the Angular development proxy also serves template assets from the API.
 - Native rendering uses Typst 0.14.2 from `TYPST_DIR/<version>/typst` or a

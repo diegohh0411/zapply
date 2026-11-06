@@ -374,30 +374,6 @@
         </div>
         @if (!isNew() && job(); as j) {
           <div
-            id="job-panel-match"
-            role="tabpanel"
-            aria-labelledby="job-tab-match"
-            [hidden]="activeTab() !== 'match'"
-            tabindex="0"
-          >
-            @if (visitedTabs().has('match')) {
-              <div class="match-layout">
-                <app-match-tab class="block min-w-0" [jobId]="j.id" />
-                <aside class="next-step">
-                  <ng-icon name="lucideFileText" class="size-6 text-brand" />
-                  <h3>Turn your match into a CV</h3>
-                  <p>
-                    Your match ranks the experience in your library. Choose what to include and
-                    tailor your summary in the CV tab.
-                  </p>
-                  <button z-button zType="outline" zSize="sm" (click)="selectTab('cv')">
-                    Build my CV <ng-icon name="lucideArrowRight" />
-                  </button>
-                </aside>
-              </div>
-            }
-          </div>
-          <div
             id="job-panel-cv"
             role="tabpanel"
             aria-labelledby="job-tab-cv"

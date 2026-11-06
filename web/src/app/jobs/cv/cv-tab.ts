@@ -14,13 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideChevronDown,
-  lucideDownload,
-  lucidePin,
-  lucideEye,
-  lucideEyeOff,
-} from '@ng-icons/lucide';
+import { lucideChevronDown, lucideDownload } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { Api, ApiError, type Schemas } from '../../core/api';
@@ -29,12 +23,13 @@ import { AuthService } from '../../core/auth.service';
 import {
   applyDrops,
   filename,
-  fit,
+  fitContent,
   sectionLabels,
   type CvContent,
   type CvEntry,
   type Fit,
 } from './cv-content';
+import { MatchTab } from '../match/match-tab';
 import { RelevanceIndicator } from './relevance-indicator';
 import { TypstService, type Compiled, type CvTemplate } from './typst.service';
 
@@ -46,19 +41,19 @@ interface Row {
   label: string;
   depth: number;
   highlight: boolean;
+  organization?: string;
+  reason?: string;
   state: 'shown' | 'trimmed' | 'pinned' | 'hidden';
 }
 
 /** A job's CV: preview, fitting, picks and exports (part 7). */
 @Component({
   selector: 'app-cv-tab',
-  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator],
-  viewProviders: [
-    provideIcons({ lucideChevronDown, lucideDownload, lucidePin, lucideEye, lucideEyeOff }),
-  ],
+  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator, MatchTab],
+  viewProviders: [provideIcons({ lucideChevronDown, lucideDownload })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',
-  styles: [`.summary-failed { border-inline-start: 3px solid #b7791f; background: light-dark(#fff8e8, #332713); color: light-dark(#805517, #f3cc82); }`],
+  styleUrl: './cv-tab.css',
 })
 export class CvTab {
   readonly jobId = input.required<string>();
@@ -75,33 +70,49 @@ export class CvTab {
   protected readonly fitting = signal(false);
   protected readonly pdfCurrent = signal(false);
   protected readonly busy = signal(false);
+  protected readonly exporting = signal(false);
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly exports = signal<Export[]>([]);
-  protected readonly summaryGenerating = computed(() => this.busy() || ['pending', 'running'].includes(this.preview()?.summary_status ?? ''));
+  protected readonly summaryGenerating = computed(() =>
+    ['pending', 'running'].includes(this.preview()?.summary_status ?? ''),
+  );
   protected readonly summaryMessage = computed(() => {
     if (this.summaryGenerating()) return 'Generating summary…';
     const p = this.preview();
     switch (p?.summary_status) {
-      case 'completed': return 'Summary updated from the selected evidence.';
+      case 'completed':
+        return 'Summary updated from the selected evidence.';
       case 'failed':
-        if (p.summary_reason === 'summary_character_limit') return 'The generated summary exceeded the configured length. Your text is preserved. Try Regenerate.';
-        if (p.summary_reason === 'summary_empty_output') return 'The model returned no summary text. Your text is preserved. Try Regenerate.';
+        if (p.summary_reason === 'summary_character_limit')
+          return 'The generated summary exceeded the configured length. Your text is preserved. Try Regenerate.';
+        if (p.summary_reason === 'summary_empty_output')
+          return 'The model returned no summary text. Your text is preserved. Try Regenerate.';
         return 'We couldn’t generate a summary. Your current text is preserved. Try Regenerate.';
-      case 'blocked': return p.summary_reason === 'usage_limit' ? 'Summary generation is paused because your USD allowance is exhausted.' : 'Summary generation is waiting. It will retry automatically when available.';
-      case 'needs_review': return 'Summary generation needs an administrator’s review. Your current text is preserved.';
-      case 'not_configured': return 'An administrator needs to configure a summary model before generation is available.';
-      case 'waiting_for_input': return 'Select library evidence and add a job description to generate a summary.';
-      case 'cancelled': return 'Summary generation was cancelled. Try Regenerate when you’re ready.';
-      default: return 'Your summary uses the evidence selected for this job.';
+      case 'blocked':
+        return p.summary_reason === 'usage_limit'
+          ? 'Summary generation is paused because your USD allowance is exhausted.'
+          : 'Summary generation is waiting. It will retry automatically when available.';
+      case 'needs_review':
+        return 'Summary generation needs an administrator’s review. Your current text is preserved.';
+      case 'not_configured':
+        return 'An administrator needs to configure a summary model before generation is available.';
+      case 'waiting_for_input':
+        return 'Select library evidence and add a job description to generate a summary.';
+      case 'cancelled':
+        return 'Summary generation was cancelled. Try Regenerate when you’re ready.';
+      default:
+        return 'Your summary uses the evidence selected for this job.';
     }
   });
   protected regenerateSummary(): void {
-    if (!this.summaryGenerating()) void this.save({});
+    if (!this.busy() && !this.summaryGenerating()) void this.save({});
   }
   protected summaryText = '';
   protected readonly summaryCharacterLimit = 500;
-  protected get summaryCharacterCount(): number { return Array.from(this.summaryText).length; }
+  protected get summaryCharacterCount(): number {
+    return Array.from(this.summaryText).length;
+  }
   private loadedSummaryText = '';
   private summaryPoll?: ReturnType<typeof setTimeout>;
   protected readonly relevance = signal<Record<string, number>>({});
@@ -125,7 +136,7 @@ export class CvTab {
   protected readonly dropped = computed(() => {
     const p = this.preview();
     const f = this.fitted();
-    return new Set(p && f ? p.trim.slice(0, f.k) : []);
+    return new Set(p && f ? (f.dropped ?? p.trim.slice(0, f.k)) : []);
   });
   protected readonly rows = computed(() => {
     const p = this.preview();
@@ -142,6 +153,7 @@ export class CvTab {
         rows.push({
           id: e.id,
           label: e.title,
+          organization: e.organization,
           depth,
           highlight: false,
           state: trimmed ? 'trimmed' : state(e.id),
@@ -155,7 +167,13 @@ export class CvTab {
             state: trimmed ? 'trimmed' : state(h.id),
           });
         for (const h of p.available.highlights.filter((h) => h.evidence_id === e.id))
-          rows.push({ id: h.id, label: h.text, depth: depth + 1, highlight: true, state: 'hidden' });
+          rows.push({
+            id: h.id,
+            label: h.text,
+            depth: depth + 1,
+            highlight: true,
+            state: 'hidden',
+          });
         for (const c of e.children ?? []) walk(c, depth + 1, trimmed);
       };
       s.entries.forEach((e) => walk(e, 0));
@@ -167,10 +185,42 @@ export class CvTab {
         section = { key: e.section, label: sectionLabels[e.section] ?? e.section, rows: [] };
         sections.push(section);
       }
-      section.rows.push({ id: e.id, label: e.title, depth: 0, highlight: false, state: 'hidden' });
+      section.rows.push({
+        id: e.id,
+        label: e.title,
+        depth: 0,
+        highlight: false,
+        reason: e.reason,
+        state: 'hidden',
+      });
     }
     return sections;
   });
+  protected readonly selectionGroups = computed(() =>
+    this.rows().map((section) => {
+      const entries: { entry: Row; highlights: Row[] }[] = [];
+      for (const row of section.rows) {
+        if (!row.highlight) entries.push({ entry: row, highlights: [] });
+        else entries.at(-1)?.highlights.push(row);
+      }
+      return { ...section, entries };
+    }),
+  );
+  protected readonly selectionCount = computed(() =>
+    this.rows().reduce(
+      (n, s) =>
+        n + s.rows.filter((r) => !r.highlight && ['shown', 'pinned'].includes(r.state)).length,
+      0,
+    ),
+  );
+  protected get hasSummaryEdits(): boolean {
+    return this.summaryText !== this.loadedSummaryText;
+  }
+
+  protected toggle(row: Row, checked: boolean): void {
+    this.pick(row.id, checked ? 'include' : 'exclude');
+  }
+
   protected readonly trimmedCount = computed(() => this.dropped().size);
   protected readonly overflow = computed(() => {
     const f = this.fitted();
@@ -189,9 +239,12 @@ export class CvTab {
         this.setPdf(undefined);
         this.exports.set([]);
         this.busy.set(false);
+        this.exporting.set(false);
         this.error.set('');
         this.notice.set('');
-        this.summaryText = ''; this.loadedSummaryText = ''; clearTimeout(this.summaryPoll);
+        this.summaryText = '';
+        this.loadedSummaryText = '';
+        clearTimeout(this.summaryPoll);
         if (identity) {
           void this.load(id);
           void this.loadExports(id);
@@ -203,14 +256,24 @@ export class CvTab {
       let active = true;
       this.relevance.set({});
       if (p?.match) {
-        void this.api.GET('/v1/match-runs/{id}', { params: { path: { id: p.match.run_id } } })
+        void this.api
+          .GET('/v1/match-runs/{id}', { params: { path: { id: p.match.run_id } } })
           .then((response) => {
             const run = Api.ok(response);
             if (!active || run.result?.scoring_version !== 3 || run.result.partial) return;
-            this.relevance.set(Object.fromEntries(run.result.evidence.map((item) => [item.evidence_id, item.relevance])));
-          }).catch(() => { /* Relevance is optional; the CV remains usable. */ });
+            this.relevance.set(
+              Object.fromEntries(
+                run.result.evidence.map((item) => [item.evidence_id, item.relevance]),
+              ),
+            );
+          })
+          .catch(() => {
+            /* Relevance is optional; the CV remains usable. */
+          });
       }
-      onCleanup(() => { active = false; });
+      onCleanup(() => {
+        active = false;
+      });
     });
     const events = inject(EventsService);
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -259,7 +322,8 @@ export class CvTab {
       const p = Api.ok(await this.api.GET('/v1/jobs/{id}/cv', { params: { path: { id } } }));
       if (!this.current(scope) || version !== this.loadVersion) return;
       this.preview.set(p);
-      const nextSummary = p.draft.summary ?? String((p.content as unknown as CvContent).profile['summary'] ?? '');
+      const nextSummary =
+        p.draft.summary ?? String((p.content as unknown as CvContent).profile['summary'] ?? '');
       if (this.summaryText === this.loadedSummaryText) this.summaryText = nextSummary;
       this.loadedSummaryText = nextSummary;
       clearTimeout(this.summaryPoll);
@@ -310,17 +374,29 @@ export class CvTab {
       return;
     }
     this.pdfCurrent.set(false);
-    const compiled = new Map<number, Compiled>();
+    const compiled = new Map<string, Compiled>();
     this.fitting.set(true);
     try {
-      const result = await fit(p.trim.length, p.draft.page_budget, async (k) => {
+      const compile = async (dropped: string[]) => {
         if (generation !== this.generation || !this.current(scope)) throw new Error('superseded');
-        const c = await this.typst.compile(p.template, applyDrops(content, p.trim.slice(0, k)));
-        compiled.set(k, c);
-        return c.pages;
-      });
+        const fittedContent = applyDrops(content, dropped);
+        const key = JSON.stringify(fittedContent);
+        let c = compiled.get(key);
+        if (!c) {
+          c = await this.typst.compile(p.template, fittedContent);
+          compiled.set(key, c);
+        }
+        return c;
+      };
+      const result = await fitContent(
+        content,
+        p.trim,
+        p.draft.page_budget,
+        async (dropped) => (await compile(dropped)).pages,
+      );
       if (generation !== this.generation || !this.current(scope)) return;
-      const pdf = compiled.get(result.k)!.pdf;
+      const { pdf } = await compile(result.dropped ?? []);
+      if (generation !== this.generation || !this.current(scope)) return;
       this.setPdf({ ...result, pdf });
       this.fittedKey = key;
       this.pdfCurrent.set(true);
@@ -374,13 +450,22 @@ export class CvTab {
         }),
       );
       if (!this.current(scope)) return;
-      if (version !== this.loadVersion || (this.preview()?.draft.version ?? 0) > next.draft.version) {
+      if (
+        version !== this.loadVersion ||
+        (this.preview()?.draft.version ?? 0) > next.draft.version
+      ) {
         this.notice.set('This CV changed while saving. The latest version is shown.');
         await this.load(id);
         return;
       }
       ++this.loadVersion;
       this.preview.set(next);
+      const nextSummary =
+        next.draft.summary ??
+        String((next.content as unknown as CvContent).profile['summary'] ?? '');
+      if (this.summaryText === this.loadedSummaryText || change.summary !== undefined)
+        this.summaryText = nextSummary;
+      this.loadedSummaryText = nextSummary;
       this.scheduleSummaryPoll(next, id);
       await this.refit();
     } catch (e) {
@@ -411,10 +496,12 @@ export class CvTab {
   protected async export(): Promise<void> {
     const p = this.preview();
     const f = this.fitted();
-    if (!p || !f || !this.pdfCurrent() || this.busy() || this.fitting()) return;
+    if (!p || !f || !this.pdfCurrent() || this.busy() || this.fitting() || this.hasSummaryEdits)
+      return;
     const id = this.jobId();
     const scope = this.scope();
     this.busy.set(true);
+    this.exporting.set(true);
     this.notice.set('');
     try {
       const digest = await crypto.subtle.digest('SHA-256', f.pdf as BufferSource);
@@ -428,7 +515,7 @@ export class CvTab {
           body: {
             draft_version: p.draft.version,
             content_hash: p.content_hash,
-            dropped: p.trim.slice(0, f.k),
+            dropped: f.dropped ?? p.trim.slice(0, f.k),
             pages: f.pages,
             client_sha256,
           },
@@ -447,7 +534,10 @@ export class CvTab {
         await this.load(id);
       } else this.error.set((e as Error).message);
     } finally {
-      if (this.current(scope)) this.busy.set(false);
+      if (this.current(scope)) {
+        this.busy.set(false);
+        this.exporting.set(false);
+      }
     }
   }
 

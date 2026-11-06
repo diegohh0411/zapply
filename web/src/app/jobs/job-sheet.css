@@ -117,27 +117,6 @@
   background: var(--background);
   border-top: 1px solid var(--border);
 }
-.match-layout {
-  display: grid;
-  gap: 2rem;
-}
-.next-step {
-  align-self: start;
-  padding: 1.5rem;
-  border-inline-start: 2px solid var(--brand);
-  background: color-mix(in oklch, var(--brand) 4%, var(--background));
-}
-.next-step h3 {
-  margin-top: 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
-}
-.next-step p {
-  margin-block: 0.5rem 1rem;
-  font-size: 0.875rem;
-  line-height: 1.65;
-  color: var(--muted-foreground);
-}
 .activity-layout {
   display: grid;
   align-items: start;
@@ -159,9 +138,6 @@
   .activity-composer {
     position: sticky;
     top: 5rem;
-  }
-  .match-layout {
-    grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
   }
 }
 @media (max-width: 40rem) {

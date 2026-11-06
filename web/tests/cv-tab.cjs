@@ -144,10 +144,18 @@ test('newest CV preview wins and a failed refit preserves the PDF but prevents e
   let requests = 0;
   let fail = false;
   const f = fixture(
-    { GET: () => (++requests === 1 ? pending.promise : Promise.resolve(ok({
-      ...preview(requests),
-      content: { ...content, profile: { name: `Ada ${requests}` } },
-    }))), POST: () => assert.fail('a stale PDF cannot be exported') },
+    {
+      GET: () =>
+        ++requests === 1
+          ? pending.promise
+          : Promise.resolve(
+              ok({
+                ...preview(requests),
+                content: { ...content, profile: { name: `Ada ${requests}` } },
+              }),
+            ),
+      POST: () => assert.fail('a stale PDF cannot be exported'),
+    },
     async () => {
       if (fail) throw Error('compile failed');
       return { pages: 1, pdf: new Uint8Array([37, 80, 68, 70]) };
@@ -187,11 +195,16 @@ test('summary polls keep the existing PDF and only compile changed inputs in the
   assert.equal(f.tab.fitted(), previous);
   assert.equal(f.tab.pdfCurrent(), true);
 
-  p = { ...p, summary_status: 'completed', content: {
-    ...content, profile: { ...content.profile, summary: 'Updated summary' },
-  } };
+  p = {
+    ...p,
+    summary_status: 'completed',
+    content: {
+      ...content,
+      profile: { ...content.profile, summary: 'Updated summary' },
+    },
+  };
   const loading = f.tab.load('job');
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(compilations, 2);
   assert.equal(f.tab.fitted(), previous);
   assert.equal(f.tab.fitting(), true);
@@ -255,7 +268,10 @@ test('a delayed CV save cannot replace a newer preview received during the save'
   f.tab.preview.set(preview(1));
   const versions = [];
   const set = f.tab.preview.set;
-  f.tab.preview.set = next => { versions.push(next.draft.version); set(next); };
+  f.tab.preview.set = (next) => {
+    versions.push(next.draft.version);
+    set(next);
+  };
   const saving = f.tab.save({ page_budget: 2 });
   // Another tab's save has committed and its change event reloads version 3
   // before this tab receives the delayed version-2 PUT response.
@@ -273,7 +289,13 @@ test('a delayed CV save cannot replace a newer preview received during the save'
 test('summary generation shows progress, preserves text and prevents duplicate runs', async () => {
   let saves = 0;
   const p = { ...preview(1), summary_status: 'running' };
-  const f = fixture({ GET: async () => ok(p), PUT: async () => { saves++; return ok(p); } });
+  const f = fixture({
+    GET: async () => ok(p),
+    PUT: async () => {
+      saves++;
+      return ok(p);
+    },
+  });
   f.tab.summaryText = 'Unsaved personal summary';
   await f.tab.load('job');
   assert.equal(f.tab.summaryGenerating(), true);
@@ -289,7 +311,11 @@ test('summary generation shows progress, preserves text and prevents duplicate r
 
 test('failed and blocked summary runs show actionable messages without a spinner', () => {
   const f = fixture({});
-  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'result_unavailable' });
+  f.tab.preview.set({
+    ...preview(1),
+    summary_status: 'failed',
+    summary_reason: 'result_unavailable',
+  });
   assert.equal(f.tab.summaryGenerating(), false);
   assert.match(f.tab.summaryMessage(), /Try Regenerate/);
   f.tab.preview.set({ ...preview(1), summary_status: 'blocked', summary_reason: 'usage_limit' });
@@ -300,8 +326,96 @@ test('failed and blocked summary runs show actionable messages without a spinner
 
 test('summary failures distinguish length validation from empty model output', () => {
   const f = fixture({});
-  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_character_limit' });
+  f.tab.preview.set({
+    ...preview(1),
+    summary_status: 'failed',
+    summary_reason: 'summary_character_limit',
+  });
   assert.match(f.tab.summaryMessage(), /exceeded the configured length/);
-  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_empty_output' });
+  f.tab.preview.set({
+    ...preview(1),
+    summary_status: 'failed',
+    summary_reason: 'summary_empty_output',
+  });
   assert.match(f.tab.summaryMessage(), /returned no summary text/);
+});
+
+test('export sends the exact backfilled omissions and downloads the same fitted snapshot', async () => {
+  const c = {
+    ...content,
+    sections: [
+      {
+        key: 'experience',
+        entries: [
+          { id: 'small', title: 'Older role' },
+          { id: 'large', title: 'Long role' },
+          { id: 'strong', title: 'Best match' },
+        ],
+      },
+    ],
+  };
+  const p = { ...preview(1), content: c, trim: ['small', 'large', 'strong'] };
+  let exported;
+  let downloaded;
+  const helper = transpile('cv-content.ts', () => ({}));
+  const f = fixture(
+    {
+      GET: async (path) => ok(path.endsWith('/exports') ? { items: [] } : p),
+      POST: async (_path, request) => {
+        exported = request.body;
+        return ok({ content: helper.applyDrops(c, exported.dropped) });
+      },
+    },
+    async (_template, c) => {
+      const size = c.sections
+        .flatMap((s) => s.entries)
+        .reduce((n, e) => n + { small: 3, large: 7, strong: 7 }[e.id], 0);
+      return {
+        pages: Math.max(1, Math.ceil(size / 10)),
+        pdf: new Uint8Array(Buffer.from(JSON.stringify(c))),
+      };
+    },
+  );
+  f.tab.downloadContent = async (_template, c) => {
+    downloaded = c;
+  };
+  await f.tab.load('job');
+  assert.equal(f.tab.error(), '');
+  assert.ok(f.tab.fitted());
+  assert.deepEqual(Array.from(f.tab.dropped()), ['large']);
+  await f.tab.export();
+  assert.deepEqual(Array.from(exported.dropped), ['large']);
+  assert.equal(exported.pages, 1);
+  assert.equal(
+    exported.client_sha256,
+    require('node:crypto').createHash('sha256').update(f.tab.fitted().pdf).digest('hex'),
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(downloaded)),
+    JSON.parse(JSON.stringify(helper.applyDrops(c, ['large']))),
+  );
+  f.destroy();
+});
+
+test('unsaved summary text blocks export and saving it restores export readiness', async () => {
+  let posts = 0;
+  const p = preview(1);
+  const f = fixture({
+    GET: async () => ok(p),
+    PUT: async (_path, request) =>
+      ok({ ...preview(2), draft: { ...p.draft, version: 2, summary: request.body.summary } }),
+    POST: async () => {
+      posts++;
+      return ok({ content });
+    },
+  });
+  await f.tab.load('job');
+  f.tab.summaryText = 'My edited summary';
+  assert.equal(f.tab.hasSummaryEdits, true);
+  await f.tab.export();
+  assert.equal(posts, 0);
+  await f.tab.save({ summary: f.tab.summaryText });
+  assert.equal(f.tab.hasSummaryEdits, false);
+  assert.equal(f.tab.summaryText, 'My edited summary');
+  f.destroy();
 });
