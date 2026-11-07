@@ -27,7 +27,12 @@ const (
 	// maxAgeDays is how far back mail is ever read, on first connect, after a
 	// lapse or in a backlog.
 	maxAgeDays = backfillDays
-	leaseFor   = 5 * time.Minute
+	// RescanMinDays and RescanMaxDays bound a member's own re-read of a mailbox;
+	// rescanMax caps the messages one re-read lists, newest first.
+	RescanMinDays = 1
+	RescanMaxDays = 90
+	rescanMax     = 500
+	leaseFor      = 5 * time.Minute
 )
 
 // SyncArgs is unique per trigger (Tick): River keeps a running job unique, so a
@@ -37,6 +42,8 @@ type SyncArgs struct {
 	UserID    uuid.UUID `json:"user_id" river:"unique"`
 	AccountID uuid.UUID `json:"account_id" river:"unique"`
 	Tick      string    `json:"tick" river:"unique"`
+	// Days, when set, also re-lists the inbox this many days back (a rescan).
+	Days int `json:"days,omitempty"`
 }
 
 func (SyncArgs) Kind() string { return "mail_sync" }
@@ -138,7 +145,11 @@ func truncate(s string, n int) string {
 }
 
 // Sync reads new inbox messages for one account and queues each for classification.
-func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
+func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error { return s.SyncDays(ctx, u, id, 0) }
+
+// SyncDays is Sync that, with days > 0, also lists the inbox that many days back.
+// Mail already read, relevant or not, is skipped, so only new mail reaches the model.
+func (s *Service) SyncDays(ctx context.Context, u, id uuid.UUID, days int) error {
 	if !s.Configured() {
 		return nil
 	}
@@ -179,7 +190,7 @@ func (s *Service) Sync(ctx context.Context, u, id uuid.UUID) error {
 	if held {
 		return river.JobSnooze(max(wait, 5*time.Second))
 	}
-	err = s.sync(ctx, u, id, acc)
+	err = s.sync(ctx, u, id, acc, days)
 	var delay time.Duration
 	if errors.Is(err, ErrRateLimited) {
 		var e error
@@ -214,6 +225,8 @@ type pendingSync struct {
 	Cursor    string   `json:"cursor"`
 	More      bool     `json:"more"`
 	Bootstrap bool     `json:"bootstrap"`
+	// MaxAge widens how old a kept message may be, for a rescan; 0 means maxAgeDays.
+	MaxAge int `json:"max_age,omitempty"`
 }
 
 var errPaced = errors.New("mail sync request budget reached")
@@ -252,7 +265,7 @@ func (s *Service) quotaBackoff(ctx context.Context, u, id uuid.UUID) (time.Durat
 	return delay, err
 }
 
-func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) error {
+func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState, days int) error {
 	access, err := s.access(ctx, u, id)
 	if err != nil {
 		return err
@@ -333,6 +346,26 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 			return e
 		}
 	}
+	if days > 0 {
+		// The rescan joins whatever is pending, so an interrupted run loses neither.
+		ids, e := s.provider.Recent(ctx, access, days, rescanMax)
+		if e != nil {
+			return e
+		}
+		pending.IDs = unique(append(pending.IDs, storable(ids)...))
+		pending.MaxAge = max(pending.MaxAge, days)
+		raw, e := json.Marshal(pending)
+		if e != nil {
+			return e
+		}
+		if e = s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+			_, e := tx.Exec(ctx, `UPDATE mail_account SET sync_pending=$3 WHERE user_id=$1 AND id=$2 AND status='active'`, u, id, string(raw))
+			return e
+		}); e != nil {
+			return e
+		}
+	}
+	oldest := time.Now().AddDate(0, 0, -max(maxAgeDays, pending.MaxAge))
 	for len(pending.IDs) > 0 {
 		mid := pending.IDs[0]
 		known, e := s.known(ctx, u, id, []string{mid})
@@ -353,7 +386,7 @@ func (s *Service) sync(ctx context.Context, u, id uuid.UUID, acc accountState) e
 			if e != nil && !errors.Is(e, ErrMessageGone) {
 				return e
 			}
-			if e == nil && !strings.Contains(strings.ToLower(m.From), "<"+acc.Address+">") && !strings.EqualFold(strings.TrimSpace(m.From), acc.Address) && !m.ReceivedAt.Before(time.Now().AddDate(0, 0, -maxAgeDays)) {
+			if e == nil && !strings.Contains(strings.ToLower(m.From), "<"+acc.Address+">") && !strings.EqualFold(strings.TrimSpace(m.From), acc.Address) && !m.ReceivedAt.Before(oldest) {
 				save = true
 			}
 		}

@@ -1040,3 +1040,39 @@ func TestSyncNowNeedsAnActiveAccount(t *testing.T) {
 		t.Fatal("a paused account was synced")
 	}
 }
+
+func TestRescanReadsFurtherBackOnce(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	acct := f.connect(t)
+	f.fake.addAt("old", "x@y.test", "Interview long ago", "p", time.Now().AddDate(0, 0, -45))
+	f.fake.addAt("ancient", "x@y.test", "Interview ages ago", "p", time.Now().AddDate(0, 0, -75))
+	f.fake.recent = []string{"old", "ancient"}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	if ids := f.messageIDs(t); len(ids) != 0 {
+		t.Fatalf("the usual window stored %v", ids)
+	}
+	for _, d := range []int{0, 91} {
+		if _, e := f.api.Rescan(ctx, f.u, acct, d); e == nil {
+			t.Fatalf("a %d-day rescan was accepted", d)
+		}
+	}
+	if _, e := f.api.Rescan(ctx, f.u, acct, 60); e != nil {
+		t.Fatal(e)
+	}
+	if e := f.ws.SyncDays(ctx, f.u, acct, 60); e != nil {
+		t.Fatal(e)
+	}
+	if ids := f.messageIDs(t); len(ids) != 1 || ids["old"] == uuid.Nil {
+		t.Fatalf("a 60-day rescan stored %v", ids)
+	}
+	gets := f.fake.count("get")
+	if e := f.ws.SyncDays(ctx, f.u, acct, 60); e != nil {
+		t.Fatal(e)
+	}
+	if f.fake.count("get") != gets+1 { // only "ancient", which was never kept, is read again
+		t.Fatalf("gets %d -> %d", gets, f.fake.count("get"))
+	}
+}

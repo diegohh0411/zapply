@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 	"sync"
@@ -413,6 +414,27 @@ func (s *Service) SyncNow(ctx context.Context, u, id uuid.UUID) (Account, error)
 			return &library.ConflictError{Message: "the account is " + a.Status + " and cannot be synced"}
 		}
 		return s.wake(ctx, tx, u, id, "manual")
+	})
+	return out, err
+}
+
+// Rescan re-reads the last `days` days of the mailbox, beyond the usual window.
+// Mail already read is skipped, so only mail never seen reaches the model.
+func (s *Service) Rescan(ctx context.Context, u, id uuid.UUID, days int) (Account, error) {
+	if days < RescanMinDays || days > RescanMaxDays {
+		return Account{}, &library.ValidationError{Fields: []library.FieldError{{Field: "days", Message: fmt.Sprintf("must be between %d and %d", RescanMinDays, RescanMaxDays)}}}
+	}
+	var out Account
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		a, e := s.account(ctx, tx, u, id)
+		if e != nil {
+			return e
+		}
+		out = a
+		if a.Status != "active" {
+			return &library.ConflictError{Message: "the account is " + a.Status + " and cannot be rescanned"}
+		}
+		return s.enqueue(ctx, tx, SyncArgs{UserID: u, AccountID: id, Tick: "rescan:" + uuid.NewString(), Days: days})
 	})
 	return out, err
 }

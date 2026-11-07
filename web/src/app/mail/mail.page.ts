@@ -13,6 +13,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideBriefcase,
+  lucideHistory,
   lucideInbox,
   lucideMail,
   lucidePause,
@@ -24,6 +25,8 @@ import {
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
+import { ZardDialogImports } from '@/shared/components/dialog';
+import { ZardInputComponent } from '@/shared/components/input';
 import { ZardProgressComponent } from '@/shared/components/progress';
 import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
@@ -70,11 +73,14 @@ const REFRESH_MS = 800;
     NgIcon,
     RouterLink,
     ZardButtonComponent,
+    ZardDialogImports,
+    ZardInputComponent,
     ZardProgressComponent,
   ],
   providers: [
     provideIcons({
       lucideBriefcase,
+      lucideHistory,
       lucideInbox,
       lucideMail,
       lucidePause,
@@ -147,6 +153,15 @@ export class MailPage {
     }
     return out;
   });
+  protected readonly rescanPresets = [7, 30, 60, 90];
+  protected readonly rescanOpen = signal(false);
+  protected readonly rescanning = signal<MailAccount | null>(null);
+  protected readonly rescanDays = signal(60);
+  protected readonly rescanValid = computed(() => {
+    const d = this.rescanDays();
+    return Number.isInteger(d) && d >= 1 && d <= 90;
+  });
+  protected readonly rescanSince = computed(() => this.now() - this.rescanDays() * 86_400_000);
   private generation = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stale = { accounts: false, messages: false };
@@ -334,6 +349,33 @@ export class MailPage {
           body: { paused },
         }),
       );
+    });
+  }
+
+  protected openRescan(a: MailAccount): void {
+    this.rescanning.set(a);
+    this.rescanOpen.set(true);
+  }
+
+  protected setRescanDays(e: Event): void {
+    this.rescanDays.set((e.target as HTMLInputElement).valueAsNumber);
+  }
+
+  async rescan(a: MailAccount): Promise<void> {
+    if (!this.rescanValid()) return;
+    const days = this.rescanDays();
+    this.rescanOpen.set(false);
+    await this.act(async () => {
+      Api.ok(
+        await this.api.client.POST('/v1/mail/accounts/{id}/rescan', {
+          params: { path: { id: a.id } },
+          body: { days },
+        }),
+      );
+      this.notice.set({
+        kind: 'ok',
+        text: `Scanning the last ${days} days of ${a.address}. New updates appear below as they are classified.`,
+      });
     });
   }
 

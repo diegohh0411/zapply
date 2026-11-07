@@ -59,6 +59,11 @@ func (s *server) SyncMailAccount(ctx context.Context, req gen.SyncMailAccountReq
 	return mailValue[gen.SyncMailAccount200JSONResponse](a, err)
 }
 
+func (s *server) RescanMailAccount(ctx context.Context, req gen.RescanMailAccountRequestObject) (gen.RescanMailAccountResponseObject, error) {
+	a, err := s.mail.Rescan(ctx, uid(ctx), req.Id, req.Body.Days)
+	return mailValue[gen.RescanMailAccount200JSONResponse](a, err)
+}
+
 func (s *server) DisconnectMailAccount(ctx context.Context, req gen.DisconnectMailAccountRequestObject) (gen.DisconnectMailAccountResponseObject, error) {
 	if err := s.mail.Disconnect(ctx, uid(ctx), req.Id); err != nil {
 		return nil, err
