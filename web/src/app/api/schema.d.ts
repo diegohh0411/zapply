@@ -1071,6 +1071,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail/accounts/{id}/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Re-reads the last `days` days of the inbox (at most 500 messages, newest
+         *     first), beyond the usual 30-day window. Mail already read is skipped, so
+         *     only mail never seen is sent to the model. 409 unless the account is active.
+         */
+        post: operations["rescanMailAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mail/messages": {
         parameters: {
             query?: never;
@@ -4066,6 +4089,35 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The account, with its current progress. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAccount"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    rescanMailAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    days: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The account; progress updates as the mail is read. */
             200: {
                 headers: {
                     [name: string]: unknown;

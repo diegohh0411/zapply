@@ -1910,6 +1910,11 @@ type CreateMatchRunParams struct {
 	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
+// RescanMailAccountJSONBody defines parameters for RescanMailAccount.
+type RescanMailAccountJSONBody struct {
+	Days int `json:"days"`
+}
+
 // ListMailMessagesParams defines parameters for ListMailMessages.
 type ListMailMessagesParams struct {
 	Category *MailCategory       `form:"category,omitempty" json:"category,omitempty"`
@@ -2004,6 +2009,9 @@ type CompleteGoogleConnectJSONRequestBody = MailConnectComplete
 
 // UpdateMailAccountJSONRequestBody defines body for UpdateMailAccount for application/json ContentType.
 type UpdateMailAccountJSONRequestBody = MailAccountUpdate
+
+// RescanMailAccountJSONRequestBody defines body for RescanMailAccount for application/json ContentType.
+type RescanMailAccountJSONRequestBody RescanMailAccountJSONBody
 
 // ResolveMailStatusChangeJSONRequestBody defines body for ResolveMailStatusChange for application/json ContentType.
 type ResolveMailStatusChangeJSONRequestBody = MailStatusChangeAction
@@ -2220,6 +2228,9 @@ type ServerInterface interface {
 
 	// (PATCH /v1/mail/accounts/{id})
 	UpdateMailAccount(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/mail/accounts/{id}/rescan)
+	RescanMailAccount(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (POST /v1/mail/accounts/{id}/sync)
 	SyncMailAccount(w http.ResponseWriter, r *http.Request, id ID)
@@ -4392,6 +4403,32 @@ func (siw *ServerInterfaceWrapper) UpdateMailAccount(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// RescanMailAccount operation middleware
+func (siw *ServerInterfaceWrapper) RescanMailAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RescanMailAccount(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SyncMailAccount operation middleware
 func (siw *ServerInterfaceWrapper) SyncMailAccount(w http.ResponseWriter, r *http.Request) {
 
@@ -5115,6 +5152,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.DisconnectMailAccount)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/mail/accounts/{id}", wrapper.UpdateMailAccount)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/sync", wrapper.SyncMailAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/rescan", wrapper.RescanMailAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/messages/{id}/status-change", wrapper.ResolveMailStatusChange)
 
@@ -7783,6 +7821,46 @@ func (response UpdateMailAccountdefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type RescanMailAccountRequestObject struct {
+	Id   ID `json:"id"`
+	Body *RescanMailAccountJSONRequestBody
+}
+
+type RescanMailAccountResponseObject interface {
+	VisitRescanMailAccountResponse(w http.ResponseWriter) error
+}
+
+type RescanMailAccount200JSONResponse MailAccount
+
+func (response RescanMailAccount200JSONResponse) VisitRescanMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RescanMailAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RescanMailAccountdefaultApplicationProblemPlusJSONResponse) VisitRescanMailAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SyncMailAccountRequestObject struct {
 	Id ID `json:"id"`
 }
@@ -8759,6 +8837,9 @@ type StrictServerInterface interface {
 
 	// (PATCH /v1/mail/accounts/{id})
 	UpdateMailAccount(ctx context.Context, request UpdateMailAccountRequestObject) (UpdateMailAccountResponseObject, error)
+
+	// (POST /v1/mail/accounts/{id}/rescan)
+	RescanMailAccount(ctx context.Context, request RescanMailAccountRequestObject) (RescanMailAccountResponseObject, error)
 
 	// (POST /v1/mail/accounts/{id}/sync)
 	SyncMailAccount(ctx context.Context, request SyncMailAccountRequestObject) (SyncMailAccountResponseObject, error)
@@ -10674,6 +10755,39 @@ func (sh *strictHandler) UpdateMailAccount(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMailAccountResponseObject); ok {
 		if err := validResponse.VisitUpdateMailAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RescanMailAccount operation middleware
+func (sh *strictHandler) RescanMailAccount(w http.ResponseWriter, r *http.Request, id ID) {
+	var request RescanMailAccountRequestObject
+
+	request.Id = id
+
+	var body RescanMailAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RescanMailAccount(ctx, request.(RescanMailAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RescanMailAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RescanMailAccountResponseObject); ok {
+		if err := validResponse.VisitRescanMailAccountResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

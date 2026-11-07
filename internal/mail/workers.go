@@ -17,7 +17,7 @@ type syncWorker struct {
 }
 
 func (w *syncWorker) Work(ctx context.Context, j *river.Job[SyncArgs]) error {
-	return w.s.Sync(ctx, j.Args.UserID, j.Args.AccountID)
+	return w.s.SyncDays(ctx, j.Args.UserID, j.Args.AccountID, j.Args.Days)
 }
 
 type watchWorker struct {

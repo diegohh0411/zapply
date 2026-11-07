@@ -158,6 +158,15 @@
                     zType="ghost"
                     zSize="sm"
                     [zDisabled]="busy()"
+                    (click)="openRescan(a)"
+                  >
+                    <ng-icon name="lucideHistory" /> Scan older mail
+                  </button>
+                  <button
+                    z-button
+                    zType="ghost"
+                    zSize="sm"
+                    [zDisabled]="busy()"
                     (click)="pause(a, true)"
                   >
                     <ng-icon name="lucidePause" /> Pause
@@ -294,4 +303,61 @@
       </div>
     }
   </section>
+
+  <z-dialog [(zVisible)]="rescanOpen" zWidth="min(440px, 95vw)">
+    @if (rescanning(); as a) {
+      <z-dialog-header>
+        <z-dialog-title>Scan older mail</z-dialog-title>
+        <z-dialog-description>{{ a.address }}</z-dialog-description>
+      </z-dialog-header>
+      <form class="rescan-form" (submit)="$event.preventDefault(); rescan(a)">
+        <label for="rescan-days">How far back</label>
+        <div class="rescan-presets" role="group" aria-label="Common ranges">
+          @for (d of rescanPresets; track d) {
+            <button
+              type="button"
+              [attr.aria-pressed]="rescanDays() === d"
+              (click)="rescanDays.set(d)"
+            >
+              {{ d }} days
+            </button>
+          }
+        </div>
+        <div class="rescan-custom">
+          <input
+            z-input
+            id="rescan-days"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max="90"
+            step="1"
+            [value]="rescanDays()"
+            (input)="setRescanDays($event)"
+            [attr.aria-invalid]="!rescanValid()"
+            aria-describedby="rescan-help"
+          />
+          <span>days, from 1 to 90</span>
+        </div>
+        <p id="rescan-help" class="rescan-help">
+          @if (rescanValid()) {
+            zapply reads up to 500 inbox messages received since
+            <strong>{{ rescanSince() | date: 'EEE, MMM d' }}</strong
+            >. Mail it has already read is skipped. Anything new is sent to the model to be
+            classified, which counts toward your model usage.
+          } @else {
+            Enter a whole number of days from 1 to 90.
+          }
+        </p>
+        <z-dialog-footer class="gap-2">
+          <button z-button zType="outline" type="button" (click)="rescanOpen.set(false)">
+            Cancel
+          </button>
+          <button z-button type="submit" [zDisabled]="busy() || !rescanValid()">
+            <ng-icon name="lucideHistory" /> Scan {{ rescanValid() ? rescanDays() : '' }} days
+          </button>
+        </z-dialog-footer>
+      </form>
+    }
+  </z-dialog>
 </div>
