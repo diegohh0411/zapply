@@ -317,7 +317,7 @@ test('failed and blocked summary runs show actionable messages without a spinner
     summary_reason: 'result_unavailable',
   });
   assert.equal(f.tab.summaryGenerating(), false);
-  assert.match(f.tab.summaryMessage(), /Try Regenerate/);
+  assert.match(f.tab.summaryMessage(), /Try another/);
   f.tab.preview.set({ ...preview(1), summary_status: 'blocked', summary_reason: 'usage_limit' });
   assert.equal(f.tab.summaryGenerating(), false);
   assert.match(f.tab.summaryMessage(), /allowance/);
@@ -331,7 +331,7 @@ test('summary failures distinguish length validation from empty model output', (
     summary_status: 'failed',
     summary_reason: 'summary_character_limit',
   });
-  assert.match(f.tab.summaryMessage(), /exceeded the configured length/);
+  assert.match(f.tab.summaryMessage(), /too long/);
   f.tab.preview.set({
     ...preview(1),
     summary_status: 'failed',

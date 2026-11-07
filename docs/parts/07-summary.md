@@ -34,7 +34,8 @@ calls are made by the automated tests.
 Owners select a final generated-summary cap of 100, 200, 300, 400, or 500
 characters (default 500), counted as Unicode code points including spaces and
 punctuation. The generation prompt and output validation use this cap.
-Oversized model output is rejected. Manually saved summaries retain their
+Oversized model output is trimmed to its last complete sentence that fits; it is
+rejected only when not even the first sentence fits. Manually saved summaries retain their
 500-character limit; the editor displays a counter and prevents oversized saves.
 
 Owners also select a summary completion-token cap: 1,024, 2,048 (default),

@@ -85,10 +85,10 @@ export class CvTab {
         return 'Summary updated from the selected evidence.';
       case 'failed':
         if (p.summary_reason === 'summary_character_limit')
-          return 'The generated summary exceeded the configured length. Your text is preserved. Try Regenerate.';
+          return 'The generated summary was too long. Your text is preserved. Try another.';
         if (p.summary_reason === 'summary_empty_output')
-          return 'The model returned no summary text. Your text is preserved. Try Regenerate.';
-        return 'We couldn’t generate a summary. Your current text is preserved. Try Regenerate.';
+          return 'The model returned no summary text. Your text is preserved. Try another.';
+        return 'We couldn’t generate a summary. Your current text is preserved. Try another.';
       case 'blocked':
         return p.summary_reason === 'usage_limit'
           ? 'Summary generation is paused because your USD allowance is exhausted.'
@@ -100,13 +100,16 @@ export class CvTab {
       case 'waiting_for_input':
         return 'Select library evidence and add a job description to generate a summary.';
       case 'cancelled':
-        return 'Summary generation was cancelled. Try Regenerate when you’re ready.';
+        return 'Summary generation was cancelled. Try another when you’re ready.';
       default:
         return 'Your summary uses the evidence selected for this job.';
     }
   });
   protected regenerateSummary(): void {
     if (!this.busy() && !this.summaryGenerating()) void this.save({});
+  }
+  protected discardSummaryEdits(): void {
+    this.summaryText = this.loadedSummaryText;
   }
   protected summaryText = '';
   protected readonly summaryCharacterLimit = 500;

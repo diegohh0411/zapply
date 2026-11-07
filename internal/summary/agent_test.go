@@ -128,3 +128,17 @@ func TestAdapterDistinguishesEmptyAndOversizedOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestFitToLimitDropsTrailingSentences(t *testing.T) {
+	text := "First sentence fits. Second sentence pushes it past the limit."
+	got, ok := FitToLimit(text, 30)
+	if !ok || got != "First sentence fits." {
+		t.Fatalf("got %q %v", got, ok)
+	}
+	if _, ok := FitToLimit("No boundary within the limit at all here", 10); ok {
+		t.Fatal("accepted text without a sentence boundary")
+	}
+	if got, ok := FitToLimit("Version 2.5 is out. More text follows here.", 25); !ok || got != "Version 2.5 is out." {
+		t.Fatalf("split on decimal point: %q", got)
+	}
+}
