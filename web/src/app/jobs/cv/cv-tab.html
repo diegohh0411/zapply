@@ -41,6 +41,113 @@
   @if (preview(); as p) {
     <div class="cv-columns">
       <div class="grid min-w-0 gap-6">
+        <section aria-labelledby="summary-heading" [attr.aria-busy]="summaryGenerating()">
+          <div class="editor-heading">
+            <h3 id="summary-heading">Professional summary</h3>
+            <span>{{ p.draft.summary == null ? 'Written for this job' : 'Edited by you' }}</span>
+          </div>
+          <div class="mt-3 space-y-3">
+            @if (summaryGenerating() || p.summary_status !== 'completed') {
+              <p
+                role="status"
+                aria-live="polite"
+                class="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                [class.summary-failed]="p.summary_status === 'failed'"
+              >
+                @if (summaryGenerating()) {
+                  <span
+                    aria-hidden="true"
+                    class="inline-block size-4 shrink-0 animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-r-transparent"
+                  ></span>
+                }
+                {{ summaryMessage() }}
+              </p>
+            }
+            @if (summaryGenerating() && !summaryText) {
+              <div
+                aria-hidden="true"
+                class="space-y-3 rounded border p-3 motion-safe:animate-pulse"
+              >
+                <div class="h-4 w-full rounded bg-muted"></div>
+                <div class="h-4 w-11/12 rounded bg-muted"></div>
+                <div class="h-4 w-3/4 rounded bg-muted"></div>
+              </div>
+            } @else {
+              <textarea
+                class="min-h-28 w-full resize-y rounded-md border bg-background p-3 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
+                rows="4"
+                [(ngModel)]="summaryText"
+                [readonly]="summaryGenerating()"
+                aria-label="Edit summary"
+                aria-describedby="summary-character-count"
+              ></textarea>
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  id="summary-character-count"
+                  class="mr-auto text-xs text-muted-foreground"
+                  [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit"
+                >
+                  {{ summaryCharacterCount }} / {{ summaryCharacterLimit }}
+                </span>
+                @if (hasSummaryEdits) {
+                  <button
+                    z-button
+                    zSize="sm"
+                    zType="ghost"
+                    [zDisabled]="busy()"
+                    (click)="discardSummaryEdits()"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    z-button
+                    zSize="sm"
+                    [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit"
+                    (click)="save({ summary: summaryText })"
+                  >
+                    Save
+                  </button>
+                } @else if (p.draft.summary != null) {
+                  <button
+                    z-button
+                    zSize="sm"
+                    zType="outline"
+                    [zDisabled]="busy()"
+                    (click)="save({ summary: null })"
+                    title="Discard your edits and let us write the summary for this job"
+                  >
+                    Write it for me
+                  </button>
+                } @else {
+                  <button
+                    z-button
+                    zSize="sm"
+                    zType="outline"
+                    [zDisabled]="busy() || summaryGenerating()"
+                    (click)="regenerateSummary()"
+                  >
+                    {{ summaryGenerating() ? 'Writing…' : 'Try another' }}
+                  </button>
+                }
+              </div>
+              @if (p.draft.summary != null && p.summary_suggestion && !hasSummaryEdits) {
+                <div class="space-y-2 rounded-md border border-dashed p-3">
+                  <p class="text-xs text-muted-foreground">Suggested for your current selection</p>
+                  <p class="text-sm">{{ p.summary_suggestion }}</p>
+                  <button
+                    z-button
+                    zSize="sm"
+                    zType="outline"
+                    [zDisabled]="busy()"
+                    (click)="save({ summary: p.summary_suggestion })"
+                  >
+                    Use suggestion
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        </section>
         <section aria-labelledby="selection-heading">
           <div class="editor-heading">
             <h3 id="selection-heading">Choose your experience</h3>
@@ -212,99 +319,6 @@
             </details>
           }
         </section>
-        <details
-          class="supporting-details"
-          [open]="hasSummaryEdits || p.summary_status === 'failed'"
-        >
-          <summary>
-            Edit professional summary
-            <span>{{ p.draft.summary == null ? 'Automatic' : 'Custom' }}</span>
-          </summary>
-          <div class="space-y-3" aria-label="Summary" [attr.aria-busy]="summaryGenerating()">
-            <p
-              role="status"
-              aria-live="polite"
-              class="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
-              [class.summary-failed]="p.summary_status === 'failed'"
-            >
-              @if (summaryGenerating()) {
-                <span
-                  aria-hidden="true"
-                  class="inline-block size-4 shrink-0 animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-r-transparent"
-                ></span>
-              }
-              {{ summaryMessage() }}
-            </p>
-            @if (summaryGenerating()) {
-              <div
-                aria-hidden="true"
-                class="space-y-3 rounded border p-3 motion-safe:animate-pulse"
-              >
-                <div class="h-4 w-full rounded bg-muted"></div>
-                <div class="h-4 w-11/12 rounded bg-muted"></div>
-                <div class="h-4 w-3/4 rounded bg-muted"></div>
-              </div>
-            } @else {
-              <textarea
-                class="min-h-40 w-full resize-y rounded-md border bg-background p-3 text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
-                rows="6"
-                [(ngModel)]="summaryText"
-                aria-label="Edit summary"
-                aria-describedby="summary-character-count"
-              ></textarea>
-              <p
-                id="summary-character-count"
-                class="text-xs"
-                [class.text-destructive]="summaryCharacterCount > summaryCharacterLimit"
-              >
-                {{ summaryCharacterCount }} / {{ summaryCharacterLimit }} characters
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  z-button
-                  zSize="sm"
-                  [zDisabled]="busy() || summaryCharacterCount > summaryCharacterLimit"
-                  (click)="save({ summary: summaryText })"
-                >
-                  Save summary
-                </button>
-                <button
-                  z-button
-                  zSize="sm"
-                  zType="outline"
-                  [zDisabled]="busy() || summaryGenerating()"
-                  [zLoading]="summaryGenerating()"
-                  (click)="regenerateSummary()"
-                >
-                  {{ summaryGenerating() ? 'Generating…' : 'Regenerate' }}
-                </button>
-                <button
-                  z-button
-                  zSize="sm"
-                  zType="ghost"
-                  [zDisabled]="busy()"
-                  (click)="save({ summary: null })"
-                >
-                  Use automatic
-                </button>
-              </div>
-              @if (
-                p.draft.summary !== null && p.draft.summary !== undefined && p.summary_suggestion
-              ) {
-                <p class="text-sm">{{ p.summary_suggestion }}</p>
-                <button
-                  z-button
-                  zSize="sm"
-                  zType="outline"
-                  [zDisabled]="busy()"
-                  (click)="save({ summary: p.summary_suggestion })"
-                >
-                  Apply suggestion
-                </button>
-              }
-            }
-          </div>
-        </details>
         @if (exports().length) {
           <details class="group rounded-xl border">
             <summary
