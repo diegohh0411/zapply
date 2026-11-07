@@ -113,3 +113,26 @@ export function connectNotice(params: Record<string, string | undefined>): {
       return { kind: 'error', text: 'Could not connect Gmail. Try again.' };
   }
 }
+
+/** Splits `Name <addr@x>` into its parts; a bare address comes back as the name. */
+export function parseSender(from: string): { name: string; email: string } {
+  const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(from);
+  if (!m || !m[1]) return { name: m?.[2] ?? from, email: '' };
+  return { name: m[1], email: m[2] };
+}
+
+/** "Today", "Yesterday", or a date like "Wed, Nov 5" (with the year when it is not this one). */
+export function dayLabel(iso: string, now = Date.now()): string {
+  const d = new Date(iso);
+  const start = (t: Date) => new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+  const today = new Date(now);
+  const days = Math.round((start(today) - start(d)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(d.getFullYear() !== today.getFullYear() && { year: 'numeric' }),
+  });
+}

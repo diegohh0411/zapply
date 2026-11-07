@@ -1,0 +1,397 @@
+:host {
+  display: block;
+  /* One hue per category, shared by the filter dots and the row rails. */
+  --cat-received: var(--muted-foreground);
+  --cat-assessment: oklch(0.62 0.13 235);
+  --cat-interview: oklch(0.58 0.18 295);
+  --cat-rejection: var(--destructive);
+  --cat-offer: oklch(0.62 0.15 160);
+}
+.mail-page {
+  max-width: 64rem;
+  margin-inline: auto;
+  padding: 1.75rem 1.5rem 3rem;
+}
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+.page-header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.page-header p,
+.muted-text {
+  margin-top: 0.35rem;
+  max-width: 65ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+.banner-error {
+  border-color: color-mix(in oklch, var(--destructive) 35%, transparent);
+  background: color-mix(in oklch, var(--destructive) 5%, transparent);
+  color: var(--destructive);
+}
+
+/* Mailboxes */
+.mailboxes {
+  margin-bottom: 2.5rem;
+}
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.section-heading h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.section-heading span {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.mailbox-list {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.mailbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 1rem 1.25rem;
+}
+.mailbox + .mailbox {
+  border-top: 1px solid var(--border);
+}
+.mailbox-main {
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+.mailbox-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+}
+.mailbox-address {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.mailbox-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.mailbox-stats strong {
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.mailbox-progress {
+  margin-top: 0.6rem;
+  max-width: 24rem;
+}
+.mailbox-progress p {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.mailbox-note {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.mailbox-note-warn {
+  color: oklch(0.55 0.13 70);
+}
+.mailbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.disconnect {
+  color: var(--muted-foreground);
+}
+.disconnect:hover {
+  color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 8%, transparent);
+}
+.mailbox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+.privacy {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.privacy summary {
+  display: inline-flex;
+  gap: 0.4rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.privacy summary::-webkit-details-marker {
+  display: none;
+}
+.privacy summary::before {
+  content: '›';
+  display: inline-block;
+}
+.privacy[open] summary::before {
+  transform: rotate(90deg);
+}
+.privacy summary:hover {
+  color: var(--foreground);
+}
+.privacy summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+.privacy p {
+  margin-top: 0.5rem;
+  max-width: 72ch;
+  line-height: 1.6;
+}
+
+/* Updates */
+.updates-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding-top: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+.updates-bar h2 {
+  padding-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.filter-tabs {
+  display: flex;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.6rem 0.75rem 0.7rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.filter-tabs button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.filter-tabs button[aria-pressed='true'] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+.filter-tabs button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.category-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--cat);
+}
+[data-category='received'] {
+  --cat: var(--cat-received);
+}
+[data-category='assessment'] {
+  --cat: var(--cat-assessment);
+}
+[data-category='interview'] {
+  --cat: var(--cat-interview);
+}
+[data-category='rejection'] {
+  --cat: var(--cat-rejection);
+}
+[data-category='offer'] {
+  --cat: var(--cat-offer);
+}
+.day-heading {
+  padding: 1.5rem 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.message-list {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.message {
+  position: relative;
+  padding: 1rem 1.25rem 1rem 1.5rem;
+}
+.message + .message {
+  border-top: 1px solid var(--border);
+}
+/* The category rail: scanning the left edge tells you what kind of news each mail is. */
+.message::before {
+  content: '';
+  position: absolute;
+  inset: 0.85rem auto 0.85rem 0.6rem;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--cat);
+}
+.message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+.category-label {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--cat);
+}
+[data-category='received'] .category-label {
+  color: var(--muted-foreground);
+}
+.sender {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--foreground);
+}
+.sender-email {
+  margin-left: 0.35rem;
+  color: var(--muted-foreground);
+}
+.message-meta time {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.subject {
+  margin-top: 0.3rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.snippet {
+  margin-top: 0.25rem;
+  max-width: 80ch;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+.message-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.message-links a,
+.message-links span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.message-links a {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.message-links a:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+.message-links a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+.message app-mail-status-change {
+  display: block;
+  margin-top: 0.6rem;
+}
+.updates-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.older {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 40rem) {
+  .mail-page {
+    padding: 1.25rem 1rem 2rem;
+  }
+  .mailbox,
+  .message {
+    padding-right: 1rem;
+  }
+  .mailbox {
+    padding-left: 1rem;
+  }
+  .sender-email {
+    display: none;
+  }
+}
