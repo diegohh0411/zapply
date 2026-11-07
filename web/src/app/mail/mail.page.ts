@@ -8,10 +8,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
+  lucideBriefcase,
+  lucideInbox,
   lucideMail,
   lucidePause,
   lucidePlay,
@@ -33,7 +35,9 @@ import {
   categories,
   categoryLabel,
   connectNotice,
+  dayLabel,
   mailProgress,
+  parseSender,
   relativeTime,
   type MailAccount,
   type MailCategory,
@@ -55,22 +59,23 @@ const dotClass: Record<Tone, string> = {
   warn: 'bg-amber-500',
   muted: 'bg-muted-foreground/50',
 };
-const categoryClass: Record<MailCategory, string> = {
-  received: 'bg-muted text-foreground',
-  assessment: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
-  interview: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
-  rejection: 'bg-destructive/10 text-destructive',
-  offer: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-};
-
 /** Account and message events arrive in bursts while a backlog is classified; refetch at most this often. */
 const REFRESH_MS = 800;
 
 @Component({
   selector: 'app-mail-page',
-  imports: [DatePipe, MailStatusChange, NgIcon, ZardButtonComponent, ZardProgressComponent],
+  imports: [
+    DatePipe,
+    MailStatusChange,
+    NgIcon,
+    RouterLink,
+    ZardButtonComponent,
+    ZardProgressComponent,
+  ],
   providers: [
     provideIcons({
+      lucideBriefcase,
+      lucideInbox,
       lucideMail,
       lucidePause,
       lucidePlay,
@@ -81,279 +86,8 @@ const REFRESH_MS = 800;
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="mx-auto max-w-5xl space-y-6 px-4 py-6">
-      <header>
-        <h1 class="text-xl font-semibold tracking-tight">Mail</h1>
-        <p class="text-sm text-muted-foreground">
-          Connect Gmail and zapply picks out the mail about your applications: confirmations,
-          assessments, interviews, rejections and offers.
-        </p>
-      </header>
-
-      @if (notice(); as n) {
-        <div
-          [attr.role]="n.kind === 'error' ? 'alert' : 'status'"
-          class="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
-          [class.border-destructive]="n.kind === 'error'"
-          [class.text-destructive]="n.kind === 'error'"
-        >
-          <p>{{ n.text }}</p>
-          <button
-            z-button
-            zType="ghost"
-            zSize="icon-xs"
-            type="button"
-            aria-label="Dismiss"
-            (click)="notice.set(null)"
-          >
-            <ng-icon name="lucideX" />
-          </button>
-        </div>
-      }
-      @if (error()) {
-        <div
-          role="alert"
-          class="flex items-start justify-between gap-3 rounded-lg border border-destructive p-3 text-sm text-destructive"
-        >
-          <p>{{ error() }}</p>
-          <button
-            z-button
-            zType="ghost"
-            zSize="icon-xs"
-            type="button"
-            aria-label="Dismiss"
-            (click)="error.set('')"
-          >
-            <ng-icon name="lucideX" />
-          </button>
-        </div>
-      }
-
-      <section class="space-y-4 rounded-xl border bg-card p-5" aria-labelledby="accounts-title">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="space-y-1">
-            <h2 id="accounts-title" class="font-medium">Mailboxes</h2>
-            @if (configured()) {
-              <p class="max-w-xl text-sm text-muted-foreground">
-                You can connect more than one Gmail account. Each one is read on its own and adds to
-                the same list below. Connecting an address that is already here reconnects it.
-              </p>
-            }
-          </div>
-          @if (configured()) {
-            <button
-              z-button
-              [zType]="live().length ? 'outline' : 'default'"
-              [zDisabled]="busy()"
-              (click)="connect()"
-            >
-              <ng-icon name="lucidePlus" />
-              {{ live().length ? 'Add another Gmail account' : 'Connect Gmail' }}
-            </button>
-          }
-        </div>
-
-        @if (!configured() && loaded()) {
-          <p class="text-sm text-muted-foreground">
-            Mail is not set up on this server. An administrator needs to add a Google OAuth client.
-          </p>
-        }
-
-        @for (a of live(); track a.id) {
-          <article
-            class="space-y-3 rounded-lg border bg-background p-4"
-            [attr.aria-label]="a.address"
-          >
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p class="min-w-0 truncate text-base font-medium">{{ a.address }}</p>
-              <span
-                class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                [class]="tone(a).pill"
-              >
-                <span class="size-1.5 rounded-full" [class]="tone(a).dot"></span>
-                {{ badge(a).label }}
-              </span>
-              @if (a.last_synced_at && a.status === 'active') {
-                <span class="ml-auto text-xs text-muted-foreground">
-                  Checked {{ ago(a.last_synced_at) }}
-                </span>
-              }
-            </div>
-
-            @if (progress(a); as p) {
-              @if (p.working) {
-                <div class="space-y-1.5">
-                  <z-progress [value]="p.percent" class="h-1.5" />
-                  <p class="text-sm tabular-nums text-muted-foreground" aria-live="polite">
-                    {{ p.done }}/{{ p.total }} mails classified
-                    @if (a.status === 'paused') {
-                      <span>· paused</span>
-                    }
-                  </p>
-                </div>
-              } @else if (p.total > 0) {
-                <p class="text-sm text-muted-foreground">
-                  {{ p.total }} {{ p.total === 1 ? 'mail' : 'mails' }} classified ·
-                  {{ a.mails_relevant }} about your applications
-                </p>
-              } @else if (a.status === 'active') {
-                <p class="text-sm text-muted-foreground">
-                  Looking for mail about your applications…
-                </p>
-              }
-            }
-
-            @if (note(a); as text) {
-              <p
-                class="text-sm"
-                [class.text-amber-700]="badge(a).tone === 'warn'"
-                [class.dark:text-amber-400]="badge(a).tone === 'warn'"
-                [class.text-muted-foreground]="badge(a).tone !== 'warn'"
-                [attr.role]="badge(a).tone === 'warn' ? 'status' : null"
-              >
-                {{ text }}
-              </p>
-            }
-
-            <div class="flex flex-wrap items-center gap-2 pt-1">
-              @switch (a.status) {
-                @case ('needs_reconnect') {
-                  <button z-button [zDisabled]="busy()" (click)="connect()">
-                    <ng-icon name="lucideRefreshCw" /> Reconnect
-                  </button>
-                }
-                @case ('paused') {
-                  <button z-button zType="outline" [zDisabled]="busy()" (click)="pause(a, false)">
-                    <ng-icon name="lucidePlay" /> Resume
-                  </button>
-                }
-                @default {
-                  <button z-button zType="outline" [zDisabled]="busy()" (click)="pause(a, true)">
-                    <ng-icon name="lucidePause" /> Pause
-                  </button>
-                  @if (!a.retry_at) {
-                    <button z-button zType="outline" [zDisabled]="busy()" (click)="syncNow(a)">
-                      <ng-icon name="lucideRefreshCw" /> Check now
-                    </button>
-                  }
-                }
-              }
-              <button
-                z-button
-                zType="destructive"
-                class="ml-auto"
-                [zDisabled]="busy()"
-                (click)="disconnect(a)"
-              >
-                <ng-icon name="lucideUnplug" /> Disconnect
-              </button>
-            </div>
-          </article>
-        } @empty {
-          @if (configured() && loaded()) {
-            <div
-              class="flex flex-col items-center gap-2 rounded-lg border border-dashed py-8 text-center"
-            >
-              <ng-icon name="lucideMail" class="size-6 text-muted-foreground" />
-              <p class="text-sm font-medium">No mailbox connected</p>
-              <p class="max-w-sm text-sm text-muted-foreground">
-                Connect a Gmail account and your application updates will show up below as they
-                arrive.
-              </p>
-            </div>
-          }
-        }
-
-        <details class="text-xs text-muted-foreground">
-          <summary class="cursor-pointer select-none">How zapply handles your mail</summary>
-          <p class="mt-2 max-w-3xl">
-            zapply reads each new inbox message's sender, subject and a short preview, and sends
-            them to a language model to see whether they concern an application. Mail that does not
-            is dropped on the spot: only its identifier is kept so it is never read twice. Mail that
-            does is kept with its preview. Message bodies are never stored. Pause stops all reading
-            and keeps the connection. Disconnect revokes zapply's access to the mailbox; the updates
-            already found stay here.
-          </p>
-        </details>
-      </section>
-
-      <section class="space-y-3" aria-labelledby="inbox-title">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="inbox-title" class="font-medium">Application updates</h2>
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Filter by category">
-            <button
-              z-button
-              [zType]="category() === '' ? 'default' : 'outline'"
-              zSize="sm"
-              [attr.aria-pressed]="category() === ''"
-              (click)="filter('')"
-            >
-              All
-            </button>
-            @for (c of categories; track c.value) {
-              <button
-                z-button
-                [zType]="category() === c.value ? 'default' : 'outline'"
-                zSize="sm"
-                [attr.aria-pressed]="category() === c.value"
-                (click)="filter(c.value)"
-              >
-                {{ c.label }}
-              </button>
-            }
-          </div>
-        </div>
-        <ul class="divide-y rounded-lg border">
-          @for (m of messages(); track m.id) {
-            <li class="space-y-1 p-4">
-              <div class="flex flex-wrap items-center gap-2 text-sm">
-                <span
-                  class="rounded-full px-2 py-0.5 text-xs font-medium"
-                  [class]="catClass(m.category)"
-                  >{{ label(m.category) }}</span
-                >
-                <span class="truncate font-medium">{{ m.from }}</span>
-                <time class="ml-auto text-muted-foreground" [attr.datetime]="m.received_at">{{
-                  m.received_at | date: 'medium'
-                }}</time>
-              </div>
-              <p class="font-medium">{{ m.subject || '(no subject)' }}</p>
-              <p class="text-sm text-muted-foreground">{{ m.snippet }}</p>
-              <p class="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                @if (m.job_id && jobTitles()[m.job_id]) {
-                  <span>Job: {{ jobTitles()[m.job_id] }}</span>
-                }
-                @if (live().length > 1 && addresses()[m.account_id]) {
-                  <span>Mailbox: {{ addresses()[m.account_id] }}</span>
-                }
-              </p>
-              <app-mail-status-change [message]="m" (changed)="replace($event)" />
-            </li>
-          } @empty {
-            <li class="p-6 text-center text-sm text-muted-foreground">
-              @if (loadingMessages()) {
-                Loading…
-              } @else if (category()) {
-                No {{ categoryName().toLowerCase() }} updates yet.
-              } @else if (working()) {
-                Still reading your mail. Updates appear here as they are classified.
-              } @else if (loaded() && !live().length) {
-                Connect a Gmail account to see updates here.
-              } @else {
-                Nothing yet. Updates appear here as they arrive.
-              }
-            </li>
-          }
-        </ul>
-        @if (more()) {
-          <button z-button zType="outline" [zDisabled]="loadingMessages()" (click)="older()">
-            Older
-          </button>
-        }
-      </section>
-    </div>
-  `,
+  templateUrl: './mail.page.html',
+  styleUrl: './mail.page.css',
 })
 export class MailPage {
   private readonly api = inject(Api);
@@ -367,7 +101,7 @@ export class MailPage {
   protected readonly label = categoryLabel;
   protected readonly badge = accountBadge;
   protected readonly progress = mailProgress;
-  protected readonly catClass = (c: MailCategory): string => categoryClass[c];
+  protected readonly sender = parseSender;
   protected readonly tone = (a: MailAccount): { pill: string; dot: string } => {
     const t = accountBadge(a).tone;
     return { pill: toneClass[t], dot: dotClass[t] };
@@ -401,6 +135,17 @@ export class MailPage {
   protected readonly categoryName = computed(() => {
     const c = this.category();
     return c ? categoryLabel(c) : '';
+  });
+  /** Messages grouped under Today, Yesterday or their date, newest first as loaded. */
+  protected readonly groups = computed(() => {
+    const out: { day: string; items: Message[] }[] = [];
+    for (const m of this.messages()) {
+      const day = dayLabel(m.received_at, this.now());
+      const last = out.at(-1);
+      if (last?.day === day) last.items.push(m);
+      else out.push({ day, items: [m] });
+    }
+    return out;
   });
   private generation = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
