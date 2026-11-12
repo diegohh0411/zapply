@@ -180,8 +180,14 @@ func TestChatSheetPricesOutputUnderMaxTokens(t *testing.T) {
 	if !errors.As(e, &pe) || pe.Code != "model_endpoint_unavailable" {
 		t.Fatalf("uncapped endpoint accepted: %v", e)
 	}
-	_, e = chatSheet(t, `{"tag":"test","context_length":1000,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","web_search":"0.004"}}`)
-	if !errors.As(e, &pe) || pe.Code != "unbounded_pricing_web_search" {
-		t.Fatalf("web search accepted: %v", e)
+	// web_search is never enabled by our calls, so a bounded endpoint that lists it still qualifies.
+	s, e = chatSheet(t, `{"tag":"test","context_length":1000,"max_completion_tokens":64,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","completion":"0.0000016","web_search":"0.0025"}}`)
+	if e != nil || s.InputRate != 400_000 || s.OutputRate != 1_600_000 {
+		t.Fatalf("web search blocked a bounded endpoint: %+v %v", s, e)
+	}
+	// Any other charge the reservation cannot bound still disqualifies the endpoint.
+	_, e = chatSheet(t, `{"tag":"test","context_length":1000,"supported_parameters":["max_tokens"],"pricing":{"prompt":"0.0000004","surcharge":"0.004"}}`)
+	if !errors.As(e, &pe) || pe.Code != "unbounded_pricing_surcharge" {
+		t.Fatalf("unknown charge accepted: %v", e)
 	}
 }

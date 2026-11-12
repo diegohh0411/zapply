@@ -130,7 +130,8 @@ var diagnosticMessages = []map[string]string{{"role": "user", "content": Diagnos
 // template overhead, until settlements calibrate a model.
 var chatPrior = billing.Tokenization{TokensPerKB: 1000, OverheadTokens: 64, OutputPerQ: 256}
 
-var modelID = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$`)
+// modelID accepts OpenRouter slugs, including its ~provider/model aliases.
+var modelID = regexp.MustCompile(`^~?[a-zA-Z0-9_.:-]+/[a-zA-Z0-9_.:-]+$`)
 
 // ChatSheet describes one provider endpoint of a chat model. Only endpoints
 // that honour max_tokens qualify: it caps output, reasoning included, so

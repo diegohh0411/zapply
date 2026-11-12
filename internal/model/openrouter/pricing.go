@@ -14,8 +14,9 @@ import (
 // endpoints alike. Input and output rates are the highest of their components.
 // Reasoning bills as output and counts toward max_tokens. Calls send text and
 // receive text or JSON, so audio and image charges never apply; multimodal
-// requests must price them first. Any other positive component, web_search
-// included, is a charge the reservation cannot bound.
+// requests must price them first. web_search is a server-side tool our calls
+// never enable, so it is never billed. Any other positive component is a
+// charge the reservation cannot bound.
 var componentRoles = map[string]string{
 	"prompt":             billing.RoleInput,
 	"input_cache_read":   billing.RoleInput,
@@ -29,6 +30,7 @@ var componentRoles = map[string]string{
 	"output_audio":       billing.RoleUnused,
 	"image":              billing.RoleUnused,
 	"image_output":       billing.RoleUnused,
+	"web_search":         billing.RoleUnused,
 	"discount":           billing.RoleDiscount,
 }
 
