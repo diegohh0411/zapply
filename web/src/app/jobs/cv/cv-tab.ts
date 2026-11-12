@@ -14,7 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideChevronDown, lucideDownload } from '@ng-icons/lucide';
+import { lucideChevronDown, lucideDownload, lucideSparkles } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardSelectImports } from '@/shared/components/select';
@@ -52,7 +52,7 @@ interface Row {
 @Component({
   selector: 'app-cv-tab',
   imports: [DatePipe, FormsModule, ZardButtonComponent, ...ZardSelectImports, NgIcon, RelevanceIndicator, MatchTab, RichText],
-  viewProviders: [provideIcons({ lucideChevronDown, lucideDownload })],
+  viewProviders: [provideIcons({ lucideChevronDown, lucideDownload, lucideSparkles })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',
   styleUrl: './cv-tab.css',
