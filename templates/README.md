@@ -21,7 +21,9 @@ published.json              hashes of every file each version compiles with
 - **The pinned Typst version must be the one `typst.ts` ships**
   (`web/tests/typst-golden.cjs` knows the mapping), or browsers can't compile it.
 - **User text is data.** Read it from `/content.json` and place it as text.
-  Never `eval` it or build markup from it.
+  Never `eval` it or build markup from it. Highlights may carry Typst's
+  `*strong*` and `_emphasis_` marks; the template's `rich` function reads those
+  two (and `\` escapes) itself and places everything else as text.
 - **No system or embedded fonts.** Compiles use only the version's bundled fonts.
 
 ## The determinism gate
@@ -65,7 +67,7 @@ part 7 doc). Optional fields may be missing or `null`.
           "current": false,
           "summary": "…",
           "details": { },          // the kind's details (part 2)
-          "highlights": [{ "id": "…", "text": "…" }],
+          "highlights": [{ "id": "…", "text": "…" }],   // text may use *strong*, _emphasis_, \\ escapes
           "children": [ ]          // nested entries, same shape
         }
       ]
