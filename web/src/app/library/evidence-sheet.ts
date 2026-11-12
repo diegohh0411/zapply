@@ -89,6 +89,11 @@ export class EvidenceSheet {
   readonly saved = output<void>();
 
   protected readonly humanize = humanize;
+  protected readonly categories: { value: Category; label: string }[] = [
+    { value: 'paid', label: 'Paid work' },
+    { value: 'unpaid', label: 'Unpaid' },
+    { value: 'education', label: 'Education' },
+  ];
   protected form: Form = blank();
   protected readonly kind = signal('');
   protected readonly category = signal<Category>('paid');
@@ -161,10 +166,21 @@ export class EvidenceSheet {
     }
   }
 
+  /** Changing category keeps the kind when the new category allows it; otherwise the first allowed kind is picked. */
+  protected setCategory(c: Category): void {
+    this.category.set(c);
+    if (!this.allowedKinds().some((k) => k.kind === this.kind())) {
+      this.setKind(this.allowedKinds()[0]?.kind ?? '');
+    }
+  }
+
   protected setKind(k: string): void {
     this.kind.set(k);
     this.form.kind = k;
     this.form.details = {};
+    // Output and recognition take a single date; drop an end date carried over from another kind.
+    const form = this.kinds().find((x) => x.kind === k)?.form;
+    if (form === 'output' || form === 'recognition') this.form.end = '';
     if (k === 'career_break') this.form.auto_include = false;
   }
 
