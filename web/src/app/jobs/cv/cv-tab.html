@@ -52,6 +52,11 @@
                 aria-label="Edit summary"
                 aria-describedby="summary-character-count summary-status"
               ></textarea>
+              @if (summaryGenerating()) {
+                <div class="summary-skeleton" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </div>
+              }
               @if (p.draft.summary == null && !hasSummaryEdits) {
                 <button
                   z-button
