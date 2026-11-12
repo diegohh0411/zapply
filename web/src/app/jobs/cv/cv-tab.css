@@ -238,38 +238,48 @@ summary:focus-visible {
   }
 }
 
-/* The summary keeps one box while it is written: the text dims, a slow light
-   sweeps across it and the in-box action turns into a shimmering label, so
-   nothing above or below moves. */
+/* While the summary is written, its text gives way to skeleton lines inside
+   the same box (the common "content placeholder" pattern), so nothing above or
+   below moves and the in-box action becomes a shimmering label. */
 .summary-box {
   position: relative;
 }
 .summary-box textarea {
   display: block;
-  transition: color 300ms ease;
+  transition: color 200ms ease;
 }
 .summary-box.generating textarea {
-  color: var(--muted-foreground);
+  color: transparent;
+  caret-color: transparent;
 }
-.summary-box::after {
-  content: '';
+.summary-skeleton {
   position: absolute;
-  inset: 1px;
-  border-radius: calc(var(--radius, 0.5rem) - 1px);
+  inset: 0.75rem 0.75rem auto;
+  display: grid;
+  gap: 0.7rem;
+  padding-top: 0.3rem;
   pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 20%,
-    color-mix(in oklab, var(--foreground) 6%, transparent) 50%,
-    transparent 80%
-  );
-  background-size: 250% 100%;
-  transition: opacity 300ms ease;
+  animation: summary-fade-in 200ms ease both;
 }
-.summary-box.generating::after {
-  opacity: 1;
-  animation: summary-sweep 2.4s ease-in-out infinite;
+.summary-skeleton span {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 30%,
+      color-mix(in oklab, var(--foreground) 14%, transparent) 50%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 70%
+    )
+    0 0 / 300% 100%;
+  animation: summary-sweep 1.8s linear infinite;
+}
+.summary-skeleton span:nth-child(2) {
+  width: 92%;
+  animation-delay: 120ms;
+}
+.summary-skeleton span:nth-child(3) {
+  width: 64%;
+  animation-delay: 240ms;
 }
 .summary-action {
   position: absolute;
@@ -300,6 +310,11 @@ summary:focus-visible {
     background-position: 0 0;
   }
 }
+@keyframes summary-fade-in {
+  from {
+    opacity: 0;
+  }
+}
 @keyframes summary-pulse {
   50% {
     opacity: 0.4;
@@ -307,7 +322,7 @@ summary:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .summary-box.generating::after,
+  .summary-skeleton span,
   .shimmer-text,
   .summary-spin {
     animation: none;
