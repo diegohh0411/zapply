@@ -151,16 +151,17 @@
                   <div class="break-all font-medium">{{ m.email || 'Email unavailable' }}</div>
                 </td>
                 <td class="p-3">
-                  <select
-                    class="h-9 min-w-36 rounded-md border bg-background px-2"
+                  <z-select
+                    class="min-w-36"
                     [attr.aria-label]="'Plan for ' + (m.email || 'member')"
-                    [(ngModel)]="assignments[m.id]"
+                    zPlaceholder="Choose a plan"
+                    [ngModel]="assignments[m.id]"
+                    (ngModelChange)="assignments[m.id] = $event"
                   >
-                    <option value="">Choose a plan</option>
                     @for (p of plans(); track p.id) {
-                      <option [value]="p.id">{{ p.name }}</option>
+                      <z-select-item [zValue]="p.id">{{ p.name }}</z-select-item>
                     }
-                  </select>
+                  </z-select>
                 </td>
                 <td class="p-3">{{ m.membership?.status ?? 'Unassigned' }}</td>
                 <td class="p-3 tabular-nums">

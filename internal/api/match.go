@@ -111,6 +111,10 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 	if req.Body.SummaryMaxOutputTokens != nil && !req.Body.SummaryMaxOutputTokens.Valid() {
 		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_output_tokens", Message: "select a supported token cap"}}}
 	}
+	effort := optionalString(req.Body.SummaryReasoningEffort)
+	if req.Body.SummaryReasoningEffort != nil && !req.Body.SummaryReasoningEffort.Valid() {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_reasoning_effort", Message: "select a supported thinking effort"}}}
+	}
 	if req.Body.DecisionModel != nil {
 		models, e := s.catalogue(ctx, true)
 		if e != nil {
@@ -135,17 +139,48 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "select an available text model endpoint supporting bounded output"}}}
 		}
 	}
+	if effort != nil {
+		if req.Body.SummaryModel == nil {
+			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_reasoning_effort", Message: "choose a summary model before its thinking effort"}}}
+		}
+		models, e := s.catalogue(context.WithValue(ctx, textCatalogueKey{}, true), true)
+		if e != nil {
+			return nil, e
+		}
+		if !supportsEffort(models, *req.Body.SummaryModel, *effort) {
+			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_reasoning_effort", Message: "select a thinking effort the summary model accepts"}}}
+		}
+	}
 	var raw json.RawMessage
 	e = s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens, req.Body.SummaryMaxCharacters); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4,$5)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens, req.Body.SummaryMaxCharacters, effort); err != nil {
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)
 	})
 	return decodePlatform[gen.PutModelSettings200JSONResponse](raw, membership.Translate(e))
+}
+
+// optionalString converts an optional enum from the generated API types.
+func optionalString[T ~string](value *T) *string {
+	if value == nil {
+		return nil
+	}
+	s := string(*value)
+	return &s
+}
+
+// supportsEffort reports whether the catalogue lists the effort for the model.
+func supportsEffort(models []openrouter.DecisionModel, model, effort string) bool {
+	for _, m := range models {
+		if m.ID == model {
+			return m.Reasoning.Supports(effort)
+		}
+	}
+	return false
 }
 
 type textCatalogueKey struct{}

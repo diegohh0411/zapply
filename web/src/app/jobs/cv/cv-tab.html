@@ -224,7 +224,8 @@
                           }
                         }
                       </span>
-                      <select
+                      <z-select
+                        class="w-36 max-w-full"
                         [attr.aria-label]="'Selection for ' + item.entry.label"
                         [ngModel]="
                           p.draft.picks.include.includes(item.entry.id)
@@ -233,13 +234,13 @@
                               ? 'exclude'
                               : 'reset'
                         "
-                        (ngModelChange)="pick(item.entry.id, $event)"
-                        [disabled]="busy()"
+                        (ngModelChange)="pick(item.entry.id, $any($event))"
+                        [zDisabled]="busy()"
                       >
-                        <option value="reset">Automatic</option>
-                        <option value="include">Always keep</option>
-                        <option value="exclude">Leave out</option>
-                      </select>
+                        <z-select-item zValue="reset">Automatic</z-select-item>
+                        <z-select-item zValue="include">Always keep</z-select-item>
+                        <z-select-item zValue="exclude">Leave out</z-select-item>
+                      </z-select>
                     </div>
                     @if (item.highlights.length) {
                       <details
@@ -365,29 +366,29 @@
           <h3>PDF preview</h3>
           <label
             >Language
-            <select
+            <z-select
               [ngModel]="p.draft.locale"
-              (ngModelChange)="save({ locale: $event })"
-              [disabled]="busy()"
+              (ngModelChange)="save({ locale: $any($event) })"
+              [zDisabled]="busy()"
             >
               @for (l of p.template.locales; track l) {
-                <option [value]="l">
+                <z-select-item [zValue]="l">
                   {{ l === 'es' ? 'Español' : l === 'en' ? 'English' : l }}
-                </option>
+                </z-select-item>
               }
-            </select>
+            </z-select>
           </label>
           <label
             >Length
-            <select
-              [ngModel]="p.draft.page_budget"
-              (ngModelChange)="save({ page_budget: +$event })"
-              [disabled]="busy()"
+            <z-select
+              [ngModel]="'' + p.draft.page_budget"
+              (ngModelChange)="save({ page_budget: +$any($event) })"
+              [zDisabled]="busy()"
             >
               @for (n of [1, 2, 3]; track n) {
-                <option [ngValue]="n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</option>
+                <z-select-item [zValue]="'' + n">{{ n }} {{ n === 1 ? 'page' : 'pages' }}</z-select-item>
               }
-            </select>
+            </z-select>
           </label>
         </div>
         <p class="my-2.5 text-[11px] leading-normal text-muted-foreground" role="status">

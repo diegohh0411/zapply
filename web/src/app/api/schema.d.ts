@@ -1762,6 +1762,14 @@ export interface components {
                 [key: string]: unknown;
             };
             compatibility_reason: string;
+            reasoning?: components["schemas"]["ReasoningOptions"];
+        };
+        /** @description Thinking control a model accepts. Absent when the model does not reason. */
+        ReasoningOptions: {
+            /** @description When true, reasoning cannot be turned off. */
+            mandatory: boolean;
+            /** @description Accepted efforts, highest first. Empty when the model exposes no effort choice. */
+            efforts: ("max" | "xhigh" | "high" | "medium" | "low" | "minimal" | "off")[];
         };
         /**
          * @description Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
@@ -1779,6 +1787,11 @@ export interface components {
             summary_endpoint?: string | null;
             summary_max_output_tokens: components["schemas"]["SummaryMaxOutputTokens"];
             summary_max_characters: components["schemas"]["SummaryMaxCharacters"];
+            /**
+             * @description Thinking effort for summaries; null is automatic.
+             * @enum {string|null}
+             */
+            summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3598,6 +3611,11 @@ export interface operations {
                     summary_endpoint?: string | null;
                     summary_max_output_tokens?: components["schemas"]["SummaryMaxOutputTokens"];
                     summary_max_characters?: components["schemas"]["SummaryMaxCharacters"];
+                    /**
+                     * @description Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
+                     * @enum {string|null}
+                     */
+                    summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
                 };
             };
         };

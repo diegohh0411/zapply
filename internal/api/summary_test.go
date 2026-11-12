@@ -101,7 +101,7 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.user_id',$1,true)`, userID.String()); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',2048)`)
+		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',2048,NULL,NULL)`)
 		return err
 	})
 	if err != nil {
@@ -120,7 +120,7 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.user_id',$1,true)`, userID.String()); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',NULL,100)`)
+		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',NULL,100,NULL)`)
 		return err
 	})
 	if err != nil {
@@ -132,6 +132,29 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 	}
 	if err = admin.QueryRow(ctx, `SELECT (body->>'max_characters')::int FROM model_request WHERE operation_id=$1`, replacement).Scan(&characterCap); err != nil || characterCap != 100 {
 		t.Fatalf("replacement character cap: %d %v", characterCap, err)
+	}
+	old = replacement
+	// An explicit thinking effort is stored and, unlike automatic, changes the snapshot.
+	err = pgx.BeginFunc(ctx, admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.user_id',$1,true)`, userID.String()); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `SELECT platform.save_summary_settings('test/model','test',NULL,NULL,'high')`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var effort string
+	if err = admin.QueryRow(ctx, `SELECT platform.summary_settings()->>'reasoning_effort'`).Scan(&effort); err != nil || effort != "high" {
+		t.Fatalf("saved effort = %q, err = %v", effort, err)
+	}
+	if _, err = admin.Exec(ctx, `UPDATE platform.model_settings SET summary_reasoning_effort='none'`); err == nil {
+		t.Fatal("gateway none must not be stored; use off")
+	}
+	first = c.must(200, "GET", path, nil)
+	if err = admin.QueryRow(ctx, `SELECT operation_id::text FROM cv_summary WHERE job_id=$1`, job).Scan(&replacement); err != nil || replacement == old {
+		t.Fatalf("effort change did not replace snapshot: %v", err)
 	}
 	old = replacement
 	draft := first.Body["draft"].(map[string]any)

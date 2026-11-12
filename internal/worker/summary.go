@@ -14,6 +14,7 @@ import (
 type SummaryRequest struct {
 	MaxCharacters   int               `json:"max_characters,omitempty"`
 	MaxOutputTokens int               `json:"max_output_tokens,omitempty"`
+	ReasoningEffort string            `json:"reasoning_effort,omitempty"`
 	Model           string            `json:"model"`
 	Endpoint        string            `json:"endpoint"`
 	JobID           uuid.UUID         `json:"job_id"`

@@ -317,7 +317,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if !ok {
 			return r.block(ctx, args, "chat_provider_unavailable", nil, time.Minute)
 		}
-		quote, err = modelapi.QuoteChat(ctx, p, modelapi.ChatRequest{Model: chat.Model, Endpoint: chat.Endpoint, Messages: chat.Messages, MaxOutput: chat.outputTokenCap()}, billing.Calibration{})
+		quote, err = modelapi.QuoteChat(ctx, p, modelapi.ChatRequest{Model: chat.Model, Endpoint: chat.Endpoint, Messages: chat.Messages, MaxOutput: chat.outputTokenCap(), ReasoningEffort: chat.ReasoningEffort}, billing.Calibration{})
 	} else {
 		quote, err = r.Provider.Quote(ctx)
 	}

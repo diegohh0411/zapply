@@ -461,7 +461,7 @@ platform.model_settings singleton · decision_model? · version · updated_at
 | Endpoint | Notes |
 |---|---|
 | `GET /admin/decision-models` | Owner-only filtered model catalogue, pricing, context and compatibility |
-| `GET, PUT /admin/model-settings` | Owner-only persisted `{decision_model}` |
+| `GET, PUT /admin/model-settings` | Owner-only persisted `{decision_model}`, summary model, endpoint, output and character caps, and summary thinking effort (`null` is automatic) |
 | `GET /jobs/{id}/match-estimate` | Uncached questions, requests needed, estimated cost, available allowance |
 | `POST /jobs/{id}/match-runs` | Starts a run. `Idempotency-Key` required. `202` with the run; `409` with `existing_id` while one is active |
 | `GET /jobs/{id}/match-runs` | The job's runs, newest first. Cursor pagination |

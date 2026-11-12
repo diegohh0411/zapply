@@ -39,7 +39,8 @@ type DecisionModel struct {
 	Architecture struct {
 		Output []string `json:"output_modalities"`
 	} `json:"architecture"`
-	Compatibility string `json:"compatibility_reason"`
+	Compatibility string            `json:"compatibility_reason"`
+	Reasoning     *ReasoningOptions `json:"reasoning,omitempty"`
 }
 
 func (c *Client) DecisionModels(ctx context.Context, key string, refresh bool) ([]DecisionModel, error) {

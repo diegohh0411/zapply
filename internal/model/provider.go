@@ -20,6 +20,7 @@ type Quote struct {
 	RequestRate     string    `json:"request_rate"`
 	MaxInput        int       `json:"max_input"`
 	MaxOutput       int       `json:"max_output"`
+	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
 	Reserved        int64     `json:"reserved"`
 	FetchedAt       time.Time `json:"fetched_at"`
 

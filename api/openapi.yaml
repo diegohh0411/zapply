@@ -1123,6 +1123,7 @@ paths:
                 summary_endpoint: { type: string, nullable: true }
                 summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
                 summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
+                summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic. Must be one the summary model accepts." }
       responses:
         '200':
           description: Updated settings.
@@ -2501,6 +2502,17 @@ components:
         context_length: { type: integer }
         pricing: { type: object, additionalProperties: true }
         compatibility_reason: { type: string }
+        reasoning: { $ref: '#/components/schemas/ReasoningOptions' }
+    ReasoningOptions:
+      type: object
+      description: Thinking control a model accepts. Absent when the model does not reason.
+      required: [mandatory, efforts]
+      properties:
+        mandatory: { type: boolean, description: "When true, reasoning cannot be turned off." }
+        efforts:
+          type: array
+          description: Accepted efforts, highest first. Empty when the model exposes no effort choice.
+          items: { type: string, enum: [max, xhigh, high, medium, low, minimal, off] }
     SummaryMaxCharacters:
       type: integer
       enum: [100, 200, 300, 400, 500]
@@ -2518,6 +2530,7 @@ components:
         summary_endpoint: { type: string, nullable: true }
         summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
         summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
+        summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:

@@ -94,7 +94,6 @@ input[type='checkbox'] {
   cursor: pointer;
 }
 input:disabled,
-select:disabled,
 button:disabled {
   cursor: wait;
   opacity: 0.65;
@@ -109,15 +108,6 @@ button:disabled {
 }
 .fit-omitted {
   color: light-dark(#8a590c, #edc275);
-}
-select {
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  background: var(--background);
-  color: var(--foreground);
-  padding: 0.3rem 0.4rem;
-  font-size: 0.75rem;
-  max-width: 100%;
 }
 .highlight-details {
   border-top: 1px solid var(--border);
@@ -218,7 +208,6 @@ select {
   color: light-dark(#805517, #f3cc82);
 }
 input:focus-visible,
-select:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
