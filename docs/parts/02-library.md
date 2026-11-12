@@ -50,7 +50,7 @@ A `kind` belongs to exactly one form and allows only some categories. The list i
 | `license` | credential | education | `issuer`*, `number`, `jurisdiction` |
 | `certification` | credential | education | `issuer`*, `credential_id`, `verify_url`, `score` |
 | `clearance` | credential | education | `level`*, `issuer` |
-| `project` | output | any | `role`, `repo_url` |
+| `project` | output | any | `role` |
 | `publication` | output | any | `publication_type`* (journal, conference, book, chapter, preprint, thesis, article, report), `venue`, `authors` (list), `doi` |
 | `presentation` | output | any | `event`*, `format` (talk, poster, workshop, panel) |
 | `patent` | output | any | `number`, `office`, `status` (filed, granted) |
