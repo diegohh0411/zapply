@@ -247,7 +247,8 @@ export class EvidenceSheet {
       title: f.title,
       organization_id: f.organization_id || undefined,
       start: f.start.trim() || undefined,
-      end: f.is_current ? undefined : f.end.trim() || undefined,
+      // Single-date kinds hide the end field; never send a stale end the user can't see or clear.
+      end: f.is_current || !this.dateLabels()[1] ? undefined : f.end.trim() || undefined,
       is_current: isEngagement && f.is_current,
       location: f.location,
       url: f.url,

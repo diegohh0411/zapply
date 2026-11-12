@@ -109,7 +109,7 @@ var Kinds = []Kind{
 	{Name: "clearance", Form: Credential, Categories: []Category{Education}, Fields: []Field{
 		required(text("level")), text("issuer"),
 	}},
-	{Name: "project", Form: Output, Categories: any3, Fields: []Field{text("role"), text("repo_url")}},
+	{Name: "project", Form: Output, Categories: any3, Fields: []Field{text("role")}},
 	{Name: "publication", Form: Output, Categories: any3, Fields: []Field{
 		required(enum("publication_type", "journal", "conference", "book", "chapter", "preprint", "thesis", "article", "report")),
 		text("venue"), textList("authors"), text("doi"),
