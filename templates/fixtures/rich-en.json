@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "locale": "en",
+  "date": "2026-11-12",
+  "profile": { "name": "Ada Rich", "headline": "*not bold* _not italic_" },
+  "sections": [
+    {
+      "key": "experience",
+      "entries": [
+        {
+          "id": "e1", "kind": "job", "form": "engagement", "title": "Engineer",
+          "organization": "Acme",
+          "start": { "date": "2021-03", "precision": "month" },
+          "highlights": [
+            { "id": "h1", "text": "Cut deploy time by *40%* with _incremental_ builds" },
+            { "id": "h2", "text": "*_Both at once_* and a literal \\* star and snake\\_case" },
+            { "id": "h3", "text": "Unbalanced *mark stays literal" },
+            { "id": "h4", "text": "*#panic(\"x\")* is still only text" }
+          ]
+        }
+      ]
+    }
+  ],
+  "skills": []
+}

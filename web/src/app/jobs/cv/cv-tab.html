@@ -266,7 +266,7 @@
                                   (change)="toggle(row, $any($event.target).checked)"
                                 />
                                 <span
-                                  >{{ row.label }}
+                                  ><app-rich-text [text]="row.label" />
                                   @if (row.state === 'trimmed') {
                                     <small>Left out to fit</small>
                                   }

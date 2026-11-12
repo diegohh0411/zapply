@@ -10,6 +10,7 @@ import { ZardSheetImports } from '@/shared/components/sheet';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardSwitchComponent } from '@/shared/components/switch';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
+import { RichTextEditor } from '@/shared/rich-text/rich-text.component';
 
 import { Api, ApiError, etagOf, type Schemas } from '../core/api';
 import { fieldMap } from './live';
@@ -71,6 +72,7 @@ const DATE_LABELS: Record<Schemas['Form'], [string, string | null]> = {
     ZardInputComponent,
     ZardTextareaComponent,
     ZardSwitchComponent,
+    RichTextEditor,
     ...ZardSheetImports,
     ...ZardSelectImports,
   ],

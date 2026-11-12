@@ -1,11 +1,39 @@
 // classic, version 1: a single-column CV built for ATS parsing.
 //
 // The CV arrives as JSON in /content.json (see templates/README.md). User text
-// is only ever placed as text: it is never evaluated, so markup in a highlight
-// prints literally.
+// is only ever placed as text: it is never evaluated, so Typst markup in it
+// prints literally. Highlights are the one exception: `rich` reads Typst's
+// *strong* and _emphasis_ markers (and \ escapes) itself, never anything else.
 
 #let cv = json("/content.json")
 #let s = json("/strings.json").at(cv.locale)
+
+// Highlight text with *strong* and _emphasis_ marks, as the web editor writes
+// it. A backslash escapes the next character. Unbalanced marks print the text
+// as given, so old plain-text highlights with a stray * stay unchanged.
+#let rich(src) = {
+  let runs = ()
+  let buf = ""
+  let (b, i, esc) = (false, false, false)
+  for c in src.clusters() {
+    if esc { buf += c; esc = false }
+    else if c == "\\" { esc = true }
+    else if c == "*" or c == "_" {
+      runs.push((buf, b, i))
+      buf = ""
+      if c == "*" { b = not b } else { i = not i }
+    } else { buf += c }
+  }
+  if esc { buf += "\\" }
+  runs.push((buf, b, i))
+  if b or i { return text(src) }
+  runs.filter(r => r.at(0) != "").map(r => {
+    let t = text(r.at(0))
+    if r.at(2) { t = emph(t) }
+    if r.at(1) { t = strong(t) }
+    t
+  }).join()
+}
 
 #let has(x) = x != none and x != ""
 #let get(d, k) = if d == none or k == none { none } else { d.at(k, default: none) }
@@ -150,7 +178,7 @@
   }
   let highlights = get(e, "highlights")
   if highlights != none and highlights.len() > 0 {
-    block(above: 0.4em, below: 0pt, list(..highlights.map(h => h.text)))
+    block(above: 0.4em, below: 0pt, list(..highlights.map(h => rich(h.text))))
   }
   let children = get(e, "children")
   if children != none and children.len() > 0 {

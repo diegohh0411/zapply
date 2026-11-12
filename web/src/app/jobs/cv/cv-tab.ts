@@ -32,6 +32,7 @@ import {
 import { MatchTab } from '../match/match-tab';
 import { RelevanceIndicator } from './relevance-indicator';
 import { TypstService, type Compiled, type CvTemplate } from './typst.service';
+import { RichText } from '@/shared/rich-text/rich-text.component';
 
 type Preview = Schemas['CvPreview'];
 type Export = Schemas['CvExport'];
@@ -49,7 +50,7 @@ interface Row {
 /** A job's CV: preview, fitting, picks and exports (part 7). */
 @Component({
   selector: 'app-cv-tab',
-  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator, MatchTab],
+  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator, MatchTab, RichText],
   viewProviders: [provideIcons({ lucideChevronDown, lucideDownload })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',

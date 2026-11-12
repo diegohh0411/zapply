@@ -13,6 +13,7 @@ import { Api, type Schemas } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
 import { EvidenceSheet, type EvidenceTarget, humanize } from './evidence-sheet';
 import { onChanges } from './live';
+import { RichText } from '@/shared/rich-text/rich-text.component';
 
 type Evidence = Schemas['Evidence'];
 type Category = Schemas['Category'];
@@ -26,7 +27,7 @@ const CATEGORIES: { value: Category; label: string; hint: string }[] = [
 
 @Component({
   selector: 'app-evidence-page',
-  imports: [NgTemplateOutlet, NgIcon, ZardButtonComponent, ZardSkeletonComponent, ZardSwitchComponent, ...ZardDropdownImports, EvidenceSheet],
+  imports: [NgTemplateOutlet, NgIcon, ZardButtonComponent, ZardSkeletonComponent, ZardSwitchComponent, ...ZardDropdownImports, EvidenceSheet, RichText],
   providers: [provideIcons({ lucidePlus, lucidePencil, lucideEllipsis, lucideArchive, lucideArchiveRestore, lucideTrash2 })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -91,7 +92,7 @@ const CATEGORIES: { value: Category; label: string; hint: string }[] = [
           <p class="text-sm text-muted-foreground">{{ dates(e) }}@if (e.location) { · {{ e.location }} }</p>
           @if (e.highlights.length) {
             <ul class="mt-2 list-disc pl-5 text-sm">
-              @for (h of e.highlights; track h.id) { <li>{{ h.text }}</li> }
+              @for (h of e.highlights; track h.id) { <li><app-rich-text [text]="h.text" /></li> }
             </ul>
           }
           @if (e.skills.length) {
