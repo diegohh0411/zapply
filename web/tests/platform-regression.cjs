@@ -237,3 +237,49 @@ test('summary caps load the saved values and save the owner selections', async (
   assert.equal(settings.settings().summary_max_characters, 100);
   assert.equal(settings.busy(), false);
 });
+
+test('thinking effort loads from the saved model and saves only efforts that model accepts', async (t) => {
+  const f = fixture('admin/model-settings.ts');
+  t.after(f.close);
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const settings = new f.types.ModelSettings();
+  const loading = settings.load();
+  f.requests[0].resolve(ok({version: 3, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'low'}));
+  await flush();
+  f.requests[1].resolve(ok([{tag: 'reason/fp8', name: 'Reason', service_tier: 'default'}]));
+  await flush();
+  f.requests[2].resolve(ok([
+    {id: 'reason/model', name: 'Reason', context_length: 1000, pricing: {prompt: '0.00000002', completion: '0.0000001'}, compatibility_reason: '', reasoning: {mandatory: false, efforts: ['high', 'low', 'off']}},
+    {id: 'plain/model', name: 'Plain', context_length: 1000, pricing: {}, compatibility_reason: ''},
+  ]));
+  await flush();
+  f.requests[3].resolve(ok([]));
+  await loading;
+  assert.equal(settings.summaryEffort, 'low');
+  assert.equal(settings.effortUnavailable(), false);
+  assert.equal(JSON.stringify(settings.effortOptions().map((o) => o.value)), JSON.stringify(['', 'high', 'low', 'off']));
+  assert.equal(JSON.stringify(settings.textModels().map((m) => m.name)), JSON.stringify(['Plain', 'Reason']));
+  assert.equal(settings.perMillion('0.00000002'), '$0.02');
+  assert.match(settings.effortHint(), /Thinking counts toward the 2,048-token output cap\. Low can use up to about 20%/);
+
+  settings.summaryEffort = 'off';
+  const saving = settings.save();
+  assert.equal(f.requests[4].options.body.summary_reasoning_effort, 'off');
+  assert.equal(f.requests[4].options.params.header['If-Match'], '"3"');
+  f.requests[4].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'off'}));
+  await saving;
+  assert.equal(settings.summaryEffort, 'off');
+  assert.equal(settings.settings().summary_reasoning_effort, 'off');
+
+  settings.summaryEffort = 'xhigh';
+  assert.equal(settings.effortUnavailable(), true);
+  const requests = f.requests.length;
+  await settings.save();
+  assert.equal(f.requests.length, requests, 'an unsupported effort must not be sent');
+
+  settings.summaryEffort = '';
+  settings.selectSummaryModel('plain/model');
+  assert.equal(settings.summaryEffort, '');
+  assert.equal(JSON.stringify(settings.effortOptions().map((o) => o.value)), JSON.stringify(['']));
+  assert.equal(settings.effortHint(), 'This model does not take a thinking setting.');
+});

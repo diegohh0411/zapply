@@ -68,6 +68,7 @@ type ChatRequest struct {
 	Model, Endpoint string
 	Messages        any
 	MaxOutput       int
+	ReasoningEffort string
 }
 
 // QuoteChat prices one chat call. The quote's rate strings feed the provider's
@@ -93,6 +94,6 @@ func QuoteChat(ctx context.Context, p ChatPricer, r ChatRequest, c billing.Calib
 		return Quote{}, e
 	}
 	return Quote{Model: r.Model, Endpoint: r.Endpoint, InputRate: USD(sheet.InputRate), OutputRate: USD(sheet.OutputRate), RequestRate: USD(sheet.RequestRate),
-		MaxInput: sheet.Context, MaxOutput: min(sheet.MaxOutput, r.MaxOutput), Reserved: prediction.Reserved, FetchedAt: sheet.FetchedAt,
+		MaxInput: sheet.Context, MaxOutput: min(sheet.MaxOutput, r.MaxOutput), ReasoningEffort: r.ReasoningEffort, Reserved: prediction.Reserved, FetchedAt: sheet.FetchedAt,
 		Sheet: &sheet, Shape: &shape, Calibration: &c, Prediction: &prediction}, nil
 }

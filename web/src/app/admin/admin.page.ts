@@ -14,6 +14,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardInputComponent } from '@/shared/components/input';
+import { ZardSelectImports } from '@/shared/components/select';
 import { AccountService } from '../core/account.service';
 import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
@@ -26,7 +27,7 @@ type Attempt = Schemas['AttemptSummary'];
 
 @Component({
   selector: 'app-admin-page',
-  imports: [ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent],
+  imports: [ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })

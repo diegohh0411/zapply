@@ -559,6 +559,39 @@ func (e ModelOperationStatus) Valid() bool {
 	}
 }
 
+// Defines values for ModelSettingsSummaryReasoningEffort.
+const (
+	ModelSettingsSummaryReasoningEffortHigh    ModelSettingsSummaryReasoningEffort = "high"
+	ModelSettingsSummaryReasoningEffortLow     ModelSettingsSummaryReasoningEffort = "low"
+	ModelSettingsSummaryReasoningEffortMax     ModelSettingsSummaryReasoningEffort = "max"
+	ModelSettingsSummaryReasoningEffortMedium  ModelSettingsSummaryReasoningEffort = "medium"
+	ModelSettingsSummaryReasoningEffortMinimal ModelSettingsSummaryReasoningEffort = "minimal"
+	ModelSettingsSummaryReasoningEffortOff     ModelSettingsSummaryReasoningEffort = "off"
+	ModelSettingsSummaryReasoningEffortXhigh   ModelSettingsSummaryReasoningEffort = "xhigh"
+)
+
+// Valid indicates whether the value is a known member of the ModelSettingsSummaryReasoningEffort enum.
+func (e ModelSettingsSummaryReasoningEffort) Valid() bool {
+	switch e {
+	case ModelSettingsSummaryReasoningEffortHigh:
+		return true
+	case ModelSettingsSummaryReasoningEffortLow:
+		return true
+	case ModelSettingsSummaryReasoningEffortMax:
+		return true
+	case ModelSettingsSummaryReasoningEffortMedium:
+		return true
+	case ModelSettingsSummaryReasoningEffortMinimal:
+		return true
+	case ModelSettingsSummaryReasoningEffortOff:
+		return true
+	case ModelSettingsSummaryReasoningEffortXhigh:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrganizationType.
 const (
 	OrganizationTypeClient     OrganizationType = "client"
@@ -583,6 +616,39 @@ func (e OrganizationType) Valid() bool {
 	case OrganizationTypeNonprofit:
 		return true
 	case OrganizationTypeOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReasoningOptionsEfforts.
+const (
+	ReasoningOptionsEffortsHigh    ReasoningOptionsEfforts = "high"
+	ReasoningOptionsEffortsLow     ReasoningOptionsEfforts = "low"
+	ReasoningOptionsEffortsMax     ReasoningOptionsEfforts = "max"
+	ReasoningOptionsEffortsMedium  ReasoningOptionsEfforts = "medium"
+	ReasoningOptionsEffortsMinimal ReasoningOptionsEfforts = "minimal"
+	ReasoningOptionsEffortsOff     ReasoningOptionsEfforts = "off"
+	ReasoningOptionsEffortsXhigh   ReasoningOptionsEfforts = "xhigh"
+)
+
+// Valid indicates whether the value is a known member of the ReasoningOptionsEfforts enum.
+func (e ReasoningOptionsEfforts) Valid() bool {
+	switch e {
+	case ReasoningOptionsEffortsHigh:
+		return true
+	case ReasoningOptionsEffortsLow:
+		return true
+	case ReasoningOptionsEffortsMax:
+		return true
+	case ReasoningOptionsEffortsMedium:
+		return true
+	case ReasoningOptionsEffortsMinimal:
+		return true
+	case ReasoningOptionsEffortsOff:
+		return true
+	case ReasoningOptionsEffortsXhigh:
 		return true
 	default:
 		return false
@@ -700,6 +766,39 @@ func (e WorkMode) Valid() bool {
 	case Onsite:
 		return true
 	case Remote:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PutModelSettingsJSONBodySummaryReasoningEffort.
+const (
+	PutModelSettingsJSONBodySummaryReasoningEffortHigh    PutModelSettingsJSONBodySummaryReasoningEffort = "high"
+	PutModelSettingsJSONBodySummaryReasoningEffortLow     PutModelSettingsJSONBodySummaryReasoningEffort = "low"
+	PutModelSettingsJSONBodySummaryReasoningEffortMax     PutModelSettingsJSONBodySummaryReasoningEffort = "max"
+	PutModelSettingsJSONBodySummaryReasoningEffortMedium  PutModelSettingsJSONBodySummaryReasoningEffort = "medium"
+	PutModelSettingsJSONBodySummaryReasoningEffortMinimal PutModelSettingsJSONBodySummaryReasoningEffort = "minimal"
+	PutModelSettingsJSONBodySummaryReasoningEffortOff     PutModelSettingsJSONBodySummaryReasoningEffort = "off"
+	PutModelSettingsJSONBodySummaryReasoningEffortXhigh   PutModelSettingsJSONBodySummaryReasoningEffort = "xhigh"
+)
+
+// Valid indicates whether the value is a known member of the PutModelSettingsJSONBodySummaryReasoningEffort enum.
+func (e PutModelSettingsJSONBodySummaryReasoningEffort) Valid() bool {
+	switch e {
+	case PutModelSettingsJSONBodySummaryReasoningEffortHigh:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortLow:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortMax:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortMedium:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortMinimal:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortOff:
+		return true
+	case PutModelSettingsJSONBodySummaryReasoningEffortXhigh:
 		return true
 	default:
 		return false
@@ -925,6 +1024,9 @@ type DecisionModel struct {
 	Id                  string                 `json:"id"`
 	Name                string                 `json:"name"`
 	Pricing             map[string]interface{} `json:"pricing"`
+
+	// Reasoning Thinking control a model accepts. Absent when the model does not reason.
+	Reasoning *ReasoningOptions `json:"reasoning,omitempty"`
 }
 
 // EmploymentType defines model for EmploymentType.
@@ -1557,9 +1659,15 @@ type ModelSettings struct {
 	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
 	SummaryMaxOutputTokens SummaryMaxOutputTokens `json:"summary_max_output_tokens"`
 	SummaryModel           *string                `json:"summary_model,omitempty"`
-	UpdatedAt              time.Time              `json:"updated_at"`
-	Version                int                    `json:"version"`
+
+	// SummaryReasoningEffort Thinking effort for summaries; null is automatic.
+	SummaryReasoningEffort *ModelSettingsSummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`
+	UpdatedAt              time.Time                            `json:"updated_at"`
+	Version                int                                  `json:"version"`
 }
+
+// ModelSettingsSummaryReasoningEffort Thinking effort for summaries; null is automatic.
+type ModelSettingsSummaryReasoningEffort string
 
 // Organization defines model for Organization.
 type Organization struct {
@@ -1643,6 +1751,18 @@ type ProfileInput struct {
 	Phone     *string `json:"phone,omitempty"`
 	Summary   *string `json:"summary,omitempty"`
 }
+
+// ReasoningOptions Thinking control a model accepts. Absent when the model does not reason.
+type ReasoningOptions struct {
+	// Efforts Accepted efforts, highest first. Empty when the model exposes no effort choice.
+	Efforts []ReasoningOptionsEfforts `json:"efforts"`
+
+	// Mandatory When true, reasoning cannot be turned off.
+	Mandatory bool `json:"mandatory"`
+}
+
+// ReasoningOptionsEfforts defines model for ReasoningOptions.Efforts.
+type ReasoningOptionsEfforts string
 
 // Reorder defines model for Reorder.
 type Reorder struct {
@@ -1799,6 +1919,9 @@ type PutModelSettingsJSONBody struct {
 	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
 	SummaryMaxOutputTokens *SummaryMaxOutputTokens `json:"summary_max_output_tokens,omitempty"`
 	SummaryModel           *string                 `json:"summary_model,omitempty"`
+
+	// SummaryReasoningEffort Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
+	SummaryReasoningEffort *PutModelSettingsJSONBodySummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`
 }
 
 // PutModelSettingsParams defines parameters for PutModelSettings.
@@ -1806,6 +1929,9 @@ type PutModelSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
 }
+
+// PutModelSettingsJSONBodySummaryReasoningEffort defines parameters for PutModelSettings.
+type PutModelSettingsJSONBodySummaryReasoningEffort string
 
 // UpdatePlanParams defines parameters for UpdatePlan.
 type UpdatePlanParams struct {

@@ -36,7 +36,7 @@ type Client struct {
 	cached          modelapi.Quote
 	models          []DecisionModel
 	modelsAt        time.Time
-	reasoningModels map[string]reasoningOptions
+	reasoningModels map[string]ReasoningOptions
 	reasoningAt     time.Time
 	// DecisionBounds is for fake HTTP tests only. Production uses ownerSelectedBound.
 	DecisionBounds map[string]BillingBound
@@ -220,7 +220,7 @@ func (c *Client) generateMessages(ctx context.Context, key string, q modelapi.Qu
 			"max_price": map[string]any{"prompt": million(q.InputRate), "completion": million(q.OutputRate), "request": json.Number(q.RequestRate)}},
 	}
 	if summary {
-		reasoning, err := c.summaryReasoning(ctx, q.Model)
+		reasoning, err := c.summaryReasoning(ctx, q.Model, q.ReasoningEffort)
 		if err != nil {
 			return modelapi.Result{}, &modelapi.ProviderError{Code: "reasoning_config_unavailable", Uncharged: true}
 		}
