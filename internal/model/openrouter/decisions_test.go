@@ -168,7 +168,6 @@ func TestDecisionSheetPricesEveryComponent(t *testing.T) {
 
 	// Per-call charges the reservation cannot bound make the model incompatible.
 	for pricing, reason := range map[string]string{
-		`{"prompt":"0.000000042","web_search":"0.004"}`:            "unbounded_pricing_web_search",
 		`{"prompt":"0.000000042","completion":"0.000001"}`:         "unbounded_pricing_completion",
 		`{"prompt":"0.000000042","internal_reasoning":"0.000002"}`: "unbounded_pricing_internal_reasoning",
 		`{"prompt":"0.000000042","new_thing":"0.1"}`:               "unbounded_pricing_new_thing",
@@ -180,8 +179,11 @@ func TestDecisionSheetPricesEveryComponent(t *testing.T) {
 			t.Errorf("%s: %v, want %s", pricing, e, reason)
 		}
 	}
-	// Zero-priced extra components are harmless.
+	// Zero-priced extra components are harmless, and web_search is never billed on our calls.
 	if _, e = sheetFor(t, `{"prompt":"0.000000042","web_search":"0","new_thing":0}`); e != nil {
 		t.Fatalf("zero components rejected: %v", e)
+	}
+	if _, e = sheetFor(t, `{"prompt":"0.000000042","web_search":"0.0025"}`); e != nil {
+		t.Fatalf("web_search rejected: %v", e)
 	}
 }
