@@ -148,6 +148,43 @@ func TestEvidenceLifecycle(t *testing.T) {
 	}
 }
 
+// A kind can change on update, together with its category, when the new
+// kind allows that category. Details of the old kind are not carried over.
+func TestChangeKindOnUpdate(t *testing.T) {
+	s, uid, ctx := setup(t)
+
+	research, _, err := s.CreateEvidence(ctx, uid, library.EvidenceInput{
+		Kind: "job", Category: library.Paid, Title: "NLP research", Start: "2026-08",
+		Details: map[string]any{"work_mode": "remote"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Paid → Unpaid as an internship: the category and kind both change.
+	moved, err := s.UpdateEvidence(ctx, uid, research.ID, 1, library.EvidenceInput{
+		Kind: "internship", Category: library.Unpaid, Title: "NLP research", Start: "2026-08",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Kind != "internship" || moved.Form != library.Engagement || moved.Category != library.Unpaid || moved.Version != 2 {
+		t.Fatalf("moved = %+v", moved)
+	}
+	if len(moved.Details) != 0 {
+		t.Fatalf("details of the old kind survived: %v", moved.Details)
+	}
+
+	// A category the new kind does not allow is still refused.
+	_, err = s.UpdateEvidence(ctx, uid, research.ID, 2, library.EvidenceInput{
+		Kind: "volunteering", Category: library.Paid, Title: "NLP research", Start: "2026-08",
+	})
+	var verr *library.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("volunteering in paid: err = %v, want validation error", err)
+	}
+}
+
 func TestEvidenceValidation(t *testing.T) {
 	s, uid, ctx := setup(t)
 	_, _, err := s.CreateEvidence(ctx, uid, library.EvidenceInput{Kind: "job", Category: library.Unpaid, Title: "x", Start: "2020"}, nil)
