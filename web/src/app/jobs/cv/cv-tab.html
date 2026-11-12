@@ -1,9 +1,6 @@
 <section class="grid gap-6" aria-label="Match and CV">
   <header class="cv-toolbar">
-    <div>
-      <h2>Your match & CV</h2>
-      <p>Review your match, choose what to include, then export.</p>
-    </div>
+    <app-match-tab class="min-w-0" [jobId]="jobId()" />
     <div class="export-action">
       <span role="status">{{
         exporting()
@@ -28,8 +25,6 @@
       </button>
     </div>
   </header>
-
-  <app-match-tab class="block" [jobId]="jobId()" />
 
   @if (error()) {
     <p role="alert" class="cv-alert text-destructive">{{ error() }}</p>

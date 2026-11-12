@@ -1,194 +1,48 @@
-<section class="space-y-3 rounded-lg border bg-muted/20 p-4" aria-label="Job match">
-  <header class="flex items-start justify-between gap-3">
-    <div>
-      <h2 class="text-sm font-semibold">Match results</h2>
-      <p class="mt-1 text-sm text-muted-foreground">
-        Your experience ranked against this job description.
-      </p>
-    </div>
-    @if (active()) {
-      <button z-button zType="outline" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">
-        Cancel match
-      </button>
-    } @else if (run()) {
-      <button
-        z-button
-        zType="ghost"
-        zSize="sm"
-        class="shrink-0"
-        [zDisabled]="busy()"
-        [zLoading]="busy()"
-        (click)="confirmRematch.set(true)"
-      >
-        <ng-icon name="lucideRefreshCw" /> Re-run match
-      </button>
-    }
-  </header>
-
-  @if (confirmRematch() && !active()) {
-    <div class="flex flex-wrap items-center gap-2 text-xs" role="alert">
-      <p class="min-w-0 flex-1">
-        Re-running resets your match corrections and manual CV selections.
-      </p>
-      <button z-button zType="outline" zSize="sm" (click)="confirmRematch.set(false)">
-        Keep selections
-      </button>
-      <button
-        z-button
-        zType="destructive"
-        zSize="sm"
-        [zDisabled]="busy()"
-        (click)="action('start')"
-      >
-        Re-run and reset
-      </button>
-    </div>
-  }
-  @if (error() || store.errors().get(jobId())) {
-    <p
-      role="alert"
-      class="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-    >
-      {{ error() || store.errors().get(jobId()) }}
-    </p>
-  }
-
-  @if (run(); as r) {
-    @if (r.stale && (!result() || wholePosting())) {
-      <p class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-        These results need updating. Re-run to compare the current posting and library.
-      </p>
-    }
-    @if (active() || !result()) {
-      <div class="space-y-3 rounded-xl border bg-muted/30 p-5" aria-live="polite">
-        <h3 class="font-medium">{{ statusLabel() }}</h3>
-        <p class="text-sm text-muted-foreground">
-          @switch (r.status) {
-            @case ('pending') {
-              Your match will start when processing is available.
-            }
-            @case ('running') {
-              Ranking your experience and highlights against the full posting.
-            }
-            @case ('blocked') {
-              Processing is waiting for configuration or available allowance.
-            }
-            @case ('needs_review') {
-              This match needs a review before it can continue.
-            }
-            @default {
-              Re-run the match to try again.
-            }
-          }
-        </p>
-        @if (active()) {
-          <progress
-            class="h-1.5 w-full accent-brand"
-            [value]="r.answered + r.unanswered"
-            [max]="r.total || 1"
-            aria-label="Match progress"
-          ></progress>
+<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm" aria-label="Job match">
+  @if (active()) {
+    <span class="flex items-center gap-2 text-muted-foreground" role="status" aria-live="polite">
+      <span
+        aria-hidden="true"
+        class="inline-block size-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+      ></span>
+      {{ statusLabel() }}
+      @if (run(); as r) {
+        @if (r.total) {
+          <span class="tabular-nums">{{ r.answered + r.unanswered }}/{{ r.total }}</span>
         }
-        @if (r.next_eligible_at) {
-          <p class="text-xs text-muted-foreground">
-            Next attempt {{ r.next_eligible_at | date: 'medium' }}
-          </p>
-        }
-      </div>
-    }
-
-    @if (result(); as result) {
-      @if (!wholePosting()) {
-        <div class="rounded-xl border bg-muted/30 p-5 text-sm">
-          <h3 class="font-medium">Update this match</h3>
-          <p class="mt-2 text-muted-foreground">
-            This result used the earlier requirement analysis. Re-run to rank your experience
-            against the full posting.
-          </p>
-        </div>
-      } @else {
-        @if (r.status === 'partial') {
-          <p class="rounded-lg border p-4 text-sm">
-            Some comparisons could not finish. These rankings are incomplete; re-run to try again.
-          </p>
-        }
-        <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm" aria-label="Match overview">
-          <p>
-            <strong class="font-semibold">{{ result.evidence.length }}</strong> experience items
-            ranked
-          </p>
-          <p>
-            <strong class="font-semibold">{{ relevantCount() }}</strong> relevant to this role
-          </p>
-          @if (result.relevant_years) {
-            <p>{{ result.relevant_years | number: '1.1-1' }} relevant years</p>
-          }
-        </div>
-        <p class="text-xs leading-relaxed text-muted-foreground">
-          Review relevance scores and edit selections below. Lower-scoring experience can fill spare
-          space in your CV.
-        </p>
       }
+    </span>
+    <button z-button zType="ghost" zSize="sm" [zDisabled]="busy()" (click)="action('cancel')">
+      Cancel
+    </button>
+  } @else if (run()) {
+    @if (notice(); as n) {
+      <span class="text-amber-700 dark:text-amber-400">{{ n }}</span>
     }
-
-    <details class="group text-xs text-muted-foreground">
-      <summary class="flex w-fit cursor-pointer list-none items-center gap-2 py-2">
-        Match details
-        <ng-icon name="lucideChevronDown" class="transition-transform group-open:rotate-180" />
-      </summary>
-      <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg border p-3">
-        <dt>Status</dt>
-        <dd>{{ statusLabel() }}</dd>
-        <dt>Processing stage</dt>
-        <dd>{{ r.stage.replaceAll('_', ' ') }}</dd>
-        @if (r.blocked_reason) {
-          <dt>Waiting on</dt>
-          <dd>{{ r.blocked_reason.replaceAll('_', ' ') }}</dd>
-        }
-        <dt>Comparisons</dt>
-        <dd>
-          {{ r.answered }} of {{ r.total }} answered · {{ r.cached }} reused ·
-          {{ r.unanswered }} unanswered
-        </dd>
-        <dt>Cost</dt>
-        <dd>{{ r.cost_usd ? '$' + (r.cost_usd | number: '1.2-4') : '$0.00' }}</dd>
-        <dt>Model</dt>
-        <dd class="break-all">{{ r.model || 'Not configured' }}</dd>
-        @if (r.finished_at) {
-          <dt>Updated</dt>
-          <dd>{{ r.finished_at | date: 'medium' }}</dd>
-        }
-        @if (result(); as result) {
-          @if (wholePosting()) {
-            @if (result.seniority) {
-              <dt>Role level</dt>
-              <dd>{{ result.seniority.replaceAll('_', ' ') }}</dd>
-            }
-            <dt>Relevant experience</dt>
-            <dd>{{ result.relevant_years | number: '1.1-1' }} years in your library</dd>
-          }
-        }
-      </dl>
-    </details>
+    <button
+      z-button
+      zType="ghost"
+      zSize="sm"
+      [zDisabled]="busy()"
+      [zLoading]="busy()"
+      (click)="rerun()"
+    >
+      <ng-icon name="lucideRefreshCw" /> Re-run match
+    </button>
   } @else if (!store.errors().get(jobId())) {
-    <div class="flex flex-col items-center rounded-lg border border-dashed px-6 py-5 text-center">
-      <ng-icon name="lucideSearch" class="mb-4 size-7 text-muted-foreground" />
-      <h3 class="text-base font-medium">See where your experience fits</h3>
-      <p class="mb-5 mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
-        Find the experience, highlights, and skills most relevant to this posting.
-      </p>
-      <button z-button [zDisabled]="busy()" [zLoading]="busy()" (click)="action('start')">
-        Check my match
-      </button>
-    </div>
+    <button
+      z-button
+      zSize="sm"
+      zType="outline"
+      [zDisabled]="busy()"
+      [zLoading]="busy()"
+      [attr.title]="costHint()"
+      (click)="action('start')"
+    >
+      <ng-icon name="lucideSearch" /> Check my match
+    </button>
   }
-  @if (!result() && estimate(); as e) {
-    <p class="text-xs text-muted-foreground">
-      {{
-        e.available
-          ? 'Estimated cost: $' + (e.cost_usd | number: '1.2-4')
-          : 'Cost estimate unavailable. Processing may wait for available allowance.'
-      }}
-    </p>
+  @if (error() || store.errors().get(jobId()); as message) {
+    <span role="alert" class="text-destructive">{{ message }}</span>
   }
-</section>
+</div>

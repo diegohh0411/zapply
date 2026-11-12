@@ -14,12 +14,6 @@
   background: var(--background);
   border-bottom: 1px solid var(--border);
 }
-.cv-toolbar h2 {
-  font-size: 1.25rem;
-  font-weight: 650;
-  letter-spacing: -0.025em;
-}
-.cv-toolbar p,
 .editor-help {
   color: var(--muted-foreground);
   font-size: 0.8125rem;
