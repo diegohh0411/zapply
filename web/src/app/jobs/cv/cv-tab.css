@@ -202,6 +202,9 @@ button:disabled {
   font-size: 0.8125rem;
   line-height: 1.6;
 }
+.summary-warning {
+  color: light-dark(#805517, #f3cc82);
+}
 .summary-failed {
   border-inline-start: 3px solid #b7791f;
   background: light-dark(#fff8e8, #332713);
@@ -238,5 +241,84 @@ summary:focus-visible {
   .pdf-frame iframe {
     min-height: 28rem;
     height: 65vh;
+  }
+}
+
+/* The summary keeps one box while it is written: the text dims, a slow light
+   sweeps across it and the in-box action turns into a shimmering label, so
+   nothing above or below moves. */
+.summary-box {
+  position: relative;
+}
+.summary-box textarea {
+  display: block;
+  transition: color 300ms ease;
+}
+.summary-box.generating textarea {
+  color: var(--muted-foreground);
+}
+.summary-box::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(var(--radius, 0.5rem) - 1px);
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--foreground) 6%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 250% 100%;
+  transition: opacity 300ms ease;
+}
+.summary-box.generating::after {
+  opacity: 1;
+  animation: summary-sweep 2.4s ease-in-out infinite;
+}
+.summary-action {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+}
+.shimmer-text {
+  background: linear-gradient(
+      90deg,
+      var(--muted-foreground) 35%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 65%
+    )
+    0 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: summary-sweep 2s linear infinite;
+}
+.summary-spin {
+  animation: summary-pulse 1.6s ease-in-out infinite;
+}
+@keyframes summary-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes summary-pulse {
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .summary-box.generating::after,
+  .shimmer-text,
+  .summary-spin {
+    animation: none;
+  }
+  .shimmer-text {
+    color: var(--muted-foreground);
   }
 }
