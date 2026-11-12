@@ -133,6 +133,26 @@ export class EvidenceSheet {
     }));
   });
 
+  /**
+   * Errors the form cannot show inline. Some inputs are hidden for a kind (the
+   * end date on output/recognition), and some fields have no error slot at all,
+   * so surface them at the bottom instead of failing silently.
+   */
+  protected readonly unshownErrors = computed<{ field: string; message: string }[]>(() => {
+    const shown = new Set(['', 'organization_id', 'title', 'start', 'url']);
+    if (this.dateLabels()[1]) shown.add('end');
+    for (const f of this.fields()) shown.add('details.' + f.name);
+    this.form.highlights.forEach((_, i) => shown.add(`highlights[${i}].text`));
+    return Object.entries(this.errors())
+      .filter(([field]) => !shown.has(field))
+      .map(([field, message]) => ({ field, message }));
+  });
+
+  protected errorLabel(field: string): string {
+    if (!field) return '';
+    return /^[a-z_]+$/.test(field) ? humanize(field) + ': ' : field + ': ';
+  }
+
   constructor() {
     effect(() => {
       const t = this.target();
@@ -241,13 +261,14 @@ export class EvidenceSheet {
         fd.type === 'number' ? Number(v) : fd.type === 'list' ? v.split(',').map((x) => x.trim()).filter(Boolean) : v;
     }
     const isEngagement = this.kindInfo()?.form === 'engagement';
+    const hasEnd = this.dateLabels()[1] !== null;
     return {
       kind: f.kind,
       category: this.category(),
       title: f.title,
       organization_id: f.organization_id || undefined,
       start: f.start.trim() || undefined,
-      end: f.is_current ? undefined : f.end.trim() || undefined,
+      end: !hasEnd || f.is_current ? undefined : f.end.trim() || undefined,
       is_current: isEngagement && f.is_current,
       location: f.location,
       url: f.url,
