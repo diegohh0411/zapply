@@ -17,6 +17,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideDownload } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
+import { ZardSelectImports } from '@/shared/components/select';
 import { Api, ApiError, type Schemas } from '../../core/api';
 import { EventsService } from '../../core/events.service';
 import { AuthService } from '../../core/auth.service';
@@ -50,7 +51,7 @@ interface Row {
 /** A job's CV: preview, fitting, picks and exports (part 7). */
 @Component({
   selector: 'app-cv-tab',
-  imports: [DatePipe, FormsModule, ZardButtonComponent, NgIcon, RelevanceIndicator, MatchTab, RichText],
+  imports: [DatePipe, FormsModule, ZardButtonComponent, ...ZardSelectImports, NgIcon, RelevanceIndicator, MatchTab, RichText],
   viewProviders: [provideIcons({ lucideChevronDown, lucideDownload })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',

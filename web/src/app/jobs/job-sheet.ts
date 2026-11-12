@@ -35,6 +35,7 @@ import {
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
+import { ZardDatePickerComponent } from '@/shared/components/date-picker';
 import { ZardDialogComponent, ZardDialogImports } from '@/shared/components/dialog';
 import { ZardDropdownImports } from '@/shared/components/dropdown';
 import { ZardInputComponent } from '@/shared/components/input';
@@ -99,6 +100,19 @@ const emptyForm = (statusId = ''): Form => ({
   notes: '',
 });
 
+// Form dates are local YYYY-MM-DD strings; the date picker works with Date values.
+function parseIsoDate(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+}
+
+function formatIsoDate(value: Date | Date[] | null): string {
+  const date = Array.isArray(value) ? value[0] : value;
+  if (!date) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 @Component({
   selector: 'app-job-sheet',
   imports: [
@@ -114,6 +128,7 @@ const emptyForm = (statusId = ''): Form => ({
     ZardTextareaComponent,
     ZardSkeletonComponent,
     ...ZardSelectImports,
+    ZardDatePickerComponent,
     ...ZardDropdownImports,
     ...ZardDialogImports,
   ],
@@ -358,6 +373,18 @@ export class JobSheet {
 
   protected touch(): void {
     this.dirty.set(true);
+  }
+
+  private appliedDateCache: { iso: string; date: Date | null } = { iso: '', date: null };
+  // Memoized so the picker keeps the same Date between change detection passes.
+  protected appliedDate(iso: string): Date | null {
+    if (this.appliedDateCache.iso !== iso) this.appliedDateCache = { iso, date: parseIsoDate(iso) };
+    return this.appliedDateCache.date;
+  }
+
+  protected setAppliedOn(value: Date | Date[] | null): void {
+    this.form.applied_on = formatIsoDate(value);
+    this.touch();
   }
 
   protected async close(): Promise<void> {

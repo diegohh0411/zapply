@@ -213,7 +213,13 @@
             </label>
             <label class="field sm:col-span-3">
               <span>Applied on</span>
-              <input z-input name="applied_on" type="date" [(ngModel)]="form.applied_on" />
+              <z-date-picker
+                name="applied_on"
+                zPlaceholder="Pick a date"
+                zFormat="MMM d, yyyy"
+                [ngModel]="appliedDate(form.applied_on)"
+                (ngModelChange)="setAppliedOn($event)"
+              />
               <small class="text-xs text-muted-foreground"
                 >Set automatically when the job first moves to an active stage.</small
               >
@@ -636,7 +642,13 @@
           </label>
           <label class="field sm:col-span-6">
             <span>Applied on</span>
-            <input z-input name="applied_on" type="date" [(ngModel)]="form.applied_on" />
+            <z-date-picker
+              name="applied_on"
+              zPlaceholder="Pick a date"
+              zFormat="MMM d, yyyy"
+              [ngModel]="appliedDate(form.applied_on)"
+              (ngModelChange)="setAppliedOn($event)"
+            />
             <small class="text-xs text-muted-foreground"
               >Set automatically when the job first moves to an active stage.</small
             >
