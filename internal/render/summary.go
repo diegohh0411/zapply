@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diegohh0411/zapply/internal/summary"
 	"github.com/diegohh0411/zapply/internal/worker"
@@ -49,7 +50,9 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 		return err
 	}
 	// Only selected content enters the agent; contact details and the previous summary are excluded.
-	input, _ := json.Marshal(map[string]any{"locale": p.Content.Locale, "job_description": description, "sections": p.Content.Sections, "skills": p.Content.Skills})
+	// as_of lets the agent tell past roles from current ones. Month precision
+	// regenerates a summary at most once a month as roles age into the past.
+	input, _ := json.Marshal(map[string]any{"as_of": time.Now().UTC().Format("2006-01"), "locale": p.Content.Locale, "job_description": description, "sections": p.Content.Sections, "skills": p.Content.Skills})
 	// Automatic thinking keeps the original hash, so only an explicit effort regenerates summaries.
 	settingsKey := settings.Model + "|" + settings.Endpoint + "|" + strconv.Itoa(settings.MaxOutputTokens) + "|" + strconv.Itoa(settings.MaxCharacters)
 	effort := ""
