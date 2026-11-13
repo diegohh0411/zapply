@@ -8,7 +8,7 @@ The library holds everything a person can truthfully claim. Matching (part 6) ra
 
 Every evidence has a **category** and a **form**.
 
-**Category** decides the CV section and the paid/unpaid framing:
+**Category** decides the CV section and the paid/unpaid framing. Internships, and assignments outside coursework, always print under Experience; their category still sets the framing:
 
 | Category | Meaning |
 |---|---|
