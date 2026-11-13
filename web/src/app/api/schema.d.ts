@@ -1854,6 +1854,10 @@ export interface components {
             evidence_id: string;
             relevance: number;
             highlight_ids: string[];
+            /** @description Expected whole-posting relevance of each answered highlight, including library opt-outs. Absent on historical results. */
+            highlight_scores?: {
+                [key: string]: number;
+            };
         };
         EvidenceMatch: components["schemas"]["Selection"];
         Insight: {

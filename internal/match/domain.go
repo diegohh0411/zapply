@@ -387,10 +387,11 @@ type Coverage struct {
 	Review        bool              `json:"review"`
 }
 type Selection struct {
-	EvidenceID   string   `json:"evidence_id"`
-	Relevance    float64  `json:"relevance"`
-	HighlightIDs []string `json:"highlight_ids"`
-	Title        string   `json:"title"`
+	EvidenceID      string             `json:"evidence_id"`
+	Relevance       float64            `json:"relevance"`
+	HighlightIDs    []string           `json:"highlight_ids"`
+	HighlightScores map[string]float64 `json:"highlight_scores,omitempty"`
+	Title           string             `json:"title"`
 }
 type RankedSkill struct {
 	SkillID   string  `json:"skill_id"`

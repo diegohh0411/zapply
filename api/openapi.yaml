@@ -2604,6 +2604,10 @@ components:
         evidence_id: { type: string }
         relevance: { type: number }
         highlight_ids: { type: array, items: { type: string } }
+        highlight_scores:
+          type: object
+          description: Expected whole-posting relevance of each answered highlight, including library opt-outs. Absent on historical results.
+          additionalProperties: { type: number, minimum: 0, maximum: 1 }
     EvidenceMatch:
       allOf:
         - $ref: '#/components/schemas/Selection'

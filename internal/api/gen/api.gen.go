@@ -1792,8 +1792,11 @@ type SalaryPeriod string
 type Selection struct {
 	EvidenceId   string   `json:"evidence_id"`
 	HighlightIds []string `json:"highlight_ids"`
-	Relevance    float32  `json:"relevance"`
-	Title        *string  `json:"title,omitempty"`
+
+	// HighlightScores Expected whole-posting relevance of each answered highlight, including library opt-outs. Absent on historical results.
+	HighlightScores *map[string]float32 `json:"highlight_scores,omitempty"`
+	Relevance       float32             `json:"relevance"`
+	Title           *string             `json:"title,omitempty"`
 }
 
 // Skill defines model for Skill.

@@ -72,12 +72,23 @@ func TestWholePostingRankingWithoutCoverage(t *testing.T) {
 	if len(r.Selection) != 1 || r.Selection[0].EvidenceID != "job" || r.Selection[0].Relevance != .75 || strings.Join(r.Selection[0].HighlightIDs, ",") != "h2,h1" {
 		t.Fatalf("selected experience or highlight ordering: %#v", r.Selection)
 	}
+	if got := r.Selection[0].HighlightScores; got["h1"] != .25 || got["h2"] != 1 || len(got) != 2 {
+		t.Fatalf("individual scores lost before rendering: %v", got)
+	}
 	if len(r.Evidence) != 3 || r.Evidence[0].EvidenceID != "hidden" || len(r.Suggestions) != 1 || r.Suggestions[0].EvidenceID != "hidden" || r.Skills[0].SkillID != "go" {
 		t.Fatalf("ranking: %#v", r)
 	}
 	delete(a, "highlight:h1")
 	if r = ComputeV3(s, nil, a, nil, time.Now(), false); !r.Partial || r.Score != nil {
 		t.Fatal("missing comparison must yield incomplete rankings without a score")
+	}
+	if _, known := r.Selection[0].HighlightScores["h1"]; known {
+		t.Fatal("unanswered highlight must not become a known zero score")
+	}
+	s.Evidence[0].Highlights[1].AutoInclude = false
+	r = ComputeV3(s, nil, a, nil, time.Now(), false)
+	if r.Selection[0].HighlightScores["h2"] != 1 || strings.Contains(strings.Join(r.Selection[0].HighlightIDs, ","), "h2") {
+		t.Fatal("disabled highlights retain their score for manual picks, without automatic inclusion")
 	}
 	if r = ComputeV3(Snapshot{}, nil, map[string]systemone.Answer{"seniority": choiceAnswer("not_specified", "not_specified", "mid")}, nil, time.Now(), false); r.Partial || len(r.Selection) != 0 {
 		t.Fatal("empty library should complete with empty rankings")

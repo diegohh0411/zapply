@@ -329,6 +329,37 @@ func LatestCompleted(ctx context.Context, tx pgx.Tx, u, job uuid.UUID) (r Run, o
 	if r, e = loadRun(ctx, tx, u, id, false); e != nil {
 		return r, false, e
 	}
+	// Older v3 results saved highlight order only. Reconstruct scores from the
+	// paid answers so existing CVs benefit without a migration or model call.
+	if r.Pipeline == PipelineV3 {
+		highlights := map[string][]Highlight{}
+		for _, item := range r.Snapshot.Evidence {
+			highlights[item.ID] = item.Highlights
+		}
+		for _, item := range r.Result.Evidence {
+			if len(highlights[item.EvidenceID]) > 0 && len(item.HighlightScores) == 0 {
+				a, err := answers(ctx, tx, u, id)
+				if err != nil {
+					return r, false, err
+				}
+				for _, list := range [][]Selection{r.Result.Evidence, r.Result.Selection, r.Result.Suggestions} {
+					for i := range list {
+						if list[i].HighlightScores != nil {
+							continue
+						}
+						scores := map[string]float64{}
+						for _, h := range highlights[list[i].EvidenceID] {
+							if answer, ok := a["highlight:"+h.ID]; ok {
+								scores[h.ID] = expected(answer)
+							}
+						}
+						list[i].HighlightScores = scores
+					}
+				}
+				break
+			}
+		}
+	}
 	_, jh, _, fp, e := snapshot(ctx, tx, u, job)
 	r.Stale = r.Pipeline != DefaultPipeline || jh != r.JobHash || fp != r.LibraryFingerprint
 	return r, e == nil, e
@@ -452,6 +483,13 @@ func (s *Service) Detail(ctx context.Context, u, id uuid.UUID) (Run, error) {
 			for _, item := range items {
 				if now[item.EvidenceID] {
 					item.HighlightIDs = filterHighlights(item.HighlightIDs)
+					visibleScores := map[string]float64{}
+					for id, score := range item.HighlightScores {
+						if highlightExists[id] {
+							visibleScores[id] = score
+						}
+					}
+					item.HighlightScores = visibleScores
 					visible = append(visible, item)
 				}
 			}
