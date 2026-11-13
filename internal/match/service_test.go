@@ -788,3 +788,43 @@ func TestDefaultWholePostingRunAndWarmCache(t *testing.T) {
 		t.Fatalf("warm run missed cache: %#v calls %d", r, f.p.calls)
 	}
 }
+
+func TestLatestCompletedRecoversHistoricalHighlightScores(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	r := f.run(t, f.start(t).ID)
+	highlight := f.evidence.Highlights[0].ID.String()
+	want, known := r.Result.Evidence[0].HighlightScores[highlight]
+	if !known {
+		t.Fatal("completed v3 run did not save the highlight score")
+	}
+	// Simulate a completed result written before individual scores existed.
+	for _, list := range [][]match.Selection{r.Result.Evidence, r.Result.Selection, r.Result.Suggestions} {
+		for i := range list {
+			list[i].HighlightScores = nil
+		}
+	}
+	raw, err := json.Marshal(r.Result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := f.p.calls
+	if err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE match_run SET result=$3 WHERE user_id=$1 AND id=$2`, f.u, r.ID, string(raw)); err != nil {
+			return err
+		}
+		recovered, ok, err := match.LatestCompleted(ctx, tx, f.u, f.job.ID)
+		if err != nil {
+			return err
+		}
+		if !ok || recovered.Result.Evidence[0].HighlightScores[highlight] != want || len(recovered.Result.Evidence[0].HighlightScores) != 1 {
+			t.Fatalf("historical scores not recovered: %+v", recovered.Result.Evidence)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if f.p.calls != calls {
+		t.Fatal("recovering paid scores made another model call")
+	}
+}

@@ -87,6 +87,12 @@ func ComputeV3(s Snapshot, _ []Requirement, answers map[string]systemone.Answer,
 		for _, h := range highlights {
 			highlightScores[h.ID] = score("highlight:" + h.ID)
 		}
+		selection.HighlightScores = make(map[string]float64, len(highlights))
+		for _, h := range highlights {
+			if _, ok := answers["highlight:"+h.ID]; ok {
+				selection.HighlightScores[h.ID] = highlightScores[h.ID]
+			}
+		}
 		sort.SliceStable(highlights, func(i, j int) bool { return highlightScores[highlights[i].ID] > highlightScores[highlights[j].ID] })
 		for _, h := range highlights {
 			if h.AutoInclude {

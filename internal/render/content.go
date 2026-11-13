@@ -241,6 +241,7 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 	exclude := set(picks.Exclude)
 	// Which evidence appears, and how relevant each is.
 	relevance := map[string]float64{}
+	highlightScores := map[string]float64{}
 	ranked := map[string][]string{} // evidence → highlight IDs, most relevant first
 	selected := map[string]bool{}
 	suggested := map[string]bool{}
@@ -249,6 +250,9 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 		for _, s := range ranking.Evidence {
 			relevance[s.EvidenceID] = s.Relevance
 			ranked[s.EvidenceID] = s.HighlightIDs
+			for id, score := range s.HighlightScores {
+				highlightScores[id] = score
+			}
 		}
 		for _, s := range ranking.Suggestions {
 			suggested[s.EvidenceID] = true
@@ -375,7 +379,11 @@ func Build(lib Library, ranking *match.Result, picks Picks, locale string, date 
 		content.Skills = append(content.Skills, ContentSkill{s.ID, s.Name, s.Type, s.Proficiency})
 	}
 
-	return Built{Content: content, Trim: trimOrder(content, relevance, include, supports), Available: available(lib, selected, exclude, suggested, highlights)}
+	trim := trimOrder(content, relevance, include, supports)
+	if len(highlightScores) > 0 {
+		trim = scoredTrimOrder(content, relevance, highlightScores, include, supports)
+	}
+	return Built{Content: content, Trim: trim, Available: available(lib, selected, exclude, suggested, highlights)}
 }
 
 // trimOrder drops optional skills first, then mixes highlights and entries

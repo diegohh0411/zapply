@@ -92,6 +92,17 @@ templates/<name>/<version>/
    - parent entries inherit their strongest child's priority, with descendants
      before containers on ties; evidence supporting a met must-have goes last
 
+   For whole-posting runs with individual highlight scores, priority is relevance
+   per estimated text line, recomputed after each removal. An entry inherits its
+   strongest surviving bullet or child entry's priority. Identical bullet wording
+   (ignoring case and whitespace) contributes only its best remaining copy; a
+   pinned copy takes precedence. Different numbers and wording remain distinct.
+   This conservative duplicate check does not infer semantic equivalence. The
+   first bullet stays with each retained entry, and all pins protect their
+   containers. Line estimates count Unicode characters and are only a selection
+   heuristic: the browser still compiles the PDF to enforce the page budget.
+   Historical results without scores retain the previous positional fallback.
+
 The content is canonical JSON with a `content_hash` (SHA-256), like
 `job.content_hash`.
 

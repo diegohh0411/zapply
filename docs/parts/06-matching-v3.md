@@ -16,7 +16,13 @@ multiplier or requirement attribution added to relevance.
 Entries meeting CVD's 1.5/4 relevance floor are selected for automatic CVs when
 their library flag permits it. Relevant entries with automatic inclusion off
 are suggestions. Highlights retain their inclusion flags and are ranked within
-their entry. Existing CV rules still preserve degrees and allow manual picks.
+their entry. Results also retain each answered highlight's expected relevance,
+including disabled highlights for manual picks. Unanswered highlights have no
+score; a known zero remains distinct from an unanswered question. Older completed
+v3 results reconstruct these scores from saved answers when used for rendering,
+without another model call. CV fitting uses these scores to preserve strong
+individual proof, account for space, and discount repeated wording. Existing CV
+rules still preserve degrees and allow manual picks.
 There is no aggregate match percentage; `score` stays null, `must_met` and
 `must_total` stay zero, and `requirements` and `insights` are empty arrays.
 Missing answers mark rankings partial; rendering continues to use completed runs.
