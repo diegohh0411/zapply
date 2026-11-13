@@ -272,3 +272,23 @@ func TestTrimProtectsStrongDescendantAndDropsWeakEntriesBeforeStrongDetails(t *t
 		t.Fatalf("a weak parent must not remove a stronger child early: %v", b.Trim)
 	}
 }
+
+func TestSectionOfWorkKinds(t *testing.T) {
+	cases := []struct {
+		kind, category, want string
+	}{
+		{"internship", "unpaid", "experience"},
+		{"internship", "education", "experience"},
+		{"internship", "paid", "experience"},
+		{"assignment", "unpaid", "experience"},
+		{"assignment", "education", "education"},
+		{"volunteering", "unpaid", "unpaid"},
+		{"career_break", "unpaid", "unpaid"},
+	}
+	for _, c := range cases {
+		got := sectionOf(Evidence{Kind: c.kind, Category: c.category, Form: "engagement"})
+		if got != c.want {
+			t.Errorf("sectionOf(%s/%s) = %q, want %q", c.kind, c.category, got, c.want)
+		}
+	}
+}

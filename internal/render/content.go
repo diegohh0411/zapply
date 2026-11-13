@@ -180,6 +180,11 @@ func sectionOf(e Evidence) string {
 		}
 		return "awards"
 	}
+	// Internships are work whatever the pay, and so is an assignment that
+	// isn't coursework; neither belongs with volunteering.
+	if e.Kind == "internship" || (e.Kind == "assignment" && e.Category != "education") {
+		return "experience"
+	}
 	switch e.Category {
 	case "paid":
 		return "experience"
