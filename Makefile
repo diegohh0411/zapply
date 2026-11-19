@@ -2,7 +2,7 @@ SHELL := /bin/bash
 COMPOSE ?= $(shell command -v podman >/dev/null && echo "podman compose" || echo "docker compose")
 ENV := set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: build run run-all worker relay migrate token db-up db-down test test-integration vet image generate web web-dev
+.PHONY: build run run-all worker relay migrate token db-up db-down firecrawl test test-integration vet image generate web web-dev
 
 build:
 	go build -o bin/zapply ./cmd/zapply
@@ -29,7 +29,10 @@ db-up:
 	$(COMPOSE) -f deploy/compose.yaml up -d --wait
 
 db-down:
-	$(COMPOSE) -f deploy/compose.yaml down
+	$(COMPOSE) -f deploy/compose.yaml --profile firecrawl down
+
+firecrawl: ## Firecrawl Local on 127.0.0.1:3002, reading posting links (first build compiles Rust)
+	@$(ENV) $(COMPOSE) -f deploy/compose.yaml --profile firecrawl up -d --build firecrawl
 
 generate: ## Regenerate sqlc queries, the OpenAPI server and the web client types
 	go tool sqlc generate
