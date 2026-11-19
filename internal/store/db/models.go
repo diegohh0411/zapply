@@ -724,6 +724,8 @@ type CvSummary struct {
 	OperationID *uuid.UUID
 	Dirty       bool
 	ChangedAt   time.Time
+	FitKey      string
+	FitDropped  []string
 }
 
 type DecisionAnswer struct {
