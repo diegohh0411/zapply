@@ -8,7 +8,8 @@ export interface PostingGuess {
   source?: string;
   location?: string;
   work_mode?: 'onsite' | 'remote' | 'hybrid';
-  employment_type?: 'full_time' | 'part_time' | 'contract' | 'temporary' | 'internship' | 'freelance';
+  employment_type?:
+    'full_time' | 'part_time' | 'contract' | 'temporary' | 'internship' | 'freelance';
   salary_min?: number;
   salary_max?: number;
   salary_currency?: string;
@@ -29,7 +30,8 @@ const SOURCES: [RegExp, string][] = [
 ];
 
 /** Hosts whose first path segment is the company: boards.greenhouse.io/acme/jobs/1 */
-const ATS_COMPANY_IN_PATH = /(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|recruitee\.com|smartrecruiters\.com)$/;
+const ATS_COMPANY_IN_PATH =
+  /(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|recruitee\.com|smartrecruiters\.com)$/;
 
 const words = (slug: string) =>
   slug
@@ -86,7 +88,11 @@ const CURRENCY: Record<string, string> = { $: 'USD', '€': 'EUR', '£': 'GBP' }
 export function readText(text: string): PostingGuess {
   const g: PostingGuess = {};
   if (!text.trim()) return g;
-  const first = text.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  const first =
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .find(Boolean) ?? '';
   if (first.length > 3 && first.length < 90) g.title = first;
   const t = text.toLowerCase();
   if (/\bhybrid\b/.test(t)) g.work_mode = 'hybrid';
@@ -99,13 +105,21 @@ export function readText(text: string): PostingGuess {
   const loc = /\b(?:location|based in)\s*[:\-]?\s*([^\n.;]{3,60})/i.exec(text);
   if (loc) g.location = loc[1].trim();
   // "$120,000 – $150,000", "€80k-95k", "USD 120k to 150k per year"
-  const money = /([$€£]|\b[A-Z]{3}\b)\s?(\d[\d,.]*)\s?(k)?\s*(?:-|–|—|to)\s*(?:[$€£]|[A-Z]{3})?\s?(\d[\d,.]*)\s?(k)?/.exec(text);
+  const money =
+    /([$€£]|\b[A-Z]{3}\b)\s?(\d[\d,.]*)\s?(k)?\s*(?:-|–|—|to)\s*(?:[$€£]|[A-Z]{3})?\s?(\d[\d,.]*)\s?(k)?/.exec(
+      text,
+    );
   if (money) {
-    const n = (v: string, k?: string) => Math.round(parseFloat(v.replace(/,/g, '')) * (k ? 1000 : 1));
+    const n = (v: string, k?: string) =>
+      Math.round(parseFloat(v.replace(/,/g, '')) * (k ? 1000 : 1));
     g.salary_currency = CURRENCY[money[1]] ?? money[1];
     g.salary_min = n(money[2], money[3]);
     g.salary_max = n(money[4], money[5] ?? money[3]);
-    g.salary_period = /per hour|\/\s?h(ou)?r|hourly/.test(t) ? 'hour' : /per month|\/\s?mo(nth)?|monthly/.test(t) ? 'month' : 'year';
+    g.salary_period = /per hour|\/\s?h(ou)?r|hourly/.test(t)
+      ? 'hour'
+      : /per month|\/\s?mo(nth)?|monthly/.test(t)
+        ? 'month'
+        : 'year';
   }
   return g;
 }
