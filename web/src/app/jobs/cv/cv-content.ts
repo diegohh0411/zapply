@@ -98,19 +98,13 @@ export function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return x.length === y.length && x.every((id, i) => id === y[i]);
 }
 
-/** The longest summary the agent may write (summary.MaxCharacters on the server). */
-export const summaryCharacters = 500;
-
 /**
  * Stands in for the summary while fitting, so the fit never depends on the
- * summary's text: it reserves the longest summary. Wide glyphs make the space
- * at least as tall as any shorter summary.
+ * summary's text: it reserves exactly `rows` lines, the space the summary is
+ * written to fill (the server revises or trims summaries that wrap to more).
  */
-export function withSummarySpace(content: CvContent): CvContent {
-  const word = 'W'.repeat(12);
-  const words: string[] = [];
-  for (let length = 0; length < summaryCharacters; length += word.length + 1) words.push(word);
-  return { ...content, profile: { ...content.profile, summary: words.join(' ') } };
+export function withSummarySpace(content: CvContent, rows: number): CvContent {
+  return { ...content, profile: { ...content.profile, summary: Array(rows).fill('W').join('\n') } };
 }
 
 export interface Fit {

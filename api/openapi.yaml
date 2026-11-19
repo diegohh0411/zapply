@@ -1121,8 +1121,7 @@ paths:
                 decision_model: { type: string, nullable: true }
                 summary_model: { type: string, nullable: true }
                 summary_endpoint: { type: string, nullable: true }
-                summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
-                summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
+                summary_rows: { $ref: '#/components/schemas/SummaryRows' }
                 summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic. Must be one the summary model accepts." }
       responses:
         '200':
@@ -1652,8 +1651,9 @@ components:
         dropped: { type: array, maxItems: 1000, items: { type: string, format: uuid }, description: Optional item IDs the fit left out. }
     CvPreview:
       type: object
-      required: [draft, template, content, content_hash, fit_key, fit, trim, available, match]
+      required: [draft, template, content, content_hash, fit_key, fit, summary_rows, trim, available, match]
       properties:
+        summary_rows: { type: integer, minimum: 1, maximum: 4, description: "Lines fitting reserves for the summary. A manual summary is fitted as written instead." }
         summary_status: { type: string, description: "Includes waiting_for_fit until the browser reports a fit for the current content." }
         summary_suggestion: { type: string }
         summary_reason: { type: string }
@@ -2550,23 +2550,19 @@ components:
           type: array
           description: Accepted efforts, highest first. Empty when the model exposes no effort choice.
           items: { type: string, enum: [max, xhigh, high, medium, low, minimal, off] }
-    SummaryMaxCharacters:
+    SummaryRows:
       type: integer
-      enum: [100, 200, 300, 400, 500]
-      description: Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
-    SummaryMaxOutputTokens:
-      type: integer
-      enum: [1024, 2048, 4096, 8192]
-      description: Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
+      minimum: 1
+      maximum: 4
+      description: Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value.
     ModelSettings:
       type: object
-      required: [version, decision_model, summary_max_output_tokens, summary_max_characters, updated_at]
+      required: [version, decision_model, summary_rows, updated_at]
       properties:
         decision_model: { type: string, nullable: true }
         summary_model: { type: string, nullable: true }
         summary_endpoint: { type: string, nullable: true }
-        summary_max_output_tokens: { $ref: '#/components/schemas/SummaryMaxOutputTokens' }
-        summary_max_characters: { $ref: '#/components/schemas/SummaryMaxCharacters' }
+        summary_rows: { $ref: '#/components/schemas/SummaryRows' }
         summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }

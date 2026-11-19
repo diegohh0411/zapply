@@ -90,6 +90,8 @@ export class CvTab {
       case 'failed':
         if (p.summary_reason === 'summary_character_limit')
           return 'The generated summary was too long. Your text is preserved. Try another.';
+        if (p.summary_reason === 'summary_row_limit')
+          return 'The generated summary didn’t fit its rows on the page. Your text is preserved. Try another.';
         if (p.summary_reason === 'summary_empty_output')
           return 'The model returned no summary text. Your text is preserved. Try another.';
         return 'We couldn’t generate a summary. Your current text is preserved. Try another.';
@@ -387,8 +389,9 @@ export class CvTab {
     this.pdfCurrent.set(false);
     const compiled = new Map<string, Compiled>();
     this.fitting.set(true);
-    // Fitting reserves the summary's longest space, so the fit doesn't depend on the summary's text.
-    const reserved = withSummarySpace(content);
+    // Fitting reserves the summary's rows, so the fit doesn't depend on an
+    // automatic summary's text. A manual summary is fitted as written.
+    const reserved = p.draft.summary != null ? content : withSummarySpace(content, p.summary_rows);
     let result: Fit | undefined;
     try {
       const compile = async (source: CvContent, dropped: string[]) => {

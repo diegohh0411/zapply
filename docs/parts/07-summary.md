@@ -15,9 +15,25 @@ optional items. Until a fit is reported for the current content, the preview
 reports `waiting_for_fit` and no summary is queued. A fit for content that has
 since changed is a 409 conflict, and the browser reloads and fits again.
 
-Fitting reserves a fixed 500-character summary space, so the fit does not
-depend on the summary's text. Once a summary is generated, its length cannot
-move the page break.
+Fitting reserves exactly as many summary lines as the owner's **summary rows**
+setting (1–4, default 2), so the fit does not depend on the summary's text. The
+key covers the rows, so changing the setting asks for a new fit. A manual
+summary is fitted as written instead, and its text is part of the key.
+
+The generated summary must wrap to exactly those rows. The server measures with
+the Typst CLI the CV compiles with: it compiles a page holding only the summary
+and counts its lines. When a summary is queued, a calibration paragraph gives
+the characters per line for the template version and locale (classic/1 holds
+about 114), and the instruction asks for the character range that ends on the
+last row. After each answer the worker measures it. If it wraps to more or fewer
+rows, the answer and feedback naming the line count and the characters to add
+or cut are sent back in the same conversation, up to twice. Each revision is a
+separate, separately charged attempt of the same operation; the turns are kept
+in `summary_turn`, since request bodies never change. If the last answer is
+still too long, trailing sentences are dropped until it fits, then trailing
+words with an ellipsis; one still too short is published. While a revision is
+queued the preview reports the summary as running. If the server can't measure
+(no Typst CLI), summaries are published unchecked.
 
 Owners select a text model from the OpenRouter catalogue and configure its
 provider endpoint in the existing model settings panel. The endpoint must
@@ -48,20 +64,9 @@ Deploy migration 00022 and restart both API and worker. Generation stays
 unconfigured until an owner selects a model and endpoint. No live provider
 calls are made by the automated tests.
 
-Owners select a final generated-summary cap of 100, 200, 300, 400, or 500
-characters (default 500), counted as Unicode code points including spaces and
-punctuation. The generation prompt and output validation use this cap.
-Oversized model output is trimmed to its last complete sentence that fits; it is
-rejected only when not even the first sentence fits. Manually saved summaries retain their
+Each completion is capped at 4,096 tokens, reasoning included; the thinking
+effort sets how much of it a model spends. Manually saved summaries keep their
 500-character limit; the editor displays a counter and prevents oversized saves.
-
-Owners also select a summary completion-token cap: 1,024, 2,048 (default),
-4,096, or 8,192. This budget includes reasoning tokens as well as the
-final paragraph, independently of the final-summary character cap. The selected cap
-is snapshotted in each queued request and used for both the full-cost allowance
-reservation and the provider's `max_tokens`. Changing the setting invalidates
-existing summaries. Requests queued before cap configuration retain their
-original 256-token bound until replaced.
 
 Apply migration 00023 before deploying the updated API and worker. It sets the
 initial cap to 2,048 and invalidates existing summary snapshots for regeneration.
@@ -75,3 +80,8 @@ original 500-character limit. Existing manual summaries are preserved.
 Apply migration 00028 before deploying the updated API and worker. It adds the
 stored fit (`fit_key`, `fit_dropped`) to each summary snapshot. Existing
 snapshots have no fit, so their summaries wait for the next CV view to report one.
+
+Apply migration 00029 before deploying the updated API and worker. It replaces
+the character and token caps with `summary_rows` (default 2), adds
+`summary_turn`, and invalidates automatic summaries. The worker needs the Typst
+CLI (`TYPST_DIR`, as the image sets) to measure rows.

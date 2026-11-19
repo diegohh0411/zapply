@@ -131,11 +131,13 @@ type Preview struct {
 	Content           Content  `json:"content"`
 	ContentHash       string   `json:"content_hash"`
 	// FitKey names this content for a browser fit; Fit is the fit reported for it, or nil.
-	FitKey    string     `json:"fit_key"`
-	Fit       *Fit       `json:"fit"`
-	Trim      []string   `json:"trim"`
-	Available Available  `json:"available"`
-	Match     *MatchInfo `json:"match"`
+	FitKey string `json:"fit_key"`
+	Fit    *Fit   `json:"fit"`
+	// SummaryRows is how many lines fitting reserves for the summary.
+	SummaryRows int        `json:"summary_rows"`
+	Trim        []string   `json:"trim"`
+	Available   Available  `json:"available"`
+	Match       *MatchInfo `json:"match"`
 }
 
 // ExportInput creates a snapshot of what the client fitted.
@@ -251,7 +253,11 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (Pr
 		locale = m.Locales[0]
 	}
 	b := Build(lib, ranking, d.Picks, locale, s.Now().UTC())
-	p := Preview{Draft: d, Template: info(m), Content: b.Content, Trim: b.Trim, Available: b.Available, Match: mi}
+	settings, e := loadSummarySettings(ctx, tx)
+	if e != nil {
+		return Preview{}, e
+	}
+	p := Preview{Draft: d, Template: info(m), Content: b.Content, Trim: b.Trim, Available: b.Available, Match: mi, SummaryRows: settings.Rows}
 	p.FitKey = fitKey(p)
 	return p, nil
 }

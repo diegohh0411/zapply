@@ -9,6 +9,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -105,11 +106,8 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 	if e != nil {
 		return nil, e
 	}
-	if req.Body.SummaryMaxCharacters != nil && !req.Body.SummaryMaxCharacters.Valid() {
-		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_characters", Message: "select a supported character cap"}}}
-	}
-	if req.Body.SummaryMaxOutputTokens != nil && !req.Body.SummaryMaxOutputTokens.Valid() {
-		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_max_output_tokens", Message: "select a supported token cap"}}}
+	if r := req.Body.SummaryRows; r != nil && (*r < render.MinSummaryRows || *r > render.MaxSummaryRows) {
+		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_rows", Message: "select between 1 and 4 summary rows"}}}
 	}
 	effort := optionalString(req.Body.SummaryReasoningEffort)
 	if req.Body.SummaryReasoningEffort != nil && !req.Body.SummaryReasoningEffort.Valid() {
@@ -156,7 +154,7 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 		if err := tx.QueryRow(ctx, `SELECT platform.save_model_settings($1,$2)`, req.Body.DecisionModel, version).Scan(&raw); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4,$5)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryMaxOutputTokens, req.Body.SummaryMaxCharacters, effort); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryRows, effort); err != nil {
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)

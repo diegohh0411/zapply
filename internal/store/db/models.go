@@ -1150,9 +1150,8 @@ type PlatformModelSetting struct {
 	UpdatedAt              time.Time
 	SummaryModel           *string
 	SummaryEndpoint        *string
-	SummaryMaxOutputTokens int32
-	SummaryMaxCharacters   int32
 	SummaryReasoningEffort *string
+	SummaryRows            int32
 }
 
 type PlatformModelUsage struct {
@@ -1226,4 +1225,13 @@ type Skill struct {
 	Type           SkillType
 	Proficiency    string
 	CreatedAt      time.Time
+}
+
+type SummaryTurn struct {
+	OperationID uuid.UUID
+	N           int32
+	UserID      uuid.UUID
+	Role        string
+	Content     string
+	CreatedAt   time.Time
 }

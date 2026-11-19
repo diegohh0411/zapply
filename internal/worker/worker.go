@@ -142,6 +142,8 @@ type Runtime struct {
 	OnTerminal      func(context.Context, pgx.Tx, Operation) error
 	AddWorkers      func(*river.Workers)
 	RecoverFeatures func(context.Context, *river.Client[pgx.Tx]) error
+	// MeasureSummary checks a summary's rows; nil accepts any length.
+	MeasureSummary SummaryMeasure
 }
 
 func (r *Runtime) Client(concurrency int) (*river.Client[pgx.Tx], error) {
@@ -202,6 +204,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var op Operation
 	var attempts []Attempt
 	var chat *SummaryRequest
+	var history []summary.Message
 	var decision *systemone.Request
 	var calibration []byte
 	if err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
@@ -219,6 +222,10 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				return err
 			}
 			if err := json.Unmarshal(body, chat); err != nil {
+				return err
+			}
+			var err error
+			if history, err = summaryTurns(ctx, tx, op.ID); err != nil {
 				return err
 			}
 			var dirty bool
@@ -365,7 +372,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if !ok {
 			return r.block(ctx, args, "chat_provider_unavailable", nil, time.Minute)
 		}
-		quote, err = modelapi.QuoteChat(ctx, p, modelapi.ChatRequest{Model: chat.Model, Endpoint: chat.Endpoint, Messages: chat.Messages, MaxOutput: chat.outputTokenCap(), ReasoningEffort: chat.ReasoningEffort}, billing.Calibration{})
+		quote, err = modelapi.QuoteChat(ctx, p, modelapi.ChatRequest{Model: chat.Model, Endpoint: chat.Endpoint, Messages: chat.conversation(history), MaxOutput: chat.outputTokenCap(), ReasoningEffort: chat.ReasoningEffort}, billing.Calibration{})
 	} else {
 		quote, err = r.Provider.Quote(ctx)
 	}
@@ -466,9 +473,10 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
 	} else if chat != nil {
 		stop := r.watchSummary(callCtx, cancel, args, chat.JobID)
-		_, err = summary.Run(callCtx, chat.Model, chat.Input, chat.outputTokenCap(), chat.characterCap(), func(ctx context.Context, _ string, messages []summary.Message) (string, error) {
+		var text string
+		text, err = summary.Run(callCtx, summary.Config{Model: chat.Model, MaxOutputTokens: chat.outputTokenCap(), MaxCharacters: chat.characterCap(), Instruction: chat.Instruction, History: history}, chat.Input, func(ctx context.Context, _ string, messages []summary.Message) (string, error) {
 			raw, _ := json.Marshal(messages)
-			reserved, _ := json.Marshal(chat.Messages)
+			reserved, _ := json.Marshal(chat.conversation(history))
 			if len(raw) > len(reserved) {
 				return "", &modelapi.ProviderError{Code: "request_too_large", Uncharged: true}
 			}
@@ -487,6 +495,8 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				r.Log.Warn("summary generation failed", "operation_id", args.OperationID, "job_id", chat.JobID, "model", chat.Model, "reason", summaryReason, "output_characters", utf8.RuneCountInString(result.Text), "max_characters", chat.characterCap())
 			}
 			result.Text = ""
+		} else {
+			result.Text = text
 		}
 	} else {
 		result, err = r.Provider.Generate(callCtx, key, quote)
@@ -496,6 +506,13 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	// recorded during drain instead of triggering a second external call.
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer stop()
+	if chat != nil && result.Amount != nil && result.Text != "" && chat.Rows > 0 && r.MeasureSummary != nil {
+		revise, text, reason := r.checkRows(cleanup, args, chat, history, result.Text)
+		if revise != "" {
+			return r.settleRevision(ctx, args, id, result, history, revise)
+		}
+		result.Text, summaryReason = text, reason
+	}
 	if result.Amount != nil {
 		if *result.Amount > quote.Reserved && r.Log != nil {
 			r.Log.Error("provider charge exceeded reservation", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "reserved_usd", modelapi.USD(quote.Reserved), "actual_usd", modelapi.USD(*result.Amount))

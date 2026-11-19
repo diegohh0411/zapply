@@ -1205,6 +1205,8 @@ export interface components {
             dropped: string[];
         };
         CvPreview: {
+            /** @description Lines fitting reserves for the summary. A manual summary is fitted as written instead. */
+            summary_rows: number;
             /** @description Includes waiting_for_fit until the browser reports a fit for the current content. */
             summary_status?: string;
             summary_suggestion?: string;
@@ -1808,22 +1810,13 @@ export interface components {
             /** @description Accepted efforts, highest first. Empty when the model exposes no effort choice. */
             efforts: ("max" | "xhigh" | "high" | "medium" | "low" | "minimal" | "off")[];
         };
-        /**
-         * @description Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
-         * @enum {integer}
-         */
-        SummaryMaxCharacters: 100 | 200 | 300 | 400 | 500;
-        /**
-         * @description Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
-         * @enum {integer}
-         */
-        SummaryMaxOutputTokens: 1024 | 2048 | 4096 | 8192;
+        /** @description Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value. */
+        SummaryRows: number;
         ModelSettings: {
             decision_model: string | null;
             summary_model?: string | null;
             summary_endpoint?: string | null;
-            summary_max_output_tokens: components["schemas"]["SummaryMaxOutputTokens"];
-            summary_max_characters: components["schemas"]["SummaryMaxCharacters"];
+            summary_rows: components["schemas"]["SummaryRows"];
             /**
              * @description Thinking effort for summaries; null is automatic.
              * @enum {string|null}
@@ -3650,8 +3643,7 @@ export interface operations {
                     decision_model: string | null;
                     summary_model?: string | null;
                     summary_endpoint?: string | null;
-                    summary_max_output_tokens?: components["schemas"]["SummaryMaxOutputTokens"];
-                    summary_max_characters?: components["schemas"]["SummaryMaxCharacters"];
+                    summary_rows?: components["schemas"]["SummaryRows"];
                     /**
                      * @description Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
                      * @enum {string|null}

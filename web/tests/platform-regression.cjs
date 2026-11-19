@@ -210,31 +210,28 @@ test('summary provider dropdown preserves saved choices and clears unavailable o
 });
 
 
-test('summary caps load the saved values and save the owner selections', async (t) => {
+test('summary rows load the saved value and save the owner selection', async (t) => {
   const f = fixture('admin/model-settings.ts');
   t.after(f.close);
   const settings = new f.types.ModelSettings();
-  assert.equal(settings.summaryMaxOutputTokens, 2048);
-  assert.equal(settings.summaryMaxCharacters, 500);
+  assert.equal(settings.summaryRows, 2);
+  assert.equal(settings.summaryRowChoices.join(), "1,2,3,4");
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 1, decision_model: null, summary_model: null, summary_endpoint: null, summary_max_output_tokens: 4096, summary_max_characters: 300}));
+  f.requests[0].resolve(ok({version: 1, decision_model: null, summary_model: null, summary_endpoint: null, summary_rows: 3}));
   await new Promise(resolve => setImmediate(resolve));
   f.requests[1].resolve(ok([]));
   await new Promise(resolve => setImmediate(resolve));
   f.requests[2].resolve(ok([]));
   await loading;
-  assert.equal(settings.summaryMaxOutputTokens, 4096);
-  assert.equal(settings.summaryMaxCharacters, 300);
-  settings.summaryMaxOutputTokens = 8192;
-  settings.summaryMaxCharacters = 100;
+  assert.equal(settings.summaryRows, 3);
+  settings.selectRows('1');
   const saving = settings.saveSummary();
-  assert.equal(f.requests[3].options.body.summary_max_output_tokens, 8192);
-  assert.equal(f.requests[3].options.body.summary_max_characters, 100);
+  assert.equal(f.requests[3].options.body.summary_rows, 1);
+  assert.equal('summary_max_output_tokens' in f.requests[3].options.body, false);
   assert.equal(f.requests[3].options.params.header['If-Match'], '"1"');
-  f.requests[3].resolve(ok({version: 2, summary_max_output_tokens: 8192, summary_max_characters: 100}));
+  f.requests[3].resolve(ok({version: 2, summary_rows: 1}));
   await saving;
-  assert.equal(settings.settings().summary_max_output_tokens, 8192);
-  assert.equal(settings.settings().summary_max_characters, 100);
+  assert.equal(settings.settings().summary_rows, 1);
   assert.equal(settings.busy(), false);
 });
 
@@ -244,7 +241,7 @@ test('thinking effort loads from the saved model and saves only efforts that mod
   const flush = () => new Promise((resolve) => setImmediate(resolve));
   const settings = new f.types.ModelSettings();
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 3, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'low'}));
+  f.requests[0].resolve(ok({version: 3, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
   await flush();
   f.requests[1].resolve(ok([{tag: 'reason/fp8', name: 'Reason', service_tier: 'default'}]));
   await flush();
@@ -260,13 +257,13 @@ test('thinking effort loads from the saved model and saves only efforts that mod
   assert.equal(JSON.stringify(settings.effortOptions().map((o) => o.value)), JSON.stringify(['', 'high', 'low', 'off']));
   assert.equal(JSON.stringify(settings.textModels().map((m) => m.name)), JSON.stringify(['Plain', 'Reason']));
   assert.equal(settings.perMillion('0.00000002'), '$0.02');
-  assert.match(settings.effortHint(), /Thinking counts toward the 2,048-token output cap\. Low can use up to about 20%/);
+  assert.match(settings.effortHint(), /Low can spend up to about 20% of each answer's tokens thinking/);
 
   settings.summaryEffort = 'off';
   const saving = settings.saveSummary();
   assert.equal(f.requests[4].options.body.summary_reasoning_effort, 'off');
   assert.equal(f.requests[4].options.params.header['If-Match'], '"3"');
-  f.requests[4].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'off'}));
+  f.requests[4].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'off'}));
   await saving;
   assert.equal(settings.summaryEffort, 'off');
   assert.equal(settings.settings().summary_reasoning_effort, 'off');
@@ -290,7 +287,7 @@ test('each model saves on its own and sends the other model saved settings', asy
   const flush = () => new Promise((resolve) => setImmediate(resolve));
   const settings = new f.types.ModelSettings();
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 5, decision_model: 'dec/a', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'low'}));
+  f.requests[0].resolve(ok({version: 5, decision_model: 'dec/a', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
   await flush();
   f.requests[1].resolve(ok([{tag: 'reason/fp8', name: 'Reason', service_tier: 'default'}]));
   await flush();
@@ -304,7 +301,7 @@ test('each model saves on its own and sends the other model saved settings', asy
   assert.equal(settings.summaryDirty(), false);
   assert.equal(settings.decisionDirty(), false);
 
-  settings.summaryMaxOutputTokens = 4096;
+  settings.summaryRows = 4;
   settings.selectDecisionModel('dec/b');
   assert.equal(settings.summaryDirty(), true);
   assert.equal(settings.decisionDirty(), true);
@@ -312,28 +309,28 @@ test('each model saves on its own and sends the other model saved settings', asy
   const deciding = settings.saveDecision();
   const decisionBody = f.requests[4].options.body;
   assert.equal(decisionBody.decision_model, 'dec/b');
-  assert.equal(decisionBody.summary_max_output_tokens, 2048, 'the summary draft must not leak into the decision save');
+  assert.equal(decisionBody.summary_rows, 2, 'the summary draft must not leak into the decision save');
   assert.equal(decisionBody.summary_model, 'reason/model');
   assert.equal(decisionBody.summary_reasoning_effort, 'low');
   assert.equal(f.requests[4].options.params.header['If-Match'], '"5"');
-  f.requests[4].resolve(ok({version: 6, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 2048, summary_max_characters: 500, summary_reasoning_effort: 'low'}));
+  f.requests[4].resolve(ok({version: 6, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
   await deciding;
   assert.equal(settings.decisionDirty(), false);
   assert.equal(settings.summaryDirty(), true, 'the summary draft stays unsaved');
-  assert.equal(settings.summaryMaxOutputTokens, 4096);
+  assert.equal(settings.summaryRows, 4);
 
   const summarizing = settings.saveSummary();
   const summaryBody = f.requests[5].options.body;
   assert.equal(summaryBody.decision_model, 'dec/b', 'the saved decision model is kept');
-  assert.equal(summaryBody.summary_max_output_tokens, 4096);
+  assert.equal(summaryBody.summary_rows, 4);
   assert.equal(f.requests[5].options.params.header['If-Match'], '"6"');
-  f.requests[5].resolve(ok({version: 7, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_max_output_tokens: 4096, summary_max_characters: 500, summary_reasoning_effort: 'low'}));
+  f.requests[5].resolve(ok({version: 7, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low'}));
   await summarizing;
   assert.equal(settings.summaryDirty(), false);
 
-  settings.summaryMaxCharacters = 100;
+  settings.summaryRows = 1;
   assert.equal(settings.summaryDirty(), true);
   settings.discardSummary();
-  assert.equal(settings.summaryMaxCharacters, 500);
+  assert.equal(settings.summaryRows, 4);
   assert.equal(settings.summaryDirty(), false);
 });

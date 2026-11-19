@@ -125,13 +125,13 @@ The export records the dropped item IDs, not `k`. Rendering a snapshot never
 fits again: it compiles exactly what was stored.
 
 The summary is part of the fit's input but not its text. The browser fits with
-a placeholder of 500 wide characters in place of the summary, the longest a
-summary may be, so the page break does not depend on the summary's text. The
-browser then reports the dropped IDs to the server (see the summary notes), which
-stores them and writes the summary from the content those IDs leave. The
-placeholder always reserves space, even when no summary is generated, so a fit
-may leave some blank space and drop one optional item more than a fit that
-could use it.
+a placeholder of exactly `summary_rows` lines in place of an automatic summary,
+the lines the summary is written to fill, so the page break does not depend on
+the summary's text. A manual summary is fitted as written. The browser then
+reports the dropped IDs to the server (see the summary notes), which stores
+them and writes the summary from the content those IDs leave, revising it until
+it wraps to those rows. The placeholder reserves its rows even when no summary
+is generated.
 
 The page budget defaults to 1 and can be set to 1–3 pages per draft.
 
