@@ -33,18 +33,49 @@ type FitInput struct {
 // fitKey identifies the content a browser fit is valid for. The summary is
 // left out because fitting reserves its maximum space, so its text can't
 // change the fit.
+// A manual summary is fitted as written, so its text is part of the key.
 func fitKey(p Preview) string {
 	c := p.Content
 	c.Profile.Summary = ""
+	if p.Draft.Summary != nil {
+		c.Profile.Summary = *p.Draft.Summary
+	}
 	b, _ := json.Marshal(struct {
 		Content         Content  `json:"content"`
 		Trim            []string `json:"trim"`
 		Template        string   `json:"template"`
 		TemplateVersion int      `json:"template_version"`
 		PageBudget      int      `json:"page_budget"`
-	}{c, p.Trim, p.Template.Name, p.Template.Version, p.Draft.PageBudget})
+		SummaryRows     int      `json:"summary_rows"`
+		Manual          bool     `json:"manual,omitempty"`
+	}{c, p.Trim, p.Template.Name, p.Template.Version, p.Draft.PageBudget, p.SummaryRows, p.Draft.Summary != nil})
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+// fallbackPerLine estimates characters per summary line when the server
+// can't compile to measure (classic/1 measures about 114).
+const fallbackPerLine = 110
+
+type summarySettings struct {
+	Model, Endpoint string
+	Rows            int     `json:"rows"`
+	ReasoningEffort *string `json:"reasoning_effort"`
+}
+
+func loadSummarySettings(ctx context.Context, tx pgx.Tx) (summarySettings, error) {
+	var settings summarySettings
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT platform.summary_settings()`).Scan(&raw); err != nil {
+		return settings, err
+	}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return settings, err
+	}
+	if settings.Rows < MinSummaryRows || settings.Rows > MaxSummaryRows {
+		settings.Rows = DefaultSummaryRows
+	}
+	return settings, nil
 }
 
 // summaryEntry is what the summary agent sees of an entry: its heading and
@@ -108,17 +139,8 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 	if storedFitKey != "" && storedFitKey == p.FitKey {
 		p.Fit = &Fit{Dropped: storedDropped}
 	}
-	var settings struct {
-		Model, Endpoint string
-		MaxOutputTokens int     `json:"max_output_tokens"`
-		MaxCharacters   int     `json:"max_characters"`
-		ReasoningEffort *string `json:"reasoning_effort"`
-	}
-	var raw []byte
-	if err := tx.QueryRow(ctx, `SELECT platform.summary_settings()`).Scan(&raw); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &settings); err != nil {
+	settings, err := loadSummarySettings(ctx, tx)
+	if err != nil {
 		return err
 	}
 	var description string
@@ -155,7 +177,7 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 	// regenerates a summary at most once a month as roles age into the past.
 	input, _ := json.Marshal(map[string]any{"as_of": time.Now().UTC().Format("2006-01"), "locale": p.Content.Locale, "job_description": description, "sections": shown})
 	// Automatic thinking keeps the original hash, so only an explicit effort regenerates summaries.
-	settingsKey := settings.Model + "|" + settings.Endpoint + "|" + strconv.Itoa(settings.MaxOutputTokens) + "|" + strconv.Itoa(settings.MaxCharacters)
+	settingsKey := settings.Model + "|" + settings.Endpoint + "|rows:" + strconv.Itoa(p.SummaryRows) + "|" + p.Template.Name + "/" + strconv.Itoa(p.Template.Version)
 	effort := ""
 	if settings.ReasoningEffort != nil {
 		effort = *settings.ReasoningEffort
@@ -173,8 +195,19 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 		if err != nil {
 			return err
 		}
+		perLine, err := s.Typst.CharactersPerLine(ctx, p.Template.Name, p.Template.Version, p.Content.Locale)
+		if err != nil {
+			perLine = fallbackPerLine
+		}
+		lo, hi := SummaryRange(perLine, p.SummaryRows)
+		instruction := summary.InstructionForRows(p.SummaryRows, lo, hi)
+		// The hard cap leaves room for an answer to be measured and revised
+		// rather than cut short.
+		limit := min(summary.MaxCharacters, int(perLine*float64(p.SummaryRows+1)))
 		// Reserve extra framing bytes for the SDK's generated system instructions.
-		request := worker.SummaryRequest{MaxCharacters: settings.MaxCharacters, MaxOutputTokens: settings.MaxOutputTokens, ReasoningEffort: effort, Model: settings.Model, Endpoint: settings.Endpoint, JobID: d.JobID, Input: string(input), Messages: []summary.Message{{Role: "system", Content: summary.InstructionFor(settings.MaxCharacters) + strings.Repeat(" ", 8192)}, {Role: "user", Content: string(input)}}}
+		request := worker.SummaryRequest{Rows: p.SummaryRows, MinCharacters: lo, MaxCharacters: limit, Template: p.Template.Name, TemplateVersion: p.Template.Version, Locale: p.Content.Locale, Instruction: instruction,
+			MaxOutputTokens: summary.OutputTokens, ReasoningEffort: effort, Model: settings.Model, Endpoint: settings.Endpoint, JobID: d.JobID, Input: string(input),
+			Messages: []summary.Message{{Role: "system", Content: instruction + strings.Repeat(" ", 8192)}, {Role: "user", Content: string(input)}}}
 		id, err := q.EnqueueSummary(ctx, tx, u, key, request)
 		if err != nil {
 			return err
@@ -191,6 +224,10 @@ func (s *Service) summary(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft, 
 		if _, err := tx.Exec(ctx, `UPDATE cv_summary SET last_summary=$3 WHERE user_id=$1 AND job_id=$2`, u, d.JobID, p.SummarySuggestion); err != nil {
 			return err
 		}
+	}
+	// A summary sent back for revision is still being written.
+	if p.SummaryStatus == "blocked" && p.SummaryReason == "summary_revising" {
+		p.SummaryStatus, p.SummaryReason = "running", ""
 	}
 	if p.SummaryStatus != "completed" {
 		p.SummarySuggestion = ""

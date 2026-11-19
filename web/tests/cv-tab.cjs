@@ -48,6 +48,7 @@ const preview = (version) => ({
   content,
   content_hash: 'hash',
   trim: [],
+  summary_rows: 2,
   template: { assets: {} },
   draft: {
     version,
@@ -355,6 +356,8 @@ test('summary failures distinguish length validation from empty model output', (
     summary_reason: 'summary_empty_output',
   });
   assert.match(f.tab.summaryMessage(), /returned no summary text/);
+  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_row_limit' });
+  assert.match(f.tab.summaryMessage(), /didn’t fit its rows/);
 });
 
 test('export sends the exact backfilled omissions and downloads the same fitted snapshot', async () => {

@@ -90,23 +90,12 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
          <span class="text-xs text-muted-foreground" [class.text-destructive]="effortUnavailable()">{{ effortHint() }}</span>
        </div>
 
-       <details class="output-limits">
-         <summary>Output limits</summary>
-         <div class="space-y-5 pt-4">
-           <div class="field"><span class="field-label">Summary token cap</span>
-             <z-select class="w-full max-w-xl" aria-label="Summary token cap" [ngModel]="'' + summaryMaxOutputTokens" (ngModelChange)="selectTokenCap(single($event))" [zDisabled]="loading() || busy()">
-               @for (cap of summaryTokenCaps; track cap.value) { <z-select-item [zValue]="'' + cap.value">{{ cap.label }}</z-select-item> }
-             </z-select>
-             <span class="text-xs text-muted-foreground">Includes reasoning and summary text. Higher caps give reasoning models more room and reserve more of the user's allowance.</span>
-           </div>
-           <div class="field"><span class="field-label">Final summary character cap</span>
-             <z-select class="w-full max-w-xl" aria-label="Final summary character cap" [ngModel]="'' + summaryMaxCharacters" (ngModelChange)="selectCharacterCap(single($event))" [zDisabled]="loading() || busy()">
-               @for (cap of summaryCharacterCaps; track cap) { <z-select-item [zValue]="'' + cap">{{ cap }} characters{{ cap === 500 ? ' (default)' : '' }}</z-select-item> }
-             </z-select>
-             <span class="text-xs text-muted-foreground">Limits generated summary text, including spaces and punctuation. Changing this setting regenerates automatic summaries.</span>
-           </div>
-         </div>
-       </details>
+       <div class="field"><span class="field-label">Summary rows</span>
+         <z-select class="w-full max-w-xl" aria-label="Summary rows" [ngModel]="'' + summaryRows" (ngModelChange)="selectRows(single($event))" [zDisabled]="loading() || busy()">
+           @for (rows of summaryRowChoices; track rows) { <z-select-item [zValue]="'' + rows">{{ rows }} {{ rows === 1 ? 'row' : 'rows' }}{{ rows === 2 ? ' (default)' : '' }}</z-select-item> }
+         </z-select>
+         <span class="text-xs text-muted-foreground">Lines the summary fills on the CV page. A summary that wraps to more or fewer goes back to the model with feedback, up to twice. Changing this regenerates automatic summaries.</span>
+       </div>
 
        <footer class="flex flex-wrap items-center gap-3 border-t pt-5">
          <button z-button [zDisabled]="!canSaveSummary()" (click)="saveSummary()">{{ busy() ? 'Saving…' : 'Save summary settings' }}</button>
@@ -161,8 +150,6 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
  .status-pill { display: inline-flex; align-items: center; gap: .375rem; border-radius: 999px; border: 1px solid var(--border); padding: .125rem .625rem; font-size: .75rem; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; }
  .status-pill::before { content: ''; width: .375rem; height: .375rem; border-radius: 999px; background: currentColor; }
  .status-pill.is-dirty { color: #b45309; border-color: #fcd34d; }
- .output-limits summary { cursor: pointer; font-size: .875rem; font-weight: 500; width: fit-content; }
- .output-limits summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: .25rem; }
  `],
 })
 export class ModelSettings {
@@ -186,21 +173,16 @@ export class ModelSettings {
  tierEndpoints() { return this.endpoints().filter(e => e.service_tier === this.summaryTier); }
  selectTier(tier: string): void { this.summaryTier = tier; const endpoints = this.tierEndpoints(); this.summaryEndpoint = endpoints.length === 1 ? endpoints[0]!.tag : ''; this.summaryNotice.set(''); }
  selectEndpoint(tag: string): void { this.summaryEndpoint = tag; this.summaryNotice.set(''); }
- readonly summaryTokenCaps: {value: Schemas['SummaryMaxOutputTokens']; label: string}[] = [
-   {value: 1024, label: '1,024 tokens'}, {value: 2048, label: '2,048 tokens (default)'},
-   {value: 4096, label: '4,096 tokens'}, {value: 8192, label: '8,192 tokens'},
- ];
- readonly summaryCharacterCaps: Schemas['SummaryMaxCharacters'][] = [100, 200, 300, 400, 500];
- summaryMaxCharacters: Schemas['SummaryMaxCharacters'] = 500;
- summaryMaxOutputTokens: Schemas['SummaryMaxOutputTokens'] = 2048;
+ readonly summaryRowChoices: Schemas['SummaryRows'][] = [1, 2, 3, 4];
+ summaryRows: Schemas['SummaryRows'] = 2;
  summaryModel = ''; summaryEndpoint = '';
  // '' is automatic: optional thinking stays off and required thinking uses its lowest effort.
  summaryEffort: '' | Effort = '';
  selected = ''; private generation = 0;
- constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; this.summaryEffort = ''; this.summaryMaxOutputTokens = 2048; this.summaryMaxCharacters = 500; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); this.clearNotices(); void this.load(); }); }); }
+ constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; this.summaryEffort = ''; this.summaryRows = 2; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); this.clearNotices(); void this.load(); }); }); }
  private clearNotices(): void { this.summaryNotice.set(''); this.summaryError.set(''); this.decisionNotice.set(''); this.decisionError.set(''); }
  private applySettings(saved: Settings): void {
-   this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryMaxOutputTokens = saved.summary_max_output_tokens; this.summaryMaxCharacters = saved.summary_max_characters;
+   this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryRows = saved.summary_rows;
  }
  private async fetchModels(current: () => boolean): Promise<void> {
    const textModels = Api.ok(await this.api.GET('/v1/admin/text-models')); if (!current()) return; this.textModels.set([...textModels].sort(byName));
@@ -244,15 +226,14 @@ export class ModelSettings {
    if (!this.summaryEffort) return 'Automatic keeps summaries short: optional thinking stays off, and required thinking uses its lowest effort.';
    if (this.summaryEffort === 'off') return 'Thinking stays off for summaries.';
    const share = Math.round(EFFORT_SHARE[this.summaryEffort] * 100);
-   return `Thinking counts toward the ${this.summaryMaxOutputTokens.toLocaleString('en-US')}-token output cap. ${EFFORT_LABELS[this.summaryEffort]} can use up to about ${share}% of it, leaving the rest for the summary.`;
+   return `${EFFORT_LABELS[this.summaryEffort]} can spend up to about ${share}% of each answer's tokens thinking. Higher efforts cost more per summary.`;
  }
  perMillion(value: unknown): string {
    const usd = Number(value) * 1_000_000;
    if (!Number.isFinite(usd)) return '—';
    return `$${usd.toLocaleString('en-US', { maximumFractionDigits: usd < 1 ? 4 : 2 })}`;
  }
- selectTokenCap(value: string): void { this.summaryMaxOutputTokens = Number(value) as Schemas['SummaryMaxOutputTokens']; this.summaryNotice.set(''); }
- selectCharacterCap(value: string): void { this.summaryMaxCharacters = Number(value) as Schemas['SummaryMaxCharacters']; this.summaryNotice.set(''); }
+ selectRows(value: string): void { this.summaryRows = Number(value) as Schemas['SummaryRows']; this.summaryNotice.set(''); }
  selectEffort(value: string): void { this.summaryEffort = value as '' | Effort; this.summaryNotice.set(''); }
  selectDecisionModel(value: string): void { this.selected = value; this.decisionNotice.set(''); }
  selectSummaryModel(model: string | string[] | null): void {
@@ -276,7 +257,7 @@ export class ModelSettings {
  // Dirty state compares drafts with the last saved settings.
  summaryDirty(): boolean {
    const saved = this.settings(); if (!saved) return false;
-   return this.summaryModel !== (saved.summary_model ?? '') || this.summaryEndpoint !== (saved.summary_endpoint ?? '') || this.summaryEffort !== (saved.summary_reasoning_effort ?? '') || this.summaryMaxOutputTokens !== saved.summary_max_output_tokens || this.summaryMaxCharacters !== saved.summary_max_characters;
+   return this.summaryModel !== (saved.summary_model ?? '') || this.summaryEndpoint !== (saved.summary_endpoint ?? '') || this.summaryEffort !== (saved.summary_reasoning_effort ?? '') || this.summaryRows !== saved.summary_rows;
  }
  decisionDirty(): boolean { return this.selected !== (this.settings()?.decision_model ?? ''); }
  // Explains why Save is off. Empty when saving is allowed.
@@ -296,7 +277,7 @@ export class ModelSettings {
    const endpoint = this.endpoints().find(e => e.tag === saved.summary_endpoint)?.name ?? saved.summary_endpoint ?? '';
    const effort = saved.summary_reasoning_effort ? EFFORT_LABELS[saved.summary_reasoning_effort] : 'Automatic';
    const route = endpoint ? `${model} via ${endpoint}` : model;
-   return [route, `Thinking ${effort}`, `${saved.summary_max_output_tokens.toLocaleString('en-US')}-token cap`].join(' · ');
+   return [route, `Thinking ${effort}`, `${saved.summary_rows} ${saved.summary_rows === 1 ? 'row' : 'rows'}`].join(' · ');
  }
  decisionLive(): string {
    const saved = this.settings(); if (!saved) return '';
@@ -305,7 +286,7 @@ export class ModelSettings {
  }
  discardSummary(): void {
    const saved = this.settings(); if (!saved) return;
-   this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryMaxOutputTokens = saved.summary_max_output_tokens; this.summaryMaxCharacters = saved.summary_max_characters;
+   this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryRows = saved.summary_rows;
    this.summaryError.set(''); this.summaryNotice.set('Changes discarded.'); void this.loadEndpoints();
  }
  discardDecision(): void {
@@ -317,7 +298,7 @@ export class ModelSettings {
    const identity = this.auth.identity(), generation = this.generation; this.busy.set(true); this.summaryError.set(''); this.summaryNotice.set(''); this.decisionNotice.set('');
    const current = () => identity === this.auth.identity() && generation === this.generation;
    try {
-     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: saved.decision_model ?? null, summary_model: this.summaryModel || null, summary_endpoint: this.summaryEndpoint || null, summary_max_output_tokens: this.summaryMaxOutputTokens, summary_max_characters: this.summaryMaxCharacters, summary_reasoning_effort: this.summaryModel ? (this.summaryEffort || null) : null } }));
+     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: saved.decision_model ?? null, summary_model: this.summaryModel || null, summary_endpoint: this.summaryEndpoint || null, summary_rows: this.summaryRows, summary_reasoning_effort: this.summaryModel ? (this.summaryEffort || null) : null } }));
      if (current()) { this.settings.set(value); this.summaryNotice.set('Summary settings saved.'); }
    } catch(e) { if (current()) this.summaryError.set((e as Error).message); }
    finally { if (current()) this.busy.set(false); }
@@ -327,7 +308,7 @@ export class ModelSettings {
    const identity = this.auth.identity(), generation = this.generation; this.busy.set(true); this.decisionError.set(''); this.decisionNotice.set(''); this.summaryNotice.set('');
    const current = () => identity === this.auth.identity() && generation === this.generation;
    try {
-     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null, summary_model: saved.summary_model ?? null, summary_endpoint: saved.summary_endpoint ?? null, summary_max_output_tokens: saved.summary_max_output_tokens, summary_max_characters: saved.summary_max_characters, summary_reasoning_effort: saved.summary_reasoning_effort ?? null } }));
+     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: this.selected || null, summary_model: saved.summary_model ?? null, summary_endpoint: saved.summary_endpoint ?? null, summary_rows: saved.summary_rows, summary_reasoning_effort: saved.summary_reasoning_effort ?? null } }));
      if (current()) { this.settings.set(value); this.decisionNotice.set('Decision model saved.'); }
    } catch(e) { if (current()) this.decisionError.set((e as Error).message); }
    finally { if (current()) this.busy.set(false); }

@@ -218,7 +218,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	runtime := &worker.Runtime{Store: st, Provider: openrouter.New(cfg.Worker.Model, cfg.Worker.Endpoint), Keys: keys, Log: log}
+	runtime := &worker.Runtime{Store: st, Provider: openrouter.New(cfg.Worker.Model, cfg.Worker.Endpoint), Keys: keys, Log: log, MeasureSummary: render.NewCompiler(cfg.TypstDir).SummaryLines}
 	q, err := worker.NewQueue(st)
 	if err != nil {
 		return err

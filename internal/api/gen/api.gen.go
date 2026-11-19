@@ -700,57 +700,6 @@ func (e SkillType) Valid() bool {
 	}
 }
 
-// Defines values for SummaryMaxCharacters.
-const (
-	N100 SummaryMaxCharacters = 100
-	N200 SummaryMaxCharacters = 200
-	N300 SummaryMaxCharacters = 300
-	N400 SummaryMaxCharacters = 400
-	N500 SummaryMaxCharacters = 500
-)
-
-// Valid indicates whether the value is a known member of the SummaryMaxCharacters enum.
-func (e SummaryMaxCharacters) Valid() bool {
-	switch e {
-	case N100:
-		return true
-	case N200:
-		return true
-	case N300:
-		return true
-	case N400:
-		return true
-	case N500:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SummaryMaxOutputTokens.
-const (
-	N1024 SummaryMaxOutputTokens = 1024
-	N2048 SummaryMaxOutputTokens = 2048
-	N4096 SummaryMaxOutputTokens = 4096
-	N8192 SummaryMaxOutputTokens = 8192
-)
-
-// Valid indicates whether the value is a known member of the SummaryMaxOutputTokens enum.
-func (e SummaryMaxOutputTokens) Valid() bool {
-	switch e {
-	case N1024:
-		return true
-	case N2048:
-		return true
-	case N4096:
-		return true
-	case N8192:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for WorkMode.
 const (
 	Hybrid WorkMode = "hybrid"
@@ -1007,6 +956,9 @@ type CvPreview struct {
 		Stale bool               `json:"stale"`
 	} `json:"match"`
 	SummaryReason *string `json:"summary_reason,omitempty"`
+
+	// SummaryRows Lines fitting reserves for the summary. A manual summary is fitted as written instead.
+	SummaryRows int `json:"summary_rows"`
 
 	// SummaryStatus Includes waiting_for_fit until the browser reports a fit for the current content.
 	SummaryStatus     *string    `json:"summary_status,omitempty"`
@@ -1671,18 +1623,15 @@ type ModelOperationStatus string
 type ModelSettings struct {
 	DecisionModel   *string `json:"decision_model"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
-
-	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
-	SummaryMaxCharacters SummaryMaxCharacters `json:"summary_max_characters"`
-
-	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
-	SummaryMaxOutputTokens SummaryMaxOutputTokens `json:"summary_max_output_tokens"`
-	SummaryModel           *string                `json:"summary_model,omitempty"`
+	SummaryModel    *string `json:"summary_model,omitempty"`
 
 	// SummaryReasoningEffort Thinking effort for summaries; null is automatic.
 	SummaryReasoningEffort *ModelSettingsSummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`
-	UpdatedAt              time.Time                            `json:"updated_at"`
-	Version                int                                  `json:"version"`
+
+	// SummaryRows Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value.
+	SummaryRows SummaryRows `json:"summary_rows"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	Version     int         `json:"version"`
 }
 
 // ModelSettingsSummaryReasoningEffort Thinking effort for summaries; null is automatic.
@@ -1843,11 +1792,8 @@ type SkillMerge struct {
 // SkillType defines model for SkillType.
 type SkillType string
 
-// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
-type SummaryMaxCharacters int
-
-// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
-type SummaryMaxOutputTokens int
+// SummaryRows Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value.
+type SummaryRows = int
 
 // SystemKey defines model for SystemKey.
 type SystemKey struct {
@@ -1934,16 +1880,13 @@ type ResolveModelAttemptParams struct {
 type PutModelSettingsJSONBody struct {
 	DecisionModel   *string `json:"decision_model"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
-
-	// SummaryMaxCharacters Maximum Unicode characters in generated summaries, including spaces and punctuation. Omitted updates preserve the saved cap.
-	SummaryMaxCharacters *SummaryMaxCharacters `json:"summary_max_characters,omitempty"`
-
-	// SummaryMaxOutputTokens Maximum completion tokens, including reasoning. Omitted updates preserve the saved cap.
-	SummaryMaxOutputTokens *SummaryMaxOutputTokens `json:"summary_max_output_tokens,omitempty"`
-	SummaryModel           *string                 `json:"summary_model,omitempty"`
+	SummaryModel    *string `json:"summary_model,omitempty"`
 
 	// SummaryReasoningEffort Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
 	SummaryReasoningEffort *PutModelSettingsJSONBodySummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`
+
+	// SummaryRows Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value.
+	SummaryRows *SummaryRows `json:"summary_rows,omitempty"`
 }
 
 // PutModelSettingsParams defines parameters for PutModelSettings.

@@ -45,14 +45,14 @@ func TestCancelledRunDoesNotPublishLateOutput(t *testing.T) {
 }
 
 func TestNewRequiresGateway(t *testing.T) {
-	if _, err := New("model", DefaultMaxOutputTokens, MaxCharacters, nil); err == nil {
+	if _, err := New(Config{Model: "model", MaxOutputTokens: OutputTokens, MaxCharacters: MaxCharacters}, nil); err == nil {
 		t.Fatal("agent accepted missing allowance gateway")
 	}
 }
 
 func TestRunUsesFreshADKSession(t *testing.T) {
 	calls := 0
-	text, err := Run(context.Background(), "test/model", `{"job_description":"Write Go","sections":[]}`, DefaultMaxOutputTokens, MaxCharacters, func(ctx context.Context, name string, messages []Message) (string, error) {
+	text, err := Run(context.Background(), Config{Model: "test/model", MaxOutputTokens: OutputTokens, MaxCharacters: MaxCharacters}, `{"job_description":"Write Go","sections":[]}`, func(ctx context.Context, name string, messages []Message) (string, error) {
 		calls++
 		if name != "test/model" || len(messages) < 2 || messages[len(messages)-1].Content != `{"job_description":"Write Go","sections":[]}` {
 			t.Fatalf("unexpected agent input: %s %#v", name, messages)
@@ -91,7 +91,7 @@ func TestRunEnforcesConfiguredCharacterCap(t *testing.T) {
 		for _, extra := range []int{0, 1} {
 			t.Run(fmt.Sprintf("cap_%d_extra_%d", cap, extra), func(t *testing.T) {
 				output := strings.Repeat("é", cap+extra)
-				text, err := Run(context.Background(), "test/model", "selected evidence", DefaultMaxOutputTokens, cap, func(_ context.Context, _ string, messages []Message) (string, error) {
+				text, err := Run(context.Background(), Config{Model: "test/model", MaxOutputTokens: OutputTokens, MaxCharacters: cap}, "selected evidence", func(_ context.Context, _ string, messages []Message) (string, error) {
 					if len(messages) < 2 || !strings.Contains(messages[0].Content, fmt.Sprintf("at most %d Unicode characters", cap)) {
 						t.Fatalf("configured limit missing from instruction: %#v", messages)
 					}
@@ -140,5 +140,29 @@ func TestFitToLimitDropsTrailingSentences(t *testing.T) {
 	}
 	if got, ok := FitToLimit("Version 2.5 is out. More text follows here.", 25); !ok || got != "Version 2.5 is out." {
 		t.Fatalf("split on decimal point: %q", got)
+	}
+}
+
+func TestRunContinuesHistoryAndAsksForRows(t *testing.T) {
+	history := []Message{{Role: "assistant", Content: "Too long."}, {Role: "user", Content: Revision(3, 2, 300, 140, 216)}}
+	var sent []Message
+	text, err := Run(context.Background(), Config{Model: "m", MaxOutputTokens: OutputTokens, MaxCharacters: 300, Instruction: InstructionForRows(2, 140, 216), History: history}, "evidence", func(_ context.Context, _ string, messages []Message) (string, error) {
+		sent = messages
+		return "Line one\n\nline   two.", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "Line one line two." {
+		t.Fatalf("text = %q, want one normalized paragraph", text)
+	}
+	if len(sent) != 4 || sent[0].Role != "system" || sent[1].Content != "evidence" || sent[2] != history[0] || sent[3] != history[1] {
+		t.Fatalf("messages = %+v", sent)
+	}
+	if !strings.Contains(sent[0].Content, "exactly 2 lines") || !strings.Contains(sent[0].Content, "between 140 and 216") {
+		t.Fatalf("instruction = %q", sent[0].Content)
+	}
+	if !strings.Contains(sent[3].Content, "wraps to 3 lines") || !strings.Contains(Revision(1, 2, 80, 140, 216), "about 98 more") {
+		t.Fatalf("revision feedback = %q", sent[3].Content)
 	}
 }

@@ -86,6 +86,16 @@ var Sources = []string{"main.typ", "strings.json"}
 // content.json, with system and embedded fonts disabled, so the output
 // depends on nothing else on the machine.
 func Compile(ctx context.Context, typst string, m Manifest, content []byte) ([]byte, error) {
+	return compile(ctx, typst, m, content, "pdf")
+}
+
+// CompileSVG is Compile with SVG output, for content that fits one page.
+// Measurements read it; nothing compiled this way is stored or shown.
+func CompileSVG(ctx context.Context, typst string, m Manifest, content []byte) ([]byte, error) {
+	return compile(ctx, typst, m, content, "svg")
+}
+
+func compile(ctx context.Context, typst string, m Manifest, content []byte, format string) ([]byte, error) {
 	if len(content) > 256<<10 {
 		return nil, fmt.Errorf("CV content exceeds 256 KB")
 	}
@@ -114,9 +124,9 @@ func Compile(ctx context.Context, typst string, m Manifest, content []byte) ([]b
 	if err := os.CopyFS(fontDir, fonts); err != nil {
 		return nil, err
 	}
-	out := filepath.Join(dir, "out.pdf")
+	out := filepath.Join(dir, "out."+format)
 	cmd := exec.CommandContext(ctx, typst, "compile",
-		"--root", dir,
+		"--root", dir, "--format", format,
 		"--ignore-system-fonts", "--ignore-embedded-fonts",
 		"--font-path", fontDir,
 		filepath.Join(dir, "main.typ"), out)
