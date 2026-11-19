@@ -1680,6 +1680,28 @@ type PlanInput struct {
 	Name      string `json:"name"`
 }
 
+// PostingRead defines model for PostingRead.
+type PostingRead struct {
+	Company *string `json:"company,omitempty"`
+
+	// Description The page as markdown; empty when it had no text.
+	Description    string          `json:"description"`
+	EmploymentType *EmploymentType `json:"employment_type,omitempty"`
+	Location       *string         `json:"location,omitempty"`
+	SalaryCurrency *string         `json:"salary_currency,omitempty"`
+	SalaryMax      *int64          `json:"salary_max,omitempty"`
+	SalaryMin      *int64          `json:"salary_min,omitempty"`
+	SalaryPeriod   *SalaryPeriod   `json:"salary_period,omitempty"`
+	Title          *string         `json:"title,omitempty"`
+	WorkMode       *WorkMode       `json:"work_mode,omitempty"`
+}
+
+// PostingReadInput defines model for PostingReadInput.
+type PostingReadInput struct {
+	// Url The posting's http(s) URL.
+	Url string `json:"url"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Code   *string       `json:"code,omitempty"`
@@ -2116,6 +2138,9 @@ type CreateOrganizationJSONRequestBody = OrganizationInput
 // UpdateOrganizationJSONRequestBody defines body for UpdateOrganization for application/json ContentType.
 type UpdateOrganizationJSONRequestBody = OrganizationInput
 
+// ReadPostingJSONRequestBody defines body for ReadPosting for application/json ContentType.
+type ReadPostingJSONRequestBody = PostingReadInput
+
 // PutProfileJSONRequestBody defines body for PutProfile for application/json ContentType.
 type PutProfileJSONRequestBody = ProfileInput
 
@@ -2361,6 +2386,9 @@ type ServerInterface interface {
 
 	// (PATCH /v1/organizations/{id})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (POST /v1/postings/read)
+	ReadPosting(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/profile)
 	GetProfile(w http.ResponseWriter, r *http.Request)
@@ -4848,6 +4876,20 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ReadPosting operation middleware
+func (siw *ServerInterfaceWrapper) ReadPosting(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReadPosting(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProfile operation middleware
 func (siw *ServerInterfaceWrapper) GetProfile(w http.ResponseWriter, r *http.Request) {
 
@@ -5232,6 +5274,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/activities", wrapper.CreateJobNote)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/jobs/{id}/activities/{activity_id}", wrapper.DeleteJobNote)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/jobs/{id}/activities/{activity_id}", wrapper.UpdateJobNote)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/postings/read", wrapper.ReadPosting)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/job-views", wrapper.ListJobViews)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/job-views", wrapper.CreateJobView)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/job-views/{id}", wrapper.DeleteJobView)
@@ -8442,6 +8485,45 @@ func (response UpdateOrganizationdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type ReadPostingRequestObject struct {
+	Body *ReadPostingJSONRequestBody
+}
+
+type ReadPostingResponseObject interface {
+	VisitReadPostingResponse(w http.ResponseWriter) error
+}
+
+type ReadPosting200JSONResponse PostingRead
+
+func (response ReadPosting200JSONResponse) VisitReadPostingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReadPostingdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReadPostingdefaultApplicationProblemPlusJSONResponse) VisitReadPostingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetProfileRequestObject struct {
 }
 
@@ -9040,6 +9122,9 @@ type StrictServerInterface interface {
 
 	// (PATCH /v1/organizations/{id})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
+
+	// (POST /v1/postings/read)
+	ReadPosting(ctx context.Context, request ReadPostingRequestObject) (ReadPostingResponseObject, error)
 
 	// (GET /v1/profile)
 	GetProfile(ctx context.Context, request GetProfileRequestObject) (GetProfileResponseObject, error)
@@ -11289,6 +11374,37 @@ func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateOrganizationResponseObject); ok {
 		if err := validResponse.VisitUpdateOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReadPosting operation middleware
+func (sh *strictHandler) ReadPosting(w http.ResponseWriter, r *http.Request) {
+	var request ReadPostingRequestObject
+
+	var body ReadPostingJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReadPosting(ctx, request.(ReadPostingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReadPosting")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReadPostingResponseObject); ok {
+		if err := validResponse.VisitReadPostingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

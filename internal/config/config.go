@@ -42,6 +42,7 @@ type Config struct {
 	Web                    Web
 	Worker                 Worker
 	Google                 Google
+	Firecrawl              Firecrawl
 	SystemKeyRing          string
 	SystemKeyActiveVersion string
 	// TypstDir holds a Typst CLI per version, TypstDir/<version>/typst, for
@@ -87,6 +88,14 @@ func (g Google) RedirectURL() string {
 
 // PushURL is the endpoint the Pub/Sub push subscription targets.
 func (g Google) PushURL() string { return strings.TrimRight(g.PublicURL, "/") + "/hooks/google/pubsub" }
+
+// Firecrawl is the scrape API that reads posting links in the new job dialog:
+// Firecrawl Local (deploy/compose.yaml) or any Firecrawl v2 server. Optional:
+// without a URL the dialog reads only what the link itself says.
+type Firecrawl struct {
+	URL   string
+	Token string
+}
 
 // Web is public configuration for the browser app (served as /config.json).
 type Web struct {
@@ -136,6 +145,7 @@ func Load() (Config, error) {
 			PubSubAudience:       os.Getenv("GOOGLE_PUBSUB_AUDIENCE"),
 			PubSubServiceAccount: os.Getenv("GOOGLE_PUBSUB_SERVICE_ACCOUNT"),
 		},
+		Firecrawl: Firecrawl{URL: os.Getenv("FIRECRAWL_URL"), Token: os.Getenv("FIRECRAWL_TOKEN")},
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),
 			AdminAddr:   get("RELAY_ADMIN_ADDR", ":8081"),

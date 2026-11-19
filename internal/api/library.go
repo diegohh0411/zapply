@@ -16,6 +16,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/posting"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/worker"
 )
@@ -33,6 +34,7 @@ type server struct {
 	cv             *render.Service
 	decisionModels *openrouter.Client
 	mail           *mail.Service
+	postings       *posting.Reader
 	pushVerifier   auth.Verifier
 }
 

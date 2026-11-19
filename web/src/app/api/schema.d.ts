@@ -439,6 +439,29 @@ export interface paths {
         patch: operations["updateJobNote"];
         trace?: never;
     };
+    "/v1/postings/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Reads a posting's page for the new job dialog, through the configured
+         *     Firecrawl scrape API (FIRECRAWL_URL; docs/parts/04-jobs.md). Fields
+         *     come from the page's schema.org JobPosting data; absent fields were not
+         *     found. Nothing is saved. 503 when no scraper is configured, 422 on `url`
+         *     when the page could not be read.
+         */
+        post: operations["readPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/job-views": {
         parameters: {
             query?: never;
@@ -1535,6 +1558,25 @@ export interface components {
          * @enum {string}
          */
         JobSort: "-updated_at" | "-created_at" | "position";
+        PostingReadInput: {
+            /** @description The posting's http(s) URL. */
+            url: string;
+        };
+        PostingRead: {
+            title?: string;
+            company?: string;
+            location?: string;
+            work_mode?: components["schemas"]["WorkMode"];
+            employment_type?: components["schemas"]["EmploymentType"];
+            /** Format: int64 */
+            salary_min?: number;
+            /** Format: int64 */
+            salary_max?: number;
+            salary_currency?: string;
+            salary_period?: components["schemas"]["SalaryPeriod"];
+            /** @description The page as markdown; empty when it had no text. */
+            description: string;
+        };
         JobInput: {
             /** Format: uuid */
             status_id?: string;
@@ -3044,6 +3086,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobActivity"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    readPosting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostingReadInput"];
+            };
+        };
+        responses: {
+            /** @description What the page says. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingRead"];
                 };
             };
             default: components["responses"]["Problem"];

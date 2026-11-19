@@ -29,6 +29,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/posting"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -63,6 +64,8 @@ type Deps struct {
 	// PushVerifier checks the Pub/Sub push token; nil verifies against Google's
 	// published keys when push is configured.
 	PushVerifier auth.Verifier
+	// Postings reads posting pages for POST /v1/postings/read; nil answers 503.
+	Postings *posting.Reader
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -74,7 +77,7 @@ func Handler(d Deps) http.Handler {
 		d.Logger.Error("queue initialization failed", "err", queueErr)
 		queue = nil
 	}
-	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue}
+	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue, postings: d.Postings}
 	srv.matcher = match.New(d.Store, queue)
 	srv.jobs.Matcher = srv.matcher
 	srv.cv = render.NewService(d.Store, render.NewCompiler(d.TypstDir))
@@ -222,6 +225,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var dup *jobs.DuplicateError
 	var platformError *membership.Error
 	var matchConflict *match.Conflict
+	var unreadable *posting.UnreadableError
 	switch {
 	case errors.As(err, &matchConflict):
 		httpx.WriteJSON(w, 409, map[string]any{"title": "A match run is already active", "status": 409, "existing_id": matchConflict.ExistingID})
@@ -238,6 +242,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeValidation(w, r, invalid.Fields)
 	case errors.As(err, &conflict):
 		httpx.WriteProblem(w, r, http.StatusConflict, conflict.Message)
+	case errors.Is(err, posting.ErrNotConfigured):
+		httpx.WriteProblem(w, r, http.StatusServiceUnavailable, "reading postings is not configured on this server")
+	case errors.Is(err, posting.ErrInvalidURL):
+		writeValidation(w, r, []library.FieldError{{Field: "url", Message: "Enter an http(s) link."}})
+	case errors.As(err, &unreadable):
+		writeValidation(w, r, []library.FieldError{{Field: "url", Message: "Couldn't read this page: " + unreadable.Reason + "."}})
 	case errors.Is(err, mail.ErrNotConfigured):
 		httpx.WriteProblem(w, r, http.StatusServiceUnavailable, "mail is not configured on this server")
 	case errors.Is(err, library.ErrNotFound):

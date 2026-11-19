@@ -629,6 +629,29 @@ paths:
         "204": { description: Deleted. }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/postings/read:
+    post:
+      operationId: readPosting
+      tags: [jobs]
+      description: |
+        Reads a posting's page for the new job dialog, through the configured
+        Firecrawl scrape API (FIRECRAWL_URL; docs/parts/04-jobs.md). Fields
+        come from the page's schema.org JobPosting data; absent fields were not
+        found. Nothing is saved. 503 when no scraper is configured, 422 on `url`
+        when the page could not be read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostingReadInput" }
+      responses:
+        "200":
+          description: What the page says.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PostingRead" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /v1/job-views:
     get:
       operationId: listJobViews
@@ -2039,6 +2062,25 @@ components:
       type: string
       enum: [-updated_at, -created_at, position]
       default: -updated_at
+    PostingReadInput:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, description: "The posting's http(s) URL." }
+    PostingRead:
+      type: object
+      required: [description]
+      properties:
+        title: { type: string }
+        company: { type: string }
+        location: { type: string }
+        work_mode: { $ref: "#/components/schemas/WorkMode" }
+        employment_type: { $ref: "#/components/schemas/EmploymentType" }
+        salary_min: { type: integer, format: int64, minimum: 0 }
+        salary_max: { type: integer, format: int64, minimum: 0 }
+        salary_currency: { type: string }
+        salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
+        description: { type: string, description: "The page as markdown; empty when it had no text." }
     JobInput:
       type: object
       required: [title]
