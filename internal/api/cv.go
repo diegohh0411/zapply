@@ -45,6 +45,19 @@ func (s *server) PutCv(ctx context.Context, req gen.PutCvRequestObject) (gen.Put
 	return gen.PutCv200JSONResponse{Body: body, Headers: gen.PutCv200ResponseHeaders{ETag: etag(p.Draft.Version)}}, nil
 }
 
+func (s *server) PutCvFit(ctx context.Context, req gen.PutCvFitRequestObject) (gen.PutCvFitResponseObject, error) {
+	in, e := convertMatch[render.FitInput](req.Body, nil)
+	if e != nil {
+		return nil, e
+	}
+	p, e := s.cv.SaveFit(ctx, uid(ctx), req.Id, in)
+	body, e := convertMatch[gen.CvPreview](p, e)
+	if e != nil {
+		return nil, e
+	}
+	return gen.PutCvFit200JSONResponse(body), nil
+}
+
 func (s *server) ListCvExports(ctx context.Context, req gen.ListCvExportsRequestObject) (gen.ListCvExportsResponseObject, error) {
 	xs, e := s.cv.Exports(ctx, uid(ctx), req.Id)
 	return convertMatch[gen.ListCvExports200JSONResponse](map[string]any{"items": xs}, e)

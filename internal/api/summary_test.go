@@ -75,9 +75,16 @@ func TestSummaryReplacesInputsAndProtectsManualText(t *testing.T) {
 	job := c.must(201, "POST", "/v1/jobs", map[string]any{"title": "Engineer", "description": "Build compilers"}).Body["id"].(string)
 	path := "/v1/jobs/" + job + "/cv"
 	first := c.must(200, "GET", path, nil)
-	if first.Body["summary_status"] != "pending" {
-		t.Fatalf("summary not queued: %v", first.Body)
+	if first.Body["summary_status"] != "waiting_for_fit" {
+		t.Fatalf("summary queued before a fit: %v", first.Body)
 	}
+	// The browser reports the page fit it computed; only then is a summary written.
+	fitKey, _ := first.Body["fit_key"].(string)
+	first = c.must(200, "PUT", path+"/fit", map[string]any{"fit_key": fitKey, "dropped": []string{}})
+	if first.Body["summary_status"] != "pending" {
+		t.Fatalf("summary not queued after fit: %v", first.Body)
+	}
+	c.must(409, "PUT", path+"/fit", map[string]any{"fit_key": "stale", "dropped": []string{}})
 	var old string
 	if err = admin.QueryRow(ctx, `SELECT operation_id::text FROM cv_summary WHERE job_id=$1`, job).Scan(&old); err != nil {
 		t.Fatal(err)

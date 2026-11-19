@@ -87,6 +87,20 @@ function fixture(
   const auth = { identity: signal('alice') };
   const effects = [];
   let destroy;
+  // The server keeps the fit the browser reports and returns it with each preview.
+  const reported = { fit: null };
+  const api = {
+    ...client,
+    GET: client.GET && (async (path, request) => {
+      const r = await client.GET(path, request);
+      return path.endsWith('/cv') && r.data ? { ...r, data: { ...r.data, fit: reported.fit } } : r;
+    }),
+    PUT: async (path, request) => {
+      if (!path.endsWith('/fit')) return client.PUT(path, request);
+      reported.fit = { dropped: request.body.dropped };
+      return ok(null);
+    },
+  };
   const input = (value) => signal(value);
   input.required = () => signal('job');
   const core = {
@@ -107,7 +121,7 @@ function fixture(
             destroy = fn;
           },
         };
-      return { client };
+      return { client: api };
     },
   };
   const helper = transpile('cv-content.ts', () => ({}));
@@ -165,7 +179,8 @@ test('newest CV preview wins and a failed refit preserves the PDF but prevents e
   await f.tab.load('job');
   pending.resolve(ok(preview(1)));
   await older;
-  assert.equal(f.tab.preview().draft.version, 2);
+  // Reporting the fit reloads the CV, so the newest GET is what the view shows.
+  assert.equal(f.tab.preview().draft.version, requests);
   assert.ok(f.tab.fitted());
   const previous = f.tab.fitted();
   fail = true;
@@ -181,17 +196,17 @@ test('newest CV preview wins and a failed refit preserves the PDF but prevents e
 test('summary polls keep the existing PDF and only compile changed inputs in the background', async () => {
   let p = { ...preview(1), summary_status: 'running' };
   let compilations = 0;
+  let hold;
   const pending = deferred();
   const f = fixture({ GET: async () => ok(p) }, () => {
     compilations++;
-    return compilations === 1
-      ? Promise.resolve({ pages: 1, pdf: new Uint8Array([1]) })
-      : pending.promise;
+    return hold ?? Promise.resolve({ pages: 1, pdf: new Uint8Array([1]) });
   });
   await f.tab.load('job');
+  const compiled = compilations;
   const previous = f.tab.fitted();
   await f.tab.load('job');
-  assert.equal(compilations, 1);
+  assert.equal(compilations, compiled);
   assert.equal(f.tab.fitted(), previous);
   assert.equal(f.tab.pdfCurrent(), true);
 
@@ -203,9 +218,11 @@ test('summary polls keep the existing PDF and only compile changed inputs in the
       profile: { ...content.profile, summary: 'Updated summary' },
     },
   };
+  hold = pending.promise;
   const loading = f.tab.load('job');
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(compilations, 2);
+  // Fitting the changed content compiles again; the old PDF stays on screen meanwhile.
+  assert.equal(compilations, compiled + 1);
   assert.equal(f.tab.fitted(), previous);
   assert.equal(f.tab.fitting(), true);
   assert.equal(f.tab.pdfCurrent(), false);
@@ -400,10 +417,13 @@ test('export sends the exact backfilled omissions and downloads the same fitted 
 test('unsaved summary text blocks export and saving it restores export readiness', async () => {
   let posts = 0;
   const p = preview(1);
+  let current = p;
   const f = fixture({
-    GET: async () => ok(p),
-    PUT: async (_path, request) =>
-      ok({ ...preview(2), draft: { ...p.draft, version: 2, summary: request.body.summary } }),
+    GET: async () => ok(current),
+    PUT: async (_path, request) => {
+      current = { ...preview(2), draft: { ...p.draft, version: 2, summary: request.body.summary } };
+      return ok(current);
+    },
     POST: async () => {
       posts++;
       return ok({ content });

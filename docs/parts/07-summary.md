@@ -1,8 +1,23 @@
 # Automatic CV summaries
 
-CV previews register a summary draft. A selected-evidence snapshot, locale,
-job description, model and endpoint identify each generation. The profile
-summary and contact details are excluded from the agent input.
+CV previews register a summary draft. A generation is identified by the agent
+input, locale, job description, model and endpoint. The agent input is the
+headings of the entries on the page (title, organization, dates, current) and
+the highlights the page shows. Skills, entry summaries, details, the previous
+summary, and contact details are excluded.
+
+The agent sees only what the page shows. The browser fits the CV to its page
+budget and reports the optional IDs it dropped, with the `fit_key` the preview
+carried (`PUT /v1/jobs/{id}/cv/fit`). The key hashes the content without the
+summary, the trim order, the template and the page budget. The server accepts
+a fit only when the key matches the current content and the dropped IDs are
+optional items. Until a fit is reported for the current content, the preview
+reports `waiting_for_fit` and no summary is queued. A fit for content that has
+since changed is a 409 conflict, and the browser reloads and fits again.
+
+Fitting reserves a fixed 500-character summary space, so the fit does not
+depend on the summary's text. Once a summary is generated, its length cannot
+move the page break.
 
 Owners select a text model from the OpenRouter catalogue and configure its
 provider endpoint in the existing model settings panel. The endpoint must
@@ -20,7 +35,9 @@ A worker scans invalidated drafts once per second, after a 700 ms quiet period,
 and queues replacement operations. Running requests check durable invalidation
 every 200 ms and cancel their context. Replaced operations cannot publish into
 the current draft. Requests are also scheduled 700 ms out to coalesce rapid
-selection changes. This works with the browser closed and recovers on restart.
+selection changes. Background regeneration works with the browser closed only
+while the stored fit still matches the content. When the content changed, the
+worker stops the summary and waits for the next CV view to report a fit.
 
 Automatic summaries appear in preview and export. Saving a manual summary
 protects it; future generated text is offered as a suggestion. “Use automatic
@@ -54,3 +71,7 @@ cap is saved in each queued request and included in the generation snapshot.
 Changing it invalidates automatic summaries. Older clients that omit the
 setting preserve its saved value, and older queued requests retain their
 original 500-character limit. Existing manual summaries are preserved.
+
+Apply migration 00028 before deploying the updated API and worker. It adds the
+stored fit (`fit_key`, `fit_dropped`) to each summary snapshot. Existing
+snapshots have no fit, so their summaries wait for the next CV view to report one.

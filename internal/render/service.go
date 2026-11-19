@@ -123,16 +123,19 @@ type MatchInfo struct {
 
 // Preview is a draft with its built content, before fitting.
 type Preview struct {
-	SummaryStatus     string     `json:"summary_status"`
-	SummarySuggestion string     `json:"summary_suggestion"`
-	SummaryReason     string     `json:"summary_reason"`
-	Draft             Draft      `json:"draft"`
-	Template          Template   `json:"template"`
-	Content           Content    `json:"content"`
-	ContentHash       string     `json:"content_hash"`
-	Trim              []string   `json:"trim"`
-	Available         Available  `json:"available"`
-	Match             *MatchInfo `json:"match"`
+	SummaryStatus     string   `json:"summary_status"`
+	SummarySuggestion string   `json:"summary_suggestion"`
+	SummaryReason     string   `json:"summary_reason"`
+	Draft             Draft    `json:"draft"`
+	Template          Template `json:"template"`
+	Content           Content  `json:"content"`
+	ContentHash       string   `json:"content_hash"`
+	// FitKey names this content for a browser fit; Fit is the fit reported for it, or nil.
+	FitKey    string     `json:"fit_key"`
+	Fit       *Fit       `json:"fit"`
+	Trim      []string   `json:"trim"`
+	Available Available  `json:"available"`
+	Match     *MatchInfo `json:"match"`
 }
 
 // ExportInput creates a snapshot of what the client fitted.
@@ -223,8 +226,8 @@ func loadLibrary(ctx context.Context, tx pgx.Tx, u uuid.UUID) (Library, error) {
 	return lib, json.Unmarshal(raw, &lib)
 }
 
-// build makes a draft's preview, dated today.
-func (s *Service) build(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (Preview, error) {
+// plan makes a draft's content before its summary, dated today.
+func (s *Service) plan(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (Preview, error) {
 	m, ok := manifest(d.Template, d.TemplateVersion)
 	if !ok {
 		return Preview{}, invalid("template", "no such template version")
@@ -249,6 +252,16 @@ func (s *Service) build(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (P
 	}
 	b := Build(lib, ranking, d.Picks, locale, s.Now().UTC())
 	p := Preview{Draft: d, Template: info(m), Content: b.Content, Trim: b.Trim, Available: b.Available, Match: mi}
+	p.FitKey = fitKey(p)
+	return p, nil
+}
+
+// build makes a draft's preview, with its summary.
+func (s *Service) build(ctx context.Context, tx pgx.Tx, u uuid.UUID, d Draft) (Preview, error) {
+	p, e := s.plan(ctx, tx, u, d)
+	if e != nil {
+		return p, e
+	}
 	if err := s.summary(ctx, tx, u, d, &p); err != nil {
 		return p, err
 	}
