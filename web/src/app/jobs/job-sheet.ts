@@ -57,7 +57,13 @@ import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, WORK_MODES } from './format';
-import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
+import {
+  type Job,
+  type JobActivity,
+  type JobInput,
+  JobsStore,
+  type PostingRead,
+} from './jobs.store';
 
 export type JobTab = 'details' | 'cv' | 'mail' | 'activity';
 const workspaceTabs = [
@@ -207,19 +213,68 @@ export class JobSheet {
     return this.store.statusById().get(id)?.stage ?? '';
   }
 
-  protected continueFromLink(): void {
-    const guess = readPosting(this.form.url, this.form.description);
-    const form = this.form as unknown as Record<string, unknown>;
-    const filled = new Set<string>();
-    for (const [key, value] of Object.entries(guess)) {
-      if (value === undefined || value === '') continue;
-      if (form[key] === '' || form[key] === null) {
-        form[key] = value;
-        filled.add(key);
+  /** The server is reading the posting's page (Continue shows a spinner). */
+  protected readonly reading = signal(false);
+  /** Why the page couldn't be read, shown on the review step. */
+  protected readonly readProblem = signal('');
+  /** Values the last read filled: a new link replaces them, but not edits made since. */
+  private autoFilled: Record<string, unknown> = {};
+
+  protected enterByHand(): void {
+    this.readProblem.set('');
+    this.step.set('review');
+  }
+
+  protected async continueFromLink(): Promise<void> {
+    if (this.reading()) return;
+    const generation = this.generation;
+    const url = this.form.url.trim();
+    this.readProblem.set('');
+    this.errors.set({});
+    let page: PostingRead | null = null;
+    if (url) {
+      this.reading.set(true);
+      try {
+        page = await this.store.readPosting(url);
+      } catch (e) {
+        if (generation !== this.generation) return;
+        // 503: no scraper on this server, so the link and text are all there is.
+        if (!(e instanceof ApiError && e.status === 503)) {
+          this.readProblem.set(
+            e instanceof ApiError && e.fieldErrors.length
+              ? e.fieldErrors[0].message
+              : 'Couldn’t read the page right now.',
+          );
+        }
+      } finally {
+        if (generation === this.generation) this.reading.set(false);
       }
+      if (generation !== this.generation) return;
     }
+
+    const form = this.form as unknown as Record<string, unknown>;
+    const blank = emptyForm() as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(this.autoFilled)) {
+      if (form[key] === value) form[key] = blank[key];
+    }
+    const filled = new Set<string>();
+    const autoFilled: Record<string, unknown> = {};
+    const fill = (key: string, value: unknown) => {
+      if (value === undefined || value === null || value === '') return;
+      if (form[key] !== '' && form[key] !== null) return;
+      form[key] = value;
+      filled.add(key);
+      autoFilled[key] = value;
+    };
+    const { description, ...fields } = page ?? { description: '' };
+    fill('description', description);
+    for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
+      fill(key, value);
+    }
+    this.autoFilled = autoFilled;
     this.filled.set(filled);
     this.step.set('review');
+    this.cdr.markForCheck();
   }
 
   protected form: Form = emptyForm();
@@ -327,6 +382,8 @@ export class JobSheet {
       this.isNew.set(true);
       this.step.set('link');
       this.filled.set(new Set());
+      this.readProblem.set('');
+      this.autoFilled = {};
       this.selectTab('details', false);
       this.form = emptyForm(
         t.statusId ??

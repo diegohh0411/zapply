@@ -127,6 +127,15 @@
             {{ form.url ? 'Change' : 'Add link' }}
           </button>
         </div>
+        @if (errors()['url']; as e) {
+          <small class="err -mt-3" role="alert">{{ e }}</small>
+        }
+        @if (readProblem(); as problem) {
+          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+            <ng-icon name="lucideTriangleAlert" class="size-3.5 text-amber-600" />
+            {{ problem }} Filled what the link says.
+          </p>
+        }
         @if (filled().size) {
           <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <ng-icon name="lucideSparkles" class="size-3.5 text-brand" />
@@ -352,14 +361,15 @@
   </div>
   <div class="flex items-center justify-between gap-3 border-t bg-muted/30 px-5 py-4 sm:px-8">
     @if (step() === 'link') {
-      <button z-button zType="ghost" type="button" (click)="step.set('review')">
+      <button z-button zType="ghost" type="button" [zDisabled]="reading()" (click)="enterByHand()">
         Enter details by hand
       </button>
       <button
         z-button
         type="submit"
         form="capture-form"
-        [zDisabled]="!form.url.trim() && !form.description.trim()"
+        [zLoading]="reading()"
+        [zDisabled]="reading() || (!form.url.trim() && !form.description.trim())"
       >
         Continue <ng-icon name="lucideArrowRight" />
       </button>

@@ -124,11 +124,14 @@ export function readText(text: string): PostingGuess {
   return g;
 }
 
-/** The link wins for title and company; the posting text fills the rest. */
-export function readPosting(url: string, text: string): PostingGuess {
-  const fromText = readText(text);
-  const fromLink = readLink(url);
-  return { ...fromText, ...Object.fromEntries(Object.entries(fromLink).filter(([, v]) => v)) };
+/**
+ * What the page said (`page`, read by the server) wins; then the link, for
+ * title and company; the posting text fills the rest.
+ */
+export function readPosting(url: string, text: string, page: PostingGuess = {}): PostingGuess {
+  const present = (g: PostingGuess) =>
+    Object.fromEntries(Object.entries(g).filter(([, v]) => v !== undefined && v !== ''));
+  return { ...readText(text), ...present(readLink(url)), ...present(page) };
 }
 
 /** "LinkedIn · Senior Backend Engineer at Acme" for the hint under the link field. */
