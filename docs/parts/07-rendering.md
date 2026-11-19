@@ -124,6 +124,15 @@ Fitting runs where the CV is compiled, which is normally the browser:
 The export records the dropped item IDs, not `k`. Rendering a snapshot never
 fits again: it compiles exactly what was stored.
 
+The summary is part of the fit's input but not its text. The browser fits with
+a placeholder of 500 wide characters in place of the summary, the longest a
+summary may be, so the page break does not depend on the summary's text. The
+browser then reports the dropped IDs to the server (see the summary notes), which
+stores them and writes the summary from the content those IDs leave. The
+placeholder always reserves space, even when no summary is generated, so a fit
+may leave some blank space and drop one optional item more than a fit that
+could use it.
+
 The page budget defaults to 1 and can be set to 1–3 pages per draft.
 
 ## Rendering

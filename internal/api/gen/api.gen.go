@@ -955,6 +955,15 @@ type CvExportPage struct {
 	Items []CvExport `json:"items"`
 }
 
+// CvFitInput defines model for CvFitInput.
+type CvFitInput struct {
+	// Dropped Optional item IDs the fit left out.
+	Dropped []openapi_types.UUID `json:"dropped"`
+
+	// FitKey The fit_key of the preview the browser fitted.
+	FitKey string `json:"fit_key"`
+}
+
 // CvPicks defines model for CvPicks.
 type CvPicks struct {
 	Exclude []openapi_types.UUID `json:"exclude"`
@@ -985,11 +994,21 @@ type CvPreview struct {
 	Content     map[string]interface{} `json:"content"`
 	ContentHash string                 `json:"content_hash"`
 	Draft       CvDraft                `json:"draft"`
-	Match       *struct {
+
+	// Fit The fit reported for fit_key, or null until the browser reports one.
+	Fit *struct {
+		Dropped []string `json:"dropped"`
+	} `json:"fit"`
+
+	// FitKey Names this content for a fit; it leaves out the summary.
+	FitKey string `json:"fit_key"`
+	Match  *struct {
 		RunId openapi_types.UUID `json:"run_id"`
 		Stale bool               `json:"stale"`
 	} `json:"match"`
-	SummaryReason     *string    `json:"summary_reason,omitempty"`
+	SummaryReason *string `json:"summary_reason,omitempty"`
+
+	// SummaryStatus Includes waiting_for_fit until the browser reports a fit for the current content.
 	SummaryStatus     *string    `json:"summary_status,omitempty"`
 	SummarySuggestion *string    `json:"summary_suggestion,omitempty"`
 	Template          CvTemplate `json:"template"`
@@ -2127,6 +2146,9 @@ type PutCvJSONRequestBody = CvDraftInput
 // CreateCvExportJSONRequestBody defines body for CreateCvExport for application/json ContentType.
 type CreateCvExportJSONRequestBody = CvExportInput
 
+// PutCvFitJSONRequestBody defines body for PutCvFit for application/json ContentType.
+type PutCvFitJSONRequestBody = CvFitInput
+
 // PutMatchOverrideJSONRequestBody defines body for PutMatchOverride for application/json ContentType.
 type PutMatchOverrideJSONRequestBody PutMatchOverrideJSONBody
 
@@ -2318,6 +2340,9 @@ type ServerInterface interface {
 
 	// (POST /v1/jobs/{id}/cv/exports)
 	CreateCvExport(w http.ResponseWriter, r *http.Request, id ID, params CreateCvExportParams)
+
+	// (PUT /v1/jobs/{id}/cv/fit)
+	PutCvFit(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -4154,6 +4179,32 @@ func (siw *ServerInterfaceWrapper) CreateCvExport(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// PutCvFit operation middleware
+func (siw *ServerInterfaceWrapper) PutCvFit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutCvFit(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMatchEstimate operation middleware
 func (siw *ServerInterfaceWrapper) GetMatchEstimate(w http.ResponseWriter, r *http.Request) {
 
@@ -5271,6 +5322,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-templates", wrapper.ListCvTemplates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.GetCv)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/cv", wrapper.PutCv)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/jobs/{id}/cv/fit", wrapper.PutCvFit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.ListCvExports)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/cv/exports", wrapper.CreateCvExport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/cv-exports/{id}", wrapper.GetCvExport)
@@ -7437,6 +7489,46 @@ func (response CreateCvExportdefaultApplicationProblemPlusJSONResponse) VisitCre
 	return err
 }
 
+type PutCvFitRequestObject struct {
+	Id   ID `json:"id"`
+	Body *PutCvFitJSONRequestBody
+}
+
+type PutCvFitResponseObject interface {
+	VisitPutCvFitResponse(w http.ResponseWriter) error
+}
+
+type PutCvFit200JSONResponse CvPreview
+
+func (response PutCvFit200JSONResponse) VisitPutCvFitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutCvFitdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutCvFitdefaultApplicationProblemPlusJSONResponse) VisitPutCvFitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMatchEstimateRequestObject struct {
 	Id openapi_types.UUID `json:"id"`
 }
@@ -8927,6 +9019,9 @@ type StrictServerInterface interface {
 
 	// (POST /v1/jobs/{id}/cv/exports)
 	CreateCvExport(ctx context.Context, request CreateCvExportRequestObject) (CreateCvExportResponseObject, error)
+
+	// (PUT /v1/jobs/{id}/cv/fit)
+	PutCvFit(ctx context.Context, request PutCvFitRequestObject) (PutCvFitResponseObject, error)
 
 	// (GET /v1/jobs/{id}/match-estimate)
 	GetMatchEstimate(ctx context.Context, request GetMatchEstimateRequestObject) (GetMatchEstimateResponseObject, error)
@@ -10522,6 +10617,39 @@ func (sh *strictHandler) CreateCvExport(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateCvExportResponseObject); ok {
 		if err := validResponse.VisitCreateCvExportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutCvFit operation middleware
+func (sh *strictHandler) PutCvFit(w http.ResponseWriter, r *http.Request, id ID) {
+	var request PutCvFitRequestObject
+
+	request.Id = id
+
+	var body PutCvFitJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutCvFit(ctx, request.(PutCvFitRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutCvFit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutCvFitResponseObject); ok {
+		if err := validResponse.VisitPutCvFitResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1295,6 +1295,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CvPreview" }
         default: { $ref: "#/components/responses/Problem" }
+  /v1/jobs/{id}/cv/fit:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      operationId: putCvFit
+      tags: [cv]
+      description: |
+        Reports the page fit the browser found for the preview whose fit_key
+        this is. The summary is written only from the content that fit keeps,
+        so until a fit for the current content is reported the summary waits.
+        A fit for content that has since changed is a conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CvFitInput" }
+      responses:
+        "200":
+          description: The preview, rebuilt with the reported fit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CvPreview" }
+        default: { $ref: "#/components/responses/Problem" }
   /v1/jobs/{id}/cv/exports:
     parameters:
       - $ref: "#/components/parameters/ID"
@@ -1621,17 +1644,31 @@ components:
         locale: { type: string }
         page_budget: { type: integer, minimum: 1, maximum: 3 }
         picks: { $ref: "#/components/schemas/CvPicks" }
+    CvFitInput:
+      type: object
+      required: [fit_key, dropped]
+      properties:
+        fit_key: { type: string, description: The fit_key of the preview the browser fitted. }
+        dropped: { type: array, maxItems: 1000, items: { type: string, format: uuid }, description: Optional item IDs the fit left out. }
     CvPreview:
       type: object
-      required: [draft, template, content, content_hash, trim, available, match]
+      required: [draft, template, content, content_hash, fit_key, fit, trim, available, match]
       properties:
-        summary_status: { type: string }
+        summary_status: { type: string, description: "Includes waiting_for_fit until the browser reports a fit for the current content." }
         summary_suggestion: { type: string }
         summary_reason: { type: string }
         draft: { $ref: "#/components/schemas/CvDraft" }
         template: { $ref: "#/components/schemas/CvTemplate" }
         content: { type: object, additionalProperties: true, description: The template's content (templates/README.md). }
         content_hash: { type: string }
+        fit_key: { type: string, description: Names this content for a fit; it leaves out the summary. }
+        fit:
+          type: object
+          nullable: true
+          description: The fit reported for fit_key, or null until the browser reports one.
+          required: [dropped]
+          properties:
+            dropped: { type: array, items: { type: string } }
         trim: { type: array, items: { type: string }, description: Optional item IDs, least relevant first. }
         available:
           type: object

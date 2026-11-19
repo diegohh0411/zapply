@@ -25,7 +25,9 @@ import {
   applyDrops,
   filename,
   fitContent,
+  sameIds,
   sectionLabels,
+  withSummarySpace,
   type CvContent,
   type CvEntry,
   type Fit,
@@ -101,6 +103,8 @@ export class CvTab {
         return 'An administrator needs to configure a summary model before generation is available.';
       case 'waiting_for_input':
         return 'Select library evidence and add a job description to generate a summary.';
+      case 'waiting_for_fit':
+        return 'The summary is written once the CV fits the page. Your current text is preserved.';
       case 'cancelled':
         return 'Summary generation was cancelled. Try another when you’re ready.';
       default:
@@ -376,15 +380,20 @@ export class CvTab {
     if (this.fitted() && this.fittedKey === key) {
       this.pdfCurrent.set(true);
       this.fitting.set(false);
+      const f = this.fitted();
+      if (f) await this.reportFitIfNew(p, f.dropped ?? p.trim.slice(0, f.k));
       return;
     }
     this.pdfCurrent.set(false);
     const compiled = new Map<string, Compiled>();
     this.fitting.set(true);
+    // Fitting reserves the summary's longest space, so the fit doesn't depend on the summary's text.
+    const reserved = withSummarySpace(content);
+    let result: Fit | undefined;
     try {
-      const compile = async (dropped: string[]) => {
+      const compile = async (source: CvContent, dropped: string[]) => {
         if (generation !== this.generation || !this.current(scope)) throw new Error('superseded');
-        const fittedContent = applyDrops(content, dropped);
+        const fittedContent = applyDrops(source, dropped);
         const key = JSON.stringify(fittedContent);
         let c = compiled.get(key);
         if (!c) {
@@ -393,24 +402,52 @@ export class CvTab {
         }
         return c;
       };
-      const result = await fitContent(
-        content,
+      const fitted = await fitContent(
+        reserved,
         p.trim,
         p.draft.page_budget,
-        async (dropped) => (await compile(dropped)).pages,
+        async (dropped) => (await compile(reserved, dropped)).pages,
       );
       if (generation !== this.generation || !this.current(scope)) return;
-      const { pdf } = await compile(result.dropped ?? []);
+      const { pdf } = await compile(content, fitted.dropped ?? []);
       if (generation !== this.generation || !this.current(scope)) return;
-      this.setPdf({ ...result, pdf });
+      this.setPdf({ ...fitted, pdf });
       this.fittedKey = key;
       this.pdfCurrent.set(true);
+      result = fitted;
     } catch (e) {
       if (generation === this.generation && this.current(scope))
         this.error.set((e as Error).message);
     } finally {
       if (generation === this.generation && this.current(scope)) this.fitting.set(false);
     }
+    if (result && generation === this.generation && this.current(scope))
+      await this.reportFitIfNew(p, result.dropped ?? []);
+  }
+
+  /**
+   * The server writes the summary only from a fit it holds for the current
+   * content. Reports this one unless it already holds it.
+   */
+  private async reportFitIfNew(p: Preview, dropped: string[]): Promise<void> {
+    if (p.fit && sameIds(p.fit.dropped, dropped)) return;
+    const id = this.jobId();
+    const scope = this.scope();
+    try {
+      Api.ok(
+        await this.api.PUT('/v1/jobs/{id}/cv/fit', {
+          params: { path: { id } },
+          body: { fit_key: p.fit_key, dropped },
+        }),
+      );
+    } catch (e) {
+      if (!this.current(scope)) return;
+      // The CV changed while it was fitted. Load the latest version and fit that.
+      if (e instanceof ApiError && e.status === 409) await this.load(id);
+      else this.error.set((e as Error).message);
+      return;
+    }
+    if (this.current(scope)) await this.load(id);
   }
 
   private setPdf(f: (Fit & { pdf: Uint8Array }) | undefined): void {

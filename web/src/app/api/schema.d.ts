@@ -899,6 +899,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/jobs/{id}/cv/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Reports the page fit the browser found for the preview whose fit_key
+         *     this is. The summary is written only from the content that fit keeps,
+         *     so until a fit for the current content is reported the summary waits.
+         *     A fit for content that has since changed is a conflict.
+         */
+        put: operations["putCvFit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/{id}/cv/exports": {
         parameters: {
             query?: never;
@@ -1174,7 +1198,14 @@ export interface components {
             page_budget: number;
             picks: components["schemas"]["CvPicks"];
         };
+        CvFitInput: {
+            /** @description The fit_key of the preview the browser fitted. */
+            fit_key: string;
+            /** @description Optional item IDs the fit left out. */
+            dropped: string[];
+        };
         CvPreview: {
+            /** @description Includes waiting_for_fit until the browser reports a fit for the current content. */
             summary_status?: string;
             summary_suggestion?: string;
             summary_reason?: string;
@@ -1185,6 +1216,12 @@ export interface components {
                 [key: string]: unknown;
             };
             content_hash: string;
+            /** @description Names this content for a fit; it leaves out the summary. */
+            fit_key: string;
+            /** @description The fit reported for fit_key, or null until the browser reports one. */
+            fit: {
+                dropped: string[];
+            } | null;
             /** @description Optional item IDs */
             trim: string[];
             available: {
@@ -3875,6 +3912,33 @@ export interface operations {
             200: {
                 headers: {
                     ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPreview"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putCvFit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvFitInput"];
+            };
+        };
+        responses: {
+            /** @description The preview, rebuilt with the reported fit. */
+            200: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
