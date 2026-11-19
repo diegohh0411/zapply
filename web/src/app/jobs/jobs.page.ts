@@ -12,7 +12,14 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideBriefcase, lucideFileText, lucidePlus, lucideSearch, lucideUser, lucideX } from '@ng-icons/lucide';
+import {
+  lucideBriefcase,
+  lucideFileText,
+  lucidePlus,
+  lucideSearch,
+  lucideUser,
+  lucideX,
+} from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDialogImports } from '@/shared/components/dialog';

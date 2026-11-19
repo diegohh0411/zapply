@@ -1,167 +1,196 @@
 @if (!sheetOpen() || job() === 'new') {
-<app-database
-  [views]="store.views()"
-  [activeViewId]="activeView()?.id ?? null"
-  defaultViewName="All jobs"
-  [layout]="state().layout"
-  [modified]="modified()"
-  [content]="databaseContent"
-  (viewChange)="selectViewId($event)"
-  (layoutChange)="setLayout($event)"
-  (save)="openSave()"
-  (remove)="deleteView($event)"
-  (addView)="openNewView($event)"
-  (renameView)="renameView($event.id, $event.name)"
-  (duplicateView)="duplicateView($event)"
-  (add)="newJob()"
-  [properties]="properties"
-  [propertyEditor]="propertyEditor"
->
-  <div databaseHeader class="flex flex-wrap items-center gap-3">
-    <div class="mr-auto">
-      <h1 class="text-xl font-semibold tracking-tight">Jobs</h1>
-      <p class="text-sm text-muted-foreground">
-        {{ counts().total }} tracked · {{ counts().active }} in process · {{ counts().offer }}
-        {{ counts().offer === 1 ? 'offer' : 'offers' }}
-      </p>
+  <app-database
+    [views]="store.views()"
+    [activeViewId]="activeView()?.id ?? null"
+    defaultViewName="All jobs"
+    [layout]="state().layout"
+    [modified]="modified()"
+    [content]="databaseContent"
+    (viewChange)="selectViewId($event)"
+    (layoutChange)="setLayout($event)"
+    (save)="openSave()"
+    (remove)="deleteView($event)"
+    (addView)="openNewView($event)"
+    (renameView)="renameView($event.id, $event.name)"
+    (duplicateView)="duplicateView($event)"
+    (add)="newJob()"
+    [properties]="properties"
+    [propertyEditor]="propertyEditor"
+  >
+    <div databaseHeader class="flex flex-wrap items-center gap-3">
+      <div class="mr-auto">
+        <h1 class="text-xl font-semibold tracking-tight">Jobs</h1>
+        <p class="text-sm text-muted-foreground">
+          {{ counts().total }} tracked · {{ counts().active }} in process · {{ counts().offer }}
+          {{ counts().offer === 1 ? 'offer' : 'offers' }}
+        </p>
+      </div>
     </div>
-  </div>
 
-  <div databaseFilters class="flex flex-wrap items-center gap-2">
-    <div class="relative w-full sm:w-64">
-      <ng-icon
-        name="lucideSearch"
-        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <input
-        z-input
-        class="pl-8"
-        type="search"
-        placeholder="Search title or company"
-        aria-label="Search jobs"
-        [ngModel]="state().filters.q ?? ''"
-        (ngModelChange)="setQ($event)"
-      />
-    </div>
-    <div class="flex flex-wrap gap-1" role="group" aria-label="Filter by stage">
-      @for (s of stages; track s.value) {
-        <button
-          type="button"
-          class="chip"
-          [class.chip-on]="hasStage(s.value)"
-          [attr.aria-pressed]="hasStage(s.value)"
-          (click)="toggleStage(s.value)"
-        >
-          {{ s.label }}
+    <div databaseFilters class="flex flex-wrap items-center gap-2">
+      <div class="relative w-full sm:w-64">
+        <ng-icon
+          name="lucideSearch"
+          class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <input
+          z-input
+          class="pl-8"
+          type="search"
+          placeholder="Search title or company"
+          aria-label="Search jobs"
+          [ngModel]="state().filters.q ?? ''"
+          (ngModelChange)="setQ($event)"
+        />
+      </div>
+      <div class="flex flex-wrap gap-1" role="group" aria-label="Filter by stage">
+        @for (s of stages; track s.value) {
+          <button
+            type="button"
+            class="chip"
+            [class.chip-on]="hasStage(s.value)"
+            [attr.aria-pressed]="hasStage(s.value)"
+            (click)="toggleStage(s.value)"
+          >
+            {{ s.label }}
+          </button>
+        }
+      </div>
+      <label class="flex items-center gap-2 text-sm text-muted-foreground">
+        <z-switch
+          zSize="sm"
+          [zChecked]="!!state().filters.include_archived"
+          (zCheckedChange)="setArchived($event)"
+        />
+        Archived
+      </label>
+      @if (hasFilters()) {
+        <button z-button zType="ghost" zSize="sm" type="button" (click)="clearFilters()">
+          <ng-icon name="lucideX" /> Clear
         </button>
       }
     </div>
-    <label class="flex items-center gap-2 text-sm text-muted-foreground">
-      <z-switch
-        zSize="sm"
-        [zChecked]="!!state().filters.include_archived"
-        (zCheckedChange)="setArchived($event)"
-      />
-      Archived
-    </label>
-    @if (hasFilters()) {
-      <button z-button zType="ghost" zSize="sm" type="button" (click)="clearFilters()">
-        <ng-icon name="lucideX" /> Clear
-      </button>
-    }
-  </div>
-</app-database>
+  </app-database>
 
-<ng-template #databaseContent let-layout>
-  @if (store.loading() && store.jobs().length === 0) {
-    <div class="flex gap-3 p-4">
-      @for (i of [1, 2, 3, 4]; track i) {
-        <z-skeleton class="h-64 w-72 shrink-0 rounded-xl" />
-      }
-    </div>
-  } @else if (store.error()) {
-    <p class="p-6 text-sm text-destructive" role="alert">
-      Could not load jobs: {{ store.error() }}
-    </p>
-  } @else if (store.jobs().length === 0 && !state().filters.include_archived) {
-    <div class="flex flex-col gap-6 p-4 pt-6">
-      <div class="flex items-start gap-4">
-        <img src="icon.svg" alt="" class="size-10 rounded-xl" />
-        <div>
-          <h2 class="text-lg font-semibold">Get your first tailored CV</h2>
-          <p class="text-sm text-muted-foreground">
-            zapply builds each CV from your profile and experience. Set those up once, then save a posting to match against.
-          </p>
-        </div>
+  <ng-template #databaseContent let-layout>
+    @if (store.loading() && store.jobs().length === 0) {
+      <div class="flex gap-3 p-4">
+        @for (i of [1, 2, 3, 4]; track i) {
+          <z-skeleton class="h-64 w-72 shrink-0 rounded-xl" />
+        }
       </div>
-      <ol class="grid grid-cols-3 gap-3">
-        <li class="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
-          <div class="flex items-center gap-2">
-            <span class="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums">1</span>
-            <ng-icon name="lucideUser" class="size-4 text-muted-foreground" />
-            <h3 class="text-sm font-medium">Add your profile</h3>
-          </div>
-          <p class="text-sm text-muted-foreground">Name, headline and links: the header of every CV.</p>
-          <a z-button zType="outline" class="mt-auto self-start" routerLink="/library/profile">Open profile</a>
-        </li>
-        <li class="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
-          <div class="flex items-center gap-2">
-            <span class="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums">2</span>
-            <ng-icon name="lucideBriefcase" class="size-4 text-muted-foreground" />
-            <h3 class="text-sm font-medium">Add your experience</h3>
-          </div>
-          <p class="text-sm text-muted-foreground">Roles, projects and highlights. Each CV picks the ones that fit the job.</p>
-          <a z-button zType="outline" class="mt-auto self-start" routerLink="/library/experience">Add experience</a>
-        </li>
-        <li class="flex flex-col gap-3 rounded-xl border-2 border-primary/40 bg-card p-4 shadow-xs">
-          <div class="flex items-center gap-2">
-            <span class="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold tabular-nums text-primary-foreground">3</span>
-            <ng-icon name="lucideFileText" class="size-4 text-muted-foreground" />
-            <h3 class="text-sm font-medium">Save a job and match</h3>
-          </div>
-          <p class="text-sm text-muted-foreground">Paste a posting. zapply scores the match and drafts a CV for it.</p>
-          <button z-button type="button" class="mt-auto self-start" (click)="newJob()">
-            <ng-icon name="lucidePlus" /> New job
-          </button>
-        </li>
-      </ol>
-      <div class="flex flex-col gap-2">
-        <p class="text-xs text-muted-foreground">Your board fills in as you apply, interview and hear back.</p>
-        <div class="flex gap-3 opacity-60">
-          @for (col of columns().slice(0, 4); track col.id) {
-            <section class="flex h-40 w-72 shrink-0 flex-col gap-2 rounded-xl bg-muted/50 p-3">
-              <span class="text-xs font-medium text-muted-foreground">{{ col.name }}</span>
-              <div class="h-14 rounded-lg border-2 border-dashed border-border"></div>
-            </section>
-          }
-        </div>
-      </div>
-    </div>
-  } @else if (!filtered().length) {
-    <div class="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center">
-      <ng-icon name="lucideSearch" class="size-8 text-muted-foreground" />
-      <h2 class="text-lg font-semibold">No jobs match this view</h2>
-      <p class="text-sm leading-relaxed text-muted-foreground">
-        Try another title or company, or clear the filters to see all your jobs.
+    } @else if (store.error()) {
+      <p class="p-6 text-sm text-destructive" role="alert">
+        Could not load jobs: {{ store.error() }}
       </p>
-      <button z-button zType="outline" (click)="clearFilters()">Clear filters</button>
-    </div>
-  } @else if (layout === 'board') {
-    <app-job-board
-      [statuses]="columns()"
-      [jobs]="filtered()"
-      (open)="open($event)"
-      (add)="newJob($event)"
-      (move)="move($event)"
-      (editProperty)="database()?.editProperty('status')"
-    />
-  } @else {
-    <app-job-table [statuses]="store.statuses()" [jobs]="filtered()" (open)="open($event)" (add)="newJob()" (editProperty)="database()?.editProperty('status')" />
-  }
-</ng-template>
+    } @else if (store.jobs().length === 0 && !state().filters.include_archived) {
+      <div class="flex flex-col gap-6 p-4 pt-6">
+        <div class="flex items-start gap-4">
+          <img src="icon.svg" alt="" class="size-10 rounded-xl" />
+          <div>
+            <h2 class="text-lg font-semibold">Get your first tailored CV</h2>
+            <p class="text-sm text-muted-foreground">
+              zapply builds each CV from your profile and experience. Set those up once, then save a
+              posting to match against.
+            </p>
+          </div>
+        </div>
+        <ol class="grid grid-cols-3 gap-3">
+          <li class="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
+            <div class="flex items-center gap-2">
+              <span
+                class="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums"
+                >1</span
+              >
+              <ng-icon name="lucideUser" class="size-4 text-muted-foreground" />
+              <h3 class="text-sm font-medium">Add your profile</h3>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Name, headline and links: the header of every CV.
+            </p>
+            <a z-button zType="outline" class="mt-auto self-start" routerLink="/library/profile"
+              >Open profile</a
+            >
+          </li>
+          <li class="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs">
+            <div class="flex items-center gap-2">
+              <span
+                class="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold tabular-nums"
+                >2</span
+              >
+              <ng-icon name="lucideBriefcase" class="size-4 text-muted-foreground" />
+              <h3 class="text-sm font-medium">Add your experience</h3>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Roles, projects and highlights. Each CV picks the ones that fit the job.
+            </p>
+            <a z-button zType="outline" class="mt-auto self-start" routerLink="/library/experience"
+              >Add experience</a
+            >
+          </li>
+          <li
+            class="flex flex-col gap-3 rounded-xl border-2 border-primary/40 bg-card p-4 shadow-xs"
+          >
+            <div class="flex items-center gap-2">
+              <span
+                class="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold tabular-nums text-primary-foreground"
+                >3</span
+              >
+              <ng-icon name="lucideFileText" class="size-4 text-muted-foreground" />
+              <h3 class="text-sm font-medium">Save a job and match</h3>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Paste a posting. zapply scores the match and drafts a CV for it.
+            </p>
+            <button z-button type="button" class="mt-auto self-start" (click)="newJob()">
+              <ng-icon name="lucidePlus" /> New job
+            </button>
+          </li>
+        </ol>
+        <div class="flex flex-col gap-2">
+          <p class="text-xs text-muted-foreground">
+            Your board fills in as you apply, interview and hear back.
+          </p>
+          <div class="flex gap-3 opacity-60">
+            @for (col of columns().slice(0, 4); track col.id) {
+              <section class="flex h-40 w-72 shrink-0 flex-col gap-2 rounded-xl bg-muted/50 p-3">
+                <span class="text-xs font-medium text-muted-foreground">{{ col.name }}</span>
+                <div class="h-14 rounded-lg border-2 border-dashed border-border"></div>
+              </section>
+            }
+          </div>
+        </div>
+      </div>
+    } @else if (!filtered().length) {
+      <div class="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center">
+        <ng-icon name="lucideSearch" class="size-8 text-muted-foreground" />
+        <h2 class="text-lg font-semibold">No jobs match this view</h2>
+        <p class="text-sm leading-relaxed text-muted-foreground">
+          Try another title or company, or clear the filters to see all your jobs.
+        </p>
+        <button z-button zType="outline" (click)="clearFilters()">Clear filters</button>
+      </div>
+    } @else if (layout === 'board') {
+      <app-job-board
+        [statuses]="columns()"
+        [jobs]="filtered()"
+        (open)="open($event)"
+        (add)="newJob($event)"
+        (move)="move($event)"
+        (editProperty)="database()?.editProperty('status')"
+      />
+    } @else {
+      <app-job-table
+        [statuses]="store.statuses()"
+        [jobs]="filtered()"
+        (open)="open($event)"
+        (add)="newJob()"
+        (editProperty)="database()?.editProperty('status')"
+      />
+    }
+  </ng-template>
 
-<ng-template #propertyEditor><app-status-property /></ng-template>
-
+  <ng-template #propertyEditor><app-status-property /></ng-template>
 }
 
 <app-job-sheet
@@ -175,12 +204,17 @@
 
 <z-dialog [(zVisible)]="saveOpen" zWidth="min(420px, 95vw)">
   <z-dialog-header>
-    <z-dialog-title>{{ newLayout() ? 'New view' : activeView() ? 'Update view' : 'Save view' }}</z-dialog-title>
+    <z-dialog-title>{{
+      newLayout() ? 'New view' : activeView() ? 'Update view' : 'Save view'
+    }}</z-dialog-title>
     <z-dialog-description
       >Keeps the current layout and filters one click away.</z-dialog-description
     >
   </z-dialog-header>
-  <form class="flex flex-col gap-4" (ngSubmit)="activeView() && !newLayout() ? updateView() : saveAsNew()">
+  <form
+    class="flex flex-col gap-4"
+    (ngSubmit)="activeView() && !newLayout() ? updateView() : saveAsNew()"
+  >
     <label class="field">
       <span>Name</span>
       <input
