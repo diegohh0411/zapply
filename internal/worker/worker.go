@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -273,21 +274,68 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 			}
 			wait := reconcileDelay(a.Deadline)
 			lookupAllowed := true
+			model := ""
 			if decision != nil {
+				model = decision.Model
 				dp, ok := r.Provider.(modelapi.DecisionProvider)
 				lookupAllowed = ok && dp.DecisionLookupSupported(decision.Model)
+			} else if chat != nil {
+				model = chat.Model
 			}
-			if !lookupAllowed || a.GenerationID == nil {
+			// Every way out of this loop that leaves the attempt unsettled is
+			// logged with everything known about it, so a stuck charge can be
+			// diagnosed from the logs instead of by hand in the database.
+			unsettled := func(why string, err error, extra ...any) error {
+				fields := append([]any{
+					"why", why,
+					"user_id", args.UserID,
+					"operation_id", args.OperationID,
+					"operation_kind", op.Kind,
+					"operation_status", op.Status,
+					"operation_blocked_reason", op.BlockedReason,
+					"operation_created_at", op.CreatedAt,
+					"operation_age", time.Since(op.CreatedAt).String(),
+					"attempt_id", a.ID,
+					"attempt_number", a.Number,
+					"attempt_state", a.State,
+					"attempt_key_id", a.KeyID,
+					"attempt_generation_id", a.GenerationID,
+					"attempt_deadline", a.Deadline,
+					"past_deadline", time.Since(a.Deadline).String(),
+					"attempts_total", len(attempts),
+					"model", model,
+					"lookup_supported", lookupAllowed,
+					"provider", fmt.Sprintf("%T", r.Provider),
+					"next_check_in", wait.String(),
+				}, extra...)
+				if err != nil {
+					fields = append(fields, "error", err.Error(), "error_type", fmt.Sprintf("%T", err))
+					var pe *modelapi.ProviderError
+					if errors.As(err, &pe) {
+						fields = append(fields, "provider_code", pe.Code, "provider_uncharged", pe.Uncharged, "provider_retry_after", pe.RetryAfter.String())
+					}
+				}
+				r.logger(ctx).WarnContext(ctx, "model attempt still unsettled", fields...)
 				return river.JobSnooze(wait)
+			}
+			if !lookupAllowed {
+				return unsettled("provider_lookup_unsupported", nil)
+			}
+			if a.GenerationID == nil {
+				return unsettled("no_generation_id", nil)
 			}
 			key, err := r.key(ctx, args.UserID, a.KeyID)
 			if err != nil {
-				return river.JobSnooze(wait)
+				return unsettled("key_unavailable", err)
 			}
 			result, err := r.Provider.Lookup(ctx, key, *a.GenerationID)
-			if err != nil || result.Amount == nil {
-				return river.JobSnooze(wait)
+			if err != nil {
+				return unsettled("lookup_failed", err)
 			}
+			if result.Amount == nil {
+				return unsettled("lookup_without_amount", nil, "lookup_generation_id", result.GenerationID, "lookup_usage", string(result.Usage), "lookup_has_text", result.Text != "")
+			}
+			r.logger(ctx).InfoContext(ctx, "model attempt settled by generation lookup", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", a.ID, "generation_id", *a.GenerationID, "amount", *result.Amount, "usage", string(result.Usage), "past_deadline", time.Since(a.Deadline).String())
 			return r.settle(ctx, args, a.ID, result, op.Result, "generation_lookup", false, "")
 		}
 		// An owner resolved accounting; no generation is repeated to recover output.
@@ -476,7 +524,14 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	if result.GenerationID != "" {
 		generation = &result.GenerationID
 	}
-	logger.WarnContext(cleanup, "model request accounting uncertain", "operation_id", args.OperationID, "attempt_id", id, "model", quote.Model, "reason", code, "generation_id", result.GenerationID, "has_result", result.Text != "")
+	fields := []any{"user_id", args.UserID, "operation_id", args.OperationID, "operation_kind", op.Kind, "attempt_id", id, "attempt_number", len(attempts) + 1, "key_id", reservation.KeyID, "model", quote.Model, "reserved", quote.Reserved, "reason", code, "generation_id", result.GenerationID, "has_result", result.Text != "", "result_characters", utf8.RuneCountInString(result.Text), "usage", string(result.Usage), "provider", fmt.Sprintf("%T", r.Provider), "context_error", fmt.Sprint(callCtx.Err())}
+	if err != nil {
+		fields = append(fields, "error", err.Error(), "error_type", fmt.Sprintf("%T", err))
+	}
+	if pe != nil {
+		fields = append(fields, "provider_code", pe.Code, "provider_uncharged", pe.Uncharged, "provider_retry_after", pe.RetryAfter.String())
+	}
+	logger.WarnContext(cleanup, "model request accounting uncertain", fields...)
 	if e := r.uncertain(cleanup, args, id, generation, code, result.Text); e != nil {
 		return e
 	}
@@ -541,7 +596,7 @@ func (r *Runtime) settleCharged(ctx context.Context, args Args, id uuid.UUID, re
 		break
 	}
 	if r.Log != nil {
-		r.Log.Error("provider charge could not be saved", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "error", err)
+		r.Log.Error("provider charge could not be saved", "user_id", args.UserID, "operation_id", args.OperationID, "attempt_id", id, "generation_id", result.GenerationID, "amount", fmt.Sprint(derefAmount(result.Amount)), "usage", string(result.Usage), "has_result", result.Text != "", "reason", reason, "error", fmt.Sprint(err), "error_type", fmt.Sprintf("%T", err))
 	}
 	var generation *string
 	if result.GenerationID != "" {
@@ -624,4 +679,20 @@ func (r *Runtime) terminal(ctx context.Context, tx pgx.Tx, args Args) error {
 func (q *Queue) InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs) error {
 	_, err := q.client.InsertTx(ctx, tx, args, insertOptions())
 	return err
+}
+
+// logger returns the runtime's logger, falling back to the request's.
+func (r *Runtime) logger(ctx context.Context) *slog.Logger {
+	if r.Log != nil {
+		return r.Log
+	}
+	return logx.From(ctx)
+}
+
+// derefAmount reports a charge for logs; nil means the provider gave none.
+func derefAmount(a *int64) any {
+	if a == nil {
+		return nil
+	}
+	return *a
 }
