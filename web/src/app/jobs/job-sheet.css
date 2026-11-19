@@ -162,6 +162,32 @@
   }
 }
 
+.review-grid {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.review-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.auto-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--brand);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+.auto-mark ng-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
 .capture-section {
   border-bottom: 1px solid var(--border);
 }

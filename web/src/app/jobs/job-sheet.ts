@@ -1,6 +1,7 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   DestroyRef,
   effect,
@@ -32,6 +33,9 @@ import {
   lucidePlus,
   lucideTrash2,
   lucideX,
+  lucideLink,
+  lucideSparkles,
+  lucideTriangleAlert,
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
@@ -43,6 +47,8 @@ import { ZardSelectImports } from '@/shared/components/select';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
+import { ZardToggleGroupComponent } from '@/shared/components/toggle-group';
+import { describeLink, readPosting } from './posting-link';
 
 import { CvTab } from './cv/cv-tab';
 import { MailTab } from './mail-tab';
@@ -129,6 +135,7 @@ function formatIsoDate(value: Date | Date[] | null): string {
     ZardSkeletonComponent,
     ...ZardSelectImports,
     ZardDatePickerComponent,
+    ZardToggleGroupComponent,
     ...ZardDropdownImports,
     ...ZardDialogImports,
   ],
@@ -149,6 +156,9 @@ function formatIsoDate(value: Date | Date[] | null): string {
       lucidePlus,
       lucidePencil,
       lucideX,
+      lucideLink,
+      lucideSparkles,
+      lucideTriangleAlert,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -174,6 +184,43 @@ export class JobSheet {
   protected readonly workModes = WORK_MODES;
   protected readonly employmentTypes = EMPLOYMENT_TYPES;
   protected readonly salaryPeriods = SALARY_PERIODS;
+  protected readonly workModeItems = WORK_MODES.map((o) => ({ value: o.value, label: o.label }));
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  /** New jobs start from the posting link, then a short review. */
+  protected readonly step = signal<'link' | 'review'>('link');
+  /** Fields the posting filled in, marked in the review so they get checked. */
+  protected readonly filled = signal<ReadonlySet<string>>(new Set());
+
+  protected linkHint(): string {
+    return describeLink(this.form.url);
+  }
+
+  protected duplicate(): { id: string; title: string } | null {
+    const url = this.form.url.trim();
+    if (!url) return null;
+    const hit = this.store.jobs().find((j) => j.url === url);
+    return hit ? { id: hit.id, title: hit.title } : null;
+  }
+
+  protected statusStage(id: string): string {
+    return this.store.statusById().get(id)?.stage ?? '';
+  }
+
+  protected continueFromLink(): void {
+    const guess = readPosting(this.form.url, this.form.description);
+    const form = this.form as unknown as Record<string, unknown>;
+    const filled = new Set<string>();
+    for (const [key, value] of Object.entries(guess)) {
+      if (value === undefined || value === '') continue;
+      if (form[key] === '' || form[key] === null) {
+        form[key] = value;
+        filled.add(key);
+      }
+    }
+    this.filled.set(filled);
+    this.step.set('review');
+  }
 
   protected form: Form = emptyForm();
   protected readonly job = signal<Job | null>(null);
@@ -195,6 +242,16 @@ export class JobSheet {
   private activitiesRequest = 0;
 
   constructor() {
+    // Statuses can arrive after the sheet opens: start new jobs in the first "saved" status.
+    effect(() => {
+      const statuses = this.store.statuses();
+      if (!this.isNew() || !statuses.length) return;
+      untracked(() => {
+        if (this.form.status_id) return;
+        this.form.status_id = (statuses.find((s) => s.stage === 'saved') ?? statuses[0]).id;
+        this.cdr.markForCheck();
+      });
+    });
     effect(() => {
       this.captureOpen.set(this.visible() && this.isNew());
     });
@@ -268,6 +325,8 @@ export class JobSheet {
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
+      this.step.set('link');
+      this.filled.set(new Set());
       this.selectTab('details', false);
       this.form = emptyForm(
         t.statusId ??
