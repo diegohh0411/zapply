@@ -21,6 +21,8 @@ services:
   firecrawl:
     build: ./deploy/firecrawl
     image: localhost/zapply-firecrawl:0.1.0
+    # The app calls it by its service name, which it otherwise refuses.
+    command: ["serve", "--host", "0.0.0.0", "--allowed-host", "firecrawl"]
     environment:
       FIRECRAWL_CLOUD: ${FIRECRAWL_CLOUD:-off}
       FIRECRAWL_LOCAL_TOKEN: ${FIRECRAWL_TOKEN:?set FIRECRAWL_TOKEN in .env}
