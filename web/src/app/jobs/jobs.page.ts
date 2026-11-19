@@ -10,9 +10,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideSearch, lucideX } from '@ng-icons/lucide';
+import { lucideBriefcase, lucideFileText, lucidePlus, lucideSearch, lucideUser, lucideX } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardDialogImports } from '@/shared/components/dialog';
@@ -50,6 +50,7 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
   selector: 'app-jobs-page',
   imports: [
     FormsModule,
+    RouterLink,
     NgIcon,
     ZardButtonComponent,
     ZardInputComponent,
@@ -65,6 +66,9 @@ const DEFAULT_STATE: ViewState = { layout: 'board', filters: {} };
   providers: [
     provideIcons({
       lucidePlus,
+      lucideUser,
+      lucideBriefcase,
+      lucideFileText,
       lucideSearch,
       lucideX,
     }),
