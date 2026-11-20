@@ -1152,6 +1152,7 @@ type PlatformModelSetting struct {
 	SummaryEndpoint        *string
 	SummaryReasoningEffort *string
 	SummaryRows            int32
+	ExtractionModel        *string
 }
 
 type PlatformModelUsage struct {
