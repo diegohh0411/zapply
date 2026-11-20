@@ -452,10 +452,36 @@ export interface paths {
          * @description Reads a posting's page for the new job dialog, through the configured
          *     Firecrawl scrape API (FIRECRAWL_URL; docs/parts/04-jobs.md). Fields
          *     come from the page's schema.org JobPosting data; absent fields were not
-         *     found. Nothing is saved. 503 when no scraper is configured, 422 on `url`
-         *     when the page could not be read.
+         *     found. When an extraction model is configured, `extraction_id` names a
+         *     metered request that reads the fields from the page's text; poll
+         *     getPostingExtraction for it. Nothing is saved. 503 when no scraper is
+         *     configured, 422 on `url` when the page could not be read.
          */
         post: operations["readPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/postings/extractions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description The fields an extraction model read from a posting's text. While it is
+         *     pending, poll again. A request that cannot run now (no plan, usage
+         *     limit, no model key) is cancelled and answers `unavailable` with the
+         *     reason, since the dialog that asked has no use for a late answer.
+         */
+        get: operations["getPostingExtraction"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1576,6 +1602,22 @@ export interface components {
             salary_period?: components["schemas"]["SalaryPeriod"];
             /** @description The page as markdown; empty when it had no text. */
             description: string;
+            /**
+             * Format: uuid
+             * @description A model request reading the fields from the page's text, when one was started.
+             */
+            extraction_id?: string;
+        };
+        PostingExtraction: {
+            /** @enum {string} */
+            status: "pending" | "completed" | "unavailable";
+            /** @description Why an unavailable extraction did not run or finish. */
+            reason?: string;
+            fields?: components["schemas"]["PostingRead"];
+            /** @description The model's certainty in each field it filled, from 0 to 1, by field name. */
+            certainty?: {
+                [key: string]: number;
+            };
         };
         JobInput: {
             /** Format: uuid */
@@ -3111,6 +3153,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PostingRead"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPostingExtraction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The extraction's state and, once completed, its fields. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingExtraction"];
                 };
             };
             default: components["responses"]["Problem"];
