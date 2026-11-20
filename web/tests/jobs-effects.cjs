@@ -67,6 +67,9 @@ function load(file, core) {
       return { Api, ApiError, etagOf: (r) => r.response.headers.get('ETag') };
     if (name.endsWith('/sonner')) return { ZardSonnerService: Toast };
     if (name.endsWith('/confirm.service')) return { ConfirmService: Confirm };
+    // Plain data and parsing helpers: the sheet builds its options from them.
+    if (name === './format') return load('jobs/format.ts', core);
+    if (name === './posting-link') return load('jobs/posting-link.ts', core);
     return other;
   };
   vm.runInNewContext(code, {
@@ -109,6 +112,7 @@ async function fixture(t, overrides = {}) {
   const injector = core.createEnvironmentInjector([
     { provide: core.ɵChangeDetectionScheduler, useValue: { notify() {} } },
     { provide: core.ɵEffectScheduler, useValue: scheduler },
+    { provide: core.ChangeDetectorRef, useValue: { markForCheck() {} } },
     { provide: AuthService, useValue: auth },
     { provide: EventsService, useValue: events },
     { provide: Api, useValue: { client } },
