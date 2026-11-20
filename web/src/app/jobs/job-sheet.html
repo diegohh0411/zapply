@@ -136,18 +136,33 @@
             {{ problem }} Filled what the link says.
           </p>
         }
-        @if (filled().size) {
-          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+        @if (extracting()) {
+          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+            <z-skeleton class="size-3.5 rounded-full" />
+            Reading the rest of the posting…
+          </p>
+        } @else if (filled().size) {
+          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
             <ng-icon name="lucideSparkles" class="size-3.5 text-brand" />
             Filled {{ filled().size }} {{ filled().size === 1 ? 'detail' : 'details' }} from the
-            posting. They’re marked so you can check them.
+            posting. They’re marked so you can check them{{
+              unsure().size ? ', in amber where it wasn’t sure' : ''
+            }}.
+          </p>
+        }
+        @if (extractProblem(); as problem) {
+          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+            <ng-icon name="lucideTriangleAlert" class="size-3.5 text-amber-600" />
+            {{ problem }}
           </p>
         }
         <label class="flex flex-col gap-1">
           <span class="flex items-center gap-2 text-xs text-muted-foreground"
             >Job title <span class="text-destructive">*</span>
             @if (filled().has('title')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /> from posting</span>
+              <span class="auto-mark" [class.unsure]="unsure().has('title')"
+                ><ng-icon name="lucideSparkles" /> from posting</span
+              >
             }
           </span>
           <input
@@ -168,7 +183,9 @@
           <span class="review-label"
             >Company
             @if (filled().has('company')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('company')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <input
@@ -191,7 +208,9 @@
           <span class="review-label"
             >Location
             @if (filled().has('location')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('location')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <input
@@ -205,7 +224,9 @@
           <span class="review-label"
             >Work mode
             @if (filled().has('work_mode')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('work_mode')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <z-toggle-group
@@ -223,7 +244,9 @@
           <span class="review-label"
             >Employment
             @if (filled().has('employment_type')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('employment_type')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <z-select
@@ -241,7 +264,9 @@
           <span class="review-label"
             >Salary
             @if (filled().has('salary_min')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('salary_min')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <div
@@ -291,7 +316,9 @@
           <span class="review-label"
             >Source
             @if (filled().has('source')) {
-              <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
+              <span class="auto-mark" [class.unsure]="unsure().has('source')"
+                ><ng-icon name="lucideSparkles"
+              /></span>
             }
           </span>
           <input

@@ -29,6 +29,7 @@ class JobsStoreToken {}
 class ZardSonnerService {}
 class ConfirmService {}
 const DestroyRef = Symbol('DestroyRef');
+const ChangeDetectorRef = Symbol('ChangeDetectorRef');
 const toast = { error() {}, success() {}, warning() {} };
 const core = {
   signal,
@@ -46,10 +47,12 @@ const core = {
     if (token === EventsService) return currentEvents;
     if (token === JobsStoreToken) return currentStore;
     if (token === ZardSonnerService) return toast;
+    if (token === ChangeDetectorRef) return { markForCheck() {} };
     return {};
   },
   Injectable: () => (x) => x,
   ChangeDetectionStrategy: { OnPush: 1 },
+  ChangeDetectorRef,
 };
 function load(file, names) {
   // Drop only component decorator metadata, retaining the actual class code.
@@ -421,4 +424,67 @@ test('job tab URLs preserve the saved view and clear when switching or closing a
     { queryParams: { job: 'another-job', tab: null }, queryParamsHandling: 'merge' },
     { queryParams: { job: null, tab: null }, queryParamsHandling: 'merge' },
   ]);
+});
+
+test('a model reading fills blanks and link guesses, never typed values or the page data', async () => {
+  let polls = 0;
+  const sheet = sheetStore({
+    readPosting: async () => ({
+      description: 'Page text',
+      company: 'Acme Inc',
+      extraction_id: 'x1',
+    }),
+    postingExtraction: async (id) => {
+      assert.equal(id, 'x1');
+      return ++polls < 2
+        ? { status: 'pending' }
+        : {
+            status: 'completed',
+            fields: {
+              description: '',
+              title: 'Staff Engineer',
+              company: 'Acme',
+              location: 'Berlin',
+              work_mode: 'remote',
+              salary_min: 100000,
+              salary_max: 120000,
+            },
+            certainty: {
+              title: 0.95,
+              company: 0.99,
+              location: 0.9,
+              work_mode: 0.5,
+              salary_min: 0.9,
+            },
+          };
+    },
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://example.com/careers/1';
+  sheet.form.location = 'Typed by hand';
+  await sheet.continueFromLink();
+  assert.equal(sheet.extracting(), true);
+  while (sheet.extracting()) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(polls, 2);
+  assert.equal(sheet.form.title, 'Staff Engineer');
+  assert.equal(sheet.form.company, 'Acme Inc', 'the page data wins');
+  assert.equal(sheet.form.location, 'Typed by hand', 'typed values stay');
+  assert.equal(sheet.form.work_mode, 'remote');
+  assert.equal(sheet.form.salary_min, 100000);
+  assert.deepEqual([...sheet.unsure()], ['work_mode', 'salary_max']);
+  assert.ok(sheet.filled().has('title') && !sheet.filled().has('location'));
+});
+
+test('a model reading that cannot run explains why and fills nothing', async () => {
+  const sheet = sheetStore({
+    readPosting: async () => ({ description: 'Page text', extraction_id: 'x2' }),
+    postingExtraction: async () => ({ status: 'unavailable', reason: 'usage_limit' }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://example.com/careers/2';
+  await sheet.continueFromLink();
+  const before = JSON.stringify(sheet.form);
+  while (sheet.extracting()) await new Promise((r) => setTimeout(r, 50));
+  assert.match(sheet.extractProblem(), /limit/);
+  assert.equal(JSON.stringify(sheet.form), before);
 });

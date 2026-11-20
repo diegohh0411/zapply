@@ -79,6 +79,7 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 | `GET, POST /jobs/{id}/activities`, `PATCH, DELETE /jobs/{id}/activities/{activity_id}` | The timeline, newest first. Only notes are writable |
 | `GET, POST /job-views`, `PUT, DELETE /job-views/{id}` | Saved views |
 | `POST /postings/read` | `{url}`: reads a posting's page for the new job dialog. Saves nothing. See [Reading posting links](#reading-posting-links) |
+| `GET /postings/extractions/{id}` | A model's reading of a posting's fields: `pending`, `completed` with `fields` and `certainty`, or `unavailable` with `reason`. See [Model extraction](#model-extraction) |
 
 - Lists return summaries without `description` and `notes`; a board of 200 postings would otherwise be megabytes.
 - Errors, ETags (`version`), `If-Match` (`428`/`412`) and validation (`422` with `errors[]`) work exactly as in part 2.
@@ -111,8 +112,17 @@ Errors: `503` without `FIRECRAWL_URL` (the dialog then uses the link and text al
 - It serves `POST /v2/scrape` on `127.0.0.1:3002`, requires the token, and refuses localhost and private-network targets, so a posting URL can't reach internal services.
 - `FIRECRAWL_CLOUD=off` (the compose default) keeps every fetch on this machine. `auto` sends pages that block it to Firecrawl Cloud, which then sees their URLs. LinkedIn sometimes blocks; pasting the text still works.
 - Chromium's sandbox needs `clone`, `setns` and `unshare`, which Podman's default seccomp profile allows. Docker's blocks them, so JavaScript pages come back unrendered with a warning; run with Playwright's seccomp profile there (Firecrawl's docs show how). Docker Compose can't pass that profile to Podman, so the compose file leaves it out.
-- Local scrapes skip the `json` and `summary` formats, so fields come from JSON-LD rather than a model. Any Firecrawl v2 server works in `FIRECRAWL_URL`, including a self-hosted one or Firecrawl Cloud.
+- Local scrapes skip the `json` and `summary` formats, so fields come from JSON-LD and the [extraction model](#model-extraction) rather than Firecrawl's own. Any Firecrawl v2 server works in `FIRECRAWL_URL`, including a self-hosted one or Firecrawl Cloud.
 - The production image doesn't include it (one Heroku dyno). Without `FIRECRAWL_URL` production keeps the link-only read.
+
+### Model extraction
+
+Most career sites publish no JSON-LD, so `POST /v1/postings/read` also starts a metered extraction of the page's markdown and returns its `extraction_id`. The dialog polls `GET /v1/postings/extractions/{id}` (up to a minute) and shows "Reading the rest of the posting…" meanwhile.
+
+- **Model:** `platform.model_settings.extraction_model`, `cloudflare/clairic` by default ([Clairic](https://developers.cloudflare.com/workers-ai/models/clairic/), Cloudflare's typed extraction model), called through OpenRouter's [Extractions API](https://openrouter.ai/docs/guides/community/extractions) (`POST /api/alpha/extractions`) with the system OpenRouter key. Any model the catalogue lists on that route works; `NULL` turns extraction off. There's no settings UI yet.
+- **Schema** (`internal/posting/extract.go`): nine fields, as `text` and `number`. The route has no enum type and Clairic's text answers are spans of the page, so work mode, employment type, salary period and currency are read as the words that state them and normalized in Go. Anything that doesn't normalize (a bare `$`, "per week") is dropped, not guessed. The page text sent is capped at 60 KB.
+- **Metering:** an extraction is a `model_operation` of kind `extraction` (migration `00030`), run by the worker through the same reserve, call and settle path as decisions. Fields count as questions and the state is priced once per field (`InputPerQuestion`), since the model may read it once per pass; settlement uses the cost OpenRouter reports. A request that can't run now (no plan, usage limit) is cancelled when the dialog polls it, and the dialog says why.
+- **Merging:** the model fills blank fields and replaces values guessed from the link or text. It never replaces the page's own JSON-LD values or anything the user typed. Each answer carries a certainty (`confidence × (1 − p_null)`); fields under 0.8 are marked in amber.
 
 ## Delivered
 
