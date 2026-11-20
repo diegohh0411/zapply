@@ -321,7 +321,7 @@ export class JobSheet {
     }
     if (!current()) return;
     if (result?.status === 'completed' && result.fields) {
-      this.applyExtraction(result.fields, result.certainty ?? {});
+      this.applyExtraction(result.fields, result.certainty ?? {}, result.absent ?? []);
     } else {
       this.extractProblem.set(extractionProblem(result?.reason ?? ''));
     }
@@ -330,16 +330,27 @@ export class JobSheet {
 
   /**
    * Fills blank fields and replaces values guessed from the link or text, but
-   * keeps the page's own data and anything the user typed.
+   * keeps the page's own data and anything the user typed. Guesses for fields
+   * the model found the posting doesn't state are withdrawn.
    */
-  private applyExtraction(fields: PostingRead, certainty: Record<string, number>): void {
+  private applyExtraction(
+    fields: PostingRead,
+    certainty: Record<string, number>,
+    absent: string[],
+  ): void {
     const form = this.form as unknown as Record<string, unknown>;
     const filled = new Set(this.filled());
     const unsure = new Set<string>();
-    const replaceable = (key: string) =>
-      form[key] === '' ||
-      form[key] === null ||
-      (key in this.autoFilled && form[key] === this.autoFilled[key] && !this.fromPage.has(key));
+    const guessed = (key: string) =>
+      key in this.autoFilled && form[key] === this.autoFilled[key] && !this.fromPage.has(key);
+    const replaceable = (key: string) => form[key] === '' || form[key] === null || guessed(key);
+    const blank = emptyForm() as unknown as Record<string, unknown>;
+    for (const key of absent) {
+      if (key === 'description' || !guessed(key)) continue;
+      form[key] = blank[key];
+      delete this.autoFilled[key];
+      filled.delete(key);
+    }
     const { description: _, extraction_id: __, ...found } = fields;
     const salary = replaceable('salary_min') && replaceable('salary_max');
     for (const [key, value] of Object.entries(found)) {

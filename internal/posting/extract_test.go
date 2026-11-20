@@ -91,3 +91,32 @@ func TestNormalizers(t *testing.T) {
 		}
 	}
 }
+
+func TestAbsent(t *testing.T) {
+	raw := `{
+		"employment_type": {"type":"text","value":null,"p_null":0.998},
+		"location": {"type":"text","value":null,"p_null":0.6},
+		"salary_min": {"type":"number","value":null,"p_null":0.99},
+		"salary_max": {"type":"number","value":120000,"p_null":0.01},
+		"salary_currency": {"type":"text","value":null,"p_null":0.95},
+		"work_mode": {"type":"number","value":null,"p_null":0.99},
+		"unknown": {"type":"text","value":null,"p_null":0.99},
+		"title": {"type":"text","value":"Engineer","p_null":0.001}
+	}`
+	got, err := Absent(ExtractionRequest("m", "page"), []byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// location is not sure enough, half a salary range is not absent, and
+	// mistyped or unrequested answers are ignored.
+	if want := "employment_type,salary_currency"; strings.Join(got, ",") != want {
+		t.Fatalf("Absent = %v, want %s", got, want)
+	}
+	both := `{"salary_min":{"type":"number","value":null,"p_null":0.97},"salary_max":{"type":"number","value":null,"p_null":0.93}}`
+	if got, _ := Absent(ExtractionRequest("m", "page"), []byte(both)); strings.Join(got, ",") != "salary_max,salary_min" {
+		t.Fatalf("Absent = %v, want both salary ends", got)
+	}
+	if _, err := Absent(ExtractionRequest("m", "page"), []byte(`[]`)); err == nil {
+		t.Fatal("want an error for malformed answers")
+	}
+}

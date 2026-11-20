@@ -100,9 +100,15 @@ export function readText(text: string): PostingGuess {
   else if (/\bon[- ]?site\b/.test(t)) g.work_mode = 'onsite';
   if (/\bpart[- ]time\b/.test(t)) g.employment_type = 'part_time';
   else if (/\bfull[- ]time\b/.test(t)) g.employment_type = 'full_time';
-  else if (/\bcontract(or)?\b/.test(t)) g.employment_type = 'contract';
+  else if (
+    /\b(?:contract(?:or)?\s+(?:role|position|job|basis|assignment|opportunity)|(?:fixed[- ]term|temporary)\s+contract|independent contractor|employment type\s*:?\s*contract)\b/.test(
+      t,
+    )
+  )
+    g.employment_type = 'contract';
   else if (/\binternship\b/.test(t)) g.employment_type = 'internship';
-  const loc = /\b(?:location|based in)\s*[:\-]?\s*([^\n.;]{3,60})/i.exec(text);
+  // "Location: Berlin", "Based in Berlin"; not "Location-based hybrid policy".
+  const loc = /\b(?:location\s*:|based in)\s*([^\n.;*]{3,60})/i.exec(text);
   if (loc) g.location = loc[1].trim();
   // "$120,000 – $150,000", "€80k-95k", "USD 120k to 150k per year"
   const money =

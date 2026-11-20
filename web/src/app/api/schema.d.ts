@@ -1618,6 +1618,8 @@ export interface components {
             certainty?: {
                 [key: string]: number;
             };
+            /** @description Fields the model is confident the posting does not state. Guesses for them can be withdrawn. */
+            absent?: string[];
         };
         JobInput: {
             /** Format: uuid */

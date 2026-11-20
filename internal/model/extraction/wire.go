@@ -8,6 +8,7 @@ import (
 	"errors"
 	"math"
 	"regexp"
+	"sort"
 	"unicode/utf8"
 )
 
@@ -106,6 +107,27 @@ func Parse(r Request, raw []byte) (map[string]Answer, error) {
 			out[name] = a
 		}
 	}
+	return out, nil
+}
+
+// Absent lists the requested fields the model answered null with p_null of at
+// least threshold: those it judged the state holds nothing for.
+func Absent(r Request, raw []byte, threshold float64) ([]string, error) {
+	var all map[string]Answer
+	if err := json.Unmarshal(raw, &all); err != nil {
+		return nil, errors.New("invalid extraction answers")
+	}
+	var out []string
+	for name, a := range all {
+		f, ok := r.Fields[name]
+		if !ok || a.Type != f.Type || a.PNull == nil || !unit(a.PNull) || *a.PNull < threshold {
+			continue
+		}
+		if len(a.Value) == 0 || string(a.Value) == "null" {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
 	return out, nil
 }
 

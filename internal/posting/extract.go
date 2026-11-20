@@ -75,6 +75,32 @@ func FromAnswers(answers map[string]extraction.Answer) Extracted {
 	return out
 }
 
+// absentAt is how sure the model must be that a posting omits a field before
+// the dialog drops a guess for it.
+const absentAt = 0.9
+
+// Absent returns the job fields the model is confident the posting does not
+// state, so guesses made from the link or text can be withdrawn. The salary
+// range counts as absent only when both ends are.
+func Absent(r extraction.Request, raw []byte) ([]string, error) {
+	names, err := extraction.Absent(r, raw, absentAt)
+	if err != nil {
+		return nil, err
+	}
+	has := map[string]bool{}
+	for _, n := range names {
+		has[n] = true
+	}
+	out := []string{}
+	for _, n := range names {
+		if (n == "salary_min" || n == "salary_max") && !(has["salary_min"] && has["salary_max"]) {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
 func certainty(answers map[string]extraction.Answer, name string, ok bool) float64 {
 	if !ok {
 		return 1

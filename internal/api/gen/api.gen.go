@@ -1703,6 +1703,9 @@ type PlanInput struct {
 
 // PostingExtraction defines model for PostingExtraction.
 type PostingExtraction struct {
+	// Absent Fields the model is confident the posting does not state. Guesses for them can be withdrawn.
+	Absent *[]string `json:"absent,omitempty"`
+
 	// Certainty The model's certainty in each field it filled, from 0 to 1, by field name.
 	Certainty *map[string]float64 `json:"certainty,omitempty"`
 	Fields    *PostingRead        `json:"fields,omitempty"`

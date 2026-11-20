@@ -2117,6 +2117,10 @@ components:
           type: object
           description: The model's certainty in each field it filled, from 0 to 1, by field name.
           additionalProperties: { type: number, format: double }
+        absent:
+          type: array
+          description: Fields the model is confident the posting does not state. Guesses for them can be withdrawn.
+          items: { type: string }
     JobInput:
       type: object
       required: [title]

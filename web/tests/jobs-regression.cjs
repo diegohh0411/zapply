@@ -488,3 +488,43 @@ test('a model reading that cannot run explains why and fills nothing', async () 
   assert.match(sheet.extractProblem(), /limit/);
   assert.equal(JSON.stringify(sheet.form), before);
 });
+
+test('a model reading withdraws text guesses for fields the posting does not state', async () => {
+  const sheet = sheetStore({
+    readPosting: async () => ({
+      description: 'Remote role.\nEmployment type: contract\nLocation: Berlin',
+      extraction_id: 'x3',
+    }),
+    postingExtraction: async () => ({
+      status: 'completed',
+      fields: { description: '', work_mode: 'remote' },
+      certainty: { work_mode: 0.99 },
+      absent: ['employment_type', 'location', 'salary_currency'],
+    }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://example.com/careers/3';
+  await sheet.continueFromLink();
+  assert.equal(sheet.form.employment_type, 'contract', 'the text guess comes first');
+  sheet.form.location = 'Typed by hand';
+  while (sheet.extracting()) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(sheet.form.employment_type, '', 'a guess the model ruled out is withdrawn');
+  assert.ok(!sheet.filled().has('employment_type'));
+  assert.equal(sheet.form.location, 'Typed by hand', 'typed values stay');
+  assert.equal(sheet.form.work_mode, 'remote');
+});
+
+test('posting text guesses ignore "contract" and "location" in passing', async () => {
+  const sheet = sheetStore({
+    readPosting: async () => ({
+      description:
+        'Guide customers from a signed contract to production.\n**Location-based hybrid policy:** Currently, we expect all staff in an office.',
+    }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://example.com/careers/4';
+  await sheet.continueFromLink();
+  assert.equal(sheet.form.employment_type, '');
+  assert.equal(sheet.form.location, '');
+  assert.equal(sheet.form.work_mode, 'hybrid');
+});

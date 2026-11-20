@@ -148,7 +148,11 @@ func (s *server) GetPostingExtraction(ctx context.Context, req gen.GetPostingExt
 		reason := "invalid_answers"
 		return gen.GetPostingExtraction200JSONResponse{Status: gen.PostingExtractionStatusUnavailable, Reason: &reason}, nil
 	}
+	absent, err := posting.Absent(r, []byte(result))
+	if err != nil {
+		return nil, err
+	}
 	x := posting.FromAnswers(answers)
 	fields := postingRead(x.Posting)
-	return gen.GetPostingExtraction200JSONResponse{Status: gen.PostingExtractionStatusCompleted, Fields: &fields, Certainty: &x.Certainty}, nil
+	return gen.GetPostingExtraction200JSONResponse{Status: gen.PostingExtractionStatusCompleted, Fields: &fields, Certainty: &x.Certainty, Absent: &absent}, nil
 }
