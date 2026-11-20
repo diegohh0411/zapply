@@ -19,6 +19,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/model/billing"
+	"github.com/diegohh0411/zapply/internal/model/extraction"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -206,6 +207,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	var chat *SummaryRequest
 	var history []summary.Message
 	var decision *systemone.Request
+	var extract *extraction.Request
 	var calibration []byte
 	if err := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
 		var raw []byte
@@ -257,6 +259,20 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				return err
 			}
 		}
+		if op.Kind == "extraction" {
+			var body []byte
+			if err := tx.QueryRow(ctx, "SELECT body FROM model_request WHERE operation_id=$1 AND user_id=$2", op.ID, args.UserID).Scan(&body); err != nil {
+				return err
+			}
+			var req extraction.Request
+			if err := json.Unmarshal(body, &req); err != nil {
+				return err
+			}
+			extract = &req
+			if err := tx.QueryRow(ctx, "SELECT platform.model_calibration($1)", req.Model).Scan(&calibration); err != nil {
+				return err
+			}
+		}
 		if err := tx.QueryRow(ctx, "SELECT platform.attempts_for_operation($1)", args.OperationID).Scan(&raw); err != nil {
 			return err
 		}
@@ -286,6 +302,10 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 				model = decision.Model
 				dp, ok := r.Provider.(modelapi.DecisionProvider)
 				lookupAllowed = ok && dp.DecisionLookupSupported(decision.Model)
+			} else if extract != nil {
+				model = extract.Model
+				ep, ok := r.Provider.(modelapi.ExtractionProvider)
+				lookupAllowed = ok && ep.DecisionLookupSupported(extract.Model)
 			} else if chat != nil {
 				model = chat.Model
 			}
@@ -367,6 +387,12 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 			return r.block(ctx, args, "decision_provider_unavailable", nil, 5*time.Minute)
 		}
 		quote, err = modelapi.QuoteDecision(ctx, dp, *decision, modelapi.CalibrationOf(calibration))
+	} else if extract != nil {
+		ep, ok := r.Provider.(modelapi.ExtractionProvider)
+		if !ok {
+			return r.block(ctx, args, "extraction_provider_unavailable", nil, 5*time.Minute)
+		}
+		quote, err = modelapi.QuoteExtraction(ctx, ep, *extract, modelapi.CalibrationOf(calibration))
 	} else if chat != nil {
 		p, ok := r.Provider.(ChatProvider)
 		if !ok {
@@ -376,7 +402,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	} else {
 		quote, err = r.Provider.Quote(ctx)
 	}
-	if decision != nil && quote.Model != "" {
+	if (decision != nil || extract != nil) && quote.Model != "" {
 		if e := r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
 			_, e := tx.Exec(ctx, `INSERT INTO platform.model_quote(model,quote) VALUES($1,$2) ON CONFLICT(model) DO UPDATE SET quote=EXCLUDED.quote,fetched_at=now()`, quote.Model, systemone.Raw(quote))
 			return e
@@ -390,7 +416,7 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 		if errors.As(err, &pe) {
 			reason = pe.Code
 		}
-		if decision != nil && reason == "request_too_large" && quote.Decision {
+		if (decision != nil || extract != nil) && reason == "request_too_large" && quote.Decision {
 			return r.tx(ctx, args.UserID, func(tx pgx.Tx) error {
 				tag, e := tx.Exec(ctx, `UPDATE model_operation SET status='failed',blocked_reason='request_too_large',version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2 AND status IN ('pending','blocked')`, op.ID, args.UserID)
 				if e != nil {
@@ -409,6 +435,8 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	hashInput := rawQuote
 	if decision != nil {
 		hashInput = systemone.Raw(map[string]any{"quote": quote, "request": decision})
+	} else if extract != nil {
+		hashInput = systemone.Raw(map[string]any{"quote": quote, "request": extract})
 	}
 	hash := sha256.Sum256(hashInput)
 	var reservation struct {
@@ -471,6 +499,8 @@ func (r *Runtime) Process(ctx context.Context, args Args) error {
 	summaryReason := ""
 	if decision != nil {
 		result, err = r.Provider.(modelapi.DecisionProvider).Decide(callCtx, key, *decision, quote)
+	} else if extract != nil {
+		result, err = r.Provider.(modelapi.ExtractionProvider).Extract(callCtx, key, *extract, quote)
 	} else if chat != nil {
 		stop := r.watchSummary(callCtx, cancel, args, chat.JobID)
 		var text string

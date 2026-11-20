@@ -57,7 +57,7 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 		}
 		r = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, r)
+	req, err := http.NewRequestWithContext(ctx, method, c.url(path), r)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 		}
 		return b, &modelapi.ProviderError{Code: code, Uncharged: uncharged, RetryAfter: retry}
 	}
-	if method == "POST" && (path == "/systemone" || path == "/chat/completions") {
+	if method == "POST" && (path == "/systemone" || path == extractionsPath || path == "/chat/completions") {
 		var envelope struct {
 			ID string `json:"id"`
 		}

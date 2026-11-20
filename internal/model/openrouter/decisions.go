@@ -41,6 +41,9 @@ type DecisionModel struct {
 	} `json:"architecture"`
 	Compatibility string            `json:"compatibility_reason"`
 	Reasoning     *ReasoningOptions `json:"reasoning,omitempty"`
+	// Endpoints lists the routes that serve the model beyond chat, such as
+	// /api/alpha/extractions.
+	Endpoints []string `json:"endpoints,omitempty"`
 }
 
 func (c *Client) DecisionModels(ctx context.Context, key string, refresh bool) ([]DecisionModel, error) {
@@ -156,13 +159,19 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "invalid_request", Uncharged: true}
 	}
 	raw, callErr := c.request(ctx, "POST", "/systemone", key, json.RawMessage(wire))
+	return systemOneResult(ctx, "/systemone", raw, callErr)
+}
+
+// systemOneResult reads a decision or extraction response: its answers, its
+// generation id and the cost OpenRouter reports for it.
+func systemOneResult(ctx context.Context, path string, raw []byte, callErr error) (modelapi.Result, error) {
 	var body struct {
 		ID      string          `json:"id"`
 		Answers json.RawMessage `json:"answers"`
 		Usage   json.RawMessage `json:"usage"`
 	}
 	parseErr := json.Unmarshal(raw, &body)
-	logResponse(ctx, "/systemone", raw, parseErr)
+	logResponse(ctx, path, raw, parseErr)
 	if parseErr != nil {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
