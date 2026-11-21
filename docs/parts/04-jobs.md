@@ -78,6 +78,7 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 | `POST /jobs/{id}/archive`, `/unarchive`, `DELETE /jobs/{id}` | Archived jobs are hidden from lists by default |
 | `GET, POST /jobs/{id}/activities`, `PATCH, DELETE /jobs/{id}/activities/{activity_id}` | The timeline, newest first. Only notes are writable |
 | `GET, POST /job-views`, `PUT, DELETE /job-views/{id}` | Saved views |
+| `POST /postings/read` | `{url}`: reads a posting's page for the new job dialog. Saves nothing. See [Reading posting links](#reading-posting-links) |
 
 - Lists return summaries without `description` and `notes`; a board of 200 postings would otherwise be megabytes.
 - Errors, ETags (`version`), `If-Match` (`428`/`412`) and validation (`422` with `errors[]`) work exactly as in part 2.
@@ -89,10 +90,29 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 
 ## Out of scope
 
-- Fetching and parsing a posting from its URL (needs the worker, part 5; the extension in part 11 will send the text it sees).
+- Reading pages behind a sign-in. The extension in part 11 will send the text it sees.
 - Linking jobs to a global `company` (part 8 adds `company_id`; `company` stays as the user's own spelling).
 - Contacts and reminders. Notes cover them until there is demand.
 - Full-text search over descriptions.
+
+## Reading posting links
+
+The new job dialog starts from the posting link, then shows a review step with the fields it filled marked. `POST /v1/postings/read` scrapes the page through a Firecrawl v2 API (`FIRECRAWL_URL`, bearer `FIRECRAWL_TOKEN`) and returns:
+
+- **Fields from the page's schema.org `JobPosting` JSON-LD**, which job boards publish for search engines (Lever, LinkedIn, Workday, most ATSs): title, company, location, remote (`TELECOMMUTE`), employment type and salary. A salary per week or day has no job period and is dropped. Without JSON-LD, the title falls back to `og:title`.
+- **The page as markdown**, which becomes the job description when none was pasted.
+
+The dialog merges, highest first: the page's fields, then what the URL says (`web/src/app/jobs/posting-link.ts`: board, company and title from the path), then what the description says (work mode, employment type, salary, location). It fills only empty fields, and a new link replaces only values it filled that weren't edited.
+
+Errors: `503` without `FIRECRAWL_URL` (the dialog then uses the link and text alone, silently); `422` on `url` when the page can't be read (blocked, `4xx`, slow), which the review step shows; a scraper that's down is a `500`.
+
+**Firecrawl Local.** In development, `make firecrawl` runs [Firecrawl Local](https://docs.firecrawl.dev/quickstarts/firecrawl-local) from `deploy/firecrawl/Dockerfile`: one binary built from crates.io at a pinned version, with Chromium for JavaScript pages. It's behind the `firecrawl` compose profile because its first build compiles Rust (several minutes); `make db-up` doesn't start it.
+
+- It serves `POST /v2/scrape` on `127.0.0.1:3002`, requires the token, and refuses localhost and private-network targets, so a posting URL can't reach internal services.
+- `FIRECRAWL_CLOUD=off` (the compose default) keeps every fetch on this machine. `auto` sends pages that block it to Firecrawl Cloud, which then sees their URLs. LinkedIn sometimes blocks; pasting the text still works.
+- Chromium's sandbox needs `clone`, `setns` and `unshare`, which Podman's default seccomp profile allows. Docker's blocks them, so JavaScript pages come back unrendered with a warning; run with Playwright's seccomp profile there (Firecrawl's docs show how). Docker Compose can't pass that profile to Podman, so the compose file leaves it out.
+- Local scrapes skip the `json` and `summary` formats, so fields come from JSON-LD rather than a model. Any Firecrawl v2 server works in `FIRECRAWL_URL`, including a self-hosted one or Firecrawl Cloud.
+- The production image doesn't include it (one Heroku dyno). Without `FIRECRAWL_URL` production keeps the link-only read.
 
 ## Delivered
 

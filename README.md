@@ -43,6 +43,24 @@ make test-integration  # full suite against a throwaway Postgres container
 
 With Podman, `make db-up` goes through `podman compose`. If it cannot reach the socket, set `DOCKER_HOST` to the Podman machine's socket.
 
+### Running the app on this machine
+
+`compose.yaml` runs the production image and Firecrawl Local against the hosted
+database, in place of a dyno. Put the production settings in `.env` (the
+Heroku config vars, `PUBLIC_URL=http://localhost:8080` and a `FIRECRAWL_TOKEN`
+of your choice), then:
+
+```sh
+podman compose up -d --build   # http://localhost:8080
+podman compose down
+```
+
+Gmail push needs a public URL, so leave the `GOOGLE_PUBSUB_*` variables out and
+set `MAIL_RECONCILE_INTERVAL` (e.g. `5m`) for mail to sync while it runs. Google
+sign-in for mail needs `http://localhost:8080/oauth/google/callback` on the
+OAuth client, and Supabase sign-in needs `http://localhost:8080` among the
+project's redirect URLs. Migrations: `podman compose run --rm app migrate`.
+
 ## Database roles
 
 - `zapply migrate` connects as the schema owner (`MIGRATE_DATABASE_URL`).

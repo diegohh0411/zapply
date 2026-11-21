@@ -1,6 +1,7 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   DestroyRef,
   effect,
@@ -32,6 +33,9 @@ import {
   lucidePlus,
   lucideTrash2,
   lucideX,
+  lucideLink,
+  lucideSparkles,
+  lucideTriangleAlert,
 } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
@@ -44,6 +48,7 @@ import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
 import { ZardToggleGroupComponent } from '@/shared/components/toggle-group';
+import { describeLink, readPosting } from './posting-link';
 
 import { CvTab } from './cv/cv-tab';
 import { MailTab } from './mail-tab';
@@ -52,7 +57,13 @@ import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
 import { ConfirmService } from '../core/confirm.service';
 import { EMPLOYMENT_TYPES, SALARY_PERIODS, WORK_MODES } from './format';
-import { type Job, type JobActivity, type JobInput, JobsStore } from './jobs.store';
+import {
+  type Job,
+  type JobActivity,
+  type JobInput,
+  JobsStore,
+  type PostingRead,
+} from './jobs.store';
 
 export type JobTab = 'details' | 'cv' | 'mail' | 'activity';
 const workspaceTabs = [
@@ -151,6 +162,9 @@ function formatIsoDate(value: Date | Date[] | null): string {
       lucidePlus,
       lucidePencil,
       lucideX,
+      lucideLink,
+      lucideSparkles,
+      lucideTriangleAlert,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -176,6 +190,92 @@ export class JobSheet {
   protected readonly workModes = WORK_MODES;
   protected readonly employmentTypes = EMPLOYMENT_TYPES;
   protected readonly salaryPeriods = SALARY_PERIODS;
+  protected readonly workModeItems = WORK_MODES.map((o) => ({ value: o.value, label: o.label }));
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  /** New jobs start from the posting link, then a short review. */
+  protected readonly step = signal<'link' | 'review'>('link');
+  /** Fields the posting filled in, marked in the review so they get checked. */
+  protected readonly filled = signal<ReadonlySet<string>>(new Set());
+
+  protected linkHint(): string {
+    return describeLink(this.form.url);
+  }
+
+  protected duplicate(): { id: string; title: string } | null {
+    const url = this.form.url.trim();
+    if (!url) return null;
+    const hit = this.store.jobs().find((j) => j.url === url);
+    return hit ? { id: hit.id, title: hit.title } : null;
+  }
+
+  protected statusStage(id: string): string {
+    return this.store.statusById().get(id)?.stage ?? '';
+  }
+
+  /** The server is reading the posting's page (Continue shows a spinner). */
+  protected readonly reading = signal(false);
+  /** Why the page couldn't be read, shown on the review step. */
+  protected readonly readProblem = signal('');
+  /** Values the last read filled: a new link replaces them, but not edits made since. */
+  private autoFilled: Record<string, unknown> = {};
+
+  protected enterByHand(): void {
+    this.readProblem.set('');
+    this.step.set('review');
+  }
+
+  protected async continueFromLink(): Promise<void> {
+    if (this.reading()) return;
+    const generation = this.generation;
+    const url = this.form.url.trim();
+    this.readProblem.set('');
+    this.errors.set({});
+    let page: PostingRead | null = null;
+    if (url) {
+      this.reading.set(true);
+      try {
+        page = await this.store.readPosting(url);
+      } catch (e) {
+        if (generation !== this.generation) return;
+        // 503: no scraper on this server, so the link and text are all there is.
+        if (!(e instanceof ApiError && e.status === 503)) {
+          this.readProblem.set(
+            e instanceof ApiError && e.fieldErrors.length
+              ? e.fieldErrors[0].message
+              : 'Couldn’t read the page right now.',
+          );
+        }
+      } finally {
+        if (generation === this.generation) this.reading.set(false);
+      }
+      if (generation !== this.generation) return;
+    }
+
+    const form = this.form as unknown as Record<string, unknown>;
+    const blank = emptyForm() as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(this.autoFilled)) {
+      if (form[key] === value) form[key] = blank[key];
+    }
+    const filled = new Set<string>();
+    const autoFilled: Record<string, unknown> = {};
+    const fill = (key: string, value: unknown) => {
+      if (value === undefined || value === null || value === '') return;
+      if (form[key] !== '' && form[key] !== null) return;
+      form[key] = value;
+      filled.add(key);
+      autoFilled[key] = value;
+    };
+    const { description, ...fields } = page ?? { description: '' };
+    fill('description', description);
+    for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
+      fill(key, value);
+    }
+    this.autoFilled = autoFilled;
+    this.filled.set(filled);
+    this.step.set('review');
+    this.cdr.markForCheck();
+  }
 
   protected form: Form = emptyForm();
   protected readonly job = signal<Job | null>(null);
@@ -197,6 +297,16 @@ export class JobSheet {
   private activitiesRequest = 0;
 
   constructor() {
+    // Statuses can arrive after the sheet opens: start new jobs in the first "saved" status.
+    effect(() => {
+      const statuses = this.store.statuses();
+      if (!this.isNew() || !statuses.length) return;
+      untracked(() => {
+        if (this.form.status_id) return;
+        this.form.status_id = (statuses.find((s) => s.stage === 'saved') ?? statuses[0]).id;
+        this.cdr.markForCheck();
+      });
+    });
     effect(() => {
       this.captureOpen.set(this.visible() && this.isNew());
     });
@@ -270,6 +380,10 @@ export class JobSheet {
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
+      this.step.set('link');
+      this.filled.set(new Set());
+      this.readProblem.set('');
+      this.autoFilled = {};
       this.selectTab('details', false);
       this.form = emptyForm(
         t.statusId ??

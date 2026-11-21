@@ -16,6 +16,7 @@ export type JobFilters = Schemas['JobViewFilters'];
 export type JobStage = Schemas['JobStage'];
 export type JobActivity = Schemas['JobActivity'];
 export type JobSort = Schemas['JobSort'];
+export type PostingRead = Schemas['PostingRead'];
 
 export const STAGES: { value: JobStage; label: string }[] = [
   { value: 'saved', label: 'Saved' },
@@ -122,8 +123,9 @@ export class JobsStore {
     this.events.changes.pipe(takeUntilDestroyed(destroy)).subscribe((e) => {
       if (!this.loaded) return;
       const [kind] = e.topic.split('.');
-      if (kind === 'match_run' || ['evidence','skill','organization'].includes(kind)) { void this.loadJobs(); }
-      else if (kind === 'job') {
+      if (kind === 'match_run' || ['evidence', 'skill', 'organization'].includes(kind)) {
+        void this.loadJobs();
+      } else if (kind === 'job') {
         if (e.topic === 'job.deleted') {
           this.deleted.add(e.data.id);
           this.remove(e.data.id);
@@ -246,6 +248,13 @@ export class JobsStore {
       this.api.GET('/v1/jobs/{id}', { params: { path: { id } } }),
     );
     return { job: Api.ok(r), etag: etagOf(r) };
+  }
+
+  /** Reads a posting's page through the server's scraper. Nothing is saved. */
+  async readPosting(url: string): Promise<PostingRead> {
+    return Api.ok(
+      await this.inSession(() => this.api.POST('/v1/postings/read', { body: { url } })),
+    );
   }
 
   async create(input: JobInput): Promise<Job> {

@@ -84,6 +84,9 @@ function load(file, names) {
     if (name.endsWith('/events.service')) return { EventsService };
     if (name.endsWith('/jobs.store')) return { JobsStore: JobsStoreToken };
     if (name.endsWith('/confirm.service')) return { ConfirmService };
+    // Plain data and parsing helpers: the sheet builds its options from them.
+    if (name === './format') return load('web/src/app/jobs/format.ts');
+    if (name === './posting-link') return load('web/src/app/jobs/posting-link.ts');
     return stub;
   };
   vm.runInNewContext(

@@ -26,5 +26,22 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz"]
       interval: 2s
       retries: 30
+  # Firecrawl Local reads posting links for the new job dialog (FIRECRAWL_URL).
+  # Opt-in, since its first build compiles Rust: `make firecrawl`.
+  firecrawl:
+    profiles: [firecrawl]
+    build: ./firecrawl
+    image: localhost/zapply-firecrawl:0.1.0
+    environment:
+      # off: pages are fetched only from this machine. auto also hands pages
+      # that block it to Firecrawl Cloud, which then sees their URLs.
+      FIRECRAWL_CLOUD: ${FIRECRAWL_CLOUD:-off}
+      # Required: firecrawl-local refuses a non-loopback bind without it.
+      FIRECRAWL_LOCAL_TOKEN: ${FIRECRAWL_TOKEN:-}
+    # Chromium renders JavaScript pages with its sandbox on, which Podman's
+    # default seccomp profile allows. Docker's blocks it: pages then load
+    # without JavaScript, with a warning (docs/parts/04-jobs.md).
+    ports:
+      - "127.0.0.1:${ZAPPLY_FIRECRAWL_PORT:-3002}:3002"
 volumes:
   pgdata:
