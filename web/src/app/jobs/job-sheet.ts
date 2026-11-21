@@ -43,6 +43,7 @@ import { ZardSelectImports } from '@/shared/components/select';
 import { ZardSkeletonComponent } from '@/shared/components/skeleton';
 import { ZardSonnerService } from '@/shared/components/sonner';
 import { ZardTextareaComponent } from '@/shared/components/textarea';
+import { ZardToggleGroupComponent } from '@/shared/components/toggle-group';
 
 import { CvTab } from './cv/cv-tab';
 import { MailTab } from './mail-tab';
@@ -126,6 +127,7 @@ function formatIsoDate(value: Date | Date[] | null): string {
     ZardButtonComponent,
     ZardInputComponent,
     ZardTextareaComponent,
+    ZardToggleGroupComponent,
     ZardSkeletonComponent,
     ...ZardSelectImports,
     ZardDatePickerComponent,

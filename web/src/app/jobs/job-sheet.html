@@ -133,17 +133,15 @@
             </div>
             <div class="field sm:col-span-3">
               <span>Employment</span>
-              <z-select
+              <z-toggle-group
                 name="employment_type"
                 [(ngModel)]="form.employment_type"
-                (zSelectionChange)="touch()"
-                zPlaceholder="—"
-              >
-                <z-select-item zValue="">—</z-select-item>
-                @for (o of employmentTypes; track o.value) {
-                  <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
-                }
-              </z-select>
+                (ngModelChange)="touch()"
+                [zItems]="employmentTypes"
+                zMode="single"
+                zType="outline"
+                [zSpacing]="0"
+              />
             </div>
 
             <fieldset class="grid grid-cols-2 gap-3 sm:col-span-6 sm:grid-cols-4">
@@ -555,17 +553,15 @@
           </div>
           <div class="field" [class]="isNew() ? 'sm:col-span-2' : 'sm:col-span-3'">
             <span>Employment</span>
-            <z-select
+            <z-toggle-group
               name="employment_type"
               [(ngModel)]="form.employment_type"
-              (zSelectionChange)="touch()"
-              zPlaceholder="—"
-            >
-              <z-select-item zValue="">—</z-select-item>
-              @for (o of employmentTypes; track o.value) {
-                <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
-              }
-            </z-select>
+              (ngModelChange)="touch()"
+              [zItems]="employmentTypes"
+              zMode="single"
+              zType="outline"
+              [zSpacing]="0"
+            />
           </div>
 
           <fieldset class="grid grid-cols-2 gap-3 sm:col-span-6">
