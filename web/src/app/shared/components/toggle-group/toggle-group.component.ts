@@ -101,7 +101,7 @@ export class ZardToggleGroupComponent implements ControlValueAccessor {
   readonly zDisabled = input(false, { transform: booleanAttribute });
   readonly zMode = input<'single' | 'multiple'>('multiple');
   readonly zItemClass = input<ClassValue>('');
-  readonly zItems = input<ZardToggleGroupItem[]>([]);
+  readonly zItems = input<readonly ZardToggleGroupItem[]>([]);
   readonly zOrientation = input<'horizontal' | 'vertical'>('horizontal');
   readonly zSize = input<ZardToggleSizeVariants>('default');
   /** Gap between items in spacing units; `0` joins them into one bar. */

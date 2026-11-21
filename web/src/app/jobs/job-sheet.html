@@ -226,17 +226,17 @@
               <span class="auto-mark"><ng-icon name="lucideSparkles" /></span>
             }
           </span>
-          <z-select
+          <z-toggle-group
             name="employment_type"
+            zMode="single"
+            zType="outline"
+            zSize="sm"
+            [zSpacing]="0"
+            [zItems]="employmentTypes"
             [(ngModel)]="form.employment_type"
-            (zSelectionChange)="touch()"
-            zPlaceholder="—"
-          >
-            <z-select-item zValue="">—</z-select-item>
-            @for (o of employmentTypes; track o.value) {
-              <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
-            }
-          </z-select>
+            (ngModelChange)="touch()"
+            aria-label="Employment"
+          />
 
           <span class="review-label"
             >Salary
@@ -682,17 +682,15 @@
           </div>
           <div class="field" [class]="isNew() ? 'sm:col-span-2' : 'sm:col-span-3'">
             <span>Employment</span>
-            <z-select
+            <z-toggle-group
               name="employment_type"
               [(ngModel)]="form.employment_type"
-              (zSelectionChange)="touch()"
-              zPlaceholder="—"
-            >
-              <z-select-item zValue="">—</z-select-item>
-              @for (o of employmentTypes; track o.value) {
-                <z-select-item [zValue]="o.value">{{ o.label }}</z-select-item>
-              }
-            </z-select>
+              (ngModelChange)="touch()"
+              [zItems]="employmentTypes"
+              zMode="single"
+              zType="outline"
+              [zSpacing]="0"
+            />
           </div>
 
           <fieldset class="grid grid-cols-2 gap-3 sm:col-span-6">
