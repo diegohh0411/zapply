@@ -62,6 +62,7 @@ import {
   type JobActivity,
   type JobInput,
   JobsStore,
+  type PostingExtraction,
   type PostingRead,
 } from './jobs.store';
 
@@ -219,6 +220,16 @@ export class JobSheet {
   protected readonly readProblem = signal('');
   /** Values the last read filled: a new link replaces them, but not edits made since. */
   private autoFilled: Record<string, unknown> = {};
+  /** Fields the page's own data filled; a model's reading doesn't replace them. */
+  private fromPage = new Set<string>();
+  /** A model is reading the posting's text for the fields still missing. */
+  protected readonly extracting = signal(false);
+  /** Why the model's reading didn't happen, when it matters to the user. */
+  protected readonly extractProblem = signal('');
+  /** Filled fields the model wasn't sure of, marked for a closer look. */
+  protected readonly unsure = signal<ReadonlySet<string>>(new Set());
+  /** Counts link reads, so a superseded extraction stops filling. */
+  private readSeq = 0;
 
   protected enterByHand(): void {
     this.readProblem.set('');
@@ -228,8 +239,12 @@ export class JobSheet {
   protected async continueFromLink(): Promise<void> {
     if (this.reading()) return;
     const generation = this.generation;
+    const seq = ++this.readSeq;
     const url = this.form.url.trim();
     this.readProblem.set('');
+    this.extractProblem.set('');
+    this.extracting.set(false);
+    this.unsure.set(new Set());
     this.errors.set({});
     let page: PostingRead | null = null;
     if (url) {
@@ -266,15 +281,88 @@ export class JobSheet {
       filled.add(key);
       autoFilled[key] = value;
     };
-    const { description, ...fields } = page ?? { description: '' };
+    const { description, extraction_id, ...fields } = page ?? { description: '' };
     fill('description', description);
+    this.fromPage = new Set(
+      Object.entries(fields)
+        .filter(([key, value]) => value !== undefined && value !== '' && form[key] === '')
+        .map(([key]) => key),
+    );
     for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
       fill(key, value);
     }
+    for (const key of this.fromPage) if (!filled.has(key)) this.fromPage.delete(key);
     this.autoFilled = autoFilled;
     this.filled.set(filled);
     this.step.set('review');
     this.cdr.markForCheck();
+    if (extraction_id) void this.awaitExtraction(extraction_id, generation, seq);
+  }
+
+  /** Polls a model's reading of the posting, then fills what it found. */
+  private async awaitExtraction(id: string, generation: number, seq: number): Promise<void> {
+    const current = () => generation === this.generation && seq === this.readSeq;
+    this.extracting.set(true);
+    let result: PostingExtraction | null = null;
+    // Clairic answers in seconds; past a minute the dialog stops waiting.
+    const deadline = Date.now() + 60_000;
+    try {
+      for (let wait = 600; Date.now() < deadline; wait = Math.min(wait * 1.4, 3000)) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        if (!current()) return;
+        result = await this.store.postingExtraction(id);
+        if (!current()) return;
+        if (result.status !== 'pending') break;
+      }
+    } catch {
+      result = null;
+    } finally {
+      if (current()) this.extracting.set(false);
+    }
+    if (!current()) return;
+    if (result?.status === 'completed' && result.fields) {
+      this.applyExtraction(result.fields, result.certainty ?? {}, result.absent ?? []);
+    } else {
+      this.extractProblem.set(extractionProblem(result?.reason ?? ''));
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Fills blank fields and replaces values guessed from the link or text, but
+   * keeps the page's own data and anything the user typed. Guesses for fields
+   * the model found the posting doesn't state are withdrawn.
+   */
+  private applyExtraction(
+    fields: PostingRead,
+    certainty: Record<string, number>,
+    absent: string[],
+  ): void {
+    const form = this.form as unknown as Record<string, unknown>;
+    const filled = new Set(this.filled());
+    const unsure = new Set<string>();
+    const guessed = (key: string) =>
+      key in this.autoFilled && form[key] === this.autoFilled[key] && !this.fromPage.has(key);
+    const replaceable = (key: string) => form[key] === '' || form[key] === null || guessed(key);
+    const blank = emptyForm() as unknown as Record<string, unknown>;
+    for (const key of absent) {
+      if (key === 'description' || !guessed(key)) continue;
+      form[key] = blank[key];
+      delete this.autoFilled[key];
+      filled.delete(key);
+    }
+    const { description: _, extraction_id: __, ...found } = fields;
+    const salary = replaceable('salary_min') && replaceable('salary_max');
+    for (const [key, value] of Object.entries(found)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (key === 'salary_min' || key === 'salary_max' ? !salary : !replaceable(key)) continue;
+      form[key] = value;
+      this.autoFilled[key] = value;
+      filled.add(key);
+      if ((certainty[key] ?? 0) < 0.8) unsure.add(key);
+    }
+    this.filled.set(filled);
+    this.unsure.set(unsure);
   }
 
   protected form: Form = emptyForm();
@@ -384,6 +472,11 @@ export class JobSheet {
       this.filled.set(new Set());
       this.readProblem.set('');
       this.autoFilled = {};
+      this.fromPage = new Set();
+      this.readSeq++;
+      this.extracting.set(false);
+      this.extractProblem.set('');
+      this.unsure.set(new Set());
       this.selectTab('details', false);
       this.form = emptyForm(
         t.statusId ??
@@ -762,4 +855,20 @@ function toInput(f: Form): JobInput {
     description: f.description,
     notes: f.notes,
   };
+}
+
+/** Says why a model didn't read the posting, in the user's terms. */
+function extractionProblem(reason: string): string {
+  switch (reason) {
+    case 'membership_required':
+    case 'membership_suspended':
+      return 'Reading the rest of the posting needs an active plan.';
+    case 'usage_limit':
+    case 'request_exceeds_plan':
+      return 'Reading the rest of the posting is over your plan’s limit for now.';
+    case 'provider_key_missing':
+      return '';
+    default:
+      return 'Couldn’t read the rest of the posting.';
+  }
 }

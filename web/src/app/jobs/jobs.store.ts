@@ -17,6 +17,7 @@ export type JobStage = Schemas['JobStage'];
 export type JobActivity = Schemas['JobActivity'];
 export type JobSort = Schemas['JobSort'];
 export type PostingRead = Schemas['PostingRead'];
+export type PostingExtraction = Schemas['PostingExtraction'];
 
 export const STAGES: { value: JobStage; label: string }[] = [
   { value: 'saved', label: 'Saved' },
@@ -254,6 +255,14 @@ export class JobsStore {
   async readPosting(url: string): Promise<PostingRead> {
     return Api.ok(
       await this.inSession(() => this.api.POST('/v1/postings/read', { body: { url } })),
+    );
+  }
+
+  async postingExtraction(id: string): Promise<PostingExtraction> {
+    return Api.ok(
+      await this.inSession(() =>
+        this.api.GET('/v1/postings/extractions/{id}', { params: { path: { id } } }),
+      ),
     );
   }
 

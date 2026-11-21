@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/diegohh0411/zapply/internal/model/billing"
+	"github.com/diegohh0411/zapply/internal/model/extraction"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
 )
 
@@ -59,5 +60,13 @@ type Provider interface {
 type DecisionProvider interface {
 	DecisionSheet(ctx context.Context, model string) (billing.Sheet, error)
 	Decide(context.Context, string, systemone.Request, Quote) (Result, error)
+	DecisionLookupSupported(string) bool
+}
+
+// ExtractionProvider answers typed field extractions. Extraction models are
+// metered like decision models: priced from the request, settled from usage.
+type ExtractionProvider interface {
+	ExtractionSheet(ctx context.Context, model string) (billing.Sheet, error)
+	Extract(context.Context, string, extraction.Request, Quote) (Result, error)
 	DecisionLookupSupported(string) bool
 }

@@ -183,6 +183,9 @@
   font-size: 0.7rem;
   font-weight: 500;
 }
+.auto-mark.unsure {
+  color: var(--color-amber-600, #d97706);
+}
 .auto-mark ng-icon {
   width: 0.8rem;
   height: 0.8rem;
