@@ -154,7 +154,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	defer hub.Close()
 
-	webCfg := webui.Config{SupabaseURL: cfg.Web.SupabaseURL, SupabaseAnonKey: cfg.Web.SupabaseAnonKey, BuildCommit: os.Getenv("HEROKU_BUILD_COMMIT"), BuiltAt: webui.BuiltAt}
+	webCfg := webui.Config{SupabaseURL: cfg.Web.SupabaseURL, SupabaseAnonKey: cfg.Web.SupabaseAnonKey, PublicURL: cfg.Web.PublicURL, BuildCommit: os.Getenv("HEROKU_BUILD_COMMIT"), BuiltAt: webui.BuiltAt}
 	var devToken func(string) (string, error)
 	if cfg.Env == config.Development && cfg.Auth.DevSecret != "" {
 		webCfg.DevLogin = true

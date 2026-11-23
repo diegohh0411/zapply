@@ -165,3 +165,15 @@ Details: [Part 7](docs/parts/07-rendering.md).
 Heroku deployments can show their source commit in the sidebar by enabling both
 `runtime-dyno-metadata` and `runtime-dyno-build-metadata` labs features on the app.
 The build time is embedded in the image and shown in the browser’s local time.
+
+## License
+
+Copyright (C) 2026 Diego Hernández Herrera
+
+zapply is free software: you can redistribute it and/or modify it under the
+terms of the [GNU Affero General Public License v3.0](LICENSE) as published by
+the Free Software Foundation. If you run a modified version as a network
+service, you must offer its users the corresponding source code.
+
+The bundled Source Sans 3 fonts in `templates/fonts/` are licensed separately
+under the SIL Open Font License 1.1 (see their `LICENSE.md`).

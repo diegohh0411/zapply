@@ -25,6 +25,8 @@ type Config struct {
 	BuiltAt         string `json:"built_at,omitempty"`
 	SupabaseURL     string `json:"supabase_url"`
 	SupabaseAnonKey string `json:"supabase_anon_key"`
+	// PublicURL is the origin canonical URLs are built from.
+	PublicURL string `json:"public_url,omitempty"`
 	// DevLogin lets the app mint tokens through POST /dev/token.
 	DevLogin bool `json:"dev_login"`
 }
