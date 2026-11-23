@@ -13,10 +13,16 @@ SUPA_BACKUP := supabase/backup
 # The local superuser: `postgres` can't hand objects to roles it isn't a member of.
 SUPA_PSQL = $(firstword $(COMPOSE)) exec -i supabase_db_zapply psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
 
-.PHONY: supa-up supa-down supa-pull supa-restore build run run-all worker relay migrate token db-up db-down firecrawl crawl4ai test test-integration vet image generate web web-dev
+.PHONY: supa-up supa-down supa-pull supa-restore build run run-all worker relay migrate token db-up db-down firecrawl crawl4ai test test-integration vet image generate web web-dev edge edge-image
 
 build:
 	go build -o bin/zapply ./cmd/zapply
+
+edge: ## Edge worker binary (README, Edge workers); it needs Chrome or Chromium on PATH
+	go build -o bin/zapply-edge ./cmd/zapply-edge
+
+edge-image: ## Edge worker container, Chromium included (deploy/edge/compose.yaml builds it too)
+	$(or $(shell command -v podman),docker) build -f deploy/edge/Dockerfile -t localhost/zapply-edge:0.1.0 .
 
 run: build ## API on the host, against `make db-up`
 	@$(ENV) bin/zapply api

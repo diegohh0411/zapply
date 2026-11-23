@@ -14,6 +14,8 @@ const (
 	KindFirecrawl = "firecrawl"
 	// KindCrawl4AI is a self-hosted Crawl4AI Docker server.
 	KindCrawl4AI = "crawl4ai"
+	// KindEdge reads pages through edge workers on residential machines.
+	KindEdge = "edge"
 )
 
 // Bounds on scraper settings, matching the database's checks.
@@ -62,6 +64,10 @@ func (s Settings) Order(host string) []int {
 	return all
 }
 
+// ValidHostname reports whether h is a bare lowercase hostname such as
+// linkedin.com, without a scheme, port or path.
+func ValidHostname(h string) bool { return len(h) <= 253 && hostname.MatchString(h) }
+
 func normalizeHost(host string) string {
 	return strings.TrimSuffix(strings.ToLower(host), ".")
 }
@@ -84,11 +90,14 @@ func (s Settings) Validate() error {
 	}
 	for i, p := range s.Providers {
 		field := fmt.Sprintf("providers[%d]", i)
-		if p.Kind != KindFirecrawl && p.Kind != KindCrawl4AI {
+		if p.Kind != KindFirecrawl && p.Kind != KindCrawl4AI && p.Kind != KindEdge {
 			return &SettingsError{field + ".kind", "select a supported scraper"}
 		}
 		if p.Kind == KindCrawl4AI && p.BaseURL == "" {
 			return &SettingsError{field + ".base_url", "Crawl4AI has no hosted API: enter your server's address"}
+		}
+		if p.Kind == KindEdge && (p.BaseURL != "" || p.KeyID != "") {
+			return &SettingsError{field + ".base_url", "edge workers need no address or key: they pull jobs from this server"}
 		}
 		if p.BaseURL != "" {
 			u, err := url.Parse(p.BaseURL)

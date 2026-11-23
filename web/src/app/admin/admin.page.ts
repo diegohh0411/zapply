@@ -1,4 +1,5 @@
 import { ModelSettings } from './model-settings';
+import { EdgeWorkers } from './edge-workers';
 import { ScraperSettings } from './scraper-settings';
 import { DatePipe } from '@angular/common';
 import {
@@ -28,7 +29,7 @@ type Attempt = Schemas['AttemptSummary'];
 
 @Component({
   selector: 'app-admin-page',
-  imports: [ModelSettings, ScraperSettings, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [ModelSettings, ScraperSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })

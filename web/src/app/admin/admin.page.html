@@ -59,7 +59,10 @@
     <app-model-settings />
   }
   @if (section() === 'scraping') {
-    <app-scraper-settings />
+    <div class="space-y-12">
+      <app-scraper-settings />
+      <app-edge-workers />
+    </div>
   }
   @switch (section()) {
     @case ('plans') {
