@@ -35,6 +35,9 @@ import {
   lucidePlus,
   lucideTrash2,
   lucideX,
+  lucideCheck,
+  lucideCircle,
+  lucideLoaderCircle,
   lucideLink,
   lucideSparkles,
   lucideTriangleAlert,
@@ -167,6 +170,9 @@ function formatIsoDate(value: Date | Date[] | null): string {
       lucidePlus,
       lucidePencil,
       lucideX,
+      lucideCheck,
+      lucideCircle,
+      lucideLoaderCircle,
       lucideLink,
       lucideSparkles,
       lucideTriangleAlert,
@@ -198,8 +204,11 @@ export class JobSheet {
   protected readonly workModeItems = WORK_MODES.map((o) => ({ value: o.value, label: o.label }));
   private readonly cdr = inject(ChangeDetectorRef);
 
-  /** New jobs start from the posting link, then a short review. */
-  protected readonly step = signal<'link' | 'review'>('link');
+  /**
+   * New jobs start from the posting link, wait while it is read, then land on
+   * a filled form to check.
+   */
+  protected readonly step = signal<'link' | 'reading' | 'review'>('link');
   /** Fields the posting filled in, marked in the review so they get checked. */
   protected readonly filled = signal<ReadonlySet<string>>(new Set());
 
@@ -229,20 +238,57 @@ export class JobSheet {
   /** The extraction model is still reading the posting. */
   protected readonly extracting = signal(false);
 
+  /** Reading has taken long enough that the person is told it is still going. */
+  protected readonly slow = signal(false);
+  private slowTimer: ReturnType<typeof setTimeout> | undefined;
+
   protected enterByHand(): void {
     this.readProblem.set('');
     this.step.set('review');
   }
 
+  /** Pasting a link is the whole question: start reading as soon as it lands. */
+  protected linkPasted(): void {
+    // ngModel takes the pasted value after this event.
+    setTimeout(() => {
+      if (this.step() === 'link' && /^https?:\/\/\S+$/i.test(this.form.url.trim()))
+        void this.continueFromLink();
+    });
+  }
+
+  /** Stops waiting: the form opens as it is, and what the model reads later still lands in it. */
+  protected skipWaiting(): void {
+    if (this.step() === 'reading') this.step.set('review');
+  }
+
+  /** Abandons the read and returns to the link. */
+  protected cancelReading(): void {
+    this.generation++;
+    this.clearSlowTimer();
+    this.reading.set(false);
+    this.extracting.set(false);
+    this.step.set('link');
+    this.cdr.markForCheck();
+  }
+
+  private clearSlowTimer(): void {
+    clearTimeout(this.slowTimer);
+    this.slow.set(false);
+  }
+
   protected async continueFromLink(): Promise<void> {
-    if (this.reading()) return;
+    if (this.reading() || this.step() !== 'link') return;
     const generation = this.generation;
     const url = this.form.url.trim();
     this.readProblem.set('');
     this.errors.set({});
     let page: PostingRead | null = null;
     if (url) {
+      // The loader covers the page and the model; the form opens when both are done.
+      this.step.set('reading');
       this.reading.set(true);
+      this.clearSlowTimer();
+      this.slowTimer = setTimeout(() => this.slow.set(true), 12_000);
       try {
         page = await this.store.readPosting(url, this.form.description);
       } catch (e) {
@@ -288,9 +334,17 @@ export class JobSheet {
     this.guessed = guessed;
     this.autoFilled = autoFilled;
     this.filled.set(filled);
-    this.step.set('review');
     this.cdr.markForCheck();
-    if (extraction_id) void this.awaitExtraction(extraction_id, generation);
+    if (extraction_id) {
+      const extraction = this.awaitExtraction(extraction_id, generation);
+      // Keep the loader up until the model answers, unless the person moved on.
+      if (this.step() === 'reading') await extraction;
+    }
+    if (generation !== this.generation) return;
+    this.clearSlowTimer();
+    // Not when the person already moved on: skipped to the form, or back to the link.
+    if (this.step() === 'reading' || !url) this.step.set('review');
+    this.cdr.markForCheck();
   }
 
   /**
@@ -324,7 +378,13 @@ export class JobSheet {
         this.cdr.markForCheck();
       }
     }
-    if (!result || result.status !== 'completed' || generation !== this.generation) return;
+    if (generation !== this.generation) return;
+    if (!result || result.status === 'failed') {
+      if (!this.readProblem()) this.readProblem.set('Couldn’t read the details from the posting.');
+      this.cdr.markForCheck();
+      return;
+    }
+    if (result.status !== 'completed') return;
     const { status: _, reason: __, ...fields } = result;
     const form = this.form as unknown as Record<string, unknown>;
     const filled = new Set(this.filled());
@@ -480,6 +540,9 @@ export class JobSheet {
     if (!t) return;
     if ('new' in t) {
       this.isNew.set(true);
+      this.clearSlowTimer();
+      this.reading.set(false);
+      this.extracting.set(false);
       this.step.set('link');
       this.filled.set(new Set());
       this.readProblem.set('');
