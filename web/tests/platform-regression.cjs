@@ -222,14 +222,16 @@ test('summary rows load the saved value and save the owner selection', async (t)
   f.requests[1].resolve(ok([]));
   await new Promise(resolve => setImmediate(resolve));
   f.requests[2].resolve(ok([]));
+  await new Promise(resolve => setImmediate(resolve));
+  f.requests[3].resolve(ok([]));
   await loading;
   assert.equal(settings.summaryRows, 3);
   settings.selectRows('1');
   const saving = settings.saveSummary();
-  assert.equal(f.requests[3].options.body.summary_rows, 1);
-  assert.equal('summary_max_output_tokens' in f.requests[3].options.body, false);
-  assert.equal(f.requests[3].options.params.header['If-Match'], '"1"');
-  f.requests[3].resolve(ok({version: 2, summary_rows: 1}));
+  assert.equal(f.requests[4].options.body.summary_rows, 1);
+  assert.equal('summary_max_output_tokens' in f.requests[4].options.body, false);
+  assert.equal(f.requests[4].options.params.header['If-Match'], '"1"');
+  f.requests[4].resolve(ok({version: 2, summary_rows: 1}));
   await saving;
   assert.equal(settings.settings().summary_rows, 1);
   assert.equal(settings.busy(), false);
@@ -251,6 +253,8 @@ test('thinking effort loads from the saved model and saves only efforts that mod
   ]));
   await flush();
   f.requests[3].resolve(ok([]));
+  await flush();
+  f.requests[4].resolve(ok([]));
   await loading;
   assert.equal(settings.summaryEffort, 'low');
   assert.equal(settings.effortUnavailable(), false);
@@ -261,9 +265,9 @@ test('thinking effort loads from the saved model and saves only efforts that mod
 
   settings.summaryEffort = 'off';
   const saving = settings.saveSummary();
-  assert.equal(f.requests[4].options.body.summary_reasoning_effort, 'off');
-  assert.equal(f.requests[4].options.params.header['If-Match'], '"3"');
-  f.requests[4].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'off'}));
+  assert.equal(f.requests[5].options.body.summary_reasoning_effort, 'off');
+  assert.equal(f.requests[5].options.params.header['If-Match'], '"3"');
+  f.requests[5].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'off'}));
   await saving;
   assert.equal(settings.summaryEffort, 'off');
   assert.equal(settings.settings().summary_reasoning_effort, 'off');
@@ -297,6 +301,8 @@ test('each model saves on its own and sends the other model saved settings', asy
     {id: 'dec/a', name: 'A', context_length: 1000, pricing: {}, compatibility_reason: ''},
     {id: 'dec/b', name: 'B', context_length: 1000, pricing: {}, compatibility_reason: ''},
   ]));
+  await flush();
+  f.requests[4].resolve(ok([{id: 'ext/a', name: 'Extractor', context_length: 1000, pricing: {}, compatibility_reason: '', typed: true}]));
   await loading;
   assert.equal(settings.summaryDirty(), false);
   assert.equal(settings.decisionDirty(), false);
@@ -307,26 +313,36 @@ test('each model saves on its own and sends the other model saved settings', asy
   assert.equal(settings.decisionDirty(), true);
 
   const deciding = settings.saveDecision();
-  const decisionBody = f.requests[4].options.body;
+  const decisionBody = f.requests[5].options.body;
   assert.equal(decisionBody.decision_model, 'dec/b');
   assert.equal(decisionBody.summary_rows, 2, 'the summary draft must not leak into the decision save');
   assert.equal(decisionBody.summary_model, 'reason/model');
   assert.equal(decisionBody.summary_reasoning_effort, 'low');
-  assert.equal(f.requests[4].options.params.header['If-Match'], '"5"');
-  f.requests[4].resolve(ok({version: 6, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
+  assert.equal(f.requests[5].options.params.header['If-Match'], '"5"');
+  f.requests[5].resolve(ok({version: 6, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
   await deciding;
   assert.equal(settings.decisionDirty(), false);
   assert.equal(settings.summaryDirty(), true, 'the summary draft stays unsaved');
   assert.equal(settings.summaryRows, 4);
 
   const summarizing = settings.saveSummary();
-  const summaryBody = f.requests[5].options.body;
+  const summaryBody = f.requests[6].options.body;
   assert.equal(summaryBody.decision_model, 'dec/b', 'the saved decision model is kept');
   assert.equal(summaryBody.summary_rows, 4);
-  assert.equal(f.requests[5].options.params.header['If-Match'], '"6"');
-  f.requests[5].resolve(ok({version: 7, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low'}));
+  assert.equal(f.requests[6].options.params.header['If-Match'], '"6"');
+  f.requests[6].resolve(ok({version: 7, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low'}));
   await summarizing;
   assert.equal(settings.summaryDirty(), false);
+
+  assert.equal('extraction_model' in summaryBody, false, 'other saves keep the saved extraction model');
+  settings.selectExtractionModel('ext/a');
+  const extracting = settings.saveExtraction();
+  assert.equal(f.requests[7].options.body.extraction_model, 'ext/a');
+  assert.equal(f.requests[7].options.body.decision_model, 'dec/b');
+  f.requests[7].resolve(ok({version: 8, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low', extraction_model: 'ext/a'}));
+  await extracting;
+  assert.equal(settings.extractionDirty(), false);
+  assert.equal(settings.extractionLive(), 'Extractor');
 
   settings.summaryRows = 1;
   assert.equal(settings.summaryDirty(), true);

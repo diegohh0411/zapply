@@ -43,7 +43,7 @@ type Config struct {
 	Web                    Web
 	Worker                 Worker
 	Google                 Google
-	Firecrawl              Firecrawl
+	Scraper                Scraper
 	SystemKeyRing          string
 	SystemKeyActiveVersion string
 	// TypstDir holds a Typst CLI per version, TypstDir/<version>/typst, for
@@ -90,12 +90,26 @@ func (g Google) RedirectURL() string {
 // PushURL is the endpoint the Pub/Sub push subscription targets.
 func (g Google) PushURL() string { return strings.TrimRight(g.PublicURL, "/") + "/hooks/google/pubsub" }
 
-// Firecrawl is the scrape API that reads posting links in the new job dialog:
-// Firecrawl Local (deploy/compose.yaml) or any Firecrawl v2 server. Optional:
-// without a URL the dialog reads only what the link itself says.
+// Scraper reads posting links in the new job dialog. Provider names the
+// scrape API (SCRAPER_PROVIDER); "none" leaves the dialog reading only what
+// the link and pasted text say.
+type Scraper struct {
+	Provider  string
+	Firecrawl Firecrawl
+}
+
+// Scraper providers.
+const (
+	ScraperNone      = "none"
+	ScraperFirecrawl = "firecrawl"
+)
+
+// Firecrawl is a Firecrawl v2 API: Firecrawl's hosted API (the default URL),
+// a self-hosted server or Firecrawl Local (deploy/compose.yaml). Key is
+// FIRECRAWL_API_KEY, or Firecrawl Local's FIRECRAWL_TOKEN.
 type Firecrawl struct {
-	URL   string
-	Token string
+	URL string
+	Key string
 }
 
 // Web is public configuration for the browser app (served as /config.json).
@@ -149,7 +163,8 @@ func Load() (Config, error) {
 			PubSubAudience:       os.Getenv("GOOGLE_PUBSUB_AUDIENCE"),
 			PubSubServiceAccount: os.Getenv("GOOGLE_PUBSUB_SERVICE_ACCOUNT"),
 		},
-		Firecrawl: Firecrawl{URL: os.Getenv("FIRECRAWL_URL"), Token: os.Getenv("FIRECRAWL_TOKEN")},
+		Scraper: Scraper{Provider: os.Getenv("SCRAPER_PROVIDER"), Firecrawl: Firecrawl{
+			URL: os.Getenv("FIRECRAWL_URL"), Key: get("FIRECRAWL_API_KEY", os.Getenv("FIRECRAWL_TOKEN"))}},
 		Relay: Relay{
 			DatabaseURL: os.Getenv("RELAY_DATABASE_URL"),
 			AdminAddr:   get("RELAY_ADMIN_ADDR", ":8081"),
@@ -174,6 +189,22 @@ func Load() (Config, error) {
 	var workerErr error
 	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "10")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
 		errs = append(errs, errors.New("WORKER_CONCURRENCY must be between 1 and 64"))
+	}
+	if c.Scraper.Provider == "" {
+		// Configuring Firecrawl selects it, as before SCRAPER_PROVIDER existed.
+		c.Scraper.Provider = ScraperNone
+		if c.Scraper.Firecrawl.URL != "" || c.Scraper.Firecrawl.Key != "" {
+			c.Scraper.Provider = ScraperFirecrawl
+		}
+	}
+	switch c.Scraper.Provider {
+	case ScraperNone:
+	case ScraperFirecrawl:
+		if c.Scraper.Firecrawl.URL == "" && c.Scraper.Firecrawl.Key == "" {
+			errs = append(errs, errors.New("SCRAPER_PROVIDER=firecrawl needs FIRECRAWL_API_KEY for Firecrawl's API, or FIRECRAWL_URL for a self-hosted one"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("SCRAPER_PROVIDER must be %q or %q, got %q", ScraperFirecrawl, ScraperNone, c.Scraper.Provider))
 	}
 	if c.Env != Development && c.Env != Production {
 		errs = append(errs, fmt.Errorf("ZAPPLY_ENV must be %q or %q, got %q", Development, Production, c.Env))

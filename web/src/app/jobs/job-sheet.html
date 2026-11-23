@@ -136,6 +136,12 @@
             {{ problem }} Filled what the link says.
           </p>
         }
+        @if (extracting()) {
+          <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+            <ng-icon name="lucideSparkles" class="size-3.5 animate-pulse text-brand" />
+            Reading the posting for salary, work mode and the rest…
+          </p>
+        }
         @if (filled().size) {
           <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <ng-icon name="lucideSparkles" class="size-3.5 text-brand" />

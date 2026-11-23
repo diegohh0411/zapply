@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +40,21 @@ type Client struct {
 	reasoningModels map[string]ReasoningOptions
 	reasoningAt     time.Time
 	// DecisionBounds is for fake HTTP tests only. Production uses ownerSelectedBound.
-	DecisionBounds map[string]BillingBound
+	DecisionBounds   map[string]BillingBound
+	extractionModels []ExtractionModel
+	extractionAt     time.Time
+}
+
+// alphaPrefix marks a path on OpenRouter's alpha routes (/api/alpha), which
+// sit beside BaseURL's /api/v1.
+const alphaPrefix = "@alpha"
+
+// target resolves a request path against BaseURL or the alpha routes.
+func (c *Client) target(path string) string {
+	if rest, ok := strings.CutPrefix(path, alphaPrefix); ok {
+		return strings.TrimSuffix(c.BaseURL, "/v1") + "/alpha" + rest
+	}
+	return c.BaseURL + path
 }
 
 func New(model, endpoint string) *Client {
@@ -57,7 +72,7 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 		}
 		r = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, r)
+	req, err := http.NewRequestWithContext(ctx, method, c.target(path), r)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +121,7 @@ func (c *Client) request(ctx context.Context, method, path, key string, body any
 		}
 		return b, &modelapi.ProviderError{Code: code, Uncharged: uncharged, RetryAfter: retry}
 	}
-	if method == "POST" && (path == "/systemone" || path == "/chat/completions") {
+	if method == "POST" && (path == "/systemone" || path == "/chat/completions" || path == extractionsPath) {
 		var envelope struct {
 			ID string `json:"id"`
 		}

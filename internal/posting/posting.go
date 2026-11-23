@@ -1,20 +1,15 @@
 // Package posting reads a job posting's page into job fields. Pages are
-// fetched through a Firecrawl v2 scrape API: in development, the Firecrawl
-// Local container in deploy/compose.yaml. Fields come from the page's
-// schema.org JobPosting data, which job boards and applicant tracking systems
-// publish for search engines; the page's markdown becomes the description.
+// fetched through a Scraper (Firecrawl's API today; any provider that returns
+// markdown and raw HTML fits). Fields come from the page's schema.org
+// JobPosting data, which job boards and applicant tracking systems publish for
+// search engines; the page's markdown becomes the description. Fields the page
+// does not publish are read by an extraction model (Extraction).
 package posting
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/joburl"
@@ -51,50 +46,31 @@ type Posting struct {
 const (
 	// maxDescription matches the job description limit (internal/jobs).
 	maxDescription = 100_000
-	// maxResponse bounds a scrape response: the raw HTML of a heavy job page
-	// is a few MB.
-	maxResponse = 16 << 20
-	// scrapeTimeout is what the scraper may spend on a page; the HTTP client
-	// waits a little longer for its answer.
-	scrapeTimeout = 30 * time.Second
 )
 
-// Reader reads postings through a Firecrawl v2 API.
-type Reader struct {
-	baseURL string
-	token   string
-	http    *http.Client
+// Page is what a scraper read: the page as markdown, its raw HTML (for
+// JSON-LD), and its metadata (og:title, the site's status code).
+type Page struct {
+	Markdown string
+	RawHTML  string
+	Metadata map[string]any
 }
 
-// New returns a reader for the Firecrawl API at baseURL, or nil when baseURL
-// is empty. token is sent as a bearer token when set.
-func New(baseURL, token string) *Reader {
-	if baseURL == "" {
+// Scraper fetches a page. Implementations return *UnreadableError for pages
+// they could not read, and a plain error when the scraper itself failed.
+type Scraper interface {
+	Scrape(ctx context.Context, url string) (Page, error)
+}
+
+// Reader reads postings through a Scraper.
+type Reader struct{ scraper Scraper }
+
+// New returns a reader over s, or nil when s is nil.
+func New(s Scraper) *Reader {
+	if s == nil {
 		return nil
 	}
-	return &Reader{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
-		http:    &http.Client{Timeout: scrapeTimeout + 10*time.Second},
-	}
-}
-
-type scrapeRequest struct {
-	URL     string   `json:"url"`
-	Formats []string `json:"formats"`
-	Timeout int      `json:"timeout"`
-}
-
-type scrapeResponse struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
-	Data    struct {
-		Markdown string         `json:"markdown"`
-		RawHTML  string         `json:"rawHtml"`
-		Metadata map[string]any `json:"metadata"`
-		Warning  string         `json:"warning"`
-		Blocked  bool           `json:"blocked"`
-	} `json:"data"`
+	return &Reader{scraper: s}
 }
 
 // Read scrapes rawURL and returns what its page says.
@@ -106,60 +82,15 @@ func (r *Reader) Read(ctx context.Context, rawURL string) (Posting, error) {
 	if err != nil {
 		return Posting{}, ErrInvalidURL
 	}
-	body, err := json.Marshal(scrapeRequest{URL: target, Formats: []string{"markdown", "rawHtml"}, Timeout: int(scrapeTimeout / time.Millisecond)})
+	page, err := r.scraper.Scrape(ctx, target)
 	if err != nil {
 		return Posting{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL+"/v2/scrape", bytes.NewReader(body))
-	if err != nil {
-		return Posting{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if r.token != "" {
-		req.Header.Set("Authorization", "Bearer "+r.token)
-	}
-	res, err := r.http.Do(req)
-	if err != nil {
-		if ctx.Err() != nil {
-			return Posting{}, ctx.Err()
-		}
-		return Posting{}, fmt.Errorf("scrape: %w", err)
-	}
-	defer res.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(res.Body, maxResponse+1))
-	if err != nil {
-		return Posting{}, fmt.Errorf("scrape: read response: %w", err)
-	}
-	if len(raw) > maxResponse {
-		return Posting{}, &UnreadableError{Reason: "the page is too large"}
-	}
-	var sr scrapeResponse
-	if err := json.Unmarshal(raw, &sr); err != nil {
-		return Posting{}, fmt.Errorf("scrape: status %d, undecodable response: %w", res.StatusCode, err)
-	}
-	switch {
-	case res.StatusCode == http.StatusRequestTimeout || res.StatusCode == http.StatusGatewayTimeout:
-		return Posting{}, &UnreadableError{Reason: "the page took too long to load"}
-	case res.StatusCode >= 500 && sr.Error == "":
-		return Posting{}, fmt.Errorf("scrape: status %d", res.StatusCode)
-	case !sr.Success || res.StatusCode >= 400:
-		reason := sr.Error
-		if reason == "" {
-			reason = fmt.Sprintf("the scraper answered %d", res.StatusCode)
-		}
-		return Posting{}, &UnreadableError{Reason: reason}
-	case sr.Data.Blocked:
-		return Posting{}, &UnreadableError{Reason: "the site refused to load the page"}
-	}
-	if code, ok := sr.Data.Metadata["statusCode"].(float64); ok && code >= 400 {
-		return Posting{}, &UnreadableError{Reason: fmt.Sprintf("the site answered %d", int(code))}
-	}
-
-	p := fromJobPosting(findJobPosting(sr.Data.RawHTML))
+	p := fromJobPosting(findJobPosting(page.RawHTML))
 	if p.Title == "" {
-		p.Title = metaString(sr.Data.Metadata, "ogTitle")
+		p.Title = metaString(page.Metadata, "ogTitle")
 	}
-	p.Description = truncate(strings.TrimSpace(sr.Data.Markdown), maxDescription)
+	p.Description = truncate(strings.TrimSpace(page.Markdown), maxDescription)
 	return p, nil
 }
 

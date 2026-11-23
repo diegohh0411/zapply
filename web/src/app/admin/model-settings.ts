@@ -8,6 +8,7 @@ import { ZardComboboxImports } from '@/shared/components/combobox';
 import { ZardSelectImports } from '@/shared/components/select';
 
 type DecisionModel = Schemas['DecisionModel'];
+type ExtractionModel = Schemas['ExtractionModel'];
 type Effort = Schemas['ReasoningOptions']['efforts'][number];
 type Settings = Schemas['ModelSettings'];
 
@@ -139,6 +140,41 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
        </footer>
        @if (decisionError()) { <p role="alert" class="text-sm text-destructive">{{ decisionError() }}</p> }
      </section>
+
+     <section aria-labelledby="extraction-heading" class="space-y-6">
+       <header class="flex flex-wrap items-start justify-between gap-3">
+         <div class="space-y-1">
+           <h2 id="extraction-heading" class="text-lg font-semibold">Posting extraction</h2>
+           <p class="text-sm text-muted-foreground">Reads the salary, work mode and other details a posting's page doesn't publish, from its scraped text. Off leaves the new job dialog with what the page and link say.</p>
+         </div>
+         <span class="status-pill" [class.is-dirty]="extractionDirty()">{{ extractionDirty() ? 'Unsaved changes' : 'Saved' }}</span>
+       </header>
+       <p class="text-sm"><span class="text-muted-foreground">Live now: </span>{{ extractionLive() }}</p>
+
+       <div class="field"><span class="field-label">Extraction model</span>
+         <z-combobox class="w-full max-w-xl" ariaLabel="Extraction model" placeholder="Off" searchPlaceholder="Search models" [ngModel]="extractionModel" (ngModelChange)="selectExtractionModel(single($event))" [zDisabled]="loading() || busy()">
+           <z-combobox-input />
+           <z-combobox-content>
+             <z-combobox-empty>No models match your search.</z-combobox-empty>
+             <z-combobox-list>
+               <z-combobox-item zValue="" zLabel="Off">Off</z-combobox-item>
+               @for (m of extractionModels(); track m.id) { <z-combobox-item [zValue]="m.id" [zLabel]="m.name" [zDisabled]="!!m.compatibility_reason">{{ m.name }}</z-combobox-item> }
+             </z-combobox-list>
+           </z-combobox-content>
+         </z-combobox>
+         @if (selectedExtractionModel(); as m) {
+           <span class="text-xs text-muted-foreground">Input {{ perMillion(m.pricing['prompt']) }} / 1M tokens · {{ m.typed ? 'salaries read as numbers' : 'salaries read as text, then parsed' }}</span>
+           @if (m.compatibility_reason) { <span class="text-xs text-amber-700">Unavailable: {{ m.compatibility_reason.replaceAll('_',' ') }}.</span> }
+         }
+       </div>
+
+       <footer class="flex flex-wrap items-center gap-3 border-t pt-5">
+         <button z-button [zDisabled]="!canSaveExtraction()" (click)="saveExtraction()">{{ busy() ? 'Saving…' : 'Save extraction model' }}</button>
+         @if (extractionDirty()) { <button z-button zType="ghost" [zDisabled]="busy()" (click)="discardExtraction()">Discard changes</button> }
+         <span class="text-sm text-muted-foreground" role="status">{{ extractionNotice() }}</span>
+       </footer>
+       @if (extractionError()) { <p role="alert" class="text-sm text-destructive">{{ extractionError() }}</p> }
+     </section>
    } @else {
      <p class="text-sm" role="status">{{ loading() ? 'Loading model settings…' : 'Model settings are unavailable.' }}</p>
    }
@@ -167,6 +203,9 @@ export class ModelSettings {
  readonly error = signal(''); readonly loading = signal(false); readonly busy = signal(false);
  readonly summaryNotice = signal(''); readonly summaryError = signal('');
  readonly decisionNotice = signal(''); readonly decisionError = signal('');
+ readonly extractionModels = signal<ExtractionModel[]>([]);
+ readonly extractionNotice = signal(''); readonly extractionError = signal('');
+ extractionModel = '';
  summaryTier = 'default';
  tierLabel(tier: string): string { return ({default: 'Standard · regular capacity', flex: 'Flex · lower price, lower priority', priority: 'Priority · faster processing, higher price', ultrafast: 'Ultrafast · highest speed and price'} as Record<string, string>)[tier] ?? tier; }
  availableTiers(): string[] { return [...new Set(this.endpoints().map(e => e.service_tier))]; }
@@ -179,14 +218,16 @@ export class ModelSettings {
  // '' is automatic: optional thinking stays off and required thinking uses its lowest effort.
  summaryEffort: '' | Effort = '';
  selected = ''; private generation = 0;
- constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; this.summaryEffort = ''; this.summaryRows = 2; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); this.clearNotices(); void this.load(); }); }); }
- private clearNotices(): void { this.summaryNotice.set(''); this.summaryError.set(''); this.decisionNotice.set(''); this.decisionError.set(''); }
+ constructor() { effect(() => { this.auth.identity(); untracked(() => { this.generation++; this.settings.set(null); this.models.set([]); this.textModels.set([]); this.extractionModels.set([]); this.extractionModel = ''; this.selected = ''; this.summaryModel = ''; this.summaryEndpoint = ''; this.summaryEffort = ''; this.summaryRows = 2; ++this.endpointGeneration; this.endpoints.set([]); this.endpointError.set(''); this.endpointLoading.set(false); this.clearNotices(); void this.load(); }); }); }
+ private clearNotices(): void { this.summaryNotice.set(''); this.summaryError.set(''); this.decisionNotice.set(''); this.decisionError.set(''); this.extractionNotice.set(''); this.extractionError.set(''); }
  private applySettings(saved: Settings): void {
    this.settings.set(saved); this.selected = saved.decision_model ?? ''; this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryRows = saved.summary_rows;
+   this.extractionModel = saved.extraction_model ?? '';
  }
  private async fetchModels(current: () => boolean): Promise<void> {
    const textModels = Api.ok(await this.api.GET('/v1/admin/text-models')); if (!current()) return; this.textModels.set([...textModels].sort(byName));
-   const models = Api.ok(await this.api.GET('/v1/admin/decision-models')); if (current()) this.models.set([...models].sort(byName));
+   const models = Api.ok(await this.api.GET('/v1/admin/decision-models')); if (!current()) return; this.models.set([...models].sort(byName));
+   const extraction = Api.ok(await this.api.GET('/v1/admin/extraction-models')); if (current()) this.extractionModels.set([...extraction].sort(byName));
  }
  async load(): Promise<void> {
    const identity = this.auth.identity(), seq = ++this.generation; this.loading.set(true); this.error.set(''); this.clearNotices();
@@ -288,6 +329,28 @@ export class ModelSettings {
    const saved = this.settings(); if (!saved) return;
    this.summaryModel = saved.summary_model ?? ''; this.summaryEndpoint = saved.summary_endpoint ?? ''; this.summaryEffort = saved.summary_reasoning_effort ?? ''; this.summaryRows = saved.summary_rows;
    this.summaryError.set(''); this.summaryNotice.set('Changes discarded.'); void this.loadEndpoints();
+ }
+ selectedExtractionModel(): ExtractionModel | undefined { return this.extractionModels().find(m => m.id === this.extractionModel); }
+ selectExtractionModel(value: string): void { this.extractionModel = value; this.extractionNotice.set(''); }
+ extractionDirty(): boolean { return this.extractionModel !== (this.settings()?.extraction_model ?? ''); }
+ canSaveExtraction(): boolean { return !!this.settings() && this.extractionDirty() && !this.busy() && !this.loading() && !this.selectedExtractionModel()?.compatibility_reason; }
+ extractionLive(): string {
+   const saved = this.settings(); if (!saved) return '';
+   if (!saved.extraction_model) return 'Off';
+   return this.extractionModels().find(m => m.id === saved.extraction_model)?.name ?? saved.extraction_model;
+ }
+ discardExtraction(): void {
+   this.extractionModel = this.settings()?.extraction_model ?? ''; this.extractionError.set(''); this.extractionNotice.set('Changes discarded.');
+ }
+ async saveExtraction(): Promise<void> {
+   const saved = this.settings(); if (!saved || !this.canSaveExtraction()) return;
+   const identity = this.auth.identity(), generation = this.generation; this.busy.set(true); this.clearNotices();
+   const current = () => identity === this.auth.identity() && generation === this.generation;
+   try {
+     const value = Api.ok(await this.api.PUT('/v1/admin/model-settings', { params: { header: { 'If-Match': `"${saved.version}"` } }, body: { decision_model: saved.decision_model ?? null, summary_model: saved.summary_model ?? null, summary_endpoint: saved.summary_endpoint ?? null, summary_rows: saved.summary_rows, summary_reasoning_effort: saved.summary_reasoning_effort ?? null, extraction_model: this.extractionModel } }));
+     if (current()) { this.settings.set(value); this.extractionNotice.set(this.extractionModel ? 'Extraction model saved.' : 'Extraction turned off.'); }
+   } catch(e) { if (current()) this.extractionError.set((e as Error).message); }
+   finally { if (current()) this.busy.set(false); }
  }
  discardDecision(): void {
    this.selected = this.settings()?.decision_model ?? ''; this.decisionError.set(''); this.decisionNotice.set('Changes discarded.');

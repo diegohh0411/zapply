@@ -634,11 +634,15 @@ paths:
       operationId: readPosting
       tags: [jobs]
       description: |
-        Reads a posting's page for the new job dialog, through the configured
-        Firecrawl scrape API (FIRECRAWL_URL; docs/parts/04-jobs.md). Fields
-        come from the page's schema.org JobPosting data; absent fields were not
-        found. Nothing is saved. 503 when no scraper is configured, 422 on `url`
-        when the page could not be read.
+        Reads a posting for the new job dialog: its page through the
+        configured scraper (SCRAPER_PROVIDER; docs/parts/04-jobs.md), and the
+        pasted `text`. Fields come from the page's schema.org JobPosting data;
+        absent fields were not found. When an extraction model is selected,
+        the posting's text is also sent to it and `extraction_id` names the
+        operation; GET /v1/postings/extractions/{id} returns what it read.
+        Nothing is saved. 503 when there is neither a scraper nor text to
+        extract from, 422 on `url` when the page could not be read and there
+        is no text.
       requestBody:
         required: true
         content:
@@ -650,6 +654,23 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PostingRead" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/postings/extractions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      operationId: getPostingExtraction
+      tags: [jobs]
+      description: |
+        What the extraction model read from a posting. `pending` until the
+        model answers; `failed` when it could not (fields are then absent).
+      responses:
+        "200":
+          description: The extraction's state and fields.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PostingExtraction" }
         default: { $ref: "#/components/responses/Problem" }
 
   /v1/job-views:
@@ -1119,6 +1140,16 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/DecisionModel' } }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/extraction-models:
+    get:
+      operationId: listExtractionModels
+      responses:
+        '200':
+          description: Models served on OpenRouter's Extractions route (owner only).
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ExtractionModel' } }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/model-settings:
     get:
       operationId: getModelSettings
@@ -1146,6 +1177,7 @@ paths:
                 summary_endpoint: { type: string, nullable: true }
                 summary_rows: { $ref: '#/components/schemas/SummaryRows' }
                 summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic. Must be one the summary model accepts." }
+                extraction_model: { type: string, description: "Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off." }
       responses:
         '200':
           description: Updated settings.
@@ -2067,10 +2099,13 @@ components:
       required: [url]
       properties:
         url: { type: string, description: "The posting's http(s) URL." }
+        text: { type: string, description: "Posting text the person pasted. It is read instead of the page's when extracting." }
     PostingRead:
       type: object
       required: [description]
       properties:
+        extraction_id: { type: string, format: uuid, description: "The extraction model's operation, when one was started." }
+        page_error: { type: string, description: "Why the page could not be read, when the pasted text was used instead." }
         title: { type: string }
         company: { type: string }
         location: { type: string }
@@ -2081,6 +2116,21 @@ components:
         salary_currency: { type: string }
         salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
         description: { type: string, description: "The page as markdown; empty when it had no text." }
+    PostingExtraction:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, completed, failed] }
+        reason: { type: string, description: "Why it is waiting or failed, e.g. usage_limit." }
+        title: { type: string }
+        company: { type: string }
+        location: { type: string }
+        work_mode: { $ref: "#/components/schemas/WorkMode" }
+        employment_type: { $ref: "#/components/schemas/EmploymentType" }
+        salary_min: { type: integer, format: int64, minimum: 0 }
+        salary_max: { type: integer, format: int64, minimum: 0 }
+        salary_currency: { type: string }
+        salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
     JobInput:
       type: object
       required: [title]
@@ -2582,6 +2632,16 @@ components:
         pricing: { type: object, additionalProperties: true }
         compatibility_reason: { type: string }
         reasoning: { $ref: '#/components/schemas/ReasoningOptions' }
+    ExtractionModel:
+      type: object
+      required: [id, name, context_length, pricing, compatibility_reason, typed]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        context_length: { type: integer }
+        pricing: { type: object, additionalProperties: true }
+        compatibility_reason: { type: string, description: "Empty when the model can be selected." }
+        typed: { type: boolean, description: "Answers salaries as numbers; other models answer text that is parsed." }
     ReasoningOptions:
       type: object
       description: Thinking control a model accepts. Absent when the model does not reason.
@@ -2606,6 +2666,7 @@ components:
         summary_endpoint: { type: string, nullable: true }
         summary_rows: { $ref: '#/components/schemas/SummaryRows' }
         summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic." }
+        extraction_model: { type: string, nullable: true, description: "Extraction model that reads posting fields; null when off." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:
