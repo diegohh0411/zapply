@@ -185,7 +185,7 @@ export class Shell {
         { path: '/library/skills', label: 'Skills', icon: 'lucideSparkles' },
       ],
     },
-    { label: 'Account', items: [{ path: '/usage', label: 'Model usage', icon: 'lucideSparkles' }] },
+    { label: 'Account', items: [{ path: '/usage', label: 'Usage', icon: 'lucideSparkles' }] },
     ...(this.account.me()?.platform_role === 'owner'
       ? [
           {

@@ -13,7 +13,7 @@ export function usageUsd(value: string): string {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return usd(value);
   if (amount !== 0 && Math.abs(amount) < 0.01) {
-    return amount < 0 ? '>-$0.01' : '<$0.01';
+    return amount < 0 ? '-$0.01' : 'under $0.01';
   }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -51,7 +51,7 @@ export function blockMessage(reason: string, status = ''): string {
     membership_suspended:
       'Your model access is suspended. Your library, jobs, and existing results remain available.',
     usage_limit:
-      'Your model allowance is currently used up. Capacity returns as older usage leaves the rolling windows.',
+      'You have used your allowance for now. It grows back gradually as older usage falls outside the last 7 and 30 days.',
     request_exceeds_plan: 'This request needs a larger reservation than your plan allows.',
     accounting_pending:
       'A model charge is being reconciled. Its reservation stays in place until the charge is confirmed.',

@@ -53,7 +53,7 @@ export const routes: Routes = [
       },
       {
         path: 'usage',
-        title: 'Model usage · zapply',
+        title: 'Usage · zapply',
         loadComponent: () => import('./usage/usage.page').then((m) => m.UsagePage),
       },
       { path: 'admin', pathMatch: 'full', redirectTo: 'admin/overview' },

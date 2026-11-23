@@ -19,12 +19,12 @@ import { blockMessage, usagePercent, usageUsd } from './format';
   imports: [DatePipe, ZardButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="mx-auto max-w-5xl space-y-6 px-4 py-6">
+    <div class="mx-auto max-w-3xl space-y-6 px-4 py-6">
       <header class="flex items-start justify-between gap-4">
         <div>
-          <h1 class="text-xl font-semibold tracking-tight">Model usage</h1>
+          <h1 class="text-xl font-semibold tracking-tight">Usage</h1>
           <p class="text-sm text-muted-foreground">
-            Your allowances cover the past 7 and 30 days. Both apply to every model request.
+            How much you can use right now, and what you have used.
           </p>
         </div>
         <button z-button zType="outline" [zDisabled]="loading()" (click)="load()">Refresh</button>
@@ -35,85 +35,90 @@ import { blockMessage, usagePercent, usageUsd } from './format';
         </p>
       }
       @if (usage(); as u) {
-        <div class="text-sm">
-          <span class="font-medium">{{ u.membership?.plan_name ?? 'No membership assigned' }}</span>
-          @if (u.membership?.status === 'suspended') {
-            <span class="ml-2 text-destructive">Suspended</span>
-          }
-        </div>
+        @if (u.membership; as m) {
+          <p class="text-sm text-muted-foreground">
+            Plan: <span class="font-medium text-foreground">{{ m.plan_name }}</span>
+            @if (m.status === 'suspended') {
+              <span class="ml-2 font-medium text-destructive">Suspended</span>
+            }
+          </p>
+        } @else {
+          <p class="text-sm text-muted-foreground">No plan assigned yet.</p>
+        }
         @if (u.blocked_reason) {
           <p role="status" class="rounded-lg border bg-muted p-4 text-sm">
             {{ message(u.blocked_reason) }}
           </p>
         }
+
+        <section class="space-y-4 rounded-xl border bg-card p-6">
+          <div>
+            <p class="text-sm text-muted-foreground">Available right now</p>
+            <p class="text-3xl font-semibold tabular-nums">{{ money(availableNow(u)) }}</p>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            This is the smaller of the two limits below. Both apply to every AI request you make.
+          </p>
+          @if (u.next_capacity_at) {
+            <p class="text-sm">
+              Some of your usage frees up on
+              <strong>{{ u.next_capacity_at | date: 'medium' }}</strong>, so your limit grows back a
+              little. It does not reset all at once.
+            </p>
+          }
+        </section>
+
         <div class="grid gap-4 md:grid-cols-2">
-          @for (window of windows; track window.days) {
+          @for (days of windowDays; track days) {
+            @let limit = limitFor(u, days);
             <section class="space-y-3 rounded-xl border bg-card p-5">
-              <h2 class="font-medium">Past {{ window.days }} days</h2>
-              <p class="text-2xl font-semibold tabular-nums">
-                {{ money(window.days === 7 ? u.available_7d_usd : u.available_30d_usd) }}
-                <span class="text-sm font-normal text-muted-foreground">available</span>
-              </p>
+              <div class="flex items-baseline justify-between gap-2">
+                <h2 class="font-medium">Last {{ days }} days</h2>
+                <span class="text-sm tabular-nums">{{ limit.left }} left</span>
+              </div>
               <progress
                 class="h-2 w-full accent-primary"
                 max="100"
-                [value]="
-                  percent(
-                    window.days === 7 ? u.spent_7d_usd : u.spent_30d_usd,
-                    u.reserved_usd,
-                    window.days === 7 ? u.cap_7d_usd : u.cap_30d_usd
-                  )
-                "
-                [attr.aria-label]="'Past ' + window.days + ' days allowance used'"
+                [value]="limit.percent"
+                [attr.aria-label]="'Last ' + days + ' days: ' + limit.used + ' used'"
               ></progress>
-              <dl class="grid grid-cols-2 gap-2 text-sm">
-                <dt class="text-muted-foreground">Spent</dt>
-                <dd class="text-right tabular-nums">
-                  {{ money(window.days === 7 ? u.spent_7d_usd : u.spent_30d_usd) }}
-                </dd>
-                <dt class="text-muted-foreground">Reserved</dt>
-                <dd class="text-right tabular-nums">{{ money(u.reserved_usd) }}</dd>
-                <dt class="text-muted-foreground">Allowance</dt>
-                <dd class="text-right tabular-nums">
-                  {{ money(window.days === 7 ? u.cap_7d_usd : u.cap_30d_usd) }}
-                </dd>
-              </dl>
+              <p class="text-sm text-muted-foreground">
+                {{ limit.used }} used of your {{ limit.allowance }} limit
+              </p>
             </section>
           }
         </div>
-        <p class="text-sm text-muted-foreground">
-          Reservations cover model calls still running or being reconciled. Unused reserved amounts
-          return after the charge is confirmed.
-        </p>
-        @if (u.next_capacity_at) {
-          <p class="text-sm">
-            Older usage next leaves a window at
-            <strong>{{ u.next_capacity_at | date: 'medium' }}</strong
-            >. This may return some capacity; it is not a full reset.
-          </p>
-        }
+
         <section class="space-y-3">
-          <h2 class="font-medium">Recent charges</h2>
+          <h2 class="font-medium">Recent activity</h2>
           <div class="overflow-x-auto rounded-lg border">
             <table class="w-full text-left text-sm">
               <thead class="bg-muted">
                 <tr>
                   <th class="p-3">When</th>
-                  <th class="p-3">Model</th>
+                  <th class="p-3">Activity</th>
                   <th class="p-3 text-right">Cost</th>
                 </tr>
               </thead>
               <tbody>
                 @for (entry of entries(); track entry.id) {
                   <tr class="border-t">
-                    <td class="p-3">{{ entry.accounted_at | date: 'medium' }}</td>
-                    <td class="p-3">{{ entry.model }}</td>
+                    <td class="p-3 whitespace-nowrap">{{ entry.accounted_at | date: 'medium' }}</td>
+                    <td class="p-3">
+                      <p class="font-medium">
+                        {{ label(entry) }}
+                        @if (entry.company) {
+                          <span class="font-normal text-muted-foreground">at {{ entry.company }}</span>
+                        }
+                      </p>
+                      <p class="text-xs text-muted-foreground">{{ detail(entry) }}</p>
+                    </td>
                     <td class="p-3 text-right tabular-nums">{{ money(entry.amount_usd) }}</td>
                   </tr>
                 } @empty {
                   <tr>
                     <td colspan="3" class="p-6 text-center text-muted-foreground">
-                      No model charges yet.
+                      No usage yet. Activity appears here after your first AI request.
                     </td>
                   </tr>
                 }
@@ -122,7 +127,7 @@ import { blockMessage, usagePercent, usageUsd } from './format';
           </div>
           @if (hasMore()) {
             <button z-button zType="outline" [zDisabled]="loading()" (click)="more()">
-              Older charges
+              Show older activity
             </button>
           }
         </section>
@@ -141,9 +146,15 @@ export class UsagePage {
   protected readonly loading = signal(false);
   protected readonly error = signal('');
   protected readonly hasMore = signal(false);
-  protected readonly windows = [{ days: 7 }, { days: 30 }];
+  protected readonly windowDays = [7, 30];
+  private readonly stepLabels: Record<string, string> = {
+    match: 'matched your profile',
+    summary: 'wrote a CV summary',
+    extraction: 'read a job posting',
+    mail: 'sorted emails',
+    other: 'other AI work',
+  };
   protected readonly money = usageUsd;
-  protected readonly percent = usagePercent;
   protected readonly message = blockMessage;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private generation = 0;
@@ -170,6 +181,40 @@ export class UsagePage {
       resync.unsubscribe();
       document.removeEventListener('visibilitychange', visible);
     });
+  }
+
+  /** A job's name when its work is linked to one; otherwise a plain description of the work. */
+  protected label(entry: Schemas['UsageEntry']): string {
+    if (entry.title) return entry.title;
+    return entry.app === 'mail' ? 'Emails not linked to a job' : 'Other job work';
+  }
+
+  /** The application the work came from, and what it did, in plain words. */
+  protected detail(entry: Schemas['UsageEntry']): string {
+    const app = entry.app === 'mail' ? 'Mail' : 'Jobs';
+    const work = entry.steps.map((step) => this.stepLabels[step] ?? 'other AI work').join(', ');
+    return `${app} · ${work}`;
+  }
+
+  /** Both windows apply to every request, so the smaller remainder is what the user can actually spend. */
+  protected availableNow(u: Schemas['Usage']): string {
+    return Number(u.available_7d_usd) <= Number(u.available_30d_usd)
+      ? u.available_7d_usd
+      : u.available_30d_usd;
+  }
+
+  /** Plain-language figures for one window: what is left, what is used, and the bar fill. */
+  protected limitFor(u: Schemas['Usage'], days: number) {
+    const seven = days === 7;
+    const spent = seven ? u.spent_7d_usd : u.spent_30d_usd;
+    const cap = seven ? u.cap_7d_usd : u.cap_30d_usd;
+    return {
+      days,
+      left: usageUsd(seven ? u.available_7d_usd : u.available_30d_usd),
+      used: usageUsd(String(Number(spent) + Number(u.reserved_usd))),
+      allowance: usageUsd(cap),
+      percent: usagePercent(spent, u.reserved_usd, cap),
+    };
   }
 
   async load(): Promise<void> {

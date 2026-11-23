@@ -1846,13 +1846,17 @@ export interface components {
             membership: components["schemas"]["Membership"] | null;
             usage: components["schemas"]["Usage"];
         };
+        /** @description One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list. */
         UsageEntry: {
             id: string;
             amount_usd: string;
             /** Format: date-time */
             accounted_at: string;
-            model: string;
-            source: string;
+            /** @enum {string} */
+            app: "jobs" | "mail";
+            title?: string | null;
+            company?: string | null;
+            steps: ("match" | "summary" | "extraction" | "mail" | "other")[];
         };
         SystemKey: {
             /** Format: uuid */
