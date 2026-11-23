@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /jobs
+Disallow: /mail
+Disallow: /usage
+Disallow: /library
+Disallow: /admin/
+Disallow: /v1/

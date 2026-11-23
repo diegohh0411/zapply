@@ -2,11 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>zapply</title>
+  <title>zapply · Tailor your CV to each job</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="icon.svg">
-  <meta name="description" content="Tailor your CV to each job and track your applications.">
+  <meta name="description" content="Tailor your CV to each job and track every application with zapply.">
+  <meta name="robots" content="index, follow">
+  <meta name="application-name" content="zapply">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="zapply">
+  <meta property="og:title" content="zapply · Tailor your CV to each job">
+  <meta property="og:description" content="Tailor your CV to each job and track every application with zapply.">
+  <meta name="twitter:card" content="summary">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "zapply",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Tailor your CV to each job and track every application with zapply."
+  }
+  </script>
 
     <script>
       (function () {
@@ -26,6 +45,12 @@
 
   </head>
 <body>
-  <app-root></app-root>
+  <app-root>
+    <!-- Crawlers that do not run JavaScript read this; Angular replaces it on boot. -->
+    <main>
+      <h1>zapply</h1>
+      <p>Tailor your CV to each job and track every application in one place.</p>
+    </main>
+  </app-root>
 </body>
 </html>
