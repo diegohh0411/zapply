@@ -1,8 +1,11 @@
-/** Preserve the server's exact decimal amount; numbers are used only for progress. */
+/**
+ * Preserve the server's exact decimal amount; numbers are used only for progress.
+ * Trailing zeros go, but cents always show two digits: $0.50, not $0.5.
+ */
 export function usd(value: string): string {
   const [whole, fraction = ''] = value.split('.');
   const trimmed = fraction.replace(/0+$/, '');
-  return '$' + whole + (trimmed ? '.' + trimmed : '.00');
+  return '$' + whole + '.' + (trimmed ? trimmed.padEnd(2, '0') : '00');
 }
 
 /** Show usage amounts at cent precision without making sub-cent charges look free. */

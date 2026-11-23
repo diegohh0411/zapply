@@ -1,0 +1,79 @@
+<div class="space-y-8">
+  <div class="flex justify-end">
+    <button z-button zType="outline" [zDisabled]="loading()" (click)="load()">Refresh</button>
+  </div>
+
+  @if (error()) {
+    <p role="alert" class="rounded-lg border border-destructive p-3 text-sm text-destructive">
+      {{ error() }}
+    </p>
+  }
+
+  <section aria-labelledby="attention-heading" class="space-y-3">
+    <h2 id="attention-heading" class="text-sm font-semibold">Needs attention</h2>
+    <div class="overflow-hidden rounded-xl border bg-background">
+      @for (item of attention(); track item.link + item.label) {
+        <a
+          class="flex flex-wrap items-center justify-between gap-3 border-t p-4 first:border-t-0 hover:bg-muted/50"
+          [routerLink]="item.link"
+        >
+          <span class="text-sm font-medium">{{ item.label }}</span>
+          <span class="text-sm text-muted-foreground">{{ item.action }} →</span>
+        </a>
+      } @empty {
+        <p class="p-4 text-sm text-muted-foreground">
+          {{ loading() ? 'Checking…' : 'Nothing needs attention.' }}
+        </p>
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="live-heading" class="space-y-3">
+    <h2 id="live-heading" class="text-sm font-semibold">Live settings</h2>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <a class="card" routerLink="/admin/models" [queryParams]="{ tab: 'summaries' }">
+        <span class="card-label">Summary model</span>
+        <span class="card-value break-all">{{ summaryModel() }}</span>
+        <span class="card-meta">Automatic CV summaries</span>
+      </a>
+      <a class="card" routerLink="/admin/models" [queryParams]="{ tab: 'matching' }">
+        <span class="card-label">Decision model</span>
+        <span class="card-value break-all">{{ decisionModel() }}</span>
+        <span class="card-meta">New matching runs use this model</span>
+      </a>
+      <a class="card" routerLink="/admin/models" [queryParams]="{ tab: 'extraction' }">
+        <span class="card-label">Extraction</span>
+        <span class="card-value break-all">{{ extractionModel() }}</span>
+        <span class="card-meta">Reads posting details from scraped text</span>
+      </a>
+      <a class="card" routerLink="/admin/keys">
+        <span class="card-label">OpenRouter key</span>
+        <span class="card-value">{{ activeKey()?.label ?? 'None active' }}</span>
+        <span class="card-meta">
+          {{ activeKey() ? 'Fingerprint ' + activeKey()!.fingerprint : keys().length + ' stored, none active' }}
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <section aria-labelledby="people-heading" class="space-y-3">
+    <h2 id="people-heading" class="text-sm font-semibold">People and spend</h2>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <a class="card" routerLink="/admin/members">
+        <span class="card-label">Members</span>
+        <span class="card-value">{{ members().length }} registered</span>
+        <span class="card-meta">{{ members().length - unassigned() }} assigned · {{ unassigned() }} without a plan</span>
+      </a>
+      <a class="card" routerLink="/admin/plans">
+        <span class="card-label">Plans</span>
+        <span class="card-value">{{ plans().length }} plan{{ plans().length === 1 ? '' : 's' }}</span>
+        <span class="card-meta">Allowances for past 7 and 30 days</span>
+      </a>
+      <a class="card" routerLink="/admin/usage">
+        <span class="card-label">Unresolved charges</span>
+        <span class="card-value">{{ attempts().length }}{{ attemptsCapped() ? '+' : '' }} attempt{{ attempts().length === 1 ? '' : 's' }}</span>
+        <span class="card-meta">{{ reserved() }} reserved until confirmed</span>
+      </a>
+    </div>
+  </section>
+</div>

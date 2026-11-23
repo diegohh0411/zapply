@@ -1,9 +1,11 @@
-import { ModelSettings } from './model-settings';
+import { AdminOverview } from './admin-overview';
+import { ModelSettings, type ModelTab } from './model-settings';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  computed,
   effect,
   inject,
   signal,
@@ -15,6 +17,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardInputComponent } from '@/shared/components/input';
 import { ZardSelectImports } from '@/shared/components/select';
+import { fetchAllMembers } from './members';
 import { AccountService } from '../core/account.service';
 import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
@@ -25,9 +28,46 @@ type Plan = Schemas['Plan'];
 type Member = Schemas['Member'];
 type Attempt = Schemas['AttemptSummary'];
 
+const MODEL_TABS: { id: ModelTab; label: string }[] = [
+  { id: 'summaries', label: 'Summaries' },
+  { id: 'matching', label: 'Matching' },
+  { id: 'extraction', label: 'Extraction' },
+];
+
+const HEADINGS: Record<string, { title: string; description: string }> = {
+  overview: {
+    title: 'Platform administration',
+    description: 'Current state of models, members and charges. Open an area to change it.',
+  },
+  plans: {
+    title: 'Plans',
+    description: 'A plan sets how much model use each assigned member gets, per 7 and 30 days.',
+  },
+  members: {
+    title: 'Members',
+    description:
+      'Assign a plan to each member. Suspending model access keeps their library, jobs and results.',
+  },
+  models: {
+    title: 'Models',
+    description:
+      'Each model saves on its own. Unsaved changes stay here until you save or discard them.',
+  },
+  keys: {
+    title: 'Keys & checks',
+    description:
+      'Keys that power model calls, and a quick check that the platform can reach a model.',
+  },
+  usage: {
+    title: 'Unresolved usage',
+    description:
+      'These calls may have incurred a charge. Their reservations stay in place until the amount is confirmed. Other requests can use the remaining allowance. Confirm charges in OpenRouter before resolving them; requests with uncertain results cannot be automatically repeated.',
+  },
+};
+
 @Component({
   selector: 'app-admin-page',
-  imports: [ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [AdminOverview, ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -36,8 +76,35 @@ export class AdminPage {
   private readonly auth = inject(AuthService);
   private readonly account = inject(AccountService);
   private readonly events = inject(EventsService);
-  private readonly params = toSignal(inject(ActivatedRoute).paramMap);
-  protected readonly section = signal('plans');
+  private readonly route = inject(ActivatedRoute);
+  private readonly params = toSignal(this.route.paramMap);
+  private readonly query = toSignal(this.route.queryParamMap);
+  protected readonly modelTabs = MODEL_TABS;
+  protected readonly tab = computed<ModelTab>(() => {
+    const value = this.query()?.get('tab');
+    return value === 'matching' || value === 'extraction' ? value : 'summaries';
+  });
+  protected readonly heading = computed(() => HEADINGS[this.section()] ?? HEADINGS['overview']!);
+  protected readonly emailById = computed(
+    () => new Map(this.members().map((m) => [m.id, m.email] as const)),
+  );
+  protected readonly section = signal('overview');
+  protected readonly creating = signal(false);
+  protected readonly memberQuery = signal('');
+  protected readonly planFilter = signal('');
+  protected readonly statusFilter = signal('');
+  protected readonly visibleMembers = computed(() => {
+    const query = this.memberQuery().trim().toLowerCase();
+    const plan = this.planFilter();
+    const status = this.statusFilter();
+    return this.members().filter((m) => {
+      if (query && !(m.email ?? '').toLowerCase().includes(query)) return false;
+      if (plan && (m.membership?.plan_id ?? '') !== plan) return false;
+      if (status === 'unassigned') return !m.membership;
+      if (status) return m.membership?.status === status;
+      return true;
+    });
+  });
   protected readonly plans = signal<Plan[]>([]);
   protected readonly members = signal<Member[]>([]);
   protected readonly keys = signal<Schemas['SystemKey'][]>([]);
@@ -61,7 +128,7 @@ export class AdminPage {
 
   constructor() {
     effect(() => {
-      const section = this.params()?.get('section') ?? 'plans';
+      const section = this.params()?.get('section') ?? 'overview';
       this.auth.identity();
       this.section.set(section);
       this.clear();
@@ -88,7 +155,11 @@ export class AdminPage {
     this.attempts.set([]);
     this.error.set('');
     this.editingPlan.set(null);
+    this.creating.set(false);
     this.resolving.set(null);
+    this.memberQuery.set('');
+    this.planFilter.set('');
+    this.statusFilter.set('');
     this.operation.set(null);
     this.testKey = null;
     clearInterval(this.poll);
@@ -120,17 +191,21 @@ export class AdminPage {
         this.moreAvailable.set(list.length === 50);
         this.members.update((rows) => (append ? [...rows, ...list] : list));
         for (const m of list) this.assignments[m.id] = m.membership?.plan_id ?? '';
-      } else if (section === 'system-keys') {
+      } else if (section === 'keys') {
         const list = Api.ok(await this.api.client.GET('/v1/admin/system-keys'));
         if (this.current(identity, section, generation)) this.keys.set(list);
       } else if (section === 'usage') {
         const before = append ? this.attempts().at(-1)?.id : undefined;
-        const list = Api.ok(
-          await this.api.client.GET('/v1/admin/model-attempts', {
+        const [response, everyone] = await Promise.all([
+          this.api.client.GET('/v1/admin/model-attempts', {
             params: { query: { before, limit: 50 } },
           }),
-        );
+          // Charges name members by id; the members list maps each id to its email.
+          fetchAllMembers(this.api.client),
+        ]);
         if (!this.current(identity, section, generation)) return;
+        const list = Api.ok(response);
+        this.members.set(everyone);
         this.attempts.update((rows) => (append ? [...rows, ...list] : list));
         this.moreAvailable.set(list.length === 50);
       }
@@ -184,12 +259,28 @@ export class AdminPage {
     return error instanceof Error ? error.message : 'Could not save changes.';
   }
   editPlan(p: Plan): void {
+    this.creating.set(false);
     this.editingPlan.set(p);
-    this.planForm = { name: p.name, cap_7d_usd: p.cap_7d_usd, cap_30d_usd: p.cap_30d_usd };
+    // The form shows the amount as dollars and cents, without the server's trailing zeros.
+    this.planForm = {
+      name: p.name,
+      cap_7d_usd: usd(p.cap_7d_usd).slice(1),
+      cap_30d_usd: usd(p.cap_30d_usd).slice(1),
+    };
+  }
+  startCreate(): void {
+    this.editingPlan.set(null);
+    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+    this.creating.set(true);
   }
   cancelPlan(): void {
     this.editingPlan.set(null);
+    this.creating.set(false);
     this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+  }
+  // A member row is dirty when its selected plan differs from the saved one.
+  isDirty(m: Member): boolean {
+    return (this.assignments[m.id] ?? '') !== (m.membership?.plan_id ?? '');
   }
   async savePlan(): Promise<void> {
     const p = this.editingPlan(),

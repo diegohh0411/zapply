@@ -1,45 +1,16 @@
 <div class="mx-auto max-w-6xl space-y-6 px-4 py-6">
-  <header class="flex items-start justify-between gap-4">
-    <div>
-      <h1 class="text-xl font-semibold tracking-tight">Platform administration</h1>
-      <p class="text-sm text-muted-foreground">
-        Manage member access, model allowances, and platform keys.
-      </p>
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="max-w-3xl space-y-1">
+      <h1 class="text-xl font-semibold tracking-tight">{{ heading().title }}</h1>
+      <p class="text-sm text-muted-foreground">{{ heading().description }}</p>
     </div>
-    <button z-button zType="outline" [zDisabled]="loading() || busy()" (click)="load()">
-      Refresh
-    </button>
+    @if (section() !== 'overview' && section() !== 'models') {
+      <button z-button zType="outline" [zDisabled]="loading() || busy()" (click)="load()">
+        Refresh
+      </button>
+    }
   </header>
-  <nav aria-label="Platform administration" class="flex flex-wrap gap-2 border-b pb-4">
-    <a
-      z-button
-      [zType]="section() === 'plans' ? 'default' : 'outline'"
-      routerLink="/admin/plans"
-      [attr.aria-current]="section() === 'plans' ? 'page' : null"
-      >Plans</a
-    >
-    <a
-      z-button
-      [zType]="section() === 'members' ? 'default' : 'outline'"
-      routerLink="/admin/members"
-      [attr.aria-current]="section() === 'members' ? 'page' : null"
-      >Members</a
-    >
-    <a
-      z-button
-      [zType]="section() === 'system-keys' ? 'default' : 'outline'"
-      routerLink="/admin/system-keys"
-      [attr.aria-current]="section() === 'system-keys' ? 'page' : null"
-      >Models & keys</a
-    >
-    <a
-      z-button
-      [zType]="section() === 'usage' ? 'default' : 'outline'"
-      routerLink="/admin/usage"
-      [attr.aria-current]="section() === 'usage' ? 'page' : null"
-      >Unresolved usage</a
-    >
-  </nav>
+
   @if (error()) {
     <p role="alert" class="rounded-lg border border-destructive p-3 text-sm text-destructive">
       {{ error() }}
@@ -48,102 +19,159 @@
   @if (loading()) {
     <p role="status" class="text-sm text-muted-foreground">Loading…</p>
   }
-  @if (section() === 'system-keys') {
-    <app-model-settings />
-  }
+
   @switch (section()) {
+    @case ('overview') {
+      <app-admin-overview />
+    }
     @case ('plans') {
-      <section class="space-y-4 rounded-xl border p-5">
-        <h2 class="font-medium">{{ editingPlan() ? 'Edit plan' : 'Create a plan' }}</h2>
-        <form class="grid items-end gap-4 md:grid-cols-4" (ngSubmit)="savePlan()">
-          <label class="field"
-            ><span>Name</span
-            ><input z-input name="name" [(ngModel)]="planForm.name" maxlength="100" required
-          /></label>
-          <label class="field"
-            ><span>Past 7 days · USD</span
-            ><input
-              z-input
-              name="week"
-              [(ngModel)]="planForm.cap_7d_usd"
-              inputmode="decimal"
-              pattern="[0-9]+(\.[0-9]{1,12})?"
-              placeholder="3.00"
-              required
-          /></label>
-          <label class="field"
-            ><span>Past 30 days · USD</span
-            ><input
-              z-input
-              name="month"
-              [(ngModel)]="planForm.cap_30d_usd"
-              inputmode="decimal"
-              pattern="[0-9]+(\.[0-9]{1,12})?"
-              placeholder="10.00"
-              required
-          /></label>
-          <div class="flex gap-2">
-            <button z-button type="submit" [zDisabled]="busy()">
-              {{ editingPlan() ? 'Save plan' : 'Create plan' }}
+      <div class="flex flex-wrap items-start gap-6">
+        <div class="min-w-0 flex-[999_1_420px] space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-muted-foreground">
+              Changes apply to every assigned member immediately. Usage history stays intact.
+            </p>
+            <button z-button type="button" [zDisabled]="busy()" (click)="startCreate()">
+              New plan
             </button>
-            @if (editingPlan()) {
-              <button z-button zType="outline" type="button" (click)="cancelPlan()">Cancel</button>
-            }
           </div>
-        </form>
-        @if (editingPlan()) {
-          <p class="text-sm text-muted-foreground">
-            Changes apply to every assigned member immediately. Lowering an allowance can pause
-            model work. Usage history stays intact.
-          </p>
+          <div class="overflow-x-auto rounded-lg border">
+            <table class="w-full min-w-[520px] text-left text-sm">
+              <thead class="bg-muted">
+                <tr>
+                  <th class="p-3">Plan</th>
+                  <th class="p-3">Past 7 days</th>
+                  <th class="p-3">Past 30 days</th>
+                  <th class="p-3"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of plans(); track p.id) {
+                  <tr class="border-t" [class.bg-muted]="editingPlan()?.id === p.id">
+                    <td class="p-3 font-medium">{{ p.name }}</td>
+                    <td class="p-3 tabular-nums">{{ money(p.cap_7d_usd) }}</td>
+                    <td class="p-3 tabular-nums">{{ money(p.cap_30d_usd) }}</td>
+                    <td class="p-3 text-right">
+                      <button z-button zType="outline" [zDisabled]="busy()" (click)="editPlan(p)">
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="p-6 text-center text-muted-foreground">
+                      Create a plan to start assigning model access.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        @if (creating() || editingPlan()) {
+          <section
+            aria-labelledby="plan-form-heading"
+            class="w-full min-w-0 flex-[0_1_360px] space-y-4 rounded-xl border bg-background p-5 shadow-lg"
+          >
+            <div class="space-y-1">
+              <h2 id="plan-form-heading" class="font-medium">
+                {{ editingPlan() ? 'Edit plan' : 'New plan' }}
+              </h2>
+              @if (editingPlan()) {
+                <p class="text-sm text-muted-foreground">
+                  Changes apply to every assigned member immediately. Lowering an allowance can pause
+                  model work.
+                </p>
+              }
+            </div>
+            <form class="grid gap-4" (ngSubmit)="savePlan()">
+              <label class="field"
+                ><span>Name</span
+                ><input z-input name="name" [(ngModel)]="planForm.name" maxlength="100" required
+              /></label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="field"
+                  ><span>Past 7 days · USD</span
+                  ><input
+                    z-input
+                    name="week"
+                    [(ngModel)]="planForm.cap_7d_usd"
+                    inputmode="decimal"
+                    pattern="[0-9]+(\.[0-9]{1,12})?"
+                    placeholder="3.00"
+                    required
+                /></label>
+                <label class="field"
+                  ><span>Past 30 days · USD</span
+                  ><input
+                    z-input
+                    name="month"
+                    [(ngModel)]="planForm.cap_30d_usd"
+                    inputmode="decimal"
+                    pattern="[0-9]+(\.[0-9]{1,12})?"
+                    placeholder="10.00"
+                    required
+                /></label>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button z-button zType="outline" type="button" (click)="cancelPlan()">Cancel</button>
+                <button z-button type="submit" [zDisabled]="busy()">
+                  {{ editingPlan() ? 'Save plan' : 'Create plan' }}
+                </button>
+              </div>
+            </form>
+          </section>
         }
-      </section>
-      <div class="overflow-x-auto rounded-lg border">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-muted">
-            <tr>
-              <th class="p-3">Plan</th>
-              <th class="p-3">Past 7 days</th>
-              <th class="p-3">Past 30 days</th>
-              <th class="p-3"><span class="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (p of plans(); track p.id) {
-              <tr class="border-t">
-                <td class="p-3 font-medium">{{ p.name }}</td>
-                <td class="p-3 tabular-nums">{{ money(p.cap_7d_usd) }}</td>
-                <td class="p-3 tabular-nums">{{ money(p.cap_30d_usd) }}</td>
-                <td class="p-3 text-right">
-                  <button z-button zType="outline" [zDisabled]="busy()" (click)="editPlan(p)">
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="4" class="p-6 text-center text-muted-foreground">
-                  Create a plan to start assigning model access.
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
       </div>
     }
     @case ('members') {
-      <p class="text-sm text-muted-foreground">
-        Assign a plan to each registered member, including yourself to run model diagnostics.
-        Suspending model access preserves their library, jobs, and results.
-      </p>
       @if (!plans().length && !loading()) {
         <p class="text-sm">
           <a class="underline" routerLink="/admin/plans">Create a plan</a> before assigning
           memberships.
         </p>
       }
+      <div class="flex flex-wrap items-center gap-3">
+        <input
+          z-input
+          type="search"
+          class="min-w-0 flex-[1_1_260px]"
+          placeholder="Search by email"
+          aria-label="Search members"
+          [ngModel]="memberQuery()"
+          (ngModelChange)="memberQuery.set($event)"
+        />
+        <z-select
+          class="w-44 shrink-0"
+          aria-label="Filter by plan"
+          zPlaceholder="All plans"
+          [ngModel]="planFilter()"
+          (ngModelChange)="planFilter.set($event)"
+        >
+          <z-select-item zValue="">All plans</z-select-item>
+          @for (p of plans(); track p.id) {
+            <z-select-item [zValue]="p.id">{{ p.name }}</z-select-item>
+          }
+        </z-select>
+        <z-select
+          class="w-44 shrink-0"
+          aria-label="Filter by status"
+          zPlaceholder="Any status"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+        >
+          <z-select-item zValue="">Any status</z-select-item>
+          <z-select-item zValue="active">Active</z-select-item>
+          <z-select-item zValue="suspended">Suspended</z-select-item>
+          <z-select-item zValue="unassigned">Unassigned</z-select-item>
+        </z-select>
+        <span class="ml-auto text-sm text-muted-foreground">
+          {{ visibleMembers().length }} of {{ members().length }} shown
+        </span>
+      </div>
       <div class="overflow-x-auto rounded-lg border">
-        <table class="w-full text-left text-sm">
+        <table class="w-full min-w-[720px] text-left text-sm">
           <thead class="bg-muted">
             <tr>
               <th class="p-3">Member</th>
@@ -154,14 +182,17 @@
             </tr>
           </thead>
           <tbody>
-            @for (m of members(); track m.id) {
-              <tr class="border-t">
+            @for (m of visibleMembers(); track m.id) {
+              <tr class="border-t" [class.bg-muted]="isDirty(m)">
                 <td class="max-w-60 p-3">
                   <div class="break-all font-medium">{{ m.email || 'Email unavailable' }}</div>
+                  @if (isDirty(m)) {
+                    <div class="text-xs text-muted-foreground">Plan changed, not saved</div>
+                  }
                 </td>
                 <td class="p-3">
                   <z-select
-                    class="min-w-36"
+                    class="min-w-40"
                     [attr.aria-label]="'Plan for ' + (m.email || 'member')"
                     zPlaceholder="Choose a plan"
                     [ngModel]="assignments[m.id]"
@@ -180,8 +211,8 @@
                   <div class="flex gap-2">
                     <button
                       z-button
-                      zType="outline"
-                      [zDisabled]="busy() || !assignments[m.id]"
+                      [zType]="isDirty(m) ? 'default' : 'outline'"
+                      [zDisabled]="busy() || !isDirty(m) || !assignments[m.id]"
                       (click)="saveMember(m)"
                     >
                       Save
@@ -204,7 +235,7 @@
             } @empty {
               <tr>
                 <td colspan="5" class="p-6 text-center text-muted-foreground">
-                  No registered members.
+                  {{ members().length ? 'No members match these filters.' : 'No registered members.' }}
                 </td>
               </tr>
             }
@@ -212,13 +243,30 @@
         </table>
       </div>
       @if (moreAvailable()) {
-        <button z-button zType="outline" [zDisabled]="loading()" (click)="load(true)">
-          More members
-        </button>
+        <div class="flex justify-end">
+          <button z-button zType="outline" [zDisabled]="loading()" (click)="load(true)">
+            More members
+          </button>
+        </div>
       }
     }
-    @case ('system-keys') {
-      <section aria-labelledby="keys-heading" class="space-y-4 border-t pt-10">
+    @case ('models') {
+      <nav aria-label="Model settings" class="flex flex-wrap gap-2 border-b pb-4">
+        @for (t of modelTabs; track t.id) {
+          <a
+            z-button
+            [zType]="tab() === t.id ? 'default' : 'outline'"
+            routerLink="/admin/models"
+            [queryParams]="{ tab: t.id }"
+            [attr.aria-current]="tab() === t.id ? 'page' : null"
+            >{{ t.label }}</a
+          >
+        }
+      </nav>
+      <app-model-settings [tab]="tab()" />
+    }
+    @case ('keys') {
+      <section aria-labelledby="keys-heading" class="space-y-4">
         <div class="space-y-1">
           <h2 id="keys-heading" class="text-lg font-semibold">OpenRouter keys</h2>
           <p class="text-sm text-muted-foreground">
@@ -226,38 +274,38 @@
             new model calls.
           </p>
         </div>
-      <div class="overflow-x-auto rounded-lg border">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-muted">
-            <tr>
-              <th class="p-3">Label</th>
-              <th class="p-3">Fingerprint</th>
-              <th class="p-3">Status</th>
-              <th class="p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (k of keys(); track k.id) {
-              <tr class="border-t">
-                <td class="p-3 font-medium">{{ k.label }}</td>
-                <td class="p-3 font-mono text-xs">{{ k.fingerprint }}</td>
-                <td class="p-3">{{ k.active ? 'Active' : 'Inactive' }}</td>
-                <td class="p-3">
-                  <button z-button zType="outline" [zDisabled]="busy()" (click)="activate(k)">
-                    {{ k.active ? 'Deactivate' : 'Activate' }}
-                  </button>
-                </td>
-              </tr>
-            } @empty {
+        <div class="overflow-x-auto rounded-lg border">
+          <table class="w-full min-w-[520px] text-left text-sm">
+            <thead class="bg-muted">
               <tr>
-                <td colspan="4" class="p-6 text-center text-muted-foreground">
-                  No system keys configured.
-                </td>
+                <th class="p-3">Label</th>
+                <th class="p-3">Fingerprint</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">Actions</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (k of keys(); track k.id) {
+                <tr class="border-t">
+                  <td class="p-3 font-medium">{{ k.label }}</td>
+                  <td class="p-3 font-mono text-xs">{{ k.fingerprint }}</td>
+                  <td class="p-3">{{ k.active ? 'Active' : 'Inactive' }}</td>
+                  <td class="p-3">
+                    <button z-button zType="outline" [zDisabled]="busy()" (click)="activate(k)">
+                      {{ k.active ? 'Deactivate' : 'Activate' }}
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="4" class="p-6 text-center text-muted-foreground">
+                    No system keys configured.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
         <details class="group">
           <summary
             class="inline-flex cursor-pointer items-center text-sm font-medium underline-offset-4 hover:underline"
@@ -290,24 +338,26 @@
           </form>
         </details>
       </section>
-      <section aria-labelledby="access-heading" class="space-y-4 border-t pt-10">
+      <section aria-labelledby="access-heading" class="space-y-4 rounded-xl border p-5">
         <div class="space-y-1">
           <h2 id="access-heading" class="text-lg font-semibold">Check model access</h2>
           <p class="text-sm text-muted-foreground">
             Run one small model request using your own membership allowance.
           </p>
         </div>
-        <button
-          z-button
-          zType="outline"
-          [zDisabled]="
-            busy() ||
-            (!!operation() && !['completed', 'failed', 'cancelled'].includes(operation()!.status))
-          "
-          (click)="testGateway()"
-        >
-          Run model diagnostic
-        </button>
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            z-button
+            zType="outline"
+            [zDisabled]="
+              busy() ||
+              (!!operation() && !['completed', 'failed', 'cancelled'].includes(operation()!.status))
+            "
+            (click)="testGateway()"
+          >
+            Run model diagnostic
+          </button>
+        </div>
         @if (operation(); as op) {
           <div role="status" class="space-y-1 text-sm">
             <p>
@@ -327,104 +377,112 @@
       </section>
     }
     @case ('usage') {
-      <p class="text-sm text-muted-foreground">
-        These calls may have incurred a charge. Their reservations stay in place until the amount is
-        confirmed. Other requests can use the remaining allowance. Confirm charges in OpenRouter before resolving them; requests with uncertain results cannot be automatically repeated.
-      </p>
-      <div class="overflow-x-auto rounded-lg border">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-muted">
-            <tr>
-              <th class="p-3">Member / model</th>
-              <th class="p-3">Started</th>
-              <th class="p-3">Reserved</th>
-              <th class="p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (a of attempts(); track a.id) {
-              <tr class="border-t">
-                <td class="p-3">
-                  <div class="break-all">{{ a.user_id }}</div>
-                  <div class="text-xs text-muted-foreground">{{ a.model }}</div>
-                </td>
-                <td class="p-3">{{ a.dispatched_at | date: 'medium' }}</td>
-                <td class="p-3 tabular-nums">{{ money(a.reserved_usd) }}</td>
-                <td class="p-3">
-                  <button
-                    z-button
-                    zType="outline"
-                    [zDisabled]="busy()"
-                    (click)="startResolution(a)"
-                  >
-                    Resolve
-                  </button>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="4" class="p-6 text-center text-muted-foreground">
-                  No unresolved model charges.
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-      @if (moreAvailable()) {
-        <button z-button zType="outline" [zDisabled]="loading()" (click)="load(true)">
-          Older attempts
-        </button>
-      }
-      @if (resolving(); as a) {
-        <section class="space-y-4 rounded-xl border p-5">
-          <h2 class="font-medium">Resolve charge</h2>
-          <p class="break-all text-xs text-muted-foreground">{{ a.id }}</p>
-          <form class="grid gap-4 md:grid-cols-2" (ngSubmit)="resolve()">
-            <label class="field"
-              ><span>Confirmed cost · USD</span
-              ><input
-                z-input
-                name="cost"
-                [(ngModel)]="resolution.amount_usd"
-                inputmode="decimal"
-                pattern="[0-9]+(\.[0-9]{1,12})?"
-                required
-            /></label>
-            <label class="field"
-              ><span>Generation ID (if known)</span
-              ><input
-                z-input
-                name="generation"
-                [(ngModel)]="resolution.generation_id"
-                maxlength="128"
-            /></label>
-            <label class="field md:col-span-2"
-              ><span>Reconciliation evidence</span
-              ><input
-                z-input
-                name="evidence"
-                [(ngModel)]="resolution.reason"
-                minlength="3"
-                maxlength="1000"
-                required
-            /></label>
-            <p class="text-sm text-muted-foreground md:col-span-2">
-              This settles accounting and releases the reservation. A lost model result will not be
-              regenerated. Active calls cannot be resolved.
-            </p>
-            <div class="flex gap-2">
-              <button z-button type="submit" [zDisabled]="busy()">Confirm resolution</button
-              ><button z-button zType="outline" type="button" (click)="resolving.set(null)">
-                Cancel
+      <div class="flex flex-wrap items-start gap-6">
+        <div class="min-w-0 flex-[999_1_420px] space-y-3">
+          <div class="overflow-x-auto rounded-lg border">
+            <table class="w-full min-w-[460px] text-left text-sm">
+              <thead class="bg-muted">
+                <tr>
+                  <th class="p-3">Member / model</th>
+                  <th class="p-3">Started</th>
+                  <th class="p-3">Reserved</th>
+                  <th class="p-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of attempts(); track a.id) {
+                  <tr class="border-t" [class.bg-muted]="resolving()?.id === a.id">
+                    <td class="p-3">
+                      <div class="break-all">{{ emailById().get(a.user_id) ?? a.user_id }}</div>
+                      <div class="text-xs text-muted-foreground">{{ a.model }}</div>
+                    </td>
+                    <td class="p-3">{{ a.dispatched_at | date: 'medium' }}</td>
+                    <td class="p-3 tabular-nums">{{ money(a.reserved_usd) }}</td>
+                    <td class="p-3">
+                      <button
+                        z-button
+                        zType="outline"
+                        [zDisabled]="busy()"
+                        (click)="startResolution(a)"
+                      >
+                        Resolve
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="p-6 text-center text-muted-foreground">
+                      No unresolved model charges.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (moreAvailable()) {
+            <div class="flex justify-end">
+              <button z-button zType="outline" [zDisabled]="loading()" (click)="load(true)">
+                Older attempts
               </button>
             </div>
-          </form>
-        </section>
-      }
+          }
+        </div>
+
+        @if (resolving(); as a) {
+          <section
+            aria-labelledby="resolve-heading"
+            class="w-full min-w-0 flex-[0_1_360px] space-y-4 rounded-xl border bg-background p-5 shadow-lg"
+          >
+            <div class="space-y-1">
+              <h2 id="resolve-heading" class="font-medium">Resolve charge</h2>
+              <p class="break-all text-xs text-muted-foreground">{{ a.id }}</p>
+            </div>
+            <form class="grid gap-4" (ngSubmit)="resolve()">
+              <label class="field"
+                ><span>Confirmed cost · USD</span
+                ><input
+                  z-input
+                  name="cost"
+                  [(ngModel)]="resolution.amount_usd"
+                  inputmode="decimal"
+                  pattern="[0-9]+(\.[0-9]{1,12})?"
+                  required
+              /></label>
+              <label class="field"
+                ><span>Generation ID (if known)</span
+                ><input
+                  z-input
+                  name="generation"
+                  [(ngModel)]="resolution.generation_id"
+                  maxlength="128"
+              /></label>
+              <label class="field"
+                ><span>Reconciliation evidence</span
+                ><input
+                  z-input
+                  name="evidence"
+                  [(ngModel)]="resolution.reason"
+                  minlength="3"
+                  maxlength="1000"
+                  required
+              /></label>
+              <p class="text-sm text-muted-foreground">
+                This settles accounting and releases the reservation. A lost model result will not be
+                regenerated. Active calls cannot be resolved.
+              </p>
+              <div class="flex justify-end gap-2">
+                <button z-button zType="outline" type="button" (click)="resolving.set(null)">
+                  Cancel
+                </button>
+                <button z-button type="submit" [zDisabled]="busy()">Confirm resolution</button>
+              </div>
+            </form>
+          </section>
+        }
+      </div>
     }
     @default {
-      <p class="text-sm text-muted-foreground">Choose an administration page above.</p>
+      <p class="text-sm text-muted-foreground">Choose an administration page in the sidebar.</p>
     }
   }
 </div>
