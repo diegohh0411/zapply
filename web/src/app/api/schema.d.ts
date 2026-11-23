@@ -1644,6 +1644,8 @@ export interface components {
             salary_max?: number;
             salary_currency?: string;
             salary_period?: components["schemas"]["SalaryPeriod"];
+            /** @description The job description alone, as markdown, without the page around it (navigation, apply buttons, related jobs). */
+            description?: string;
         };
         JobInput: {
             /** Format: uuid */

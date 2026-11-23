@@ -2131,6 +2131,7 @@ components:
         salary_max: { type: integer, format: int64, minimum: 0 }
         salary_currency: { type: string }
         salary_period: { $ref: "#/components/schemas/SalaryPeriod" }
+        description: { type: string, description: "The job description alone, as markdown, without the page around it (navigation, apply buttons, related jobs)." }
     JobInput:
       type: object
       required: [title]

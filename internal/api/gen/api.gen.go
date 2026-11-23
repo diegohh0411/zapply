@@ -1719,7 +1719,10 @@ type PlanInput struct {
 
 // PostingExtraction defines model for PostingExtraction.
 type PostingExtraction struct {
-	Company        *string         `json:"company,omitempty"`
+	Company *string `json:"company,omitempty"`
+
+	// Description The job description alone, as markdown, without the page around it (navigation, apply buttons, related jobs).
+	Description    *string         `json:"description,omitempty"`
 	EmploymentType *EmploymentType `json:"employment_type,omitempty"`
 	Location       *string         `json:"location,omitempty"`
 
