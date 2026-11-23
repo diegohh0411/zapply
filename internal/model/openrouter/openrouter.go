@@ -286,6 +286,8 @@ func (c *Client) generateMessages(ctx context.Context, key string, q modelapi.Qu
 			// processed tokens means that an HTTP error is not proof of no charge.
 			if len(response.Error) == 0 || string(response.Error) == "null" || r.Amount != nil || r.GenerationID != "" || usage.Prompt > 0 || usage.Completion > 0 {
 				pe.Uncharged = false
+			} else {
+				confirmUncharged(raw, err)
 			}
 			var envelope struct {
 				Metadata struct {
@@ -322,4 +324,31 @@ func (c *Client) Lookup(ctx context.Context, key, id string) (modelapi.Result, e
 		return modelapi.Result{}, err
 	}
 	return modelapi.Result{GenerationID: id, Amount: &cost, Usage: data.Data.Cost}, nil
+}
+
+// confirmUncharged marks an HTTP error as uncharged when OpenRouter answered
+// with an explicit error envelope and no billing evidence: no generation ID,
+// no usage, and no cost. OpenRouter assigns a generation ID to every request
+// that reached a provider and reports usage for anything it bills, so an
+// error without either is a rejection rather than an unknown outcome. Without
+// this, such a call stays uncertain forever: there is no generation to look up.
+// Transport failures, unreadable bodies and non-JSON responses stay uncertain.
+func confirmUncharged(raw []byte, callErr error) {
+	var pe *modelapi.ProviderError
+	if !errors.As(callErr, &pe) || pe.Uncharged || len(raw) == 0 {
+		return
+	}
+	var body struct {
+		ID    string          `json:"id"`
+		Error json.RawMessage `json:"error"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return
+	}
+	if len(body.Error) == 0 || string(body.Error) == "null" || body.ID != "" ||
+		(len(body.Usage) > 0 && string(body.Usage) != "null") {
+		return
+	}
+	pe.Uncharged = true
 }

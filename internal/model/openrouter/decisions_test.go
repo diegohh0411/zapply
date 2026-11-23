@@ -88,8 +88,8 @@ func TestDecisionHTTPAndReservation(t *testing.T) {
 	html = false
 	oversized = true
 	_, e = c.Decide(context.Background(), "test-key", request, q)
-	if !errors.As(e, &pe) || pe.Uncharged {
-		t.Fatal("413 status treated as proof of no charge")
+	if !errors.As(e, &pe) || !pe.Uncharged {
+		t.Fatal("error envelope without billing evidence left uncertain")
 	}
 	q.FetchedAt = time.Now().Add(-time.Hour)
 	before := calls

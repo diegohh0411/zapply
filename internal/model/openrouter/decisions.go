@@ -183,8 +183,14 @@ func (c *Client) Decide(ctx context.Context, key string, r systemone.Request, q 
 		}
 		result.Amount = &n
 	}
-	// HTTP statuses alone do not establish that a decision was uncharged.
+	// HTTP statuses alone do not establish that a decision was uncharged; an
+	// error envelope without any billing evidence does.
 	if callErr != nil {
+		var pe *modelapi.ProviderError
+		confirmUncharged(raw, callErr)
+		if errors.As(callErr, &pe) && pe.Uncharged {
+			return result, callErr
+		}
 		return result, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
 	if result.Text == "" {
