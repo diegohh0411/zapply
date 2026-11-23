@@ -38,7 +38,7 @@ func (d *DBSource) Settings(ctx context.Context) (Settings, error) {
 	return s, nil
 }
 
-// Key returns the plaintext of the Firecrawl system key id.
+// Key returns the plaintext of the scraper (Firecrawl or Crawl4AI) system key id.
 func (d *DBSource) Key(ctx context.Context, id string) (string, error) {
 	u, err := uuid.Parse(id)
 	if err != nil {

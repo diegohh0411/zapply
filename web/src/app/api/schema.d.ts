@@ -1885,7 +1885,7 @@ export interface components {
          * @description Which provider the key belongs to. Only an OpenRouter key can be active.
          * @enum {string}
          */
-        SystemKeyKind: "openrouter" | "firecrawl";
+        SystemKeyKind: "openrouter" | "firecrawl" | "crawl4ai";
         SystemKeyInput: {
             label: string;
             kind?: components["schemas"]["SystemKeyKind"];
@@ -1977,15 +1977,15 @@ export interface components {
         };
         ScraperProvider: {
             /**
-             * @description The scraping API. Only Firecrawl exists today.
+             * @description The scraping API: Firecrawl (hosted or self-hosted) or a self-hosted Crawl4AI server.
              * @enum {string}
              */
-            kind: "firecrawl";
-            /** @description The API's http(s) address; null is Firecrawl's hosted API. */
+            kind: "firecrawl" | "crawl4ai";
+            /** @description The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. */
             base_url?: string | null;
             /**
              * Format: uuid
-             * @description A Firecrawl system key sent to the API; null sends none.
+             * @description A system key of the provider's own kind, sent as a bearer token; null sends none.
              */
             key_id?: string | null;
         };

@@ -699,12 +699,15 @@ func (e SalaryPeriod) Valid() bool {
 
 // Defines values for ScraperProviderKind.
 const (
+	ScraperProviderKindCrawl4ai  ScraperProviderKind = "crawl4ai"
 	ScraperProviderKindFirecrawl ScraperProviderKind = "firecrawl"
 )
 
 // Valid indicates whether the value is a known member of the ScraperProviderKind enum.
 func (e ScraperProviderKind) Valid() bool {
 	switch e {
+	case ScraperProviderKindCrawl4ai:
+		return true
 	case ScraperProviderKindFirecrawl:
 		return true
 	default:
@@ -738,6 +741,7 @@ func (e SkillType) Valid() bool {
 
 // Defines values for SystemKeyKind.
 const (
+	SystemKeyKindCrawl4ai   SystemKeyKind = "crawl4ai"
 	SystemKeyKindFirecrawl  SystemKeyKind = "firecrawl"
 	SystemKeyKindOpenrouter SystemKeyKind = "openrouter"
 )
@@ -745,6 +749,8 @@ const (
 // Valid indicates whether the value is a known member of the SystemKeyKind enum.
 func (e SystemKeyKind) Valid() bool {
 	switch e {
+	case SystemKeyKindCrawl4ai:
+		return true
 	case SystemKeyKindFirecrawl:
 		return true
 	case SystemKeyKindOpenrouter:
@@ -1882,17 +1888,17 @@ type SalaryPeriod string
 
 // ScraperProvider defines model for ScraperProvider.
 type ScraperProvider struct {
-	// BaseUrl The API's http(s) address; null is Firecrawl's hosted API.
+	// BaseUrl The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API.
 	BaseUrl *string `json:"base_url,omitempty"`
 
-	// KeyId A Firecrawl system key sent to the API; null sends none.
+	// KeyId A system key of the provider's own kind, sent as a bearer token; null sends none.
 	KeyId *openapi_types.UUID `json:"key_id,omitempty"`
 
-	// Kind The scraping API. Only Firecrawl exists today.
+	// Kind The scraping API: Firecrawl (hosted or self-hosted) or a self-hosted Crawl4AI server.
 	Kind ScraperProviderKind `json:"kind"`
 }
 
-// ScraperProviderKind The scraping API. Only Firecrawl exists today.
+// ScraperProviderKind The scraping API: Firecrawl (hosted or self-hosted) or a self-hosted Crawl4AI server.
 type ScraperProviderKind string
 
 // ScraperRule defines model for ScraperRule.

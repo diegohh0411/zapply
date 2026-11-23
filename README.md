@@ -70,6 +70,32 @@ the API imports them as the first provider the first time it boots, storing the
 key as a system key. After that the environment is ignored, and edits happen in
 the admin UI.
 
+#### Crawl4AI as a fallback
+
+[Crawl4AI](https://github.com/unclecode/crawl4ai) renders pages in a stealth
+Chromium, which gets past some sites that turn Firecrawl away. It has no hosted
+API: run its Docker server (`make crawl4ai` locally on `127.0.0.1:11235`; the
+`crawl4ai` service in `compose.yaml` is reachable by the app as
+`http://crawl4ai:11235`; both pin `unclecode/crawl4ai:0.9.5`, and Chromium
+wants `shm_size: 1g`). Then, as a platform owner:
+
+1. If the server has a token (`CRAWL4AI_API_TOKEN`, set from `CRAWL4AI_TOKEN`
+   in the compose files), add it under Administration, Models & keys, with
+   provider Crawl4AI. Without a token the server is open to whoever can reach
+   it, so keep it off public networks.
+2. Under Administration, Scraping, choose Add Crawl4AI provider, enter its
+   address, and pick the token. Place it after Firecrawl to use it as the
+   fallback, or first to prefer it. A provider can only use a key of its own
+   kind.
+3. For a site Firecrawl cannot read, add a site rule, for example
+   `linkedin.com` with Crawl4AI first and Firecrawl second.
+
+The server's SSRF guard refuses private addresses, and it rejects request
+fields such as `magic`, `simulate_user` and `override_navigator` from API
+callers, so Zapply relies on `enable_stealth` and a random user agent. LinkedIn
+may still block a datacenter IP; reading it reliably needs a residential
+address, which edge workers are meant to provide.
+
 Gmail push needs a public URL, so leave the `GOOGLE_PUBSUB_*` variables out and
 set `MAIL_RECONCILE_INTERVAL` (e.g. `5m`) for mail to sync while it runs. Google
 sign-in for mail needs `http://localhost:8080/oauth/google/callback` on the

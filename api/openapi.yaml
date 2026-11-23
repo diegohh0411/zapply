@@ -2540,6 +2540,7 @@ components:
       "enum":
         - "openrouter"
         - "firecrawl"
+        - "crawl4ai"
       "description": "Which provider the key belongs to. Only an OpenRouter key can be active."
     "SystemKeyInput":
       "type": "object"
@@ -2711,9 +2712,9 @@ components:
       type: object
       required: [kind]
       properties:
-        kind: { type: string, enum: [firecrawl], description: "The scraping API. Only Firecrawl exists today." }
-        base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API." }
-        key_id: { type: string, format: uuid, nullable: true, description: "A Firecrawl system key sent to the API; null sends none." }
+        kind: { type: string, enum: [firecrawl, crawl4ai], description: "The scraping API: Firecrawl (hosted or self-hosted) or a self-hosted Crawl4AI server." }
+        base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API." }
+        key_id: { type: string, format: uuid, nullable: true, description: "A system key of the provider's own kind, sent as a bearer token; null sends none." }
     ScraperRule:
       type: object
       required: [host, providers]

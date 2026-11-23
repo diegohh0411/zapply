@@ -52,6 +52,8 @@ export class AdminPage {
   protected readonly resolving = signal<Attempt | null>(null);
   protected readonly money = usd;
   protected readonly message = blockMessage;
+  protected readonly keyKindLabel = (kind: Schemas['SystemKeyKind']): string => ({ openrouter: 'OpenRouter', firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI' })[kind];
+  protected readonly keyKind = (value: unknown): Schemas['SystemKeyKind'] => (value === 'firecrawl' || value === 'crawl4ai' ? value : 'openrouter');
   protected planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
   protected keyForm: { label: string; key: string; kind: Schemas['SystemKeyKind'] } = { label: '', key: '', kind: 'openrouter' };
   protected resolution = { amount_usd: '', generation_id: '', reason: '' };

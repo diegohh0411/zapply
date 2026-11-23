@@ -14,7 +14,7 @@ import (
 type SettingsSource interface {
 	// Settings returns the saved settings; none saved yet is the zero Settings.
 	Settings(ctx context.Context) (Settings, error)
-	// Key returns the plaintext of the Firecrawl system key id.
+	// Key returns the plaintext of the scraper system key id.
 	Key(ctx context.Context, id string) (string, error)
 }
 
@@ -63,6 +63,15 @@ func (c *Chain) buildProvider(ctx context.Context, cfg ProviderConfig) (Scraper,
 			}
 		}
 		return NewFirecrawl(cfg.BaseURL, key), nil
+	case KindCrawl4AI:
+		var token string
+		if cfg.KeyID != "" {
+			var err error
+			if token, err = c.src.Key(ctx, cfg.KeyID); err != nil {
+				return nil, fmt.Errorf("crawl4ai key: %w", err)
+			}
+		}
+		return NewCrawl4AI(cfg.BaseURL, token), nil
 	}
 	return nil, fmt.Errorf("unknown scraper %q", cfg.Kind)
 }

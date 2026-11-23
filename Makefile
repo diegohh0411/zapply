@@ -13,7 +13,7 @@ SUPA_BACKUP := supabase/backup
 # The local superuser: `postgres` can't hand objects to roles it isn't a member of.
 SUPA_PSQL = $(firstword $(COMPOSE)) exec -i supabase_db_zapply psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
 
-.PHONY: supa-up supa-down supa-pull supa-restore build run run-all worker relay migrate token db-up db-down firecrawl test test-integration vet image generate web web-dev
+.PHONY: supa-up supa-down supa-pull supa-restore build run run-all worker relay migrate token db-up db-down firecrawl crawl4ai test test-integration vet image generate web web-dev
 
 build:
 	go build -o bin/zapply ./cmd/zapply
@@ -40,10 +40,13 @@ db-up:
 	$(COMPOSE) -f deploy/compose.yaml up -d --wait
 
 db-down:
-	$(COMPOSE) -f deploy/compose.yaml --profile firecrawl down
+	$(COMPOSE) -f deploy/compose.yaml --profile firecrawl --profile crawl4ai down
 
 firecrawl: ## Firecrawl Local on 127.0.0.1:3002, reading posting links (first build compiles Rust)
 	@$(ENV) $(COMPOSE) -f deploy/compose.yaml --profile firecrawl up -d --build firecrawl
+
+crawl4ai: ## Crawl4AI on 127.0.0.1:11235, a stealth-browser scraper provider (CRAWL4AI_TOKEN optional)
+	@$(ENV) $(COMPOSE) -f deploy/compose.yaml --profile crawl4ai up -d crawl4ai
 
 generate: ## Regenerate sqlc queries, the OpenAPI server and the web client types
 	go tool sqlc generate

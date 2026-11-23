@@ -8,8 +8,13 @@ import (
 	"strings"
 )
 
-// KindFirecrawl is a Firecrawl v2 API.
-const KindFirecrawl = "firecrawl"
+// Scraper provider kinds.
+const (
+	// KindFirecrawl is a Firecrawl v2 API, hosted or self-hosted.
+	KindFirecrawl = "firecrawl"
+	// KindCrawl4AI is a self-hosted Crawl4AI Docker server.
+	KindCrawl4AI = "crawl4ai"
+)
 
 // Bounds on scraper settings, matching the database's checks.
 const (
@@ -18,8 +23,9 @@ const (
 )
 
 // ProviderConfig is one scraper in the chain. KeyID names the system key sent
-// to the API ("" sends none); BaseURL is the API's address ("" is the
-// provider's hosted API).
+// to the API ("" sends none) and must be a key of the provider's own kind;
+// BaseURL is the API's address ("" is Firecrawl's hosted API; Crawl4AI has no
+// hosted API and needs one).
 type ProviderConfig struct {
 	Kind    string `json:"kind"`
 	BaseURL string `json:"base_url,omitempty"`
@@ -78,8 +84,11 @@ func (s Settings) Validate() error {
 	}
 	for i, p := range s.Providers {
 		field := fmt.Sprintf("providers[%d]", i)
-		if p.Kind != KindFirecrawl {
+		if p.Kind != KindFirecrawl && p.Kind != KindCrawl4AI {
 			return &SettingsError{field + ".kind", "select a supported scraper"}
+		}
+		if p.Kind == KindCrawl4AI && p.BaseURL == "" {
+			return &SettingsError{field + ".base_url", "Crawl4AI has no hosted API: enter your server's address"}
 		}
 		if p.BaseURL != "" {
 			u, err := url.Parse(p.BaseURL)

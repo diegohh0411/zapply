@@ -125,14 +125,14 @@ func (s *Service) AddKey(ctx context.Context, u uuid.UUID, label, key string) (u
 	return s.AddKeyOfKind(ctx, u, label, key, "openrouter")
 }
 
-// AddKeyOfKind stores a provider key of kind "openrouter" or "firecrawl", inactive.
+// AddKeyOfKind stores a provider key of kind "openrouter", "firecrawl" or "crawl4ai", inactive.
 func (s *Service) AddKeyOfKind(ctx context.Context, u uuid.UUID, label, key, kind string) (uuid.UUID, error) {
 	// Authorize before encryption/configuration errors to avoid disclosing system state.
 	if err := s.AssertOwner(ctx, u); err != nil {
 		return uuid.Nil, err
 	}
-	if kind != "openrouter" && kind != "firecrawl" {
-		return uuid.Nil, invalid("kind", "must be openrouter or firecrawl")
+	if kind != "openrouter" && kind != "firecrawl" && kind != "crawl4ai" {
+		return uuid.Nil, invalid("kind", "must be openrouter, firecrawl or crawl4ai")
 	}
 	label = strings.TrimSpace(label)
 	key = strings.TrimSpace(key)
