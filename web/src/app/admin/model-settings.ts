@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Api, type Schemas } from '../core/api';
@@ -11,6 +11,8 @@ type DecisionModel = Schemas['DecisionModel'];
 type ExtractionModel = Schemas['ExtractionModel'];
 type Effort = Schemas['ReasoningOptions']['efforts'][number];
 type Settings = Schemas['ModelSettings'];
+// One tab shows one model's section; each keeps its own draft in this component.
+export type ModelTab = 'summaries' | 'matching' | 'extraction';
 
 const EFFORT_LABELS: Record<Effort, string> = {
   max: 'Max',
@@ -34,14 +36,14 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
  selector: 'app-model-settings', imports: [DecimalPipe, FormsModule, ZardButtonComponent, ...ZardComboboxImports, ...ZardSelectImports], changeDetection: ChangeDetectionStrategy.OnPush,
  template: `
  <div class="space-y-12">
-   <div class="flex flex-wrap items-center justify-between gap-3">
-     <p class="max-w-2xl text-sm text-muted-foreground">Each model saves separately. Unsaved changes stay here until you save or discard them.</p>
+   <div class="flex flex-wrap items-center justify-end gap-3">
      <button z-button zType="outline" [zDisabled]="busy() || loading()" (click)="refreshCatalogue()">Refresh catalogue</button>
    </div>
 
    @if (error()) { <p role="alert" class="rounded-lg border border-destructive p-3 text-sm text-destructive">{{ error() }}</p> }
 
    @if (settings(); as saved) {
+     @if (tab() === 'summaries') {
      <section aria-labelledby="summary-heading" class="space-y-6">
        <header class="flex flex-wrap items-start justify-between gap-3">
          <div class="space-y-1">
@@ -105,7 +107,9 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
        </footer>
        @if (summaryError()) { <p role="alert" class="text-sm text-destructive">{{ summaryError() }}</p> }
      </section>
+     }
 
+     @if (tab() === 'matching') {
      <section aria-labelledby="decision-heading" class="space-y-6">
        <header class="flex flex-wrap items-start justify-between gap-3">
          <div class="space-y-1">
@@ -140,7 +144,9 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
        </footer>
        @if (decisionError()) { <p role="alert" class="text-sm text-destructive">{{ decisionError() }}</p> }
      </section>
+     }
 
+     @if (tab() === 'extraction') {
      <section aria-labelledby="extraction-heading" class="space-y-6">
        <header class="flex flex-wrap items-start justify-between gap-3">
          <div class="space-y-1">
@@ -175,6 +181,7 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
        </footer>
        @if (extractionError()) { <p role="alert" class="text-sm text-destructive">{{ extractionError() }}</p> }
      </section>
+     }
    } @else {
      <p class="text-sm" role="status">{{ loading() ? 'Loading model settings…' : 'Model settings are unavailable.' }}</p>
    }
@@ -189,6 +196,7 @@ const byName = (a: {name: string}, b: {name: string}) => a.name.localeCompare(b.
  `],
 })
 export class ModelSettings {
+ readonly tab = input<ModelTab>('summaries');
  private readonly api = inject(Api).client;
  private readonly auth = inject(AuthService);
  protected readonly single = single;

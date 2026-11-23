@@ -3,12 +3,18 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideBuilding2,
+  lucideCpu,
+  lucideCreditCard,
   lucideFolderOpen,
+  lucideKeyRound,
+  lucideLayoutDashboard,
   lucideLogOut,
   lucideMail,
+  lucideReceipt,
   lucideSparkles,
   lucideSquareKanban,
   lucideUser,
+  lucideUsers,
 } from '@ng-icons/lucide';
 
 import { ZardSidebarImports } from '@/shared/components/sidebar';
@@ -37,6 +43,12 @@ interface NavItem {
       lucideSparkles,
       lucideLogOut,
       lucideMail,
+      lucideLayoutDashboard,
+      lucideCreditCard,
+      lucideUsers,
+      lucideCpu,
+      lucideKeyRound,
+      lucideReceipt,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -178,7 +190,14 @@ export class Shell {
       ? [
           {
             label: 'Platform',
-            items: [{ path: '/admin/plans', label: 'Administration', icon: 'lucideBuilding2' }],
+            items: [
+              { path: '/admin/overview', label: 'Overview', icon: 'lucideLayoutDashboard' },
+              { path: '/admin/plans', label: 'Plans', icon: 'lucideCreditCard' },
+              { path: '/admin/members', label: 'Members', icon: 'lucideUsers' },
+              { path: '/admin/models', label: 'Models', icon: 'lucideCpu' },
+              { path: '/admin/keys', label: 'Keys & checks', icon: 'lucideKeyRound' },
+              { path: '/admin/usage', label: 'Unresolved usage', icon: 'lucideReceipt' },
+            ],
           },
         ]
       : []),
