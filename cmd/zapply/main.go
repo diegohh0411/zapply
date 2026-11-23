@@ -166,6 +166,8 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		log.Warn("web app not built into this binary; run make web")
 	}
 
+	seedScraper(ctx, cfg.Scraper, st, keys, log)
+
 	srv := &httpx.Server{Addr: cfg.HTTPAddr, DrainDelay: cfg.DrainDelay, Logger: log}
 	srv.Handler = api.Handler(api.Deps{
 		Keys:     keys,
@@ -179,7 +181,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		DevToken: devToken,
 		TypstDir: cfg.TypstDir,
 		Google:   cfg.Google,
-		Postings: posting.New(scraper(cfg.Scraper)),
+		Postings: posting.New(posting.NewChain(posting.NewDBSource(st, keys))),
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }
@@ -475,11 +477,18 @@ func runDevToken(cfg config.Config, args []string) error {
 	return nil
 }
 
-// scraper builds the configured scrape API, or nil when none is.
-func scraper(c config.Scraper) posting.Scraper {
-	switch c.Provider {
-	case config.ScraperFirecrawl:
-		return posting.NewFirecrawl(c.Firecrawl.URL, c.Firecrawl.Key)
+// seedScraper imports the environment's scraper as the saved settings when
+// none were saved yet (see config.Scraper). A failure is logged: the owner can
+// configure scrapers in the admin UI, and the next boot tries again.
+func seedScraper(ctx context.Context, c config.Scraper, st *store.Store, keys *secrets.Ring, log *slog.Logger) {
+	if c.Provider != config.ScraperFirecrawl {
+		return
 	}
-	return nil
+	seeded, err := posting.SeedFromEnv(ctx, st, keys, c.Firecrawl.URL, c.Firecrawl.Key)
+	switch {
+	case err != nil:
+		log.Warn("scraper settings not imported from the environment", "err", err)
+	case seeded:
+		log.Info("scraper settings imported from the environment; manage them in the admin UI from now on")
+	}
 }

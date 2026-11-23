@@ -1185,6 +1185,32 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ModelSettings' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/scraper-settings:
+    get:
+      operationId: getScraperSettings
+      responses:
+        '200':
+          description: The scraper providers and per-site rules (owner only).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScraperSettings' }
+        default: { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putScraperSettings
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScraperSettingsInput' }
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScraperSettings' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/jobs/{id}/match-estimate:
     parameters:
       - name: id
@@ -2487,6 +2513,7 @@ components:
       "required":
         - "id"
         - "label"
+        - "kind"
         - "fingerprint"
         - "active"
         - "version"
@@ -2497,6 +2524,8 @@ components:
           "format": "uuid"
         "label":
           "type": "string"
+        "kind":
+          "$ref": "#/components/schemas/SystemKeyKind"
         "fingerprint":
           "type": "string"
         "active":
@@ -2506,6 +2535,12 @@ components:
         "created_at":
           "type": "string"
           "format": "date-time"
+    "SystemKeyKind":
+      "type": "string"
+      "enum":
+        - "openrouter"
+        - "firecrawl"
+      "description": "Which provider the key belongs to. Only an OpenRouter key can be active."
     "SystemKeyInput":
       "type": "object"
       "required":
@@ -2516,6 +2551,8 @@ components:
           "type": "string"
           "minLength": 1
           "maxLength": 100
+        "kind":
+          "$ref": "#/components/schemas/SystemKeyKind"
         "key":
           "type": "string"
           "minLength": 8
@@ -2668,6 +2705,50 @@ components:
         summary_rows: { $ref: '#/components/schemas/SummaryRows' }
         summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic." }
         extraction_model: { type: string, nullable: true, description: "Extraction model that reads posting fields; null when off." }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    ScraperProvider:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [firecrawl], description: "The scraping API. Only Firecrawl exists today." }
+        base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API." }
+        key_id: { type: string, format: uuid, nullable: true, description: "A Firecrawl system key sent to the API; null sends none." }
+    ScraperRule:
+      type: object
+      required: [host, providers]
+      properties:
+        host: { type: string, description: "A bare lowercase hostname. The rule also covers its subdomains." }
+        providers:
+          type: array
+          minItems: 1
+          description: "Positions in the provider list, in the order to try them."
+          items: { type: integer, minimum: 0 }
+    ScraperSettingsInput:
+      type: object
+      required: [providers, rules]
+      properties:
+        providers:
+          type: array
+          maxItems: 10
+          description: "Tried in order until one reads the page."
+          items: { $ref: '#/components/schemas/ScraperProvider' }
+        rules:
+          type: array
+          maxItems: 100
+          description: "The first rule whose host matches the posting's host replaces the default order."
+          items: { $ref: '#/components/schemas/ScraperRule' }
+    ScraperSettings:
+      type: object
+      required: [providers, rules, saved, version, updated_at]
+      properties:
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/ScraperProvider' }
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/ScraperRule' }
+        saved: { type: boolean, description: "False until an owner saves, or the environment is imported at first boot." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     MatchRunSummary:

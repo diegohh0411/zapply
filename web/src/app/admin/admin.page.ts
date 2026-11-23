@@ -1,4 +1,5 @@
 import { ModelSettings } from './model-settings';
+import { ScraperSettings } from './scraper-settings';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -27,7 +28,7 @@ type Attempt = Schemas['AttemptSummary'];
 
 @Component({
   selector: 'app-admin-page',
-  imports: [ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [ModelSettings, ScraperSettings, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -52,7 +53,7 @@ export class AdminPage {
   protected readonly money = usd;
   protected readonly message = blockMessage;
   protected planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
-  protected keyForm = { label: '', key: '' };
+  protected keyForm: { label: string; key: string; kind: Schemas['SystemKeyKind'] } = { label: '', key: '', kind: 'openrouter' };
   protected resolution = { amount_usd: '', generation_id: '', reason: '' };
   protected assignments: Record<string, string> = {};
   private generation = 0;
@@ -94,7 +95,7 @@ export class AdminPage {
     clearInterval(this.poll);
     this.assignments = {};
     this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
-    this.keyForm = { label: '', key: '' };
+    this.keyForm = { label: '', key: '', kind: 'openrouter' };
   }
 
   async load(append = false): Promise<void> {
@@ -172,7 +173,7 @@ export class AdminPage {
         cap_7d_usd: 'Past 7 days allowance',
         cap_30d_usd: 'Past 30 days allowance',
         label: 'Key label',
-        key: 'OpenRouter key',
+        key: 'Provider key',
         amount_usd: 'Confirmed cost',
         reason: 'Reconciliation evidence',
         generation_id: 'Generation ID',

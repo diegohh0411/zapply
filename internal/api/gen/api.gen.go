@@ -697,6 +697,21 @@ func (e SalaryPeriod) Valid() bool {
 	}
 }
 
+// Defines values for ScraperProviderKind.
+const (
+	ScraperProviderKindFirecrawl ScraperProviderKind = "firecrawl"
+)
+
+// Valid indicates whether the value is a known member of the ScraperProviderKind enum.
+func (e ScraperProviderKind) Valid() bool {
+	switch e {
+	case ScraperProviderKindFirecrawl:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SkillType.
 const (
 	Hard     SkillType = "hard"
@@ -715,6 +730,24 @@ func (e SkillType) Valid() bool {
 	case Soft:
 		return true
 	case Tool:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemKeyKind.
+const (
+	SystemKeyKindFirecrawl  SystemKeyKind = "firecrawl"
+	SystemKeyKindOpenrouter SystemKeyKind = "openrouter"
+)
+
+// Valid indicates whether the value is a known member of the SystemKeyKind enum.
+func (e SystemKeyKind) Valid() bool {
+	switch e {
+	case SystemKeyKindFirecrawl:
+		return true
+	case SystemKeyKindOpenrouter:
 		return true
 	default:
 		return false
@@ -1847,6 +1880,50 @@ type Requirement struct {
 // SalaryPeriod defines model for SalaryPeriod.
 type SalaryPeriod string
 
+// ScraperProvider defines model for ScraperProvider.
+type ScraperProvider struct {
+	// BaseUrl The API's http(s) address; null is Firecrawl's hosted API.
+	BaseUrl *string `json:"base_url,omitempty"`
+
+	// KeyId A Firecrawl system key sent to the API; null sends none.
+	KeyId *openapi_types.UUID `json:"key_id,omitempty"`
+
+	// Kind The scraping API. Only Firecrawl exists today.
+	Kind ScraperProviderKind `json:"kind"`
+}
+
+// ScraperProviderKind The scraping API. Only Firecrawl exists today.
+type ScraperProviderKind string
+
+// ScraperRule defines model for ScraperRule.
+type ScraperRule struct {
+	// Host A bare lowercase hostname. The rule also covers its subdomains.
+	Host string `json:"host"`
+
+	// Providers Positions in the provider list, in the order to try them.
+	Providers []int `json:"providers"`
+}
+
+// ScraperSettings defines model for ScraperSettings.
+type ScraperSettings struct {
+	Providers []ScraperProvider `json:"providers"`
+	Rules     []ScraperRule     `json:"rules"`
+
+	// Saved False until an owner saves, or the environment is imported at first boot.
+	Saved     bool      `json:"saved"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Version   int       `json:"version"`
+}
+
+// ScraperSettingsInput defines model for ScraperSettingsInput.
+type ScraperSettingsInput struct {
+	// Providers Tried in order until one reads the page.
+	Providers []ScraperProvider `json:"providers"`
+
+	// Rules The first rule whose host matches the posting's host replaces the default order.
+	Rules []ScraperRule `json:"rules"`
+}
+
 // Selection defines model for Selection.
 type Selection struct {
 	EvidenceId   string   `json:"evidence_id"`
@@ -1892,15 +1969,24 @@ type SystemKey struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	Fingerprint string             `json:"fingerprint"`
 	Id          openapi_types.UUID `json:"id"`
-	Label       string             `json:"label"`
-	Version     int                `json:"version"`
+
+	// Kind Which provider the key belongs to. Only an OpenRouter key can be active.
+	Kind    SystemKeyKind `json:"kind"`
+	Label   string        `json:"label"`
+	Version int           `json:"version"`
 }
 
 // SystemKeyInput defines model for SystemKeyInput.
 type SystemKeyInput struct {
-	Key   *string `json:"key,omitempty"`
-	Label string  `json:"label"`
+	Key *string `json:"key,omitempty"`
+
+	// Kind Which provider the key belongs to. Only an OpenRouter key can be active.
+	Kind  *SystemKeyKind `json:"kind,omitempty"`
+	Label string         `json:"label"`
 }
+
+// SystemKeyKind Which provider the key belongs to. Only an OpenRouter key can be active.
+type SystemKeyKind string
 
 // Usage defines model for Usage.
 type Usage struct {
@@ -1994,6 +2080,12 @@ type PutModelSettingsJSONBodySummaryReasoningEffort string
 
 // UpdatePlanParams defines parameters for UpdatePlan.
 type UpdatePlanParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// PutScraperSettingsParams defines parameters for PutScraperSettings.
+type PutScraperSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
 }
@@ -2135,6 +2227,9 @@ type CreatePlanJSONRequestBody = PlanInput
 // UpdatePlanJSONRequestBody defines body for UpdatePlan for application/json ContentType.
 type UpdatePlanJSONRequestBody = PlanInput
 
+// PutScraperSettingsJSONRequestBody defines body for PutScraperSettings for application/json ContentType.
+type PutScraperSettingsJSONRequestBody = ScraperSettingsInput
+
 // CreateSystemKeyJSONRequestBody defines body for CreateSystemKey for application/json ContentType.
 type CreateSystemKeyJSONRequestBody = SystemKeyInput
 
@@ -2266,6 +2361,12 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(w http.ResponseWriter, r *http.Request, id ID, params UpdatePlanParams)
+
+	// (GET /v1/admin/scraper-settings)
+	GetScraperSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/scraper-settings)
+	PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams)
 
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(w http.ResponseWriter, r *http.Request)
@@ -2936,6 +3037,65 @@ func (siw *ServerInterfaceWrapper) UpdatePlan(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePlan(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScraperSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetScraperSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScraperSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutScraperSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutScraperSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutScraperSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutScraperSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5418,6 +5578,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/extraction-models", wrapper.ListExtractionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.GetScraperSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.PutScraperSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-estimate", wrapper.GetMatchEstimate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.ListMatchRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.CreateMatchRun)
@@ -5971,6 +6133,84 @@ type UpdatePlandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdatePlandefaultApplicationProblemPlusJSONResponse) VisitUpdatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScraperSettingsRequestObject struct {
+}
+
+type GetScraperSettingsResponseObject interface {
+	VisitGetScraperSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetScraperSettings200JSONResponse ScraperSettings
+
+func (response GetScraperSettings200JSONResponse) VisitGetScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutScraperSettingsRequestObject struct {
+	Params PutScraperSettingsParams
+	Body   *PutScraperSettingsJSONRequestBody
+}
+
+type PutScraperSettingsResponseObject interface {
+	VisitPutScraperSettingsResponse(w http.ResponseWriter) error
+}
+
+type PutScraperSettings200JSONResponse ScraperSettings
+
+func (response PutScraperSettings200JSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9128,6 +9368,12 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(ctx context.Context, request UpdatePlanRequestObject) (UpdatePlanResponseObject, error)
 
+	// (GET /v1/admin/scraper-settings)
+	GetScraperSettings(ctx context.Context, request GetScraperSettingsRequestObject) (GetScraperSettingsResponseObject, error)
+
+	// (PUT /v1/admin/scraper-settings)
+	PutScraperSettings(ctx context.Context, request PutScraperSettingsRequestObject) (PutScraperSettingsResponseObject, error)
+
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(ctx context.Context, request ListSystemKeysRequestObject) (ListSystemKeysResponseObject, error)
 
@@ -9755,6 +10001,63 @@ func (sh *strictHandler) UpdatePlan(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdatePlanResponseObject); ok {
 		if err := validResponse.VisitUpdatePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScraperSettings operation middleware
+func (sh *strictHandler) GetScraperSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetScraperSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScraperSettings(ctx, request.(GetScraperSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScraperSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScraperSettingsResponseObject); ok {
+		if err := validResponse.VisitGetScraperSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutScraperSettings operation middleware
+func (sh *strictHandler) PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams) {
+	var request PutScraperSettingsRequestObject
+
+	request.Params = params
+
+	var body PutScraperSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutScraperSettings(ctx, request.(PutScraperSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutScraperSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutScraperSettingsResponseObject); ok {
+		if err := validResponse.VisitPutScraperSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

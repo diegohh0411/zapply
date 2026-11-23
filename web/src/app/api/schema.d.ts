@@ -833,6 +833,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/scraper-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getScraperSettings"];
+        put: operations["putScraperSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/{id}/match-estimate": {
         parameters: {
             query?: never;
@@ -1858,14 +1874,21 @@ export interface components {
             /** Format: uuid */
             id: string;
             label: string;
+            kind: components["schemas"]["SystemKeyKind"];
             fingerprint: string;
             active: boolean;
             version: number;
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Which provider the key belongs to. Only an OpenRouter key can be active.
+         * @enum {string}
+         */
+        SystemKeyKind: "openrouter" | "firecrawl";
         SystemKeyInput: {
             label: string;
+            kind?: components["schemas"]["SystemKeyKind"];
             key: string;
         };
         KeyActivationInput: {
@@ -1948,6 +1971,41 @@ export interface components {
             summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
             /** @description Extraction model that reads posting fields; null when off. */
             extraction_model?: string | null;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ScraperProvider: {
+            /**
+             * @description The scraping API. Only Firecrawl exists today.
+             * @enum {string}
+             */
+            kind: "firecrawl";
+            /** @description The API's http(s) address; null is Firecrawl's hosted API. */
+            base_url?: string | null;
+            /**
+             * Format: uuid
+             * @description A Firecrawl system key sent to the API; null sends none.
+             */
+            key_id?: string | null;
+        };
+        ScraperRule: {
+            /** @description A bare lowercase hostname. The rule also covers its subdomains. */
+            host: string;
+            /** @description Positions in the provider list, in the order to try them. */
+            providers: number[];
+        };
+        ScraperSettingsInput: {
+            /** @description Tried in order until one reads the page. */
+            providers: components["schemas"]["ScraperProvider"][];
+            /** @description The first rule whose host matches the posting's host replaces the default order. */
+            rules: components["schemas"]["ScraperRule"][];
+        };
+        ScraperSettings: {
+            providers: components["schemas"]["ScraperProvider"][];
+            rules: components["schemas"]["ScraperRule"][];
+            /** @description False until an owner saves, or the environment is imported at first boot. */
+            saved: boolean;
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3857,6 +3915,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getScraperSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scraper providers and per-site rules (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScraperSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putScraperSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScraperSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Updated settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScraperSettings"];
                 };
             };
             default: components["responses"]["Problem"];

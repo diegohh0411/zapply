@@ -1193,6 +1193,15 @@ type PlatformProviderLock struct {
 	ID bool
 }
 
+type PlatformScraperSetting struct {
+	ID        bool
+	Providers json.RawMessage
+	Rules     json.RawMessage
+	SavedAt   *time.Time
+	Version   int32
+	UpdatedAt time.Time
+}
+
 type PlatformSystemKey struct {
 	ID                uuid.UUID
 	Label             string
@@ -1202,6 +1211,7 @@ type PlatformSystemKey struct {
 	Active            bool
 	Version           int32
 	CreatedAt         time.Time
+	Kind              string
 }
 
 type Profile struct {

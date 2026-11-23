@@ -55,6 +55,21 @@ podman compose up -d --build   # http://localhost:8080
 podman compose down
 ```
 
+### Scraping posting links
+
+Posting links in the new job dialog are read by scrapers that a platform owner
+manages in the web app (Administration, Scraping): an ordered list of
+providers, where the next one is tried when one fails, and per-site rules that
+choose other providers for a host and its subdomains. Provider keys are stored
+as encrypted system keys (Administration, Models & keys) and need
+`SYSTEM_KEY_RING`.
+
+`SCRAPER_PROVIDER`, `FIRECRAWL_URL` and `FIRECRAWL_API_KEY` (or
+`FIRECRAWL_TOKEN`) only seed a deployment that has no saved scraper settings:
+the API imports them as the first provider the first time it boots, storing the
+key as a system key. After that the environment is ignored, and edits happen in
+the admin UI.
+
 Gmail push needs a public URL, so leave the `GOOGLE_PUBSUB_*` variables out and
 set `MAIL_RECONCILE_INTERVAL` (e.g. `5m`) for mail to sync while it runs. Google
 sign-in for mail needs `http://localhost:8080/oauth/google/callback` on the
