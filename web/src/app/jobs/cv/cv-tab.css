@@ -9,8 +9,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem 1.5rem;
-  padding: 0.85rem 0;
+  gap: 0.5rem 1.5rem;
+  padding: 0.6rem 0;
   background: var(--background);
   border-bottom: 1px solid var(--border);
 }
@@ -43,8 +43,7 @@
   gap: 0.5rem;
   margin-bottom: 0.35rem;
 }
-.editor-heading h3,
-.preview-settings h3 {
+.editor-heading h3 {
   font-size: 0.9375rem;
   font-weight: 600;
 }
@@ -152,19 +151,29 @@ button:disabled {
   color: var(--muted-foreground);
   font-weight: 400;
 }
+/* One compact row above the frame: page count on the left, the two selects
+   on the right. Wraps only when the column is too narrow for all three. */
+.preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+.preview-status {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
 .preview-settings {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 0.75rem;
-}
-.preview-settings h3 {
-  margin-right: auto;
-  align-self: center;
+  gap: 0.5rem;
 }
 .preview-settings label {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.15rem;
   font-size: 0.6875rem;
   color: var(--muted-foreground);
 }
@@ -213,9 +222,28 @@ summary:focus-visible {
   .cv-columns {
     grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.1fr);
   }
+  /* Pin the preview under the sticky toolbar and fill the rest of the
+     viewport, so the whole PDF is visible without scrolling. The frame takes
+     whatever height the status row leaves over. */
   .cv-preview {
     position: sticky;
-    top: 9.75rem;
+    top: 7.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: calc(100vh - 7.25rem - 0.75rem);
+    min-height: 30rem;
+  }
+  .cv-preview .pdf-frame {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .cv-preview .pdf-frame iframe {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
   }
 }
 @media (max-width: 40rem) {
