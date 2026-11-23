@@ -245,9 +245,15 @@ export class JobSheet {
   /** The description section starts open when there is none to check, or the read failed. */
   protected readonly descriptionOpen = signal(true);
 
+  private readonly descriptionField =
+    viewChild<ElementRef<HTMLTextAreaElement>>('descriptionField');
+
   private openReview(): void {
     this.descriptionOpen.set(!this.form.description.trim() || !!this.readProblem());
     this.step.set('review');
+    // The read failed and there is nothing to check: the next thing to do is paste it.
+    if (this.readProblem() && !this.form.description.trim())
+      setTimeout(() => this.descriptionField()?.nativeElement.focus());
   }
 
   protected enterByHand(): void {
