@@ -39,8 +39,22 @@ func ExtractionRequest(model, text string) extraction.Request {
 		"salary_max":      amount("highest"),
 		"salary_currency": {Type: extraction.Text, Instructions: "The currency of the salary, such as USD, EUR or MXN"},
 		"salary_period":   {Type: extraction.Text, Instructions: "How often the salary is counted: per year, per month or per hour"},
+		"description":     {Type: extraction.Text, Instructions: descriptionInstructions},
 	}}
 }
+
+// descriptionInstructions asks for the posting's own text, cleaned of the
+// page around it, not a summary: it is what matching reads.
+const descriptionInstructions = "The full job description exactly as the posting words it, as markdown: " +
+	"the role overview, responsibilities, qualifications, compensation, benefits and the employer's statements. " +
+	"Keep every sentence, heading and list item of the description itself, word for word; do not summarize or rephrase. " +
+	"Leave out everything that is not part of the description: navigation, breadcrumbs, back links, apply or submit buttons, " +
+	"share and save icons, images, cookie banners, related or similar jobs, search links and site footers."
+
+// minDescription is the shortest cleaned description kept: anything shorter
+// is more likely a summary or a fragment than the posting, so the page's
+// text stays instead.
+const minDescription = 200
 
 // FromExtraction maps an extraction's answers onto job fields. Answers that
 // do not fit a field's values (a work mode the job API has no value for, an
@@ -80,6 +94,7 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 		SalaryMax:      num("salary_max"),
 		SalaryCurrency: currency(str("salary_currency")),
 		SalaryPeriod:   period(str("salary_period")),
+		Description:    description(answers, r.State),
 	}
 	if p.SalaryMin == nil && p.SalaryMax == nil {
 		p.SalaryCurrency, p.SalaryPeriod = "", ""
@@ -95,6 +110,23 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 		p.SalaryMin, p.SalaryMax = p.SalaryMax, p.SalaryMin
 	}
 	return p
+}
+
+// description keeps the model's cleaned description when it is plausibly the
+// posting's own text: long enough, and not longer than what it was read from.
+func description(answers map[string]extraction.Answer, state string) string {
+	a, ok := answers["description"]
+	if !ok || a.Type != extraction.Text || (a.Confidence != nil && *a.Confidence < minConfidence) {
+		return ""
+	}
+	var s string
+	_ = json.Unmarshal(a.Value, &s)
+	s = strings.TrimSpace(s)
+	n := utf8.RuneCountInString(s)
+	if n < minDescription || n > utf8.RuneCountInString(state) || n > maxDescription {
+		return ""
+	}
+	return s
 }
 
 func limit(s string, n int) string {
