@@ -104,8 +104,9 @@ func (c *Client) ExtractionSheet(ctx context.Context, model string) (billing.She
 	return billing.Sheet{}, &modelapi.ProviderError{Code: "extraction_model_unavailable", Uncharged: true}
 }
 
-// Extract sends one extraction request. Like decisions, HTTP statuses alone
-// do not establish that a call was uncharged once it was sent.
+// Extract sends one extraction request. HTTP statuses alone do not establish
+// that a call was uncharged once it was sent; an error envelope without any
+// billing evidence does (see confirmUncharged).
 func (c *Client) Extract(ctx context.Context, key string, r extraction.Request, q modelapi.Quote) (modelapi.Result, error) {
 	if q.Model != r.Model || time.Since(q.FetchedAt) > 15*time.Minute {
 		return modelapi.Result{}, &modelapi.ProviderError{Code: "stale_quote", Uncharged: true}
@@ -154,7 +155,15 @@ func (c *Client) Extract(ctx context.Context, key string, r extraction.Request, 
 		}
 		result.Amount = &n
 	}
-	if callErr != nil || result.Text == "" {
+	if callErr != nil {
+		// A rejection carrying no generation ID or usage was not billed.
+		confirmUncharged(raw, callErr)
+		if errors.As(callErr, &pe) && pe.Uncharged {
+			return result, callErr
+		}
+		return result, &modelapi.ProviderError{Code: "response_uncertain"}
+	}
+	if result.Text == "" {
 		return result, &modelapi.ProviderError{Code: "response_uncertain"}
 	}
 	return result, nil

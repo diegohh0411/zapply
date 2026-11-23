@@ -89,7 +89,7 @@ func TestAmbiguousRequestIsNotRetried(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(503)
-		_, _ = w.Write([]byte(`{"error":"do not log this raw body"}`))
+		_, _ = w.Write([]byte(`<html>do not log this raw body</html>`))
 	}))
 	defer server.Close()
 	c := New("test/model", "test")
@@ -133,7 +133,11 @@ func TestErrorResponsesPreserveBillingEvidence(t *testing.T) {
 		uncharged bool
 	}{
 		{"charged moderation", 403, `{"id":"gen-filtered","error":{"code":403,"metadata":{"provider_name":"test"}},"usage":{"cost":0.2,"prompt_tokens":2}}`, true, false},
-		{"unknown moderation", 403, `{"error":{"code":403,"metadata":{"provider_name":"test"}}}`, false, false},
+		{"rejected moderation", 403, `{"error":{"code":403,"metadata":{"provider_name":"test"}}}`, false, true},
+		{"provider error without generation", 502, `{"error":{"code":502,"message":"upstream"}}`, false, true},
+		{"provider error with generation", 502, `{"id":"gen-x","error":{"code":502}}`, false, false},
+		{"provider error with usage", 502, `{"error":{"code":502},"usage":{"prompt_tokens":3}}`, false, false},
+		{"non-JSON gateway error", 504, `<html>gateway timeout</html>`, false, false},
 		{"credits rejected", 402, `{"error":{"code":402}}`, false, true},
 		{"key budget rejected", 403, `{"error":{"code":403,"metadata":{"limit_source":"openrouter_key_limit"}}}`, false, true},
 	}

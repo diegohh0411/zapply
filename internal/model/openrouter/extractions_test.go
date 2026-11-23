@@ -14,7 +14,7 @@ import (
 )
 
 func TestExtractionHTTPAndReservation(t *testing.T) {
-	reject := false
+	reject, unprocessable := false, false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/models":
@@ -29,6 +29,11 @@ func TestExtractionHTTPAndReservation(t *testing.T) {
 			var body extraction.Request
 			if json.NewDecoder(r.Body).Decode(&body) != nil || body.Fields["salary_min"].Type != "number" || body.State == "" {
 				t.Error("bad wire shape")
+			}
+			if unprocessable {
+				w.WriteHeader(422)
+				w.Write([]byte(`{"error":{"code":422,"message":"extraction failed"}}`))
+				return
 			}
 			if reject {
 				w.WriteHeader(400)
@@ -68,6 +73,13 @@ func TestExtractionHTTPAndReservation(t *testing.T) {
 	if !errors.As(e, &pe) || pe.Code != "request_rejected" || !pe.Uncharged {
 		t.Errorf("rejected request: %v", e)
 	}
+	// An error envelope without a generation ID or usage was not billed.
+	reject, unprocessable = false, true
+	_, e = c.Extract(context.Background(), "test-key", r, q)
+	if !errors.As(e, &pe) || !pe.Uncharged {
+		t.Errorf("422 without billing evidence: %v", e)
+	}
+	unprocessable = false
 	// Untyped models are refused number fields before anything is sent.
 	r.Model = "scaledown/extract"
 	if _, e := modelapi.QuoteExtraction(context.Background(), c, r, billing.Calibration{}); !errors.As(e, &pe) || pe.Code != "invalid_request" {
