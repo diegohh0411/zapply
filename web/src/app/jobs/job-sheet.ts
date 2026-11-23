@@ -13,9 +13,11 @@ import {
   viewChild,
   type ElementRef,
   untracked,
+  computed,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowLeft,
@@ -51,7 +53,9 @@ import { ZardToggleGroupComponent } from '@/shared/components/toggle-group';
 import { describeLink, readPosting } from './posting-link';
 
 import { CvTab } from './cv/cv-tab';
-import { MailTab } from './mail-tab';
+import { MailEntry } from './mail-entry';
+import { Api, type Schemas } from '../core/api';
+import { EventsService } from '../core/events.service';
 import { StatusSelect } from './status-select';
 import { AuthService } from '../core/auth.service';
 import { ApiError } from '../core/api';
@@ -66,11 +70,10 @@ import {
   type PostingRead,
 } from './jobs.store';
 
-export type JobTab = 'details' | 'cv' | 'mail' | 'activity';
+export type JobTab = 'details' | 'cv' | 'activity';
 const workspaceTabs = [
   { id: 'details', label: 'Details', icon: 'lucideBriefcaseBusiness' },
   { id: 'cv', label: 'Match & CV', icon: 'lucideFileText' },
-  { id: 'mail', label: 'Mail', icon: 'lucideMail' },
   { id: 'activity', label: 'Activity', icon: 'lucideHistory' },
 ] as const;
 
@@ -130,7 +133,8 @@ function formatIsoDate(value: Date | Date[] | null): string {
   selector: 'app-job-sheet',
   imports: [
     CvTab,
-    MailTab,
+    MailEntry,
+    RouterLink,
     StatusSelect,
     DatePipe,
     NgTemplateOutlet,
@@ -272,7 +276,8 @@ export class JobSheet {
       autoFilled[key] = value;
     };
     const { description, extraction_id, page_error, ...fields } = page ?? { description: '' };
-    if (page_error) this.readProblem.set(`Couldn’t read the page: ${page_error}. Read the pasted text instead.`);
+    if (page_error)
+      this.readProblem.set(`Couldn’t read the page: ${page_error}. Read the pasted text instead.`);
     fill('description', description);
     const guessed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
@@ -296,7 +301,11 @@ export class JobSheet {
     this.extracting.set(true);
     let result: PostingExtraction | null = null;
     try {
-      for (let wait = 500, waited = 0; waited < 90_000; waited += wait, wait = Math.min(wait * 1.5, 4000)) {
+      for (
+        let wait = 500, waited = 0;
+        waited < 90_000;
+        waited += wait, wait = Math.min(wait * 1.5, 4000)
+      ) {
         await new Promise((resolve) => setTimeout(resolve, wait));
         if (generation !== this.generation) return;
         const r = await this.store.postingExtraction(id);
@@ -320,7 +329,9 @@ export class JobSheet {
     const filled = new Set(this.filled());
     const salaryKeys = ['salary_min', 'salary_max', 'salary_currency', 'salary_period'];
     const replaceable = (key: string) =>
-      form[key] === '' || form[key] === null || (key in this.guessed && form[key] === this.guessed[key]);
+      form[key] === '' ||
+      form[key] === null ||
+      (key in this.guessed && form[key] === this.guessed[key]);
     // A salary is one reading: take all of it or none, so a range never mixes sources.
     const salary = salaryKeys.every(replaceable);
     for (const [key, value] of Object.entries(fields)) {
@@ -353,6 +364,20 @@ export class JobSheet {
   private etag = '';
   private generation = 0;
   private activitiesRequest = 0;
+  private readonly api = inject(Api);
+  protected readonly mail = signal<Schemas['MailMessage'][]>([]);
+  /** Activity and mail interleaved, newest first. */
+  protected readonly timelineItems = computed(() =>
+    [
+      ...this.activities().map((a) => ({
+        kind: 'activity' as const,
+        id: 'a' + a.id,
+        at: a.occurred_at,
+        a,
+      })),
+      ...this.mail().map((m) => ({ kind: 'mail' as const, id: 'm' + m.id, at: m.received_at, m })),
+    ].sort((x, y) => Date.parse(y.at) - Date.parse(x.at)),
+  );
 
   constructor() {
     // Statuses can arrive after the sheet opens: start new jobs in the first "saved" status.
@@ -384,6 +409,8 @@ export class JobSheet {
         this.job.set(null);
         this.form = emptyForm();
         this.activities.set([]);
+        this.mail.set([]);
+        this.mail.set([]);
         this.activityError.set('');
         this.activityLoading.set(false);
         this.errors.set({});
@@ -407,6 +434,18 @@ export class JobSheet {
     this.store.activityChanged.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((jobId) => {
       if (jobId === this.job()?.id) void this.loadActivities(jobId);
     });
+    // Mail is part of the timeline: refresh when a message is classified or after a resync.
+    const events = inject(EventsService);
+    const destroyed = takeUntilDestroyed<unknown>(inject(DestroyRef));
+    const reloadMail = () => {
+      const id = this.job()?.id;
+      if (id) void this.loadActivities(id);
+    };
+    events.changes.pipe(destroyed).subscribe((e) => {
+      if ((e as { topic?: string }).topic === 'mail.message.classified') reloadMail();
+    });
+    events.resync.pipe(destroyed).subscribe(reloadMail);
+
     // Another tab or device saved this job: refresh unless there are local edits.
     effect(() => {
       const cur = this.job();
@@ -493,14 +532,28 @@ export class JobSheet {
     const current = () =>
       generation === this.generation && seq === this.activitiesRequest && this.job()?.id === id;
     try {
-      const rows = await this.store.activities(id);
-      if (current()) this.activities.set(rows);
+      const [rows, mail] = await Promise.all([
+        this.store.activities(id),
+        this.api.client
+          .GET('/v1/mail/messages', { params: { query: { job_id: id, limit: 50 } } })
+          .then((r) => Api.ok(r).items)
+          // Mail is optional context: keep the timeline when the mailbox is unavailable.
+          .catch(() => [] as Schemas['MailMessage'][]),
+      ]);
+      if (current()) {
+        this.activities.set(rows);
+        this.mail.set(mail);
+      }
     } catch (e) {
       if (current())
         this.activityError.set(e instanceof Error ? e.message : 'Could not load activity.');
     } finally {
       if (current()) this.activityLoading.set(false);
     }
+  }
+
+  protected replaceMail(m: Schemas['MailMessage']): void {
+    this.mail.update((list) => list.map((x) => (x.id === m.id ? m : x)));
   }
 
   protected refreshActivity(): void {
@@ -511,6 +564,8 @@ export class JobSheet {
   private validTab(tab: string | undefined): JobTab {
     // Keep existing bookmarks to the old Match tab working.
     if (tab === 'match') return 'cv';
+    // Mail now lives in the Activity timeline.
+    if (tab === 'mail') return 'activity';
     return this.tabs.find((t) => t.id === tab)?.id ?? 'details';
   }
 

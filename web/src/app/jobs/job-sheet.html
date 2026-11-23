@@ -90,8 +90,7 @@
           >
             <ng-icon name="lucideTriangleAlert" class="size-4 shrink-0 text-amber-600" />
             <span class="min-w-0 flex-1"
-              >You already saved this posting as <strong>{{ d.title }}</strong
-              >.</span
+              >You already saved this posting as <strong>{{ d.title }}</strong>.</span
             >
             <button z-button zType="outline" zSize="sm" type="button" (click)="opened.emit(d.id)">
               Open it
@@ -485,8 +484,8 @@
             (keydown)="tabKeydown($event, t.id)"
           >
             <ng-icon [name]="t.icon" /> {{ t.label }}
-            @if (t.id === 'activity' && activities().length) {
-              <span class="tab-count">{{ activities().length }}</span>
+            @if (t.id === 'activity' && timelineItems().length) {
+              <span class="tab-count">{{ timelineItems().length }}</span>
             }
             @if (t.id === 'details' && dirty()) {
               <span class="size-1.5 rounded-full bg-brand" aria-label="Unsaved changes"></span>
@@ -521,17 +520,6 @@
           >
             @if (visitedTabs().has('cv')) {
               <app-cv-tab class="block min-w-0" [jobId]="j.id" [company]="j.company" />
-            }
-          </div>
-          <div
-            id="job-panel-mail"
-            role="tabpanel"
-            aria-labelledby="job-tab-mail"
-            [hidden]="activeTab() !== 'mail'"
-            tabindex="0"
-          >
-            @if (visitedTabs().has('mail')) {
-              <app-mail-tab [jobId]="j.id" />
             }
           </div>
           <div
@@ -792,7 +780,10 @@
 <ng-template #timeline>
   <div class="tab-heading">
     <h2>Application activity</h2>
-    <p>A running record of decisions, conversations, and next steps.</p>
+    <p>
+      Notes, status changes, and mail from your connected mailbox.
+      <a routerLink="/mail" class="underline-offset-4 hover:underline">Manage mailbox</a>
+    </p>
   </div>
   @if (activityError()) {
     <div
@@ -836,77 +827,90 @@
       </form>
     </aside>
     <ol aria-label="Application timeline" class="relative flex flex-col gap-4 border-l pl-5">
-      @for (a of activities(); track a.id) {
-        <li class="relative">
-          <span
-            class="absolute -left-[26px] top-1 flex size-3 items-center justify-center rounded-full border-2 border-background"
-            [class]="a.type === 'note' ? 'bg-brand' : 'bg-muted-foreground'"
-          ></span>
-          <div class="flex flex-wrap items-baseline justify-between gap-2">
-            <p class="text-sm">
-              @switch (a.type) {
-                @case ('created') {
-                  Saved in <strong>{{ a.to_status }}</strong>
+      @for (item of timelineItems(); track item.id) {
+        @if (item.kind === 'mail') {
+          <li class="relative">
+            <span
+              class="absolute -left-[30px] top-0.5 flex size-5 items-center justify-center rounded-full border-2 border-background bg-muted text-muted-foreground"
+              ><ng-icon name="lucideMail" class="size-3"
+            /></span>
+            <app-mail-entry [message]="item.m" (changed)="replaceMail($event)" />
+          </li>
+        } @else {
+          @let a = item.a;
+          <li class="relative">
+            <span
+              class="absolute -left-[26px] top-1 flex size-3 items-center justify-center rounded-full border-2 border-background"
+              [class]="a.type === 'note' ? 'bg-brand' : 'bg-muted-foreground'"
+            ></span>
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="text-sm">
+                @switch (a.type) {
+                  @case ('created') {
+                    Saved in <strong>{{ a.to_status }}</strong>
+                  }
+                  @case ('status_changed') {
+                    <span class="inline-flex flex-wrap items-center gap-1"
+                      >{{ a.from_status }} <ng-icon name="lucideArrowRight" class="size-3" />
+                      <strong>{{ a.to_status }}</strong></span
+                    >
+                  }
+                  @case ('note') {
+                    <span class="font-medium">Note</span>
+                  }
                 }
-                @case ('status_changed') {
-                  <span class="inline-flex flex-wrap items-center gap-1"
-                    >{{ a.from_status }} <ng-icon name="lucideArrowRight" class="size-3" />
-                    <strong>{{ a.to_status }}</strong></span
-                  >
-                }
-                @case ('note') {
-                  <span class="font-medium">Note</span>
-                }
-              }
-            </p>
-            <time class="shrink-0 text-xs text-muted-foreground" [attr.datetime]="a.occurred_at">{{
-              a.occurred_at | date: 'medium'
-            }}</time>
-          </div>
-          @if (a.type === 'note') {
-            @if (editingNote() === a.id) {
-              <div class="mt-1 flex flex-col gap-2">
-                <textarea
-                  z-textarea
-                  rows="3"
-                  name="noteEdit"
-                  aria-label="Edit activity note"
-                  [(ngModel)]="noteEdit"
-                ></textarea>
-                <div class="flex justify-end gap-2">
-                  <button
-                    z-button
-                    zType="ghost"
-                    zSize="sm"
-                    type="button"
-                    (click)="editingNote.set(null)"
-                  >
-                    Cancel
+              </p>
+              <time
+                class="shrink-0 text-xs text-muted-foreground"
+                [attr.datetime]="a.occurred_at"
+                >{{ a.occurred_at | date: 'medium' }}</time
+              >
+            </div>
+            @if (a.type === 'note') {
+              @if (editingNote() === a.id) {
+                <div class="mt-1 flex flex-col gap-2">
+                  <textarea
+                    z-textarea
+                    rows="3"
+                    name="noteEdit"
+                    aria-label="Edit activity note"
+                    [(ngModel)]="noteEdit"
+                  ></textarea>
+                  <div class="flex justify-end gap-2">
+                    <button
+                      z-button
+                      zType="ghost"
+                      zSize="sm"
+                      type="button"
+                      (click)="editingNote.set(null)"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      z-button
+                      zSize="sm"
+                      type="button"
+                      [zDisabled]="!noteEdit.trim()"
+                      (click)="saveNote(a)"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                <p class="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{{ a.body }}</p>
+                <div class="mt-1 flex gap-1">
+                  <button z-button zType="ghost" zSize="xs" type="button" (click)="startEdit(a)">
+                    <ng-icon name="lucidePencil" /> Edit
                   </button>
-                  <button
-                    z-button
-                    zSize="sm"
-                    type="button"
-                    [zDisabled]="!noteEdit.trim()"
-                    (click)="saveNote(a)"
-                  >
-                    Save
+                  <button z-button zType="ghost" zSize="xs" type="button" (click)="deleteNote(a)">
+                    <ng-icon name="lucideTrash2" /> Delete
                   </button>
                 </div>
-              </div>
-            } @else {
-              <p class="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{{ a.body }}</p>
-              <div class="mt-1 flex gap-1">
-                <button z-button zType="ghost" zSize="xs" type="button" (click)="startEdit(a)">
-                  <ng-icon name="lucidePencil" /> Edit
-                </button>
-                <button z-button zType="ghost" zSize="xs" type="button" (click)="deleteNote(a)">
-                  <ng-icon name="lucideTrash2" /> Delete
-                </button>
-              </div>
+              }
             }
-          }
-        </li>
+          </li>
+        }
       } @empty {
         <li class="py-6 text-sm text-muted-foreground">
           {{
