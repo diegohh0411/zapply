@@ -206,7 +206,7 @@ func Load() (Config, error) {
 	if c.Google.PubSubAudience == "" && c.Google.PublicURL != "" {
 		c.Google.PubSubAudience = c.Google.PushURL()
 	}
-	if c.Relay.Interval, err = time.ParseDuration(get("RELAY_INTERVAL", "200ms")); err != nil || c.Relay.Interval <= 0 {
+	if c.Relay.Interval, err = time.ParseDuration(get("RELAY_INTERVAL", "15s")); err != nil || c.Relay.Interval <= 0 {
 		errs = append(errs, fmt.Errorf("RELAY_INTERVAL must be a positive duration, got %q", get("RELAY_INTERVAL", "")))
 	}
 	if c.Relay.Retention, err = time.ParseDuration(get("EVENT_RETENTION", "24h")); err != nil || c.Relay.Retention <= 0 {

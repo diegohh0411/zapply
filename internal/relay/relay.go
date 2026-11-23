@@ -32,9 +32,10 @@ type Publisher interface {
 }
 
 type Config struct {
-	Interval  time.Duration // poll interval when idle
-	Batch     int           // rows per transaction
-	Retention time.Duration // published rows older than this are pruned
+	Interval  time.Duration   // fallback poll interval when idle
+	Wake      <-chan struct{} // optional: ends an idle wait early (outbox inserts)
+	Batch     int             // rows per transaction
+	Retention time.Duration   // published rows older than this are pruned
 }
 
 type Relay struct {
@@ -70,7 +71,8 @@ const (
 )
 
 // Run relays until ctx is cancelled. A full batch is followed by another one
-// immediately; otherwise it waits Interval. Errors back off up to 5 s.
+// immediately; otherwise it waits Interval or until Wake fires. Errors back
+// off up to 5 s.
 func (r *Relay) Run(ctx context.Context) error {
 	var lastPrune time.Time
 	backoff := r.cfg.Interval
@@ -106,8 +108,17 @@ func (r *Relay) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(wait):
+		case <-r.wake(err):
 		}
 	}
+}
+
+// wake is Wake while healthy; after an error it is nil, so backoff holds.
+func (r *Relay) wake(err error) <-chan struct{} {
+	if err != nil {
+		return nil
+	}
+	return r.cfg.Wake
 }
 
 // Step relays one batch and reports how many events it published.
