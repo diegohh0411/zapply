@@ -460,6 +460,31 @@ test('a failed extraction still opens the form, with a note', async () => {
   assert.equal(sheet.form.description, 'Raw page text');
 });
 
+test('when the page cannot be read, the form opens for a pasted description that is then read', async () => {
+  const calls = [];
+  const sheet = sheetStore({
+    readPosting: async (url, text) => {
+      calls.push(text);
+      if (!text) throw Object.assign(new Error('blocked'), { status: 502, fieldErrors: [] });
+      return { description: '', extraction_id: 'x2' };
+    },
+    postingExtraction: async () => ({ status: 'completed', title: 'Pasted role', company: 'Acme' }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/1';
+  await sheet.continueFromLink();
+  assert.equal(sheet.step(), 'review');
+  assert.match(sheet.readProblem(), /Couldn’t read the page/);
+  assert.equal(sheet.descriptionOpen(), true, 'the description is open to paste into');
+  sheet.form.description = 'Acme is hiring a role. '.repeat(20);
+  await sheet.readPastedText();
+  await until(() => sheet.step() === 'review' && sheet.form.company === 'Acme');
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /Acme is hiring/);
+  assert.equal(sheet.form.title, 'Pasted role');
+  assert.equal(sheet.readProblem(), '');
+});
+
 test('closing capture preserves a rejected draft and restores the dialog after Escape', async () => {
   const sheet = sheetStore();
   await sheet.load({ new: true });

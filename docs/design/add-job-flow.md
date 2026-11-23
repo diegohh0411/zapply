@@ -34,7 +34,7 @@ NN/g recommends grouping related fields, reducing optional questions, and progre
 
 ## Extraction first
 
-Pasting a posting link is now the first step: the read starts on paste, a loader names what is happening (opening the page, picking out the details), and the same dialog opens on a filled form whose extracted fields are marked. "Fill it in myself" opens the form early without losing the answer, Cancel returns to the link, and a failed read still opens the form with a note. Posting text can be pasted under a disclosure when a page needs a login.
+Pasting a posting link is now the first step: the read starts on paste, a loader names what is happening (opening the page, picking out the details), and the same dialog opens on a filled form whose extracted fields are marked. "Fill it in myself" opens the form early without losing the answer, Cancel returns to the link, and a failed read still opens the form with a note. The first step is only the link. When the page cannot be read, the form opens with the description section open and a note; pasting the description there and choosing "Fill the form from this text" runs the extraction on it.
 
 ## Further opportunities
 

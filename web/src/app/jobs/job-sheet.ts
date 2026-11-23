@@ -242,9 +242,24 @@ export class JobSheet {
   protected readonly slow = signal(false);
   private slowTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** The description section starts open when there is none to check, or the read failed. */
+  protected readonly descriptionOpen = signal(true);
+
+  private openReview(): void {
+    this.descriptionOpen.set(!this.form.description.trim() || !!this.readProblem());
+    this.step.set('review');
+  }
+
   protected enterByHand(): void {
     this.readProblem.set('');
-    this.step.set('review');
+    this.openReview();
+  }
+
+  /** The page could not be read: read the description the person pasted instead. */
+  protected readPastedText(): void {
+    if (this.step() !== 'review' || !this.form.url.trim() || !this.form.description.trim()) return;
+    this.step.set('link');
+    void this.continueFromLink();
   }
 
   /** Pasting a link is the whole question: start reading as soon as it lands. */
@@ -258,7 +273,7 @@ export class JobSheet {
 
   /** Stops waiting: the form opens as it is, and what the model reads later still lands in it. */
   protected skipWaiting(): void {
-    if (this.step() === 'reading') this.step.set('review');
+    if (this.step() === 'reading') this.openReview();
   }
 
   /** Abandons the read and returns to the link. */
@@ -322,8 +337,7 @@ export class JobSheet {
       autoFilled[key] = value;
     };
     const { description, extraction_id, page_error, ...fields } = page ?? { description: '' };
-    if (page_error)
-      this.readProblem.set(`Couldn’t read the page: ${page_error}. Read the pasted text instead.`);
+    if (page_error) this.readProblem.set(`Couldn’t read the page: ${page_error}.`);
     fill('description', description);
     const guessed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
@@ -343,7 +357,7 @@ export class JobSheet {
     if (generation !== this.generation) return;
     this.clearSlowTimer();
     // Not when the person already moved on: skipped to the form, or back to the link.
-    if (this.step() === 'reading' || !url) this.step.set('review');
+    if (this.step() === 'reading' || !url) this.openReview();
     this.cdr.markForCheck();
   }
 

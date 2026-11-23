@@ -100,23 +100,6 @@
             </button>
           </div>
         }
-        <details class="group" [open]="!!form.description">
-          <summary
-            class="cursor-pointer select-none text-sm text-muted-foreground hover:text-foreground"
-          >
-            Page needs a login, or won’t load? Paste the posting text too
-          </summary>
-          <label class="field mt-3">
-            <span class="sr-only">Posting text</span>
-            <textarea
-              z-textarea
-              name="description"
-              rows="6"
-              [(ngModel)]="form.description"
-              placeholder="Paste the posting text: it is read instead of the page when the page can’t be opened"
-            ></textarea>
-          </label>
-        </details>
       } @else if (step() === 'reading') {
         <div class="flex flex-col gap-6 py-2" role="status" aria-live="polite">
           <div class="min-w-0">
@@ -180,7 +163,12 @@
         @if (readProblem(); as problem) {
           <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
             <ng-icon name="lucideTriangleAlert" class="size-3.5 text-amber-600" />
-            {{ problem }} Filled what the link says.
+            {{ problem }}
+            {{
+              form.description.trim()
+                ? 'Check the details below.'
+                : 'Paste the job description below and we’ll read that instead.'
+            }}
           </p>
         }
         @if (extracting()) {
@@ -367,7 +355,11 @@
           }
         </div>
         <div class="border-t">
-          <details class="capture-section" [open]="!form.description">
+          <details
+            class="capture-section"
+            [open]="descriptionOpen()"
+            (toggle)="descriptionOpen.set($any($event.target).open)"
+          >
             <summary>
               Job description
               <span>{{
@@ -387,6 +379,19 @@
                 placeholder="Paste the job posting here"
               ></textarea>
             </label>
+            @if (readProblem() && form.url.trim() && form.description.trim()) {
+              <div class="-mt-2 pb-4">
+                <button
+                  z-button
+                  zType="outline"
+                  zSize="sm"
+                  type="button"
+                  (click)="readPastedText()"
+                >
+                  <ng-icon name="lucideSparkles" /> Fill the form from this text
+                </button>
+              </div>
+            }
           </details>
           <details class="capture-section">
             <summary>Notes <span>Contacts, reminders, anything useful</span></summary>
@@ -417,12 +422,7 @@
       <button z-button zType="ghost" type="button" (click)="enterByHand()">
         Enter details by hand
       </button>
-      <button
-        z-button
-        type="submit"
-        form="capture-form"
-        [zDisabled]="!form.url.trim() && !form.description.trim()"
-      >
+      <button z-button type="submit" form="capture-form" [zDisabled]="!form.url.trim()">
         <ng-icon name="lucideSparkles" /> Read posting
       </button>
     } @else if (step() === 'reading') {
