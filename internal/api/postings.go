@@ -125,6 +125,7 @@ func (s *server) GetPostingExtraction(ctx context.Context, req gen.GetPostingExt
 		out.SalaryMin, out.SalaryMax = p.SalaryMin, p.SalaryMax
 		out.SalaryCurrency = enumPtr[string](p.SalaryCurrency)
 		out.SalaryPeriod = enumPtr[gen.SalaryPeriod](p.SalaryPeriod)
+		out.Description = enumPtr[string](p.Description)
 	}
 	return out, nil
 }

@@ -290,7 +290,8 @@ export class JobSheet {
 
   /**
    * Fills what the extraction model read once it answers: blank fields, and
-   * fields only guessed from the link, never the page's own data or edits.
+   * fields only guessed from the link, and the page's raw description; never
+   * the page's own data or edits.
    */
   private async awaitExtraction(id: string, generation: number): Promise<void> {
     this.extracting.set(true);
@@ -320,7 +321,11 @@ export class JobSheet {
     const filled = new Set(this.filled());
     const salaryKeys = ['salary_min', 'salary_max', 'salary_currency', 'salary_period'];
     const replaceable = (key: string) =>
-      form[key] === '' || form[key] === null || (key in this.guessed && form[key] === this.guessed[key]);
+      form[key] === '' ||
+      form[key] === null ||
+      (key in this.guessed && form[key] === this.guessed[key]) ||
+      // The raw page text gives way to the cleaned description, unless it was edited.
+      (key === 'description' && form[key] === this.autoFilled[key]);
     // A salary is one reading: take all of it or none, so a range never mixes sources.
     const salary = salaryKeys.every(replaceable);
     for (const [key, value] of Object.entries(fields)) {

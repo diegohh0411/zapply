@@ -1,6 +1,8 @@
 package posting
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/diegohh0411/zapply/internal/model/extraction"
@@ -44,5 +46,24 @@ func TestFromExtraction(t *testing.T) {
 	}
 	if p := FromExtraction(plain, `not json`); p.Title != "" || p.SalaryMin != nil {
 		t.Errorf("garbage: %+v", p)
+	}
+}
+
+func TestFromExtractionDescription(t *testing.T) {
+	body := strings.Repeat("Build models that run on device. ", 10)
+	page := "[Back to search results](x)\n\n[Submit Resume](y)\n\n" + body + "\n\n[Submit Resume](y)"
+	r := ExtractionRequest("cloudflare/clairic", page)
+	answer := func(v string) string {
+		b, _ := json.Marshal(v)
+		return `{"description":{"type":"text","value":` + string(b) + `}}`
+	}
+	if p := FromExtraction(r, answer(body)); p.Description != strings.TrimSpace(body) {
+		t.Errorf("cleaned description dropped: %q", p.Description)
+	}
+	if p := FromExtraction(r, answer("A summary.")); p.Description != "" {
+		t.Errorf("short description kept: %q", p.Description)
+	}
+	if p := FromExtraction(r, answer(page+page)); p.Description != "" {
+		t.Errorf("description longer than the page kept")
 	}
 }
