@@ -61,6 +61,25 @@ sign-in for mail needs `http://localhost:8080/oauth/google/callback` on the
 OAuth client, and Supabase sign-in needs `http://localhost:8080` among the
 project's redirect URLs. Migrations: `podman compose run --rm app migrate`.
 
+### Local Supabase (development only)
+
+A copy of the hosted project on this machine: Postgres 17, Auth, Studio and
+Mailpit, run by the Supabase CLI (through `npx`; Podman works, the Makefile
+points the CLI at its socket). Production keeps using hosted Supabase.
+
+```sh
+make supa-up        # first run creates supabase/signing_keys.json (ES256)
+make supa-pull      # dumps the hosted project from MIGRATE_DATABASE_URL in .env
+make supa-restore   # loads supabase/backup into the local database
+cp .env.supabase.example .env.supabase   # add the printed publishable key
+make web && make run-all ENV_FILE=.env.supabase   # http://localhost:8080
+```
+
+Sign in with the email link; it arrives in Mailpit at http://127.0.0.1:54324.
+Your account and its ID come over in `auth.users`, so your data stays yours.
+`supabase/backup` holds personal data and is never committed. Google sign-in
+isn't configured locally. `make supa-down` stops the stack and keeps its data.
+
 ## Database roles
 
 - `zapply migrate` connects as the schema owner (`MIGRATE_DATABASE_URL`).

@@ -4,3 +4,9 @@
 !/internal/webui/dist/.gitkeep
 .env.*
 !.env.example
+!.env.supabase.example
+# Local Supabase (make supa-*): private signing key and personal-data dumps
+/supabase/signing_keys.json
+/supabase/backup/
+/supabase/.temp/
+/supabase/.branches/

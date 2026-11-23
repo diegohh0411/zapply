@@ -1,8 +1,19 @@
 SHELL := /bin/bash
 COMPOSE ?= $(shell command -v podman >/dev/null && echo "podman compose" || echo "docker compose")
-ENV := set -a; [ -f .env ] && . ./.env; set +a;
+ENV_FILE ?= .env
+ENV := set -a; [ -f $(ENV_FILE) ] && . ./$(ENV_FILE); set +a;
 
-.PHONY: build run run-all worker relay migrate token db-up db-down firecrawl test test-integration vet image generate web web-dev
+# Local Supabase (development only): Postgres 17, Auth, Studio and Mailpit in
+# containers via the Supabase CLI. Podman serves the Docker API on its own socket.
+SUPABASE ?= npx -y supabase@3.2.0
+PODMAN_SOCK := $(shell podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}' 2>/dev/null)
+SB := $(if $(PODMAN_SOCK),DOCKER_HOST=unix://$(PODMAN_SOCK) )$(SUPABASE)
+SUPA_BACKUP := supabase/backup
+# psql inside the local Supabase database container, so the host needs none.
+# The local superuser: `postgres` can't hand objects to roles it isn't a member of.
+SUPA_PSQL = $(firstword $(COMPOSE)) exec -i supabase_db_zapply psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
+
+.PHONY: supa-up supa-down supa-pull supa-restore build run run-all worker relay migrate token db-up db-down firecrawl test test-integration vet image generate web web-dev
 
 build:
 	go build -o bin/zapply ./cmd/zapply
@@ -58,3 +69,35 @@ test-integration:
 
 image:
 	$(firstword $(COMPOSE)) build -t zapply .
+
+supa-up: ## Dev: local Supabase (Auth :54321, Postgres :54322, Studio :54323, Mailpit :54324)
+	@# Generated outside the repo: here the CLI would try to read the missing file.
+	@grep -qs '"kty"' supabase/signing_keys.json || { \
+		key=$$(cd "$$(mktemp -d)" && $(SB) gen signing-key --algorithm ES256 </dev/null 2>/dev/null | head -1); \
+		case "$$key" in '{"kty"'*) ;; *) echo "could not generate a signing key" >&2; exit 1;; esac; \
+		umask 077 && echo "[$$key]" > supabase/signing_keys.json; }
+	$(SB) start
+
+supa-down: ## Dev: stop local Supabase (its data is kept)
+	$(SB) stop
+
+supa-pull: ## Dev: dump the hosted project (MIGRATE_DATABASE_URL in .env) into supabase/backup
+	@mkdir -p $(SUPA_BACKUP) && chmod 700 $(SUPA_BACKUP)
+	@$(ENV) url="$$MIGRATE_DATABASE_URL"; \
+	case "$$url" in *supabase.com*) ;; *) echo "MIGRATE_DATABASE_URL in $(ENV_FILE) is not a hosted Supabase URL" >&2; exit 1;; esac; \
+	$(SB) db dump --remote="$$url" -f $(SUPA_BACKUP)/roles.sql --role-only && \
+	$(SB) db dump --remote="$$url" -f $(SUPA_BACKUP)/schema.sql && \
+	$(SB) db dump --remote="$$url" -f $(SUPA_BACKUP)/data.sql --use-copy --data-only
+	@ls -lh $(SUPA_BACKUP)
+
+supa-restore: ## Dev: load supabase/backup into local Supabase (after `make supa-up`)
+	@for f in roles schema data; do [ -s $(SUPA_BACKUP)/$$f.sql ] || { echo "missing $(SUPA_BACKUP)/$$f.sql: run make supa-pull" >&2; exit 1; }; done
+	@{ echo 'BEGIN;'; \
+	   cat $(SUPA_BACKUP)/roles.sql $(SUPA_BACKUP)/schema.sql; \
+	   echo 'SET session_replication_role = replica;'; \
+	   sed 's/^SET transaction_timeout/-- &/' $(SUPA_BACKUP)/data.sql | \
+	     awk '/^COPY "storage"\./{skip=1} !skip{print} skip && /^\\\.$$/{skip=0}'; \
+	   echo 'SET session_replication_role = origin;'; \
+	   cat deploy/supabase/local-roles.sql; \
+	   echo 'COMMIT;'; } | $(SUPA_PSQL)
+	@echo "Restored. Run the app against it: make run-all ENV_FILE=.env.supabase"
