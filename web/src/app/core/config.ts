@@ -5,6 +5,8 @@ export interface AppConfig {
   supabase_url: string;
   supabase_anon_key: string;
   dev_login: boolean;
+  /** Deployment origin without a trailing slash, e.g. https://zapply.example.com. */
+  public_url?: string;
   build_commit?: string;
   built_at?: string;
 }

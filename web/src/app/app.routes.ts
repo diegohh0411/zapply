@@ -17,13 +17,27 @@ const owner: CanActivateFn = async () => {
 
 export const routes: Routes = [
   {
-    path: 'login',
+    // Public home page. Signed-in users are sent straight to the app.
+    path: '',
+    pathMatch: 'full',
+    title: 'zapply · Tailor your CV to each job',
     canActivate: [signedOut],
+    loadComponent: () => import('./landing/landing.page').then((m) => m.LandingPage),
+  },
+  {
+    path: 'login',
+    title: 'Sign in · zapply',
+    canActivate: [signedOut],
+    data: {
+      description: 'Sign in to zapply to tailor your CV to each job and track every application.',
+    },
     loadComponent: () => import('./auth/login.page').then((m) => m.LoginPage),
   },
   {
     path: '',
     canActivate: [signedIn],
+    // Signed-in pages are private to the user: keep them out of search results.
+    data: { robots: 'noindex, nofollow' },
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'jobs' },

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -101,6 +102,9 @@ type Firecrawl struct {
 type Web struct {
 	SupabaseURL     string
 	SupabaseAnonKey string
+	// PublicURL is the deployment origin without a trailing slash, used for
+	// canonical URLs. It is the same PUBLIC_URL as Google's.
+	PublicURL string
 }
 
 type Relay struct {
@@ -153,6 +157,7 @@ func Load() (Config, error) {
 		Web: Web{
 			SupabaseURL:     os.Getenv("SUPABASE_URL"),
 			SupabaseAnonKey: os.Getenv("SUPABASE_ANON_KEY"),
+			PublicURL:       strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
 		},
 		Auth: Auth{
 			JWKSURL:   os.Getenv("AUTH_JWKS_URL"),
@@ -163,6 +168,9 @@ func Load() (Config, error) {
 	}
 
 	var errs []error
+	if u, err := url.Parse(c.Web.PublicURL); c.Web.PublicURL != "" && (err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "") {
+		errs = append(errs, fmt.Errorf("PUBLIC_URL must be an absolute http(s) URL, got %q", c.Web.PublicURL))
+	}
 	var workerErr error
 	if c.Worker.Concurrency, workerErr = strconv.Atoi(get("WORKER_CONCURRENCY", "10")); workerErr != nil || c.Worker.Concurrency < 1 || c.Worker.Concurrency > 64 {
 		errs = append(errs, errors.New("WORKER_CONCURRENCY must be between 1 and 64"))
