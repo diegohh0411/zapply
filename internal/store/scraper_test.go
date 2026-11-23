@@ -238,13 +238,13 @@ func TestScraperSettingsSeed(t *testing.T) {
 	}
 }
 
-func TestScraperFunctionsAreNotForTheWorkerToWrite(t *testing.T) {
+func TestScraperFunctionsAreNotForTheWorker(t *testing.T) {
 	f := newScraperFixture(t)
 	ctx := context.Background()
 	admin := f.db.Admin(t)
 	for fn, want := range map[string]bool{
-		"platform.scraper_settings()":                                true,
-		"platform.scraper_key(uuid)":                                 true,
+		"platform.scraper_settings()":                                false,
+		"platform.scraper_key(uuid)":                                 false,
 		"platform.save_scraper_settings(jsonb,jsonb,integer)":        false,
 		"platform.seed_scraper_settings(jsonb,uuid,bytea,text,text)": false,
 		"platform.add_key(uuid,text,bytea,text,text,text)":           false,

@@ -112,7 +112,7 @@ CREATE FUNCTION platform.scraper_key(p_id uuid) RETURNS TABLE(ciphertext bytea,e
 $$;
 REVOKE EXECUTE ON FUNCTION platform.add_key(uuid,text,bytea,text,text,text),platform.scraper_settings(),platform.save_scraper_settings(jsonb,jsonb,int),platform.seed_scraper_settings(jsonb,uuid,bytea,text,text),platform.scraper_key(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.add_key(uuid,text,bytea,text,text,text),platform.save_scraper_settings(jsonb,jsonb,int),platform.seed_scraper_settings(jsonb,uuid,bytea,text,text) TO zapply_app;
-GRANT EXECUTE ON FUNCTION platform.scraper_settings(),platform.scraper_key(uuid) TO zapply_app,zapply_worker;
+GRANT EXECUTE ON FUNCTION platform.scraper_settings(),platform.scraper_key(uuid) TO zapply_app;
 RESET ROLE;
 -- +goose StatementEnd
 
