@@ -328,11 +328,19 @@ func (c *Client) Lookup(ctx context.Context, key, id string) (modelapi.Result, e
 
 // confirmUncharged marks an HTTP error as uncharged when OpenRouter answered
 // with an explicit error envelope and no billing evidence: no generation ID,
-// no usage, and no cost. OpenRouter assigns a generation ID to every request
-// that reached a provider and reports usage for anything it bills, so an
-// error without either is a rejection rather than an unknown outcome. Without
-// this, such a call stays uncertain forever: there is no generation to look up.
-// Transport failures, unreadable bodies and non-JSON responses stay uncertain.
+// no usage, and no cost. Per OpenRouter's docs:
+//   - a non-200 status means the error happened before the model started
+//     processing; errors during generation arrive as a 200 whose body has an
+//     error and a generation id (docs/api_reference/errors-and-debugging);
+//   - Zero Completion Insurance bills no prompt, completion or reasoning tokens
+//     for a response that ends in an error (guides/features/zero-completion-
+//     insurance). Only auxiliary services that already ran (web search, file
+//     parsing, web fetch) may still bill, and those show up in usage; we use none.
+//
+// A charged non-200 (e.g. an output moderation 403) carries an id or usage
+// and stays charged or uncertain. Without this, a rejected call stays
+// uncertain forever: there is no generation to look up. Transport failures,
+// unreadable bodies and non-JSON responses stay uncertain.
 func confirmUncharged(raw []byte, callErr error) {
 	var pe *modelapi.ProviderError
 	if !errors.As(callErr, &pe) || pe.Uncharged || len(raw) == 0 {
