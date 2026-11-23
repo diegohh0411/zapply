@@ -97,22 +97,40 @@ job_view      id · user_id · name · layout (board, table) · filters jsonb ·
 
 ## Reading posting links
 
-The new job dialog starts from the posting link, then shows a review step with the fields it filled marked. `POST /v1/postings/read` scrapes the page through a Firecrawl v2 API (`FIRECRAWL_URL`, bearer `FIRECRAWL_TOKEN`) and returns:
+The new job dialog starts from the posting link, then shows a review step with the fields it filled marked. `POST /v1/postings/read` scrapes the page through the configured scraper and returns:
 
 - **Fields from the page's schema.org `JobPosting` JSON-LD**, which job boards publish for search engines (Lever, LinkedIn, Workday, most ATSs): title, company, location, remote (`TELECOMMUTE`), employment type and salary. A salary per week or day has no job period and is dropped. Without JSON-LD, the title falls back to `og:title`.
 - **The page as markdown**, which becomes the job description when none was pasted.
+- **`extraction_id`**, when the owner selected an extraction model: the posting's text (the pasted text, else the page's markdown) was queued for it. `GET /v1/postings/extractions/{id}` is `pending` until it answers, then `completed` with the fields it read, or `failed`.
 
-The dialog merges, highest first: the page's fields, then what the URL says (`web/src/app/jobs/posting-link.ts`: board, company and title from the path), then what the description says (work mode, employment type, salary, location). It fills only empty fields, and a new link replaces only values it filled that weren't edited.
+The dialog merges, highest first: the page's fields, then what the URL says (`web/src/app/jobs/posting-link.ts`: board, company and title from the path), then what the description says (work mode, employment type, salary, location). It fills only empty fields, and a new link replaces only values it filled that weren't edited. The extraction arrives after the review step opens ("Reading the posting…"): it fills empty fields and corrects ones guessed from the link or text, never the page's own data or edits. A salary is taken whole (amounts, currency and period) or not at all.
 
-Errors: `503` without `FIRECRAWL_URL` (the dialog then uses the link and text alone, silently); `422` on `url` when the page can't be read (blocked, `4xx`, slow), which the review step shows; a scraper that's down is a `500`.
+Errors: `503` without a scraper and no pasted text (the dialog then uses the link and text alone, silently); `422` on `url` when the page can't be read (blocked, `4xx`, slow) and there is no pasted text, which the review step shows. With pasted text, an unreadable page is reported in `page_error` and the text is extracted instead. A scraper that's down, or out of credits, is a `500`.
+
+### Scrapers
+
+`posting.Scraper` is the scrape API: one method that returns a page's markdown, raw HTML and metadata. `SCRAPER_PROVIDER` picks it (`firecrawl` or `none`; unset, it is `firecrawl` whenever a `FIRECRAWL_*` value is set). Firecrawl is the one provider today:
+
+- **Production** uses [Firecrawl's API](https://docs.firecrawl.dev): set `FIRECRAWL_API_KEY` and leave `FIRECRAWL_URL` unset. Firecrawl then sees posting URLs.
+- **Development** can use Firecrawl Local instead: `FIRECRAWL_URL=http://127.0.0.1:3002` with its `FIRECRAWL_TOKEN`.
+
+A new provider implements `Scrape` (returning `*posting.UnreadableError` for pages it couldn't read) and gets a case in `cmd/zapply`'s `scraper`.
+
+### Extraction models
+
+Extraction models read typed fields out of text in one pass and bill input only ([OpenRouter's Extractions API](https://openrouter.ai/docs/guides/community/extractions), alpha). The owner selects one under **Models & keys → Posting extraction**; none selected means no extraction.
+
+- `internal/model/extraction` is the provider-independent contract: a state, named typed fields, and one answer per field. `extraction.ProfileOf` says which models answer typed numbers (Clairic, Schematron, Liquid); the rest (ScaleDown Extract, Mercury Decide, Perplexity Decider) answer text only, so `posting.ExtractionRequest` asks them for salaries as text and parses it. Switching models changes nothing for callers.
+- `model.ExtractionProvider` is the provider side; `openrouter.Client` implements it on `POST /api/alpha/extractions`, with the catalogue from `GET /api/v1/models?endpoints=/api/alpha/extractions`.
+- Extractions are `model_operation`s of kind `extraction`, quoted, reserved against the member's allowance and settled by the worker like decisions. Input is reserved once per field, since providers may split fields into passes that each read the whole text. Generations aren't looked up; an uncertain one waits for the owner, as for decision models.
+- Answers under 0.5 confidence, nulls, and values that don't fit a job field (a work mode or period the job API has no value for, a bare `$` currency) are left empty for the person.
 
 **Firecrawl Local.** In development, `make firecrawl` runs [Firecrawl Local](https://docs.firecrawl.dev/quickstarts/firecrawl-local) from `deploy/firecrawl/Dockerfile`: one binary built from crates.io at a pinned version, with Chromium for JavaScript pages. It's behind the `firecrawl` compose profile because its first build compiles Rust (several minutes); `make db-up` doesn't start it.
 
 - It serves `POST /v2/scrape` on `127.0.0.1:3002`, requires the token, and refuses localhost and private-network targets, so a posting URL can't reach internal services.
 - `FIRECRAWL_CLOUD=off` (the compose default) keeps every fetch on this machine. `auto` sends pages that block it to Firecrawl Cloud, which then sees their URLs. LinkedIn sometimes blocks; pasting the text still works.
 - Chromium's sandbox needs `clone`, `setns` and `unshare`, which Podman's default seccomp profile allows. Docker's blocks them, so JavaScript pages come back unrendered with a warning; run with Playwright's seccomp profile there (Firecrawl's docs show how). Docker Compose can't pass that profile to Podman, so the compose file leaves it out.
-- Local scrapes skip the `json` and `summary` formats, so fields come from JSON-LD rather than a model. Any Firecrawl v2 server works in `FIRECRAWL_URL`, including a self-hosted one or Firecrawl Cloud.
-- The production image doesn't include it (one Heroku dyno). Without `FIRECRAWL_URL` production keeps the link-only read.
+- The production image doesn't include it (one Heroku dyno); production uses Firecrawl's API.
 
 ## Delivered
 

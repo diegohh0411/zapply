@@ -449,13 +449,39 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Reads a posting's page for the new job dialog, through the configured
-         *     Firecrawl scrape API (FIRECRAWL_URL; docs/parts/04-jobs.md). Fields
-         *     come from the page's schema.org JobPosting data; absent fields were not
-         *     found. Nothing is saved. 503 when no scraper is configured, 422 on `url`
-         *     when the page could not be read.
+         * @description Reads a posting for the new job dialog: its page through the
+         *     configured scraper (SCRAPER_PROVIDER; docs/parts/04-jobs.md), and the
+         *     pasted `text`. Fields come from the page's schema.org JobPosting data;
+         *     absent fields were not found. When an extraction model is selected,
+         *     the posting's text is also sent to it and `extraction_id` names the
+         *     operation; GET /v1/postings/extractions/{id} returns what it read.
+         *     Nothing is saved. 503 when there is neither a scraper nor text to
+         *     extract from, 422 on `url` when the page could not be read and there
+         *     is no text.
          */
         post: operations["readPosting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/postings/extractions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * @description What the extraction model read from a posting. `pending` until the
+         *     model answers; `failed` when it could not (fields are then absent).
+         */
+        get: operations["getPostingExtraction"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -767,6 +793,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listDecisionModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/extraction-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listExtractionModels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1561,8 +1603,17 @@ export interface components {
         PostingReadInput: {
             /** @description The posting's http(s) URL. */
             url: string;
+            /** @description Posting text the person pasted. It is read instead of the page's when extracting. */
+            text?: string;
         };
         PostingRead: {
+            /**
+             * Format: uuid
+             * @description The extraction model's operation, when one was started.
+             */
+            extraction_id?: string;
+            /** @description Why the page could not be read, when the pasted text was used instead. */
+            page_error?: string;
             title?: string;
             company?: string;
             location?: string;
@@ -1576,6 +1627,23 @@ export interface components {
             salary_period?: components["schemas"]["SalaryPeriod"];
             /** @description The page as markdown; empty when it had no text. */
             description: string;
+        };
+        PostingExtraction: {
+            /** @enum {string} */
+            status: "pending" | "completed" | "failed";
+            /** @description Why it is waiting or failed, e.g. usage_limit. */
+            reason?: string;
+            title?: string;
+            company?: string;
+            location?: string;
+            work_mode?: components["schemas"]["WorkMode"];
+            employment_type?: components["schemas"]["EmploymentType"];
+            /** Format: int64 */
+            salary_min?: number;
+            /** Format: int64 */
+            salary_max?: number;
+            salary_currency?: string;
+            salary_period?: components["schemas"]["SalaryPeriod"];
         };
         JobInput: {
             /** Format: uuid */
@@ -1845,6 +1913,18 @@ export interface components {
             compatibility_reason: string;
             reasoning?: components["schemas"]["ReasoningOptions"];
         };
+        ExtractionModel: {
+            id: string;
+            name: string;
+            context_length: number;
+            pricing: {
+                [key: string]: unknown;
+            };
+            /** @description Empty when the model can be selected. */
+            compatibility_reason: string;
+            /** @description Answers salaries as numbers; other models answer text that is parsed. */
+            typed: boolean;
+        };
         /** @description Thinking control a model accepts. Absent when the model does not reason. */
         ReasoningOptions: {
             /** @description When true, reasoning cannot be turned off. */
@@ -1864,6 +1944,8 @@ export interface components {
              * @enum {string|null}
              */
             summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
+            /** @description Extraction model that reads posting fields; null when off. */
+            extraction_model?: string | null;
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -3116,6 +3198,29 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getPostingExtraction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The extraction's state and fields. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingExtraction"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listJobViews: {
         parameters: {
             query?: never;
@@ -3673,6 +3778,27 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listExtractionModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Models served on OpenRouter's Extractions route (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractionModel"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getModelSettings: {
         parameters: {
             query?: never;
@@ -3716,6 +3842,8 @@ export interface operations {
                      * @enum {string|null}
                      */
                     summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
+                    /** @description Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off. */
+                    extraction_model?: string;
                 };
             };
         };

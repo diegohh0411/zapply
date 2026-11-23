@@ -129,6 +129,9 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 			return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "decision_model", Message: "select an available decision model"}}}
 		}
 	}
+	if e := s.validExtractionModel(ctx, req.Body.ExtractionModel); e != nil {
+		return nil, e
+	}
 	if (req.Body.SummaryModel == nil) != (req.Body.SummaryEndpoint == nil) {
 		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "model and endpoint must both be configured"}}}
 	}
@@ -156,6 +159,15 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 		}
 		if _, err := tx.Exec(ctx, `SELECT platform.save_summary_settings($1,$2,$3,$4)`, req.Body.SummaryModel, req.Body.SummaryEndpoint, req.Body.SummaryRows, effort); err != nil {
 			return err
+		}
+		if m := req.Body.ExtractionModel; m != nil {
+			var model *string
+			if *m != "" {
+				model = m
+			}
+			if _, err := tx.Exec(ctx, `SELECT platform.save_extraction_model($1)`, model); err != nil {
+				return err
+			}
 		}
 		return tx.QueryRow(ctx, `SELECT platform.get_model_settings()`).Scan(&raw)
 	})

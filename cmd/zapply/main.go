@@ -179,7 +179,7 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		DevToken: devToken,
 		TypstDir: cfg.TypstDir,
 		Google:   cfg.Google,
-		Postings: posting.New(cfg.Firecrawl.URL, cfg.Firecrawl.Token),
+		Postings: posting.New(scraper(cfg.Scraper)),
 	})
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }
@@ -472,5 +472,14 @@ func runDevToken(cfg config.Config, args []string) error {
 		return err
 	}
 	fmt.Println(tok)
+	return nil
+}
+
+// scraper builds the configured scrape API, or nil when none is.
+func scraper(c config.Scraper) posting.Scraper {
+	switch c.Provider {
+	case config.ScraperFirecrawl:
+		return posting.NewFirecrawl(c.Firecrawl.URL, c.Firecrawl.Key)
+	}
 	return nil
 }

@@ -17,6 +17,7 @@ export type JobStage = Schemas['JobStage'];
 export type JobActivity = Schemas['JobActivity'];
 export type JobSort = Schemas['JobSort'];
 export type PostingRead = Schemas['PostingRead'];
+export type PostingExtraction = Schemas['PostingExtraction'];
 
 export const STAGES: { value: JobStage; label: string }[] = [
   { value: 'saved', label: 'Saved' },
@@ -250,10 +251,22 @@ export class JobsStore {
     return { job: Api.ok(r), etag: etagOf(r) };
   }
 
-  /** Reads a posting's page through the server's scraper. Nothing is saved. */
-  async readPosting(url: string): Promise<PostingRead> {
+  /**
+   * Reads a posting's page through the server's scraper, and starts an
+   * extraction of its text (or the pasted text) when one is configured.
+   * Nothing is saved.
+   */
+  async readPosting(url: string, text: string): Promise<PostingRead> {
+    const body = text.trim() ? { url, text } : { url };
+    return Api.ok(await this.inSession(() => this.api.POST('/v1/postings/read', { body })));
+  }
+
+  /** What the extraction model read from a posting so far. */
+  async postingExtraction(id: string): Promise<PostingExtraction> {
     return Api.ok(
-      await this.inSession(() => this.api.POST('/v1/postings/read', { body: { url } })),
+      await this.inSession(() =>
+        this.api.GET('/v1/postings/extractions/{id}', { params: { path: { id } } }),
+      ),
     );
   }
 

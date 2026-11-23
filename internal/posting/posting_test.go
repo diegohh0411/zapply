@@ -38,7 +38,7 @@ func fakeFirecrawl(t *testing.T, status int, body any, check func(*http.Request,
 		_ = json.NewEncoder(w).Encode(body)
 	}))
 	t.Cleanup(srv.Close)
-	return New(srv.URL+"/", "secret")
+	return New(NewFirecrawl(srv.URL+"/", "secret"))
 }
 
 func TestReadJobPosting(t *testing.T) {

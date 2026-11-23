@@ -62,6 +62,7 @@ import {
   type JobActivity,
   type JobInput,
   JobsStore,
+  type PostingExtraction,
   type PostingRead,
 } from './jobs.store';
 
@@ -219,6 +220,10 @@ export class JobSheet {
   protected readonly readProblem = signal('');
   /** Values the last read filled: a new link replaces them, but not edits made since. */
   private autoFilled: Record<string, unknown> = {};
+  /** Values guessed from the link and text alone, which the extraction may correct. */
+  private guessed: Record<string, unknown> = {};
+  /** The extraction model is still reading the posting. */
+  protected readonly extracting = signal(false);
 
   protected enterByHand(): void {
     this.readProblem.set('');
@@ -235,7 +240,7 @@ export class JobSheet {
     if (url) {
       this.reading.set(true);
       try {
-        page = await this.store.readPosting(url);
+        page = await this.store.readPosting(url, this.form.description);
       } catch (e) {
         if (generation !== this.generation) return;
         // 503: no scraper on this server, so the link and text are all there is.
@@ -266,14 +271,67 @@ export class JobSheet {
       filled.add(key);
       autoFilled[key] = value;
     };
-    const { description, ...fields } = page ?? { description: '' };
+    const { description, extraction_id, page_error, ...fields } = page ?? { description: '' };
+    if (page_error) this.readProblem.set(`Couldn’t read the page: ${page_error}. Read the pasted text instead.`);
     fill('description', description);
+    const guessed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(readPosting(url, this.form.description, fields))) {
+      // Fields the page didn't publish are guesses from the link and text.
+      if (fields[key as keyof typeof fields] === undefined) guessed[key] = value;
       fill(key, value);
     }
+    this.guessed = guessed;
     this.autoFilled = autoFilled;
     this.filled.set(filled);
     this.step.set('review');
+    this.cdr.markForCheck();
+    if (extraction_id) void this.awaitExtraction(extraction_id, generation);
+  }
+
+  /**
+   * Fills what the extraction model read once it answers: blank fields, and
+   * fields only guessed from the link, never the page's own data or edits.
+   */
+  private async awaitExtraction(id: string, generation: number): Promise<void> {
+    this.extracting.set(true);
+    let result: PostingExtraction | null = null;
+    try {
+      for (let wait = 500, waited = 0; waited < 90_000; waited += wait, wait = Math.min(wait * 1.5, 4000)) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        if (generation !== this.generation) return;
+        const r = await this.store.postingExtraction(id);
+        if (generation !== this.generation) return;
+        if (r.status !== 'pending') {
+          result = r;
+          break;
+        }
+      }
+    } catch {
+      // The page's fields stand on their own.
+    } finally {
+      if (generation === this.generation) {
+        this.extracting.set(false);
+        this.cdr.markForCheck();
+      }
+    }
+    if (!result || result.status !== 'completed' || generation !== this.generation) return;
+    const { status: _, reason: __, ...fields } = result;
+    const form = this.form as unknown as Record<string, unknown>;
+    const filled = new Set(this.filled());
+    const salaryKeys = ['salary_min', 'salary_max', 'salary_currency', 'salary_period'];
+    const replaceable = (key: string) =>
+      form[key] === '' || form[key] === null || (key in this.guessed && form[key] === this.guessed[key]);
+    // A salary is one reading: take all of it or none, so a range never mixes sources.
+    const salary = salaryKeys.every(replaceable);
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (salaryKeys.includes(key) ? !salary : !replaceable(key)) continue;
+      form[key] = value;
+      filled.add(key);
+      this.autoFilled[key] = value;
+      delete this.guessed[key];
+    }
+    this.filled.set(filled);
     this.cdr.markForCheck();
   }
 

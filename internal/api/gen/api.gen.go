@@ -528,31 +528,31 @@ func (e MembershipInputStatus) Valid() bool {
 
 // Defines values for ModelOperationStatus.
 const (
-	Blocked     ModelOperationStatus = "blocked"
-	Cancelled   ModelOperationStatus = "cancelled"
-	Completed   ModelOperationStatus = "completed"
-	Failed      ModelOperationStatus = "failed"
-	NeedsReview ModelOperationStatus = "needs_review"
-	Pending     ModelOperationStatus = "pending"
-	Running     ModelOperationStatus = "running"
+	ModelOperationStatusBlocked     ModelOperationStatus = "blocked"
+	ModelOperationStatusCancelled   ModelOperationStatus = "cancelled"
+	ModelOperationStatusCompleted   ModelOperationStatus = "completed"
+	ModelOperationStatusFailed      ModelOperationStatus = "failed"
+	ModelOperationStatusNeedsReview ModelOperationStatus = "needs_review"
+	ModelOperationStatusPending     ModelOperationStatus = "pending"
+	ModelOperationStatusRunning     ModelOperationStatus = "running"
 )
 
 // Valid indicates whether the value is a known member of the ModelOperationStatus enum.
 func (e ModelOperationStatus) Valid() bool {
 	switch e {
-	case Blocked:
+	case ModelOperationStatusBlocked:
 		return true
-	case Cancelled:
+	case ModelOperationStatusCancelled:
 		return true
-	case Completed:
+	case ModelOperationStatusCompleted:
 		return true
-	case Failed:
+	case ModelOperationStatusFailed:
 		return true
-	case NeedsReview:
+	case ModelOperationStatusNeedsReview:
 		return true
-	case Pending:
+	case ModelOperationStatusPending:
 		return true
-	case Running:
+	case ModelOperationStatusRunning:
 		return true
 	default:
 		return false
@@ -616,6 +616,27 @@ func (e OrganizationType) Valid() bool {
 	case OrganizationTypeNonprofit:
 		return true
 	case OrganizationTypeOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostingExtractionStatus.
+const (
+	PostingExtractionStatusCompleted PostingExtractionStatus = "completed"
+	PostingExtractionStatusFailed    PostingExtractionStatus = "failed"
+	PostingExtractionStatusPending   PostingExtractionStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PostingExtractionStatus enum.
+func (e PostingExtractionStatus) Valid() bool {
+	switch e {
+	case PostingExtractionStatusCompleted:
+		return true
+	case PostingExtractionStatusFailed:
+		return true
+	case PostingExtractionStatusPending:
 		return true
 	default:
 		return false
@@ -1128,6 +1149,19 @@ type EvidenceUpdate struct {
 	Url     *string      `json:"url,omitempty"`
 }
 
+// ExtractionModel defines model for ExtractionModel.
+type ExtractionModel struct {
+	// CompatibilityReason Empty when the model can be selected.
+	CompatibilityReason string                 `json:"compatibility_reason"`
+	ContextLength       int                    `json:"context_length"`
+	Id                  string                 `json:"id"`
+	Name                string                 `json:"name"`
+	Pricing             map[string]interface{} `json:"pricing"`
+
+	// Typed Answers salaries as numbers; other models answer text that is parsed.
+	Typed bool `json:"typed"`
+}
+
 // FieldError defines model for FieldError.
 type FieldError struct {
 	// Field JSON path, e.g. highlights[0].text; empty for the whole request.
@@ -1621,7 +1655,10 @@ type ModelOperationStatus string
 
 // ModelSettings defines model for ModelSettings.
 type ModelSettings struct {
-	DecisionModel   *string `json:"decision_model"`
+	DecisionModel *string `json:"decision_model"`
+
+	// ExtractionModel Extraction model that reads posting fields; null when off.
+	ExtractionModel *string `json:"extraction_model,omitempty"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
 	SummaryModel    *string `json:"summary_model,omitempty"`
 
@@ -1680,6 +1717,26 @@ type PlanInput struct {
 	Name      string `json:"name"`
 }
 
+// PostingExtraction defines model for PostingExtraction.
+type PostingExtraction struct {
+	Company        *string         `json:"company,omitempty"`
+	EmploymentType *EmploymentType `json:"employment_type,omitempty"`
+	Location       *string         `json:"location,omitempty"`
+
+	// Reason Why it is waiting or failed, e.g. usage_limit.
+	Reason         *string                 `json:"reason,omitempty"`
+	SalaryCurrency *string                 `json:"salary_currency,omitempty"`
+	SalaryMax      *int64                  `json:"salary_max,omitempty"`
+	SalaryMin      *int64                  `json:"salary_min,omitempty"`
+	SalaryPeriod   *SalaryPeriod           `json:"salary_period,omitempty"`
+	Status         PostingExtractionStatus `json:"status"`
+	Title          *string                 `json:"title,omitempty"`
+	WorkMode       *WorkMode               `json:"work_mode,omitempty"`
+}
+
+// PostingExtractionStatus defines model for PostingExtraction.Status.
+type PostingExtractionStatus string
+
 // PostingRead defines model for PostingRead.
 type PostingRead struct {
 	Company *string `json:"company,omitempty"`
@@ -1687,17 +1744,26 @@ type PostingRead struct {
 	// Description The page as markdown; empty when it had no text.
 	Description    string          `json:"description"`
 	EmploymentType *EmploymentType `json:"employment_type,omitempty"`
-	Location       *string         `json:"location,omitempty"`
-	SalaryCurrency *string         `json:"salary_currency,omitempty"`
-	SalaryMax      *int64          `json:"salary_max,omitempty"`
-	SalaryMin      *int64          `json:"salary_min,omitempty"`
-	SalaryPeriod   *SalaryPeriod   `json:"salary_period,omitempty"`
-	Title          *string         `json:"title,omitempty"`
-	WorkMode       *WorkMode       `json:"work_mode,omitempty"`
+
+	// ExtractionId The extraction model's operation, when one was started.
+	ExtractionId *openapi_types.UUID `json:"extraction_id,omitempty"`
+	Location     *string             `json:"location,omitempty"`
+
+	// PageError Why the page could not be read, when the pasted text was used instead.
+	PageError      *string       `json:"page_error,omitempty"`
+	SalaryCurrency *string       `json:"salary_currency,omitempty"`
+	SalaryMax      *int64        `json:"salary_max,omitempty"`
+	SalaryMin      *int64        `json:"salary_min,omitempty"`
+	SalaryPeriod   *SalaryPeriod `json:"salary_period,omitempty"`
+	Title          *string       `json:"title,omitempty"`
+	WorkMode       *WorkMode     `json:"work_mode,omitempty"`
 }
 
 // PostingReadInput defines model for PostingReadInput.
 type PostingReadInput struct {
+	// Text Posting text the person pasted. It is read instead of the page's when extracting.
+	Text *string `json:"text,omitempty"`
+
 	// Url The posting's http(s) URL.
 	Url string `json:"url"`
 }
@@ -1900,7 +1966,10 @@ type ResolveModelAttemptParams struct {
 
 // PutModelSettingsJSONBody defines parameters for PutModelSettings.
 type PutModelSettingsJSONBody struct {
-	DecisionModel   *string `json:"decision_model"`
+	DecisionModel *string `json:"decision_model"`
+
+	// ExtractionModel Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off.
+	ExtractionModel *string `json:"extraction_model,omitempty"`
 	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
 	SummaryModel    *string `json:"summary_model,omitempty"`
 
@@ -2159,6 +2228,9 @@ type ServerInterface interface {
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(w http.ResponseWriter, r *http.Request)
 
+	// (GET /v1/admin/extraction-models)
+	ListExtractionModels(w http.ResponseWriter, r *http.Request)
+
 	// (POST /v1/admin/gateway-tests)
 	CreateGatewayTest(w http.ResponseWriter, r *http.Request, params CreateGatewayTestParams)
 
@@ -2387,6 +2459,9 @@ type ServerInterface interface {
 	// (PATCH /v1/organizations/{id})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, id ID)
 
+	// (GET /v1/postings/extractions/{id})
+	GetPostingExtraction(w http.ResponseWriter, r *http.Request, id ID)
+
 	// (POST /v1/postings/read)
 	ReadPosting(w http.ResponseWriter, r *http.Request)
 
@@ -2432,6 +2507,20 @@ func (siw *ServerInterfaceWrapper) ListDecisionModels(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDecisionModels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListExtractionModels operation middleware
+func (siw *ServerInterfaceWrapper) ListExtractionModels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListExtractionModels(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4876,6 +4965,32 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetPostingExtraction operation middleware
+func (siw *ServerInterfaceWrapper) GetPostingExtraction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPostingExtraction(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReadPosting operation middleware
 func (siw *ServerInterfaceWrapper) ReadPosting(w http.ResponseWriter, r *http.Request) {
 
@@ -5275,6 +5390,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/jobs/{id}/activities/{activity_id}", wrapper.DeleteJobNote)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/jobs/{id}/activities/{activity_id}", wrapper.UpdateJobNote)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/postings/read", wrapper.ReadPosting)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/postings/extractions/{id}", wrapper.GetPostingExtraction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/job-views", wrapper.ListJobViews)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/job-views", wrapper.CreateJobView)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/job-views/{id}", wrapper.DeleteJobView)
@@ -5296,6 +5412,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/text-model-endpoints", wrapper.ListTextModelEndpoints)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/text-models", wrapper.ListTextModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/decision-models", wrapper.ListDecisionModels)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/extraction-models", wrapper.ListExtractionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-estimate", wrapper.GetMatchEstimate)
@@ -5355,6 +5472,44 @@ type ListDecisionModelsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListDecisionModelsdefaultApplicationProblemPlusJSONResponse) VisitListDecisionModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListExtractionModelsRequestObject struct {
+}
+
+type ListExtractionModelsResponseObject interface {
+	VisitListExtractionModelsResponse(w http.ResponseWriter) error
+}
+
+type ListExtractionModels200JSONResponse []ExtractionModel
+
+func (response ListExtractionModels200JSONResponse) VisitListExtractionModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListExtractionModelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListExtractionModelsdefaultApplicationProblemPlusJSONResponse) VisitListExtractionModelsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8485,6 +8640,45 @@ func (response UpdateOrganizationdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetPostingExtractionRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type GetPostingExtractionResponseObject interface {
+	VisitGetPostingExtractionResponse(w http.ResponseWriter) error
+}
+
+type GetPostingExtraction200JSONResponse PostingExtraction
+
+func (response GetPostingExtraction200JSONResponse) VisitGetPostingExtractionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPostingExtractiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPostingExtractiondefaultApplicationProblemPlusJSONResponse) VisitGetPostingExtractionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReadPostingRequestObject struct {
 	Body *ReadPostingJSONRequestBody
 }
@@ -8895,6 +9089,9 @@ type StrictServerInterface interface {
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(ctx context.Context, request ListDecisionModelsRequestObject) (ListDecisionModelsResponseObject, error)
 
+	// (GET /v1/admin/extraction-models)
+	ListExtractionModels(ctx context.Context, request ListExtractionModelsRequestObject) (ListExtractionModelsResponseObject, error)
+
 	// (POST /v1/admin/gateway-tests)
 	CreateGatewayTest(ctx context.Context, request CreateGatewayTestRequestObject) (CreateGatewayTestResponseObject, error)
 
@@ -9123,6 +9320,9 @@ type StrictServerInterface interface {
 	// (PATCH /v1/organizations/{id})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
 
+	// (GET /v1/postings/extractions/{id})
+	GetPostingExtraction(ctx context.Context, request GetPostingExtractionRequestObject) (GetPostingExtractionResponseObject, error)
+
 	// (POST /v1/postings/read)
 	ReadPosting(ctx context.Context, request ReadPostingRequestObject) (ReadPostingResponseObject, error)
 
@@ -9210,6 +9410,30 @@ func (sh *strictHandler) ListDecisionModels(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListDecisionModelsResponseObject); ok {
 		if err := validResponse.VisitListDecisionModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListExtractionModels operation middleware
+func (sh *strictHandler) ListExtractionModels(w http.ResponseWriter, r *http.Request) {
+	var request ListExtractionModelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListExtractionModels(ctx, request.(ListExtractionModelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListExtractionModels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListExtractionModelsResponseObject); ok {
+		if err := validResponse.VisitListExtractionModelsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -11374,6 +11598,32 @@ func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateOrganizationResponseObject); ok {
 		if err := validResponse.VisitUpdateOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPostingExtraction operation middleware
+func (sh *strictHandler) GetPostingExtraction(w http.ResponseWriter, r *http.Request, id ID) {
+	var request GetPostingExtractionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPostingExtraction(ctx, request.(GetPostingExtractionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPostingExtraction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPostingExtractionResponseObject); ok {
+		if err := validResponse.VisitGetPostingExtractionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
