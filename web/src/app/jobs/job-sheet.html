@@ -23,8 +23,8 @@
       }
       <z-dialog-title class="text-sm font-medium">New job</z-dialog-title>
       <span class="text-xs text-muted-foreground"
-        >Step {{ step() === 'link' ? 1 : 2 }} of 2 ·
-        {{ step() === 'link' ? 'Find it' : 'Review' }}</span
+        >Step {{ step() === 'review' ? 2 : 1 }} of 2 ·
+        {{ step() === 'review' ? 'Review' : 'Find it' }}</span
       >
     </div>
     <button
@@ -44,20 +44,20 @@
       ngNativeValidate
       id="capture-form"
       class="flex flex-col gap-5"
-      (ngSubmit)="step() === 'link' ? continueFromLink() : save()"
+      (ngSubmit)="step() === 'review' ? save() : continueFromLink()"
       (input)="touch()"
       (keydown)="captureKeydown($event)"
     >
       @if (step() === 'link') {
         <div>
-          <h2 class="text-2xl font-semibold tracking-tight">Where did you find it?</h2>
+          <h2 class="text-2xl font-semibold tracking-tight">Paste the posting link</h2>
           <z-dialog-description class="mt-1 block"
-            >Paste the posting link and we’ll fill in what it tells us. You check everything before
+            >We’ll open the page, read the details and fill in the form. You check everything before
             it’s saved.</z-dialog-description
           >
         </div>
         <label class="field">
-          <span>Posting link</span>
+          <span class="sr-only">Posting link</span>
           <div class="relative">
             <ng-icon
               name="lucideLink"
@@ -66,10 +66,12 @@
             <input
               z-input
               cdkFocusInitial
-              class="h-11 pl-9 text-base"
+              class="h-12 pl-9 text-base"
               name="url"
               type="url"
+              autocomplete="off"
               [(ngModel)]="form.url"
+              (paste)="linkPasted()"
               placeholder="https://www.linkedin.com/jobs/view/…"
               [attr.aria-invalid]="!!errors()['url']"
             />
@@ -90,28 +92,57 @@
           >
             <ng-icon name="lucideTriangleAlert" class="size-4 shrink-0 text-amber-600" />
             <span class="min-w-0 flex-1"
-              >You already saved this posting as <strong>{{ d.title }}</strong>.</span
+              >You already saved this posting as <strong>{{ d.title }}</strong
+              >.</span
             >
             <button z-button zType="outline" zSize="sm" type="button" (click)="opened.emit(d.id)">
               Open it
             </button>
           </div>
         }
-        <label class="field">
-          <span
-            >Job description
-            <span class="font-normal text-muted-foreground"
-              >· optional, fills more and powers matching</span
-            ></span
-          >
-          <textarea
-            z-textarea
-            name="description"
-            rows="6"
-            [(ngModel)]="form.description"
-            placeholder="Paste the posting text: we pick up the salary, work mode and employment type"
-          ></textarea>
-        </label>
+      } @else if (step() === 'reading') {
+        <div class="flex flex-col gap-6 py-2" role="status" aria-live="polite">
+          <div class="min-w-0">
+            <h2 class="text-2xl font-semibold tracking-tight">Reading the posting…</h2>
+            <p class="mt-1 truncate text-sm text-muted-foreground">{{ form.url }}</p>
+          </div>
+          <ol class="flex flex-col gap-3 text-sm">
+            <li class="flex items-center gap-3">
+              @if (reading()) {
+                <ng-icon name="lucideLoaderCircle" class="size-4 animate-spin text-brand" />
+                <span>Opening the page</span>
+              } @else {
+                <ng-icon name="lucideCheck" class="size-4 text-brand" />
+                <span class="text-muted-foreground">Opened the page</span>
+              }
+            </li>
+            <li class="flex items-center gap-3">
+              @if (reading()) {
+                <ng-icon name="lucideCircle" class="size-4 text-muted-foreground/50" />
+                <span class="text-muted-foreground">Picking out the title, company and salary</span>
+              } @else {
+                <ng-icon name="lucideLoaderCircle" class="size-4 animate-spin text-brand" />
+                <span>Picking out the title, company, salary and the rest</span>
+              }
+            </li>
+            <li class="flex items-center gap-3 text-muted-foreground">
+              <ng-icon name="lucideCircle" class="size-4 text-muted-foreground/50" />
+              <span>Preparing your review</span>
+            </li>
+          </ol>
+          <div class="flex flex-col gap-3" aria-hidden="true">
+            <z-skeleton class="h-8 w-3/4" />
+            <z-skeleton class="h-9 w-full" />
+            <z-skeleton class="h-9 w-full" />
+            <z-skeleton class="h-9 w-2/3" />
+          </div>
+          @if (slow()) {
+            <p class="text-xs text-muted-foreground">
+              Still working. Some pages are slow to open. You can start filling the form in
+              meanwhile and anything we find will be added.
+            </p>
+          }
+        </div>
       } @else {
         <div
           class="flex items-center gap-2 rounded-lg border bg-muted/40 py-1.5 pl-3 pr-1.5 text-sm"
@@ -132,7 +163,12 @@
         @if (readProblem(); as problem) {
           <p class="-mb-1 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
             <ng-icon name="lucideTriangleAlert" class="size-3.5 text-amber-600" />
-            {{ problem }} Filled what the link says.
+            {{ problem }}
+            {{
+              form.description.trim()
+                ? 'Check the details below.'
+                : 'Paste the job description below and we’ll read that instead.'
+            }}
           </p>
         }
         @if (extracting()) {
@@ -319,7 +355,11 @@
           }
         </div>
         <div class="border-t">
-          <details class="capture-section" [open]="!form.description">
+          <details
+            class="capture-section"
+            [open]="descriptionOpen()"
+            (toggle)="descriptionOpen.set($any($event.target).open)"
+          >
             <summary>
               Job description
               <span>{{
@@ -333,12 +373,26 @@
               <span class="sr-only">Job description</span>
               <textarea
                 z-textarea
+                #descriptionField
                 name="description"
                 rows="5"
                 [(ngModel)]="form.description"
                 placeholder="Paste the job posting here"
               ></textarea>
             </label>
+            @if (readProblem() && form.url.trim() && form.description.trim()) {
+              <div class="-mt-2 pb-4">
+                <button
+                  z-button
+                  zType="outline"
+                  zSize="sm"
+                  type="button"
+                  (click)="readPastedText()"
+                >
+                  <ng-icon name="lucideSparkles" /> Fill the form from this text
+                </button>
+              </div>
+            }
           </details>
           <details class="capture-section">
             <summary>Notes <span>Contacts, reminders, anything useful</span></summary>
@@ -366,17 +420,16 @@
   </div>
   <div class="flex items-center justify-between gap-3 border-t bg-muted/30 px-5 py-4 sm:px-8">
     @if (step() === 'link') {
-      <button z-button zType="ghost" type="button" [zDisabled]="reading()" (click)="enterByHand()">
+      <button z-button zType="ghost" type="button" (click)="enterByHand()">
         Enter details by hand
       </button>
-      <button
-        z-button
-        type="submit"
-        form="capture-form"
-        [zLoading]="reading()"
-        [zDisabled]="reading() || (!form.url.trim() && !form.description.trim())"
-      >
-        Continue <ng-icon name="lucideArrowRight" />
+      <button z-button type="submit" form="capture-form" [zDisabled]="!form.url.trim()">
+        <ng-icon name="lucideSparkles" /> Read posting
+      </button>
+    } @else if (step() === 'reading') {
+      <button z-button zType="ghost" type="button" (click)="cancelReading()">Cancel</button>
+      <button z-button zType="outline" type="button" (click)="skipWaiting()">
+        Fill it in myself
       </button>
     } @else {
       <span class="text-xs text-muted-foreground"

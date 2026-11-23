@@ -67,3 +67,70 @@ func TestFromExtractionDescription(t *testing.T) {
 		t.Errorf("description longer than the page kept")
 	}
 }
+
+func TestAmountReadsWhatTextModelsWrite(t *testing.T) {
+	for _, c := range []struct {
+		in     string
+		lo, hi int64 // 0: none
+	}{
+		{"$150,400", 150400, 150400},
+		{"150,400 USD", 150400, 150400},
+		{"USD150,400", 150400, 150400},
+		{"$150,400 - $277,600", 150400, 277600},
+		{"USD 150,400 and 277,600", 150400, 277600},
+		{"$120K–$214.3K", 120000, 214300},
+		{"100-120k", 100000, 120000},
+		{"£50k", 50000, 50000},
+		{"1.2M", 1200000, 1200000},
+		{"85 000", 85000, 85000},
+		{"$85k per year", 85000, 85000},
+		{"$150.400,00", 150400, 150400},
+		{"€45.000", 45000, 45000},
+		{"1.200", 1200, 1200},
+		{"45,5 €", 46, 46},
+		{"$45.50/hr", 46, 46},
+		{"30 mil pesos", 30000, 30000},
+		{"2 millones", 2000000, 2000000},
+		{"MXN 30,000 monthly", 30000, 30000},
+		{"$3,000 a month", 3000, 3000},
+		{"1.500M", 1500000, 1500000},
+		{"3+ years, $100k", 100000, 100000},
+		{"ID98062 pays $90,000", 90000, 90000},
+		{"40 hours, 10% bonus", 0, 0},
+		{"Not specified", 0, 0},
+		{"$0", 0, 0},
+		{"9999999999999999999", 0, 0},
+	} {
+		check := func(highest bool, want int64) {
+			got := amount(c.in, highest)
+			if (want == 0) != (got == nil) || (got != nil && *got != want) {
+				t.Errorf("amount(%q, highest=%v) = %v, want %d", c.in, highest, got, want)
+			}
+		}
+		check(false, c.lo)
+		check(true, c.hi)
+	}
+}
+
+func TestCurrencyNeedsARealCode(t *testing.T) {
+	for in, want := range map[string]string{
+		"USD": "USD", "usd": "USD", "per year": "", "in MXN": "MXN", "the USD": "USD", "$": "",
+		"€": "EUR", "US$": "USD", "Canadian dollars": "CAD", "euros": "EUR", "dollars": "",
+	} {
+		if got := currency(in); got != want {
+			t.Errorf("currency(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFromExtractionTextRange(t *testing.T) {
+	plain := ExtractionRequest("scaledown/extract", "posting")
+	p := FromExtraction(plain, `{"salary_min":{"type":"text","value":"$150,400 - $277,600"},"salary_max":{"type":"text","value":"$150,400 - $277,600"},"salary_currency":{"type":"text","value":"US dollars"},"salary_period":{"type":"text","value":"annual"}}`)
+	if p.SalaryMin == nil || *p.SalaryMin != 150400 || *p.SalaryMax != 277600 || p.SalaryCurrency != "USD" || p.SalaryPeriod != "year" {
+		t.Errorf("range in one answer: %+v", p)
+	}
+	typed := ExtractionRequest("cloudflare/clairic", "posting")
+	if p := FromExtraction(typed, `{"salary_min":{"type":"number","value":0},"salary_max":{"type":"number","value":0}}`); p.SalaryMin != nil {
+		t.Errorf("zero salary kept: %+v", p)
+	}
+}

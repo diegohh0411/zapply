@@ -32,12 +32,15 @@ This keeps creation to one screen. Users can save immediately or enrich a record
 
 NN/g recommends grouping related fields, reducing optional questions, and progressively revealing detail to reduce the effort users perceive in a form. This supports the capture-first structure. [Form design research](https://www.nngroup.com/articles/4-principles-reduce-cognitive-load/)
 
+## Extraction first
+
+Pasting a posting link is now the first step: the read starts on paste, a loader names what is happening (opening the page, picking out the details), and the same dialog opens on a filled form whose extracted fields are marked. "Fill it in myself" opens the form early without losing the answer, Cancel returns to the link, and a failed read still opens the form with a note. The first step is only the link. When the page cannot be read, the form opens with the description section open and a note; pasting the description there and choosing "Fill the form from this text" runs the extraction on it.
+
 ## Further opportunities
 
 - Inline title-only row creation for people entering many jobs in succession.
 - A side peek for existing jobs when comparing several opportunities; the current saved-job workspace remains full page.
 - Templates only after repeated setups emerge, for example a referral checklist or interview preparation notes.
-- URL import with explicit loading, review, duplicate, and failure states if a posting extraction service is added. Pasting a URL currently saves a link; it does not import job details.
 
 ## Validation
 
