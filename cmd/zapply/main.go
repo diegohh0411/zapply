@@ -245,21 +245,32 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c))
 	}
 	summaries := render.NewService(st, nil)
+	// Woken by dirty cv_summary rows, with a slow poll as fallback. The
+	// pause matches platform.dirty_summaries' debounce on changed_at.
+	summaryWake := store.Listen(ctx, cfg.Worker.DatabaseURL, store.ChannelSummary, log)
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
+		const fallback, debounce = 30 * time.Second, 750 * time.Millisecond
+		timer := time.NewTimer(fallback)
+		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				check, done := context.WithTimeout(ctx, 10*time.Second)
-				err := summaries.RefreshSummaries(check)
-				done()
-				if err != nil && ctx.Err() == nil {
-					log.Error("summary refresh failed", "err", err)
+			case <-summaryWake:
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(debounce):
 				}
+			case <-timer.C:
 			}
+			check, done := context.WithTimeout(ctx, 10*time.Second)
+			err := summaries.RefreshSummaries(check)
+			done()
+			if err != nil && ctx.Err() == nil {
+				log.Error("summary refresh failed", "err", err)
+			}
+			timer.Reset(fallback)
 		}
 	}()
 	client, err := runtime.Client(cfg.Worker.Concurrency)
@@ -359,6 +370,7 @@ func runRelay(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	r := relay.New(pool, nc, relay.Config{
 		Interval:  cfg.Relay.Interval,
+		Wake:      store.Listen(ctx, cfg.Relay.DatabaseURL, store.ChannelOutbox, log),
 		Batch:     cfg.Relay.Batch,
 		Retention: cfg.Relay.Retention,
 	}, log)

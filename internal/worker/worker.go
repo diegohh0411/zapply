@@ -153,7 +153,9 @@ func (r *Runtime) Client(concurrency int) (*river.Client[pgx.Tx], error) {
 		r.AddWorkers(workers)
 	}
 	return river.NewClient(riverpgxv5.New(r.Store.Pool()), &river.Config{Schema: "river", Workers: workers,
-		Queues: map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: concurrency}}, Logger: r.Log, JobTimeout: 2 * time.Minute})
+		// Inserts wake fetchers through LISTEN; polling is only the fallback.
+		FetchPollInterval: 10 * time.Second,
+		Queues:            map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: concurrency}}, Logger: r.Log, JobTimeout: 2 * time.Minute})
 }
 
 func (r *Runtime) tx(ctx context.Context, u uuid.UUID, fn func(pgx.Tx) error) error {
