@@ -1211,6 +1211,38 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ScraperSettings' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/search-settings:
+    get:
+      operationId: getSearchSettings
+      tags: [platform]
+      responses:
+        '200':
+          description: The job search provider behind search watchers (owner only).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchSettings' }
+        default: { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: putSearchSettings
+      tags: [platform]
+      description: >
+        Sets the TheirStack key and what one of its API credits costs. Search
+        watchers are available once both are set; each poll is billed to the
+        member at the credits TheirStack charged (one per posting returned).
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SearchSettingsInput' }
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchSettings' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/edge-workers:
     get:
       operationId: listEdgeWorkers
@@ -1838,9 +1870,11 @@ paths:
       operationId: listJobWatches
       tags: [job-alerts]
       description: >
-        The job boards the member watches, newest first. The worker reads each
-        board every 30 minutes and files a `job_alert` notification for every
-        new posting that matches the watch's filters.
+        The member's watches, newest first, and what their plan allows for
+        search watchers. The worker reads each board every 30 minutes and runs
+        each search at its interval, filing a `job_alert` notification for
+        every new posting that matches; a posting alerts once however many
+        watches find it.
       responses:
         "200":
           description: The watches.
@@ -1852,10 +1886,12 @@ paths:
       operationId: createJobWatch
       tags: [job-alerts]
       description: >
-        Starts watching the Greenhouse, Lever or Ashby board a careers link
-        names. The board is read once to check it exists (422 on `url`
-        otherwise); what is open now is not announced, only what opens later.
-        Watching a board twice answers 409.
+        Starts a watch. A board watch reads the Greenhouse, Lever or Ashby
+        board a careers link names once to check it exists (422 on `url`
+        otherwise); watching a board twice answers 409. A search watch needs
+        title keywords and a free slot in the member's plan (422 on `kind`
+        otherwise). Either way, what is open now is not announced, only what
+        opens later.
       requestBody:
         required: true
         content:
@@ -2598,6 +2634,7 @@ components:
         - "name"
         - "cap_7d_usd"
         - "cap_30d_usd"
+        - "max_search_watchers"
         - "version"
       "properties":
         "id":
@@ -2611,6 +2648,9 @@ components:
         "cap_30d_usd":
           "type": "string"
           "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "max_search_watchers":
+          "type": "integer"
+          "description": "How many search watchers a member on this plan may keep. Zero disables them."
         "version":
           "type": "integer"
     "PlanInput":
@@ -2630,6 +2670,10 @@ components:
         "cap_30d_usd":
           "type": "string"
           "pattern": "^\\d+(\\.\\d{1,12})?$"
+        "max_search_watchers":
+          "type": "integer"
+          "minimum": 0
+          "maximum": 100
     "Membership":
       "type": "object"
       "required":
@@ -2743,7 +2787,7 @@ components:
         "usage":
           "$ref": "#/components/schemas/Usage"
     "UsageEntry":
-      "description": "One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list."
+      "description": "One line of recent activity: the charges of one job (or of the email and posting work not linked to one), or of one search watcher, newest first. Its id is the newest charge's id, which pages the list."
       "type": "object"
       "required":
         - "id"
@@ -2761,7 +2805,7 @@ components:
           "format": "date-time"
         "app":
           "type": "string"
-          "enum": ["jobs", "mail"]
+          "enum": ["jobs", "mail", "alerts"]
         "title":
           "type": "string"
           "nullable": true
@@ -2772,7 +2816,7 @@ components:
           "type": "array"
           "items":
             "type": "string"
-            "enum": ["match", "summary", "extraction", "mail", "other"]
+            "enum": ["match", "summary", "extraction", "mail", "scrape", "search", "other"]
     "SystemKey":
       "type": "object"
       "required":
@@ -2806,6 +2850,7 @@ components:
         - "openrouter"
         - "firecrawl"
         - "crawl4ai"
+        - "theirstack"
       "description": "Which provider the key belongs to. Only an OpenRouter key can be active."
     "SystemKeyInput":
       "type": "object"
@@ -2980,6 +3025,7 @@ components:
         kind: { type: string, enum: [firecrawl, crawl4ai, edge], description: "The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server." }
         base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge." }
         key_id: { type: string, format: uuid, nullable: true, description: "A system key of the provider's own kind, sent as a bearer token; null sends none." }
+        credit_usd: { type: string, nullable: true, pattern: '^\d{1,6}(\.\d{1,12})?$', description: "What one provider credit costs. Members are charged for the credits their scrapes use (Firecrawl: 1 per page, 5 through its stealth proxy; other providers: 1). Null makes the provider free. Not allowed for edge workers." }
     ScraperRule:
       type: object
       required: [host, providers]
@@ -3004,6 +3050,23 @@ components:
           maxItems: 100
           description: "The first rule whose host matches the posting's host replaces the default order."
           items: { $ref: '#/components/schemas/ScraperRule' }
+    SearchSettings:
+      type: object
+      required: [provider, key_id, credit_usd, max_results, version, updated_at]
+      properties:
+        provider: { type: string, enum: [theirstack] }
+        key_id: { type: string, format: uuid, nullable: true, description: A TheirStack system key. }
+        credit_usd: { type: string, nullable: true, description: What one TheirStack API credit costs. }
+        max_results: { type: integer, description: The most postings one poll asks for. }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    SearchSettingsInput:
+      type: object
+      required: [key_id, credit_usd, max_results]
+      properties:
+        key_id: { type: string, format: uuid, nullable: true }
+        credit_usd: { type: string, nullable: true, pattern: '^\d{1,6}(\.\d{1,12})?$' }
+        max_results: { type: integer, minimum: 1, maximum: 100 }
     ScraperSettings:
       type: object
       required: [providers, rules, saved, version, updated_at]
@@ -3266,15 +3329,25 @@ components:
     JobAts:
       type: string
       enum: [greenhouse, lever, ashby]
+    JobWatchKind:
+      type: string
+      enum: [board, search]
+      description: "board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan."
     JobWatch:
       type: object
-      required: [id, ats, board, board_url, company, keywords, locations, remote_only, paused, last_checked_at, last_error, created_at]
+      required: [id, kind, ats, board, board_url, company, keywords, locations, country, remote_only, every_hours, paused, last_checked_at, last_error, blocked_reason, next_check_at, spent_30d_usd, created_at]
       properties:
         id: { type: string, format: uuid }
-        ats: { $ref: '#/components/schemas/JobAts' }
-        board: { type: string, description: The employer's board slug. }
-        board_url: { type: string }
-        company: { type: string }
+        kind: { $ref: '#/components/schemas/JobWatchKind' }
+        ats: { allOf: [{ $ref: '#/components/schemas/JobAts' }], nullable: true, description: Null for a search. }
+        board: { type: string, nullable: true, description: "The employer's board slug; null for a search." }
+        board_url: { type: string, nullable: true }
+        company: { type: string, description: "The company a board belongs to, or a search's name." }
+        country: { type: string, nullable: true, description: "A search's ISO country code, such as MX." }
+        every_hours: { type: integer, nullable: true, enum: [1, 2, 6, 24], description: "How often a search runs; null for a board, read every 30 minutes." }
+        blocked_reason: { type: string, description: "Why a search was not run when due, or empty: plan (beyond the plan's search watchers), provider_unavailable, usage_limit, membership_required, membership_suspended or request_exceeds_plan." }
+        next_check_at: { type: string, format: date-time, nullable: true, description: "When a search runs next; null for a board or a paused search." }
+        spent_30d_usd: { type: string, description: "What a search's polls cost in the last 30 days; 0 for a board." }
         keywords: { type: array, items: { type: string }, description: A posting matches when its title contains any (empty matches all). }
         locations: { type: array, items: { type: string }, description: A posting matches when its location contains any (empty matches all). }
         remote_only: { type: boolean }
@@ -3284,15 +3357,28 @@ components:
         created_at: { type: string, format: date-time }
     JobWatchList:
       type: object
-      required: [items]
+      required: [items, search]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/JobWatch' } }
+        search: { $ref: '#/components/schemas/SearchAllowance' }
+    SearchAllowance:
+      type: object
+      required: [allowed, used, available, credit_usd, max_results]
+      description: What the member's plan allows for search watchers, and what a poll can cost.
+      properties:
+        allowed: { type: integer, description: "Search watchers the member's plan allows; 0 without an active plan." }
+        used: { type: integer }
+        available: { type: boolean, description: False until the owner configures the job search provider. }
+        credit_usd: { type: string, nullable: true, description: What one provider credit costs; a poll costs one credit per posting it returns. }
+        max_results: { type: integer, description: The most postings one poll returns, which bounds its cost. }
     JobWatchInput:
       type: object
-      required: [url]
       properties:
-        url: { type: string, maxLength: 2048, description: "A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one." }
-        company: { type: string, maxLength: 200, description: Defaults to the name the board publishes, or one made from its slug. }
+        kind: { $ref: '#/components/schemas/JobWatchKind' }
+        url: { type: string, maxLength: 2048, description: "For a board (required): a careers link, job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one." }
+        company: { type: string, maxLength: 200, description: "A board's company, defaulting to the name the board publishes; a search's name, defaulting to its terms and places." }
+        country: { type: string, pattern: '^[A-Za-z]{2}$', description: "For a search: an ISO country code." }
+        every_hours: { type: integer, enum: [1, 2, 6, 24], description: "For a search: how often it runs (default 2)." }
         keywords: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
         locations: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
         remote_only: { type: boolean }
@@ -3300,6 +3386,8 @@ components:
       type: object
       properties:
         company: { type: string, maxLength: 200 }
+        country: { type: string, pattern: '^([A-Za-z]{2})?$', description: "A search's country; an empty string removes it." }
+        every_hours: { type: integer, enum: [1, 2, 6, 24] }
         keywords: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
         locations: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
         remote_only: { type: boolean }

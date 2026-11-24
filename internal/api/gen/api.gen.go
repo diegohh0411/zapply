@@ -363,16 +363,106 @@ func (e JobStatusColor) Valid() bool {
 
 // Defines values for JobViewLayout.
 const (
-	Board JobViewLayout = "board"
-	Table JobViewLayout = "table"
+	JobViewLayoutBoard JobViewLayout = "board"
+	JobViewLayoutTable JobViewLayout = "table"
 )
 
 // Valid indicates whether the value is a known member of the JobViewLayout enum.
 func (e JobViewLayout) Valid() bool {
 	switch e {
-	case Board:
+	case JobViewLayoutBoard:
 		return true
-	case Table:
+	case JobViewLayoutTable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobWatchEveryHours.
+const (
+	JobWatchEveryHoursN1  JobWatchEveryHours = 1
+	JobWatchEveryHoursN2  JobWatchEveryHours = 2
+	JobWatchEveryHoursN24 JobWatchEveryHours = 24
+	JobWatchEveryHoursN6  JobWatchEveryHours = 6
+)
+
+// Valid indicates whether the value is a known member of the JobWatchEveryHours enum.
+func (e JobWatchEveryHours) Valid() bool {
+	switch e {
+	case JobWatchEveryHoursN1:
+		return true
+	case JobWatchEveryHoursN2:
+		return true
+	case JobWatchEveryHoursN24:
+		return true
+	case JobWatchEveryHoursN6:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobWatchInputEveryHours.
+const (
+	JobWatchInputEveryHoursN1  JobWatchInputEveryHours = 1
+	JobWatchInputEveryHoursN2  JobWatchInputEveryHours = 2
+	JobWatchInputEveryHoursN24 JobWatchInputEveryHours = 24
+	JobWatchInputEveryHoursN6  JobWatchInputEveryHours = 6
+)
+
+// Valid indicates whether the value is a known member of the JobWatchInputEveryHours enum.
+func (e JobWatchInputEveryHours) Valid() bool {
+	switch e {
+	case JobWatchInputEveryHoursN1:
+		return true
+	case JobWatchInputEveryHoursN2:
+		return true
+	case JobWatchInputEveryHoursN24:
+		return true
+	case JobWatchInputEveryHoursN6:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobWatchKind.
+const (
+	JobWatchKindBoard  JobWatchKind = "board"
+	JobWatchKindSearch JobWatchKind = "search"
+)
+
+// Valid indicates whether the value is a known member of the JobWatchKind enum.
+func (e JobWatchKind) Valid() bool {
+	switch e {
+	case JobWatchKindBoard:
+		return true
+	case JobWatchKindSearch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobWatchPatchEveryHours.
+const (
+	JobWatchPatchEveryHoursN1  JobWatchPatchEveryHours = 1
+	JobWatchPatchEveryHoursN2  JobWatchPatchEveryHours = 2
+	JobWatchPatchEveryHoursN24 JobWatchPatchEveryHours = 24
+	JobWatchPatchEveryHoursN6  JobWatchPatchEveryHours = 6
+)
+
+// Valid indicates whether the value is a known member of the JobWatchPatchEveryHours enum.
+func (e JobWatchPatchEveryHours) Valid() bool {
+	switch e {
+	case JobWatchPatchEveryHoursN1:
+		return true
+	case JobWatchPatchEveryHoursN2:
+		return true
+	case JobWatchPatchEveryHoursN24:
+		return true
+	case JobWatchPatchEveryHoursN6:
 		return true
 	default:
 		return false
@@ -757,6 +847,21 @@ func (e ScraperProviderKind) Valid() bool {
 	}
 }
 
+// Defines values for SearchSettingsProvider.
+const (
+	SearchSettingsProviderTheirstack SearchSettingsProvider = "theirstack"
+)
+
+// Valid indicates whether the value is a known member of the SearchSettingsProvider enum.
+func (e SearchSettingsProvider) Valid() bool {
+	switch e {
+	case SearchSettingsProviderTheirstack:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SkillType.
 const (
 	Hard     SkillType = "hard"
@@ -786,6 +891,7 @@ const (
 	SystemKeyKindCrawl4ai   SystemKeyKind = "crawl4ai"
 	SystemKeyKindFirecrawl  SystemKeyKind = "firecrawl"
 	SystemKeyKindOpenrouter SystemKeyKind = "openrouter"
+	SystemKeyKindTheirstack SystemKeyKind = "theirstack"
 )
 
 // Valid indicates whether the value is a known member of the SystemKeyKind enum.
@@ -797,6 +903,8 @@ func (e SystemKeyKind) Valid() bool {
 		return true
 	case SystemKeyKindOpenrouter:
 		return true
+	case SystemKeyKindTheirstack:
+		return true
 	default:
 		return false
 	}
@@ -804,13 +912,16 @@ func (e SystemKeyKind) Valid() bool {
 
 // Defines values for UsageEntryApp.
 const (
-	UsageEntryAppJobs UsageEntryApp = "jobs"
-	UsageEntryAppMail UsageEntryApp = "mail"
+	UsageEntryAppAlerts UsageEntryApp = "alerts"
+	UsageEntryAppJobs   UsageEntryApp = "jobs"
+	UsageEntryAppMail   UsageEntryApp = "mail"
 )
 
 // Valid indicates whether the value is a known member of the UsageEntryApp enum.
 func (e UsageEntryApp) Valid() bool {
 	switch e {
+	case UsageEntryAppAlerts:
+		return true
 	case UsageEntryAppJobs:
 		return true
 	case UsageEntryAppMail:
@@ -826,6 +937,8 @@ const (
 	UsageEntryStepsMail       UsageEntrySteps = "mail"
 	UsageEntryStepsMatch      UsageEntrySteps = "match"
 	UsageEntryStepsOther      UsageEntrySteps = "other"
+	UsageEntryStepsScrape     UsageEntrySteps = "scrape"
+	UsageEntryStepsSearch     UsageEntrySteps = "search"
 	UsageEntryStepsSummary    UsageEntrySteps = "summary"
 )
 
@@ -839,6 +952,10 @@ func (e UsageEntrySteps) Valid() bool {
 	case UsageEntryStepsMatch:
 		return true
 	case UsageEntryStepsOther:
+		return true
+	case UsageEntryStepsScrape:
+		return true
+	case UsageEntryStepsSearch:
 		return true
 	case UsageEntryStepsSummary:
 		return true
@@ -1628,17 +1745,32 @@ type JobViewLayout string
 
 // JobWatch defines model for JobWatch.
 type JobWatch struct {
-	Ats JobAts `json:"ats"`
+	// Ats Null for a search.
+	Ats *JobAts `json:"ats"`
 
-	// Board The employer's board slug.
-	Board     string             `json:"board"`
-	BoardUrl  string             `json:"board_url"`
-	Company   string             `json:"company"`
-	CreatedAt time.Time          `json:"created_at"`
-	Id        openapi_types.UUID `json:"id"`
+	// BlockedReason Why a search was not run when due, or empty: plan (beyond the plan's search watchers), provider_unavailable, usage_limit, membership_required, membership_suspended or request_exceeds_plan.
+	BlockedReason string `json:"blocked_reason"`
+
+	// Board The employer's board slug; null for a search.
+	Board    *string `json:"board"`
+	BoardUrl *string `json:"board_url"`
+
+	// Company The company a board belongs to, or a search's name.
+	Company string `json:"company"`
+
+	// Country A search's ISO country code, such as MX.
+	Country   *string   `json:"country"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// EveryHours How often a search runs; null for a board, read every 30 minutes.
+	EveryHours *JobWatchEveryHours `json:"every_hours"`
+	Id         openapi_types.UUID  `json:"id"`
 
 	// Keywords A posting matches when its title contains any (empty matches all).
 	Keywords []string `json:"keywords"`
+
+	// Kind board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan.
+	Kind JobWatchKind `json:"kind"`
 
 	// LastCheckedAt The board's last successful read.
 	LastCheckedAt *time.Time `json:"last_checked_at"`
@@ -1647,36 +1779,70 @@ type JobWatch struct {
 	LastError string `json:"last_error"`
 
 	// Locations A posting matches when its location contains any (empty matches all).
-	Locations  []string `json:"locations"`
-	Paused     bool     `json:"paused"`
-	RemoteOnly bool     `json:"remote_only"`
+	Locations []string `json:"locations"`
+
+	// NextCheckAt When a search runs next; null for a board or a paused search.
+	NextCheckAt *time.Time `json:"next_check_at"`
+	Paused      bool       `json:"paused"`
+	RemoteOnly  bool       `json:"remote_only"`
+
+	// Spent30dUsd What a search's polls cost in the last 30 days; 0 for a board.
+	Spent30dUsd string `json:"spent_30d_usd"`
 }
+
+// JobWatchEveryHours How often a search runs; null for a board, read every 30 minutes.
+type JobWatchEveryHours int
 
 // JobWatchInput defines model for JobWatchInput.
 type JobWatchInput struct {
-	// Company Defaults to the name the board publishes
-	Company    *string   `json:"company,omitempty"`
-	Keywords   *[]string `json:"keywords,omitempty"`
-	Locations  *[]string `json:"locations,omitempty"`
-	RemoteOnly *bool     `json:"remote_only,omitempty"`
+	// Company A board's company, defaulting to the name the board publishes; a search's name, defaulting to its terms and places.
+	Company *string `json:"company,omitempty"`
 
-	// Url A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one.
-	Url string `json:"url"`
+	// Country For a search: an ISO country code.
+	Country *string `json:"country,omitempty"`
+
+	// EveryHours For a search: how often it runs (default 2).
+	EveryHours *JobWatchInputEveryHours `json:"every_hours,omitempty"`
+	Keywords   *[]string                `json:"keywords,omitempty"`
+
+	// Kind board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan.
+	Kind       *JobWatchKind `json:"kind,omitempty"`
+	Locations  *[]string     `json:"locations,omitempty"`
+	RemoteOnly *bool         `json:"remote_only,omitempty"`
+
+	// Url For a board (required): a careers link, job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one.
+	Url *string `json:"url,omitempty"`
 }
+
+// JobWatchInputEveryHours For a search: how often it runs (default 2).
+type JobWatchInputEveryHours int
+
+// JobWatchKind board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan.
+type JobWatchKind string
 
 // JobWatchList defines model for JobWatchList.
 type JobWatchList struct {
 	Items []JobWatch `json:"items"`
+
+	// Search What the member's plan allows for search watchers, and what a poll can cost.
+	Search SearchAllowance `json:"search"`
 }
 
 // JobWatchPatch defines model for JobWatchPatch.
 type JobWatchPatch struct {
-	Company    *string   `json:"company,omitempty"`
-	Keywords   *[]string `json:"keywords,omitempty"`
-	Locations  *[]string `json:"locations,omitempty"`
-	Paused     *bool     `json:"paused,omitempty"`
-	RemoteOnly *bool     `json:"remote_only,omitempty"`
+	Company *string `json:"company,omitempty"`
+
+	// Country A search's country; an empty string removes it.
+	Country    *string                  `json:"country,omitempty"`
+	EveryHours *JobWatchPatchEveryHours `json:"every_hours,omitempty"`
+	Keywords   *[]string                `json:"keywords,omitempty"`
+	Locations  *[]string                `json:"locations,omitempty"`
+	Paused     *bool                    `json:"paused,omitempty"`
+	RemoteOnly *bool                    `json:"remote_only,omitempty"`
 }
+
+// JobWatchPatchEveryHours defines model for JobWatchPatch.EveryHours.
+type JobWatchPatchEveryHours int
 
 // KeyActivationInput defines model for KeyActivationInput.
 type KeyActivationInput struct {
@@ -2048,15 +2214,19 @@ type Plan struct {
 	Cap30dUsd string             `json:"cap_30d_usd"`
 	Cap7dUsd  string             `json:"cap_7d_usd"`
 	Id        openapi_types.UUID `json:"id"`
-	Name      string             `json:"name"`
-	Version   int                `json:"version"`
+
+	// MaxSearchWatchers How many search watchers a member on this plan may keep. Zero disables them.
+	MaxSearchWatchers int    `json:"max_search_watchers"`
+	Name              string `json:"name"`
+	Version           int    `json:"version"`
 }
 
 // PlanInput defines model for PlanInput.
 type PlanInput struct {
-	Cap30dUsd string `json:"cap_30d_usd"`
-	Cap7dUsd  string `json:"cap_7d_usd"`
-	Name      string `json:"name"`
+	Cap30dUsd         string `json:"cap_30d_usd"`
+	Cap7dUsd          string `json:"cap_7d_usd"`
+	MaxSearchWatchers *int   `json:"max_search_watchers,omitempty"`
+	Name              string `json:"name"`
 }
 
 // PostingExtraction defines model for PostingExtraction.
@@ -2194,6 +2364,9 @@ type ScraperProvider struct {
 	// BaseUrl The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge.
 	BaseUrl *string `json:"base_url,omitempty"`
 
+	// CreditUsd What one provider credit costs. Members are charged for the credits their scrapes use (Firecrawl: 1 per page, 5 through its stealth proxy; other providers: 1). Null makes the provider free. Not allowed for edge workers.
+	CreditUsd *string `json:"credit_usd,omitempty"`
+
 	// KeyId A system key of the provider's own kind, sent as a bearer token; null sends none.
 	KeyId *openapi_types.UUID `json:"key_id,omitempty"`
 
@@ -2231,6 +2404,47 @@ type ScraperSettingsInput struct {
 
 	// Rules The first rule whose host matches the posting's host replaces the default order.
 	Rules []ScraperRule `json:"rules"`
+}
+
+// SearchAllowance What the member's plan allows for search watchers, and what a poll can cost.
+type SearchAllowance struct {
+	// Allowed Search watchers the member's plan allows; 0 without an active plan.
+	Allowed int `json:"allowed"`
+
+	// Available False until the owner configures the job search provider.
+	Available bool `json:"available"`
+
+	// CreditUsd What one provider credit costs; a poll costs one credit per posting it returns.
+	CreditUsd *string `json:"credit_usd"`
+
+	// MaxResults The most postings one poll returns
+	MaxResults int `json:"max_results"`
+	Used       int `json:"used"`
+}
+
+// SearchSettings defines model for SearchSettings.
+type SearchSettings struct {
+	// CreditUsd What one TheirStack API credit costs.
+	CreditUsd *string `json:"credit_usd"`
+
+	// KeyId A TheirStack system key.
+	KeyId *openapi_types.UUID `json:"key_id"`
+
+	// MaxResults The most postings one poll asks for.
+	MaxResults int                    `json:"max_results"`
+	Provider   SearchSettingsProvider `json:"provider"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Version    int                    `json:"version"`
+}
+
+// SearchSettingsProvider defines model for SearchSettings.Provider.
+type SearchSettingsProvider string
+
+// SearchSettingsInput defines model for SearchSettingsInput.
+type SearchSettingsInput struct {
+	CreditUsd  *string             `json:"credit_usd"`
+	KeyId      *openapi_types.UUID `json:"key_id"`
+	MaxResults int                 `json:"max_results"`
 }
 
 // Selection defines model for Selection.
@@ -2312,7 +2526,7 @@ type Usage struct {
 	Spent7dUsd      string      `json:"spent_7d_usd"`
 }
 
-// UsageEntry One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list.
+// UsageEntry One line of recent activity: the charges of one job (or of the email and posting work not linked to one), or of one search watcher, newest first. Its id is the newest charge's id, which pages the list.
 type UsageEntry struct {
 	AccountedAt time.Time         `json:"accounted_at"`
 	AmountUsd   string            `json:"amount_usd"`
@@ -2409,6 +2623,12 @@ type UpdatePlanParams struct {
 
 // PutScraperSettingsParams defines parameters for PutScraperSettings.
 type PutScraperSettingsParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// PutSearchSettingsParams defines parameters for PutSearchSettings.
+type PutSearchSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
 }
@@ -2569,6 +2789,9 @@ type UpdatePlanJSONRequestBody = PlanInput
 
 // PutScraperSettingsJSONRequestBody defines body for PutScraperSettings for application/json ContentType.
 type PutScraperSettingsJSONRequestBody = ScraperSettingsInput
+
+// PutSearchSettingsJSONRequestBody defines body for PutSearchSettings for application/json ContentType.
+type PutSearchSettingsJSONRequestBody = SearchSettingsInput
 
 // CreateSystemKeyJSONRequestBody defines body for CreateSystemKey for application/json ContentType.
 type CreateSystemKeyJSONRequestBody = SystemKeyInput
@@ -2731,6 +2954,12 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/scraper-settings)
 	PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams)
+
+	// (GET /v1/admin/search-settings)
+	GetSearchSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/search-settings)
+	PutSearchSettings(w http.ResponseWriter, r *http.Request, params PutSearchSettingsParams)
 
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(w http.ResponseWriter, r *http.Request)
@@ -3592,6 +3821,65 @@ func (siw *ServerInterfaceWrapper) PutScraperSettings(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutScraperSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSearchSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutSearchSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutSearchSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutSearchSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutSearchSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6270,6 +6558,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.GetScraperSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.PutScraperSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.GetSearchSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.PutSearchSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.ListEdgeWorkers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.CreateEdgeWorker)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/admin/edge-workers/{id}", wrapper.UpdateEdgeWorker)
@@ -7070,6 +7360,84 @@ type PutScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PutScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSearchSettingsRequestObject struct {
+}
+
+type GetSearchSettingsResponseObject interface {
+	VisitGetSearchSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetSearchSettings200JSONResponse SearchSettings
+
+func (response GetSearchSettings200JSONResponse) VisitGetSearchSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSearchSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSearchSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetSearchSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutSearchSettingsRequestObject struct {
+	Params PutSearchSettingsParams
+	Body   *PutSearchSettingsJSONRequestBody
+}
+
+type PutSearchSettingsResponseObject interface {
+	VisitPutSearchSettingsResponse(w http.ResponseWriter) error
+}
+
+type PutSearchSettings200JSONResponse SearchSettings
+
+func (response PutSearchSettings200JSONResponse) VisitPutSearchSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutSearchSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutSearchSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutSearchSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10550,6 +10918,12 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/scraper-settings)
 	PutScraperSettings(ctx context.Context, request PutScraperSettingsRequestObject) (PutScraperSettingsResponseObject, error)
 
+	// (GET /v1/admin/search-settings)
+	GetSearchSettings(ctx context.Context, request GetSearchSettingsRequestObject) (GetSearchSettingsResponseObject, error)
+
+	// (PUT /v1/admin/search-settings)
+	PutSearchSettings(ctx context.Context, request PutSearchSettingsRequestObject) (PutSearchSettingsResponseObject, error)
+
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(ctx context.Context, request ListSystemKeysRequestObject) (ListSystemKeysResponseObject, error)
 
@@ -11373,6 +11747,63 @@ func (sh *strictHandler) PutScraperSettings(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutScraperSettingsResponseObject); ok {
 		if err := validResponse.VisitPutScraperSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSearchSettings operation middleware
+func (sh *strictHandler) GetSearchSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetSearchSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSearchSettings(ctx, request.(GetSearchSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSearchSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSearchSettingsResponseObject); ok {
+		if err := validResponse.VisitGetSearchSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutSearchSettings operation middleware
+func (sh *strictHandler) PutSearchSettings(w http.ResponseWriter, r *http.Request, params PutSearchSettingsParams) {
+	var request PutSearchSettingsRequestObject
+
+	request.Params = params
+
+	var body PutSearchSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutSearchSettings(ctx, request.(PutSearchSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutSearchSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutSearchSettingsResponseObject); ok {
+		if err := validResponse.VisitPutSearchSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

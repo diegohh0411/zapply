@@ -69,7 +69,7 @@ func TestSummaryUsesMemberAllowance(t *testing.T) {
 		t.Fatalf("summary operation: %#v", op)
 	}
 	var charged int64
-	if err = admin.QueryRow(ctx, `SELECT sum(amount)::bigint FROM platform.model_usage WHERE user_id=$1`, f.u).Scan(&charged); err != nil || charged != f.p.amount {
+	if err = admin.QueryRow(ctx, `SELECT sum(amount)::bigint FROM platform.ledger_entry WHERE user_id=$1`, f.u).Scan(&charged); err != nil || charged != f.p.amount {
 		t.Fatalf("incorrect member charge %d %v", charged, err)
 	}
 	if f.p.calls.Load() != 1 {
@@ -150,7 +150,7 @@ func TestSummaryRevisesToItsRowsThenTrims(t *testing.T) {
 		t.Fatalf("revision conversation: %+v", last)
 	}
 	var charged int64
-	if err = admin.QueryRow(ctx, `SELECT sum(amount)::bigint FROM platform.model_usage WHERE user_id=$1`, f.u).Scan(&charged); err != nil || charged != 3*f.p.amount {
+	if err = admin.QueryRow(ctx, `SELECT sum(amount)::bigint FROM platform.ledger_entry WHERE user_id=$1`, f.u).Scan(&charged); err != nil || charged != 3*f.p.amount {
 		t.Fatalf("every revision is charged once: %d %v", charged, err)
 	}
 }

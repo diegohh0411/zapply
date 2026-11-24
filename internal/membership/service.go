@@ -98,7 +98,9 @@ func (s *Service) Attempts(ctx context.Context, u uuid.UUID, before *uuid.UUID, 
 	return s.read(ctx, u, "SELECT platform.admin_attempts($1,$2)", before, limit)
 }
 
-func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, month string, version int) (json.RawMessage, error) {
+// SavePlan creates (version 0) or updates a plan. maxSearch nil keeps a plan's
+// search watchers, or gives a new plan none.
+func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, month string, maxSearch *int, version int) (json.RawMessage, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 100 || strings.ContainsRune(name, 0) {
 		return nil, invalid("name", "must be between 1 and 100 characters")
@@ -111,7 +113,10 @@ func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, mon
 	if err != nil || m <= 0 || !inputAmount.MatchString(month) {
 		return nil, invalid("cap_30d_usd", "must be a positive USD amount")
 	}
-	return s.read(ctx, u, "SELECT platform.save_plan($1,$2,$3,$4,$5)", id, name, w, m, version)
+	if maxSearch != nil && (*maxSearch < 0 || *maxSearch > 100) {
+		return nil, invalid("max_search_watchers", "must be between 0 and 100")
+	}
+	return s.read(ctx, u, "SELECT platform.save_plan($1,$2,$3,$4,$5,$6)", id, name, w, m, maxSearch, version)
 }
 func (s *Service) SaveMembership(ctx context.Context, u, member, plan uuid.UUID, status string, version int) (json.RawMessage, error) {
 	if status != "active" && status != "suspended" {
@@ -125,14 +130,15 @@ func (s *Service) AddKey(ctx context.Context, u uuid.UUID, label, key string) (u
 	return s.AddKeyOfKind(ctx, u, label, key, "openrouter")
 }
 
-// AddKeyOfKind stores a provider key of kind "openrouter", "firecrawl" or "crawl4ai", inactive.
+// AddKeyOfKind stores a provider key of kind "openrouter", "firecrawl",
+// "crawl4ai" or "theirstack", inactive.
 func (s *Service) AddKeyOfKind(ctx context.Context, u uuid.UUID, label, key, kind string) (uuid.UUID, error) {
 	// Authorize before encryption/configuration errors to avoid disclosing system state.
 	if err := s.AssertOwner(ctx, u); err != nil {
 		return uuid.Nil, err
 	}
-	if kind != "openrouter" && kind != "firecrawl" && kind != "crawl4ai" {
-		return uuid.Nil, invalid("kind", "must be openrouter, firecrawl or crawl4ai")
+	if kind != "openrouter" && kind != "firecrawl" && kind != "crawl4ai" && kind != "theirstack" {
+		return uuid.Nil, invalid("kind", "must be openrouter, firecrawl, crawl4ai or theirstack")
 	}
 	label = strings.TrimSpace(label)
 	key = strings.TrimSpace(key)
@@ -150,6 +156,31 @@ func (s *Service) AddKeyOfKind(ctx context.Context, u uuid.UUID, label, key, kin
 	err = s.exec(ctx, u, "SELECT platform.add_key($1,$2,$3,$4,$5,$6)", id, label, encrypted, version, secrets.Fingerprint(key), kind)
 	return id, err
 }
+
+// SearchSettings returns the job search provider's settings (owner only).
+func (s *Service) SearchSettings(ctx context.Context, u uuid.UUID) (json.RawMessage, error) {
+	return s.read(ctx, u, "SELECT platform.search_settings()")
+}
+
+// SaveSearchSettings sets the TheirStack key, its credit price (USD, "" for
+// none) and how many postings one poll may return.
+func (s *Service) SaveSearchSettings(ctx context.Context, u uuid.UUID, key *uuid.UUID, creditUSD string, maxResults, version int) (json.RawMessage, error) {
+	var price *int64
+	if creditUSD != "" {
+		n, err := modelapi.ParseUSD(creditUSD)
+		if err != nil || n <= 0 || !creditAmount.MatchString(creditUSD) {
+			return nil, invalid("credit_usd", "must be a positive USD amount such as 0.0069")
+		}
+		price = &n
+	}
+	if maxResults < 1 || maxResults > 100 {
+		return nil, invalid("max_results", "must be between 1 and 100")
+	}
+	return s.read(ctx, u, "SELECT platform.save_search_settings($1,$2,$3,$4)", key, price, maxResults, version)
+}
+
+var creditAmount = regexp.MustCompile(`^[0-9]{1,6}(?:\.[0-9]{1,12})?$`)
+
 func (s *Service) ActivateKey(ctx context.Context, u, id uuid.UUID, active bool, version int) error {
 	return s.exec(ctx, u, "SELECT platform.activate_key($1,$2,$3)", id, active, version)
 }

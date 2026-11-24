@@ -115,5 +115,9 @@ func (f *Firecrawl) Scrape(ctx context.Context, url string) (Page, error) {
 	if code, ok := sr.Data.Metadata["statusCode"].(float64); ok && code >= 400 {
 		return Page{}, &UnreadableError{Reason: fmt.Sprintf("the site answered %d", int(code))}
 	}
-	return Page{Markdown: sr.Data.Markdown, RawHTML: sr.Data.RawHTML, Metadata: sr.Data.Metadata}, nil
+	page := Page{Markdown: sr.Data.Markdown, RawHTML: sr.Data.RawHTML, Metadata: sr.Data.Metadata}
+	if n, ok := sr.Data.Metadata["creditsUsed"].(float64); ok && n > 0 && n < 1000 {
+		page.Credits = int(n)
+	}
+	return page, nil
 }

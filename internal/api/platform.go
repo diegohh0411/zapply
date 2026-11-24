@@ -62,7 +62,7 @@ func (s *server) ListPlans(ctx context.Context, _ gen.ListPlansRequestObject) (g
 }
 func (s *server) CreatePlan(ctx context.Context, req gen.CreatePlanRequestObject) (gen.CreatePlanResponseObject, error) {
 	b := req.Body
-	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), uuid.Must(uuid.NewV7()), b.Name, b.Cap7dUsd, b.Cap30dUsd, 0))
+	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), uuid.Must(uuid.NewV7()), b.Name, b.Cap7dUsd, b.Cap30dUsd, b.MaxSearchWatchers, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *server) UpdatePlan(ctx context.Context, req gen.UpdatePlanRequestObject
 		return nil, badRequest("existing plan version is required")
 	}
 	b := req.Body
-	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), req.Id, b.Name, b.Cap7dUsd, b.Cap30dUsd, ver))
+	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), req.Id, b.Name, b.Cap7dUsd, b.Cap30dUsd, b.MaxSearchWatchers, ver))
 	if err != nil {
 		return nil, err
 	}
@@ -171,4 +171,27 @@ func (s *server) GetGatewayTest(ctx context.Context, req gen.GetGatewayTestReque
 	raw, _ := json.Marshal(op)
 	v, err := decodePlatform[gen.GetGatewayTest200JSONResponse](raw, nil)
 	return v, err
+}
+
+// GetSearchSettings returns the job search provider behind search watchers (owner only).
+func (s *server) GetSearchSettings(ctx context.Context, _ gen.GetSearchSettingsRequestObject) (gen.GetSearchSettingsResponseObject, error) {
+	v, err := decodePlatform[gen.SearchSettings](s.members.SearchSettings(ctx, uid(ctx)))
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetSearchSettings200JSONResponse(v), nil
+}
+
+// PutSearchSettings sets the TheirStack key and credit price (owner only).
+func (s *server) PutSearchSettings(ctx context.Context, req gen.PutSearchSettingsRequestObject) (gen.PutSearchSettingsResponseObject, error) {
+	ver, err := parseIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	v, err := decodePlatform[gen.SearchSettings](s.members.SaveSearchSettings(ctx, uid(ctx), b.KeyId, deref(b.CreditUsd), b.MaxResults, ver))
+	if err != nil {
+		return nil, err
+	}
+	return gen.PutSearchSettings200JSONResponse(v), nil
 }

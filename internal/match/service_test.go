@@ -142,7 +142,7 @@ func setup(t *testing.T) *fixture {
 	}
 	member := membership.New(d.Store, ring)
 	plan := uuid.New()
-	if _, e = member.SavePlan(ctx, u, plan, "Test", "1", "2", 0); e != nil {
+	if _, e = member.SavePlan(ctx, u, plan, "Test", "1", "2", nil, 0); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = member.SaveMembership(ctx, u, u, plan, "active", 0); e != nil {
@@ -497,7 +497,7 @@ func TestUncertainAccountingResumesWithNewOperation(t *testing.T) {
 		t.Fatalf("uncertain %v %#v calls %d", e, r, f.p.calls)
 	}
 	var attempt uuid.UUID
-	if e = f.db.Admin(t).QueryRow(ctx, `UPDATE platform.model_attempt SET deadline_at=now()-interval '1 minute' WHERE operation_id=$1 RETURNING id`, op).Scan(&attempt); e != nil {
+	if e = f.db.Admin(t).QueryRow(ctx, `UPDATE platform.charge SET deadline_at=now()-interval '1 minute' WHERE id IN (SELECT charge_id FROM platform.model_charge WHERE operation_id=$1) RETURNING id`, op).Scan(&attempt); e != nil {
 		t.Fatal(e)
 	}
 	member := membership.New(f.db.Store, f.runtime.Keys)
@@ -547,10 +547,10 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 	// A settlement first recorded without tokens and then corrected with them
 	// still calibrates from the corrected payload.
 	admin := f.db.Admin(t)
-	if _, e = admin.Exec(ctx, `WITH a AS (SELECT a.id FROM platform.model_attempt a WHERE a.model='test/decision' AND a.state='settled' LIMIT 1),
-		cleared AS (UPDATE platform.model_usage u SET usage='{}' FROM a WHERE u.attempt_id=a.id RETURNING u.attempt_id,u.user_id)
-		INSERT INTO platform.model_usage(attempt_id,user_id,amount,accounted_at,source,dedup_key,usage)
-		SELECT attempt_id,user_id,0,now(),'generation_lookup','correction:test','{"input_tokens":10}' FROM cleared LIMIT 1`); e != nil {
+	if _, e = admin.Exec(ctx, `WITH a AS (SELECT a.charge_id AS id FROM platform.model_charge a JOIN platform.charge c ON c.id=a.charge_id WHERE a.model='test/decision' AND c.state='settled' LIMIT 1),
+		cleared AS (UPDATE platform.ledger_entry u SET detail='{}' FROM a WHERE u.charge_id=a.id RETURNING u.charge_id,u.user_id)
+		INSERT INTO platform.ledger_entry(charge_id,user_id,amount,accounted_at,source,dedup_key,detail)
+		SELECT charge_id,user_id,0,now(),'generation_lookup','correction:test','{"input_tokens":10}' FROM cleared LIMIT 1`); e != nil {
 		t.Fatal(e)
 	}
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {
@@ -562,8 +562,8 @@ func TestEstimateCacheAndModelSnapshots(t *testing.T) {
 		t.Fatalf("corrected settlement dropped from calibration: %s", raw)
 	}
 	// Chat usage names its tokens prompt_tokens/completion_tokens.
-	if _, e = admin.Exec(ctx, `UPDATE platform.model_usage SET usage='{"prompt_tokens":10,"completion_tokens":3}'
-		WHERE attempt_id IN (SELECT id FROM platform.model_attempt WHERE model='test/decision' AND state='settled')`); e != nil {
+	if _, e = admin.Exec(ctx, `UPDATE platform.ledger_entry SET detail='{"prompt_tokens":10,"completion_tokens":3}'
+		WHERE charge_id IN (SELECT a.charge_id FROM platform.model_charge a JOIN platform.charge c ON c.id=a.charge_id WHERE a.model='test/decision' AND c.state='settled')`); e != nil {
 		t.Fatal(e)
 	}
 	if e = f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error {

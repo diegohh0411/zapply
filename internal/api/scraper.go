@@ -33,7 +33,7 @@ func (s *server) PutScraperSettings(ctx context.Context, req gen.PutScraperSetti
 	}
 	settings := posting.Settings{Providers: []posting.ProviderConfig{}, Rules: []posting.Rule{}}
 	for _, p := range req.Body.Providers {
-		c := posting.ProviderConfig{Kind: string(p.Kind), BaseURL: deref(p.BaseUrl)}
+		c := posting.ProviderConfig{Kind: string(p.Kind), BaseURL: deref(p.BaseUrl), CreditUSD: deref(p.CreditUsd)}
 		if p.KeyId != nil {
 			c.KeyID = p.KeyId.String()
 		}

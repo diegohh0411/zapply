@@ -72,7 +72,7 @@ func TestWatchAndPoll(t *testing.T) {
 	}
 	kw := []string{"engineer"}
 	w, err := api.Create(ctx, alice, alerts.Input{URL: "jobs.lever.co/acme/old", Keywords: &kw})
-	if err != nil || w.Company != "Acme Inc." || w.ATS != "lever" || w.Board != "acme" {
+	if err != nil || w.Company != "Acme Inc." || w.Kind != alerts.KindBoard || *w.ATS != "lever" || *w.Board != "acme" {
 		t.Fatalf("create = %+v, %v", w, err)
 	}
 	var conflict *library.ConflictError
@@ -128,7 +128,7 @@ func TestWatchAndPoll(t *testing.T) {
 	if err := worker.Poll(ctx, "lever", "acme"); err != nil {
 		t.Fatal(err)
 	}
-	list, err := api.Watches(ctx, bob)
+	list, _, err := api.Watches(ctx, bob)
 	if err != nil || len(list) != 1 || list[0].LastError == "" {
 		t.Fatalf("watches = %+v, %v", list, err)
 	}

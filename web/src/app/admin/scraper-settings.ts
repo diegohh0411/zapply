@@ -14,7 +14,7 @@ type SystemKey = Schemas['SystemKey'];
 // What the form edits. `key_id` is '' for no key, and rule providers are
 // positions in the provider list, as the API stores them.
 type Kind = Schemas['ScraperProvider']['kind'];
-interface Provider { kind: Kind; base_url: string; key_id: string }
+interface Provider { kind: Kind; base_url: string; key_id: string; credit_usd: string }
 interface Rule { host: string; providers: number[] }
 
 const NO_KEY = 'none';
@@ -96,6 +96,14 @@ const single = (value: string | string[] | null): string => (Array.isArray(value
                       Keys are stored encrypted with the other <a class="underline" routerLink="/admin/system-keys">system keys</a>; add a {{ kindLabel(p.kind) }} key there.
                     </span>
                   </div>
+                  <label class="field"
+                    ><span>Price per credit · USD</span
+                    ><input z-input [name]="'credit-' + i" [(ngModel)]="p.credit_usd" (ngModelChange)="touch()" inputmode="decimal" placeholder="Free" maxlength="20" autocomplete="off" />
+                    <span class="text-xs font-normal text-muted-foreground">
+                      {{ p.kind === 'firecrawl' ? 'Firecrawl charges 1 credit a page, 5 through its stealth proxy.' : 'Each page counts as 1 credit.' }}
+                      Members pay for the credits their scrapes use, from their plan. Leave empty for a free provider.
+                    </span>
+                  </label>
                   }
                 </div>
               </li>
@@ -238,7 +246,7 @@ export class ScraperSettings {
 
   private apply(saved: Settings): void {
     this.settings.set(saved);
-    this.providers = saved.providers.map((p) => ({ kind: p.kind, base_url: p.base_url ?? '', key_id: p.key_id ?? '' }));
+    this.providers = saved.providers.map((p) => ({ kind: p.kind, base_url: p.base_url ?? '', key_id: p.key_id ?? '', credit_usd: p.credit_usd ?? '' }));
     this.rules = saved.rules.map((r) => ({ host: r.host, providers: [...r.providers] }));
     this.edits.update((n) => n + 1);
   }
@@ -250,6 +258,7 @@ export class ScraperSettings {
         kind: p.kind,
         base_url: p.base_url.trim() || null,
         key_id: p.key_id || null,
+        credit_usd: p.kind === 'edge' ? null : p.credit_usd.trim() || null,
       })),
       rules: this.rules.map((r) => ({ host: r.host.trim().toLowerCase(), providers: [...r.providers] })),
     };
@@ -260,7 +269,7 @@ export class ScraperSettings {
     const saved = this.settings();
     if (!saved) return false;
     const normalized = {
-      providers: saved.providers.map((p) => ({ kind: p.kind, base_url: p.base_url || null, key_id: p.key_id || null })),
+      providers: saved.providers.map((p) => ({ kind: p.kind, base_url: p.base_url || null, key_id: p.key_id || null, credit_usd: p.credit_usd || null })),
       rules: saved.rules,
     };
     return JSON.stringify(this.body()) !== JSON.stringify(normalized);
@@ -288,7 +297,7 @@ export class ScraperSettings {
     if (kind === p.kind) return;
     p.kind = kind;
     // A key of the other kind would be refused on save, and edge workers take neither.
-    if (kind === 'edge') p.base_url = '';
+    if (kind === 'edge') { p.base_url = ''; p.credit_usd = ''; }
     if (p.key_id && !this.keysFor(kind).some((k) => k.id === p.key_id)) p.key_id = '';
     this.touch();
   }
@@ -303,7 +312,7 @@ export class ScraperSettings {
 
   addProvider(kind: Kind): void {
     const keys = this.keysFor(kind);
-    this.providers.push({ kind, base_url: '', key_id: keys.length === 1 ? keys[0]!.id : '' });
+    this.providers.push({ kind, base_url: '', key_id: keys.length === 1 ? keys[0]!.id : '', credit_usd: '' });
     this.touch();
   }
   removeProvider(i: number): void {
@@ -396,7 +405,7 @@ export class ScraperSettings {
           const m = /^(providers|rules)\[(\d+)\](?:\.(\w+))?$/.exec(e.field);
           if (!m) return e.message;
           const what = m[1] === 'providers' ? `Provider ${+m[2]! + 1}` : `Site rule ${+m[2]! + 1}`;
-          const part = ({ base_url: 'API address', kind: 'scraper', host: 'site', providers: 'providers' } as Record<string, string>)[m[3] ?? ''];
+          const part = ({ base_url: 'API address', kind: 'scraper', host: 'site', providers: 'providers', credit_usd: 'price per credit' } as Record<string, string>)[m[3] ?? ''];
           return `${what}${part ? ' ' + part : ''}: ${e.message}`;
         })
         .join('; ');

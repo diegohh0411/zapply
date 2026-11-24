@@ -54,6 +54,8 @@ type Page struct {
 	Markdown string
 	RawHTML  string
 	Metadata map[string]any
+	// Credits is what the provider charged, when it says; 0 is unknown.
+	Credits int
 }
 
 // Scraper fetches a page. Implementations return *UnreadableError for pages

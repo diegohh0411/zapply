@@ -28,6 +28,7 @@
       <div class="space-y-12">
         <app-scraper-settings />
         <app-edge-workers />
+        <app-search-settings />
       </div>
     }
     @case ('plans') {
@@ -48,6 +49,7 @@
                   <th class="p-3">Plan</th>
                   <th class="p-3">Past 7 days</th>
                   <th class="p-3">Past 30 days</th>
+                  <th class="p-3">Search watchers</th>
                   <th class="p-3"><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -57,6 +59,7 @@
                     <td class="p-3 font-medium">{{ p.name }}</td>
                     <td class="p-3 tabular-nums">{{ money(p.cap_7d_usd) }}</td>
                     <td class="p-3 tabular-nums">{{ money(p.cap_30d_usd) }}</td>
+                    <td class="p-3 tabular-nums">{{ p.max_search_watchers || 'None' }}</td>
                     <td class="p-3 text-right">
                       <button z-button zType="outline" [zDisabled]="busy()" (click)="editPlan(p)">
                         Edit
@@ -65,7 +68,7 @@
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="4" class="p-6 text-center text-muted-foreground">
+                    <td colspan="5" class="p-6 text-center text-muted-foreground">
                       Create a plan to start assigning model access.
                     </td>
                   </tr>
@@ -120,6 +123,21 @@
                     required
                 /></label>
               </div>
+              <label class="field"
+                ><span>Search watchers</span
+                ><input
+                  z-input
+                  name="search"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  [(ngModel)]="planForm.max_search_watchers"
+                />
+                <span class="text-xs font-normal text-muted-foreground"
+                  >Saved job searches across every company. Their polls are paid from the allowances above. 0 turns them off.</span
+                ></label
+              >
               <div class="flex justify-end gap-2">
                 <button z-button zType="outline" type="button" (click)="cancelPlan()">Cancel</button>
                 <button z-button type="submit" [zDisabled]="busy()">
@@ -336,6 +354,7 @@
                 <z-select-item zValue="openrouter">OpenRouter</z-select-item>
                 <z-select-item zValue="firecrawl">Firecrawl</z-select-item>
                 <z-select-item zValue="crawl4ai">Crawl4AI</z-select-item>
+                <z-select-item zValue="theirstack">TheirStack</z-select-item>
               </z-select>
             </div>
             <label class="field"

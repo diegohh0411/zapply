@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 )
@@ -82,6 +84,26 @@ func SeedFromEnv(ctx context.Context, st *store.Store, ring *secrets.Ring, baseU
 	}
 	return st.SeedScraperSettings(ctx, providers, sealed)
 }
+
+// Open and Close make the source the chain's Meter: scrapes are billed to the
+// signed-in member.
+func (d *DBSource) Open(ctx context.Context, id uuid.UUID, provider, host string, creditPrice, cost int64, deadline time.Time) (string, error) {
+	u, ok := auth.UserIDFrom(ctx)
+	if !ok || u == uuid.Nil {
+		return "", ErrNoMember
+	}
+	return d.store.OpenScrapeCharge(ctx, u, id, provider, host, creditPrice, cost, deadline)
+}
+
+func (d *DBSource) Close(ctx context.Context, id uuid.UUID, credits int) error {
+	u, ok := auth.UserIDFrom(ctx)
+	if !ok {
+		return ErrNoMember
+	}
+	return d.store.CloseScrapeCharge(ctx, u, id, credits)
+}
+
+var _ Meter = (*DBSource)(nil)
 
 // EnqueueScrapeJob and ScrapeJobResult make the source the edge job queue.
 func (d *DBSource) EnqueueScrapeJob(ctx context.Context, url, host string, ttlSeconds int) (uuid.UUID, bool, error) {
