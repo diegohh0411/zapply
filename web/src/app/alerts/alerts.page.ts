@@ -28,6 +28,7 @@ import { ZardInputComponent } from '@/shared/components/input';
 import { pageState, ZardPageComponent } from '@/shared/components/page';
 import { ZardSelectImports } from '@/shared/components/select';
 import { Api, ApiError, type Schemas } from '../core/api';
+import { AuthService } from '../core/auth.service';
 import { ConfirmService } from '../core/confirm.service';
 import { relativeTime } from '../mail/format';
 import { usageUsd } from '../usage/format';
@@ -35,7 +36,8 @@ import { usageUsd } from '../usage/format';
 type Watch = Schemas['JobWatch'];
 type WatchList = Schemas['JobWatchList'];
 
-const watchesKey = ['job-watches'] as const;
+/** Keyed by member, so one member's cached list never shows for another. */
+const watchesKey = (identity: string | null) => ['job-watches', identity] as const;
 type Every = 1 | 2 | 6 | 24;
 
 const everyLabel: Record<Every, string> = { 1: 'Every hour', 2: 'Every 2 hours', 6: 'Every 6 hours', 24: 'Once a day' };
@@ -124,14 +126,15 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
       zTitle="Job alerts"
       zDescription="Watch a company's careers board and hear about new openings within 30 minutes of them going live, before they spread to LinkedIn and the applicant pool fills up."
       [zState]="page()"
+      zErrorMessage="Could not load your job alerts."
       (retry)="list.refetch()"
     >
         @if (!formOpen()) {
           <div actions class="flex flex-wrap gap-2">
-            <button z-button zType="outline" [zDisabled]="!canSearch()" [title]="searchNote()" (click)="openForm('search')">
+            <button z-button zType="outline" [zDisabled]="list.isPending() || !canSearch()" [title]="searchNote()" (click)="openForm('search')">
               <ng-icon name="lucideSearch" />Search across companies
             </button>
-            <button z-button (click)="openForm('board')">
+            <button z-button [zDisabled]="list.isPending()" (click)="openForm('board')">
               <ng-icon name="lucidePlus" />Watch a company
             </button>
           </div>
@@ -405,12 +408,14 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
 })
 export class AlertsPage {
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthService);
   private readonly confirm = inject(ConfirmService);
   private readonly queries = inject(QueryClient);
 
   /** Cached across visits: coming back shows the last list at once and refreshes behind it. */
   protected readonly list = injectQuery(() => ({
-    queryKey: watchesKey,
+    queryKey: watchesKey(this.auth.identity()),
+    enabled: !!this.auth.identity(),
     queryFn: async (): Promise<WatchList> => Api.ok(await this.api.client.GET('/v1/job-watches')),
   }));
   protected readonly watches = computed(() => this.list.data()?.items ?? []);
@@ -474,7 +479,7 @@ export class AlertsPage {
   }
 
   private reload(): void {
-    void this.queries.invalidateQueries({ queryKey: watchesKey });
+    void this.queries.invalidateQueries({ queryKey: watchesKey(this.auth.identity()) });
   }
 
   private fail(e: unknown, fallback: string): void {
@@ -510,7 +515,7 @@ export class AlertsPage {
   }
 
   private replace(w: Watch): void {
-    this.queries.setQueryData<WatchList>(watchesKey, (d) =>
+    this.queries.setQueryData<WatchList>(watchesKey(this.auth.identity()), (d) =>
       d && {
         ...d,
         items: d.items.some((x) => x.id === w.id)
@@ -590,7 +595,7 @@ export class AlertsPage {
       Api.ok(
         await this.api.client.DELETE('/v1/job-watches/{id}', { params: { path: { id: w.id } } }),
       );
-      this.queries.setQueryData<WatchList>(watchesKey, (d) =>
+      this.queries.setQueryData<WatchList>(watchesKey(this.auth.identity()), (d) =>
         d && { ...d, items: d.items.filter((x) => x.id !== w.id) },
       );
       if (w.kind === 'search') this.reload();

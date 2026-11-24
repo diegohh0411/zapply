@@ -9,7 +9,8 @@ import { EventsService } from './events.service';
  * Server state lives in TanStack Query's cache, keyed by request, so a page
  * shows what it last loaded the moment you come back to it and refreshes in
  * the background. Pages read it with injectQuery; writes go through
- * injectMutation and update or invalidate the keys they touch.
+ * injectMutation and update or invalidate the keys they touch. Every query
+ * key includes AuthService.identity().
  */
 export function provideQueries(): EnvironmentProviders {
   return makeEnvironmentProviders([
@@ -30,11 +31,13 @@ export function provideQueries(): EnvironmentProviders {
       const client = inject(QueryClient);
       const auth = inject(AuthService);
       const events = inject(EventsService);
-      // Cached data belongs to one member: drop all of it when the sign-in changes.
+      // Query keys carry the member's identity, so a mounted page moves to the
+      // new member's entry by itself. Drop the old member's entries nobody
+      // watches any more; clear() would orphan the ones a page still shows.
       let identity = auth.identity();
       effect(() => {
         const next = auth.identity();
-        if (next !== identity) client.clear();
+        if (next !== identity) client.removeQueries({ type: 'inactive' });
         identity = next;
       });
       // The event stream lost its place; anything cached may be out of date.

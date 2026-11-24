@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  contentChild,
+  Directive,
   input,
   output,
   ViewEncapsulation,
@@ -60,8 +62,16 @@ export function pageState(q: {
  * - Error: inline with a retry; stale data stays visible under it.
  * - Empty: the [empty] slot, only once a load has finished.
  *
- * Slots: [actions], [toolbar], [skeleton], [empty], and the default content.
+ * Slots: [actions], [subtitle], [toolbar], [skeleton], [empty], and the
+ * default content. A slot matches by the attribute on the projected element,
+ * so wrap it in @if/@for only when the block has exactly one root element:
+ * a second root or loose text silently falls into the default content.
+ * A custom skeleton also needs ZardPageSkeletonDirective imported.
  */
+/** Marks a custom first-load skeleton: <div skeleton>…</div>. */
+@Directive({ selector: '[skeleton]' })
+export class ZardPageSkeletonDirective {}
+
 @Component({
   selector: 'z-page',
   imports: [NgIcon, ZardButtonComponent, ZardSkeletonComponent],
@@ -82,12 +92,12 @@ export function pageState(q: {
           @if (zDescription()) {
             <p class="mt-1 text-sm text-muted-foreground">{{ zDescription() }}</p>
           }
-          <ng-content select="[subtitle]" />
         </div>
         <div class="flex flex-wrap items-center gap-2 empty:hidden">
           <ng-content select="[actions]" />
         </div>
       </header>
+      <ng-content select="[subtitle]" />
 
       <div class="mt-5 empty:hidden">
         <ng-content select="[toolbar]" />
@@ -119,11 +129,13 @@ export function pageState(q: {
       @if (state().pending) {
         <div class="mt-6" role="status" aria-label="Loading">
           <ng-content select="[skeleton]" />
-          <div class="z-page-default space-y-3">
-            @for (row of rows(); track $index) {
-              <z-skeleton class="h-16 w-full" />
-            }
-          </div>
+          @if (!customSkeleton()) {
+            <div class="space-y-3">
+              @for (row of rows(); track $index) {
+                <z-skeleton class="h-16 w-full" />
+              }
+            </div>
+          }
         </div>
       }
     </div>
@@ -133,7 +145,6 @@ export function pageState(q: {
       from { transform: translateX(-100%); }
       to { transform: translateX(300%); }
     }
-    z-page:has([skeleton]) .z-page-default { display: none; }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
@@ -147,16 +158,20 @@ export class ZardPageComponent {
   readonly zState = input<ZardPageState>({ pending: false });
   /** Rows in the default skeleton. */
   readonly zSkeletonRows = input(3);
+  /** Shown when loading fails; the error's own message when unset. */
+  readonly zErrorMessage = input('');
   readonly class = input<ClassValue>('');
 
   readonly retry = output<void>();
 
   protected readonly state = this.zState;
+  protected readonly customSkeleton = contentChild(ZardPageSkeletonDirective);
   protected readonly rows = computed(() => Array.from({ length: this.zSkeletonRows() }));
   protected readonly busy = computed(() => !!this.state().fetching && !this.state().pending);
   protected readonly errorText = computed(() => {
     const e = this.state().error;
     if (!e) return '';
+    if (this.zErrorMessage()) return this.zErrorMessage();
     return e instanceof Error ? e.message : 'Something went wrong loading this page.';
   });
   protected readonly classes = computed(() =>
