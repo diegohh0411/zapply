@@ -8,6 +8,12 @@ import {
   signal,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import {
+  injectInfiniteQuery,
+  injectQuery,
+  QueryClient,
+  type InfiniteData,
+} from '@tanstack/angular-query';
 
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -38,8 +44,15 @@ type Notification = Schemas['Notification'];
 type Message = Schemas['MailMessage'];
 type View = 'inbox' | 'unread' | 'archived';
 
+type Page = Schemas['NotificationPage'];
+
 /** Notifications arrive in bursts while a backlog is classified; refetch at most this often. */
 const REFRESH_MS = 800;
+
+const listKey = (identity: string | null, view: View) => ['notifications', identity, view] as const;
+const allKey = (identity: string | null) => ['notifications', identity] as const;
+const mailboxKey = (identity: string | null) => ['mail-accounts', identity] as const;
+const titlesKey = (identity: string | null) => ['notification-job-titles', identity] as const;
 
 /** What a mail notification says happened, as a short verb phrase after the sender. */
 const mailVerb: Record<string, string> = {
@@ -84,6 +97,7 @@ export class NotificationsPage {
   private readonly auth = inject(AuthService);
   private readonly events = inject(EventsService);
   private readonly router = inject(Router);
+  private readonly queries = inject(QueryClient);
   protected readonly notes = inject(NotificationsService);
 
   protected readonly label = categoryLabel;
@@ -92,12 +106,43 @@ export class NotificationsPage {
   protected readonly ago = (iso: string): string => relativeTime(iso, this.now());
   protected readonly now = signal(Date.now());
   protected readonly view = signal<View>('inbox');
-  protected readonly items = signal<Notification[]>([]);
-  protected readonly jobTitles = signal<Record<string, string>>({});
-  protected readonly hasMailbox = signal(true);
-  protected readonly more = signal(false);
-  protected readonly loading = signal(false);
-  protected readonly loaded = signal(false);
+  /** Cached per view: coming back shows the last list at once and refreshes behind it. */
+  protected readonly list = injectInfiniteQuery(() => ({
+    queryKey: listKey(this.auth.identity(), this.view()),
+    enabled: !!this.auth.identity(),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: Page) => (last.next_cursor ? last.items.at(-1)?.id : undefined),
+    queryFn: async ({ pageParam, queryKey: [, , view] }): Promise<Page> => {
+      const page = Api.ok(
+        await this.api.client.GET('/v1/notifications', {
+          params: { query: { limit: 50, view, ...(pageParam && { before: pageParam }) } },
+        }),
+      );
+      void this.loadJobTitles(page.items);
+      return page;
+    },
+  }));
+  protected readonly items = computed(() => this.list.data()?.pages.flatMap((p) => p.items) ?? []);
+  protected readonly more = computed(() => !!this.list.hasNextPage());
+  protected readonly loading = computed(() => this.list.isFetching());
+  protected readonly loaded = computed(() => this.list.isSuccess());
+  private readonly mailbox = injectQuery(() => ({
+    queryKey: mailboxKey(this.auth.identity()),
+    enabled: !!this.auth.identity(),
+    queryFn: async () => Api.ok(await this.api.client.GET('/v1/mail/accounts')),
+  }));
+  /** Only decides whether the empty inbox suggests connecting Gmail. */
+  protected readonly hasMailbox = computed(() => {
+    const d = this.mailbox.data();
+    return !d || d.items.some((a) => a.status !== 'disconnected');
+  });
+  private readonly titles = injectQuery(() => ({
+    queryKey: titlesKey(this.auth.identity()),
+    enabled: false,
+    staleTime: Infinity,
+    queryFn: (): Record<string, string> => ({}),
+  }));
+  protected readonly jobTitles = computed(() => this.titles.data() ?? {});
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly views: { value: View; label: string }[] = [
@@ -117,28 +162,22 @@ export class NotificationsPage {
     }
     return out;
   });
-  private generation = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    effect(() => {
-      this.auth.identity();
-      this.items.set([]);
-      void this.load();
-      void this.checkMailbox();
-    });
     const change = this.events.changes.subscribe((e) => {
       if (e.topic === 'mail.message.classified' || e.topic === 'notification.updated')
         this.refreshSoon();
     });
-    const resync = this.events.resync.subscribe(() => void this.load());
     const tick = setInterval(() => this.now.set(Date.now()), 60_000);
+    effect(() => {
+      const e = this.list.error();
+      if (e) this.fail(e, 'Could not load notifications.');
+    });
     inject(DestroyRef).onDestroy(() => {
-      this.generation++;
       clearInterval(tick);
       if (this.refreshTimer) clearTimeout(this.refreshTimer);
       change.unsubscribe();
-      resync.unsubscribe();
     });
   }
 
@@ -146,48 +185,18 @@ export class NotificationsPage {
     if (this.refreshTimer) return;
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null;
-      void this.load();
+      void this.reload();
     }, REFRESH_MS);
   }
 
-  /** Only decides whether the empty inbox suggests connecting Gmail. */
-  private async checkMailbox(): Promise<void> {
-    try {
-      const list = Api.ok(await this.api.client.GET('/v1/mail/accounts'));
-      this.hasMailbox.set(list.items.some((a) => a.status !== 'disconnected'));
-    } catch {
-      this.hasMailbox.set(true);
-    }
-  }
-
-  async load(append = false): Promise<void> {
-    const identity = this.auth.identity(),
-      generation = ++this.generation;
-    if (!identity) return;
-    const before = append ? this.items().at(-1)?.id : undefined;
-    this.loading.set(true);
-    try {
-      const page = Api.ok(
-        await this.api.client.GET('/v1/notifications', {
-          params: { query: { limit: 50, view: this.view(), ...(before && { before }) } },
-        }),
-      );
-      if (identity !== this.auth.identity() || generation !== this.generation) return;
-      this.items.update((rows) => (append ? [...rows, ...page.items] : page.items));
-      this.more.set(!!page.next_cursor);
-      this.loaded.set(true);
-      void this.loadJobTitles(page.items);
-    } catch (e) {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.fail(e, 'Could not load notifications.');
-    } finally {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.loading.set(false);
-    }
+  /** Refetches every cached view; the one on screen updates in place. */
+  private reload(): Promise<void> {
+    return this.queries.invalidateQueries({ queryKey: allKey(this.auth.identity()) });
   }
 
   private async loadJobTitles(items: Notification[]): Promise<void> {
-    const known = this.jobTitles();
+    const key = titlesKey(this.auth.identity());
+    const known = this.queries.getQueryData<Record<string, string>>(key) ?? {};
     const ids = [
       ...new Set(items.map((n) => n.mail?.job_id).filter((id): id is string => !!id)),
     ].filter((id) => !(id in known));
@@ -203,7 +212,7 @@ export class NotificationsPage {
         }
       }),
     );
-    this.jobTitles.update((t) => ({
+    this.queries.setQueryData<Record<string, string>>(key, (t) => ({
       ...t,
       ...Object.fromEntries(found.filter((x): x is readonly [string, string] => !!x)),
     }));
@@ -216,25 +225,30 @@ export class NotificationsPage {
   show(v: View): void {
     if (v === this.view()) return;
     this.view.set(v);
-    this.items.set([]);
-    this.loaded.set(false);
-    void this.load();
   }
 
   older(): void {
-    void this.load(true);
+    if (!this.list.isFetchingNextPage()) void this.list.fetchNextPage();
+  }
+
+  /** Edits the cached rows of the view on screen, so the change survives leaving the page. */
+  private edit(fn: (rows: Notification[]) => Notification[]): void {
+    this.queries.setQueryData<InfiniteData<Page, string | undefined>>(
+      listKey(this.auth.identity(), this.view()),
+      (d) => d && { ...d, pages: d.pages.map((p) => ({ ...p, items: fn(p.items) })) },
+    );
   }
 
   protected replaceMail(n: Notification, m: Message): void {
-    this.items.update((list) => list.map((x) => (x.id === n.id ? { ...x, mail: m } : x)));
+    this.edit((list) => list.map((x) => (x.id === n.id ? { ...x, mail: m } : x)));
   }
 
   private patch(id: string, p: Partial<Notification>): void {
-    this.items.update((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)));
+    this.edit((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)));
   }
 
   private drop(id: string): void {
-    this.items.update((list) => list.filter((x) => x.id !== id));
+    this.edit((list) => list.filter((x) => x.id !== id));
   }
 
   /** Opens what the notification is about: the job when one is linked, else the mail. */
@@ -289,7 +303,7 @@ export class NotificationsPage {
       else await this.notes.archive([n.id]);
     } catch (e) {
       this.fail(e, 'That did not work. Try again.');
-      void this.load();
+      void this.reload();
     }
   }
 
@@ -299,7 +313,7 @@ export class NotificationsPage {
     try {
       if (action === 'read') await this.notes.markAllRead();
       else await this.notes.archiveRead();
-      await this.load();
+      await this.reload();
     } catch (e) {
       this.fail(e, 'That did not work. Try again.');
     } finally {
