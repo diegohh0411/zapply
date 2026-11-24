@@ -55,6 +55,11 @@ export const routes: Routes = [
       // Mail was split: its updates are notifications, its mailboxes are connections.
       { path: 'mail', redirectTo: 'notifications' },
       {
+        path: 'usage',
+        title: 'Usage · zapply',
+        loadComponent: () => import('./usage/usage.page').then((m) => m.UsagePage),
+      },
+      {
         path: 'settings',
         loadComponent: () => import('./settings/settings.layout').then((m) => m.SettingsLayout),
         children: [
