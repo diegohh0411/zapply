@@ -1083,6 +1083,20 @@ type PlatformBudgetAccount struct {
 	UserID uuid.UUID
 }
 
+type PlatformEdgeWorker struct {
+	ID            uuid.UUID
+	Name          string
+	TokenHash     []byte
+	Enabled       bool
+	AllowedHosts  []string
+	MaxPerHour    int32
+	MaxConcurrent int32
+	LastSeenAt    *time.Time
+	Version       int32
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type PlatformMailAccountIndex struct {
 	AccountID      uuid.UUID
 	UserID         uuid.UUID
@@ -1204,6 +1218,32 @@ type PlatformProviderLock struct {
 	ID bool
 }
 
+type PlatformScrapeJob struct {
+	ID             uuid.UUID
+	Url            string
+	Host           string
+	Status         string
+	WorkerID       *uuid.UUID
+	CreatedAt      time.Time
+	ClaimedAt      *time.Time
+	FinishedAt     *time.Time
+	Deadline       time.Time
+	StatusCode     *int32
+	Error          *string
+	ResultMarkdown *string
+	ResultHtml     *string
+	ResultMetadata []byte
+}
+
+type PlatformScraperSetting struct {
+	ID        bool
+	Providers json.RawMessage
+	Rules     json.RawMessage
+	SavedAt   *time.Time
+	Version   int32
+	UpdatedAt time.Time
+}
+
 type PlatformSystemKey struct {
 	ID                uuid.UUID
 	Label             string
@@ -1213,6 +1253,7 @@ type PlatformSystemKey struct {
 	Active            bool
 	Version           int32
 	CreatedAt         time.Time
+	Kind              string
 }
 
 type Profile struct {

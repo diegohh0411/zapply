@@ -119,10 +119,20 @@ func (s *Service) SaveMembership(ctx context.Context, u, member, plan uuid.UUID,
 	}
 	return s.read(ctx, u, "SELECT platform.save_membership($1,$2,$3,$4)", member, plan, status, version)
 }
+
+// AddKey stores an OpenRouter key, inactive.
 func (s *Service) AddKey(ctx context.Context, u uuid.UUID, label, key string) (uuid.UUID, error) {
+	return s.AddKeyOfKind(ctx, u, label, key, "openrouter")
+}
+
+// AddKeyOfKind stores a provider key of kind "openrouter", "firecrawl" or "crawl4ai", inactive.
+func (s *Service) AddKeyOfKind(ctx context.Context, u uuid.UUID, label, key, kind string) (uuid.UUID, error) {
 	// Authorize before encryption/configuration errors to avoid disclosing system state.
 	if err := s.AssertOwner(ctx, u); err != nil {
 		return uuid.Nil, err
+	}
+	if kind != "openrouter" && kind != "firecrawl" && kind != "crawl4ai" {
+		return uuid.Nil, invalid("kind", "must be openrouter, firecrawl or crawl4ai")
 	}
 	label = strings.TrimSpace(label)
 	key = strings.TrimSpace(key)
@@ -137,7 +147,7 @@ func (s *Service) AddKey(ctx context.Context, u uuid.UUID, label, key string) (u
 	if err != nil {
 		return uuid.Nil, &Error{503, "encryption_unavailable", "system key encryption is not configured"}
 	}
-	err = s.exec(ctx, u, "SELECT platform.add_key($1,$2,$3,$4,$5)", id, label, encrypted, version, secrets.Fingerprint(key))
+	err = s.exec(ctx, u, "SELECT platform.add_key($1,$2,$3,$4,$5,$6)", id, label, encrypted, version, secrets.Fingerprint(key), kind)
 	return id, err
 }
 func (s *Service) ActivateKey(ctx context.Context, u, id uuid.UUID, active bool, version int) error {
