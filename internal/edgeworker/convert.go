@@ -21,10 +21,36 @@ func toMarkdown(page string) string {
 	if err != nil {
 		return ""
 	}
-	prune(doc)
-	var sb strings.Builder
-	if err := html.Render(&sb, doc); err != nil {
+	return nodeMarkdown(doc)
+}
+
+// markdownOfClass converts only the first element carrying class, or returns
+// "" when the page has none.
+func markdownOfClass(page, class string) string {
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
 		return ""
+	}
+	n := findClass(doc, class)
+	if n == nil {
+		return ""
+	}
+	return nodeMarkdown(n)
+}
+
+func nodeMarkdown(n *html.Node) string {
+	prune(n)
+	var sb strings.Builder
+	if n.Type == html.DocumentNode {
+		if err := html.Render(&sb, n); err != nil {
+			return ""
+		}
+	} else {
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if err := html.Render(&sb, c); err != nil {
+				return ""
+			}
+		}
 	}
 	md, err := htmltomarkdown.ConvertString(sb.String())
 	if err != nil {
@@ -64,7 +90,7 @@ func metadata(page string) map[string]any {
 			switch n.Data {
 			case "title":
 				if _, ok := m["title"]; !ok && n.FirstChild != nil {
-					m["title"] = truncate(strings.TrimSpace(n.FirstChild.Data), 500)
+					m["title"] = truncate(strings.TrimSpace(html.UnescapeString(n.FirstChild.Data)), 500)
 				}
 			case "meta":
 				key := attr(n, "property")
@@ -72,7 +98,8 @@ func metadata(page string) map[string]any {
 					key = attr(n, "name")
 				}
 				if to, ok := names[strings.ToLower(key)]; ok {
-					if v := strings.TrimSpace(attr(n, "content")); v != "" {
+					// Some sites (LinkedIn) escape these twice: "&amp;amp;".
+					if v := strings.TrimSpace(html.UnescapeString(attr(n, "content"))); v != "" {
 						if _, set := m[to]; !set {
 							m[to] = truncate(v, 2000)
 						}
@@ -103,25 +130,7 @@ func textOfClass(page, class string) string {
 	if err != nil {
 		return ""
 	}
-	var found *html.Node
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if found != nil {
-			return
-		}
-		if n.Type == html.ElementNode {
-			for _, c := range strings.Fields(attr(n, "class")) {
-				if c == class {
-					found = n
-					return
-				}
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
+	found := findClass(doc, class)
 	if found == nil {
 		return ""
 	}
@@ -137,6 +146,23 @@ func textOfClass(page, class string) string {
 	}
 	text(found)
 	return strings.Join(strings.Fields(sb.String()), " ")
+}
+
+// findClass returns the first element under n carrying class.
+func findClass(n *html.Node, class string) *html.Node {
+	if n.Type == html.ElementNode {
+		for _, c := range strings.Fields(attr(n, "class")) {
+			if c == class {
+				return n
+			}
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if f := findClass(c, class); f != nil {
+			return f
+		}
+	}
+	return nil
 }
 
 func truncate(s string, n int) string {

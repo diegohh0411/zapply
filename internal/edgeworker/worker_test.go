@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	guestFragment = `<div class="top-card-layout__card"><h2 class="top-card-layout__title">Senior Go Engineer</h2></div>
+	guestFragment = `<div class="top-card-layout__card"><h2 class="top-card-layout__title">Senior Go &amp; Cloud Engineer</h2></div>
+<div class="contextual-sign-in-modal"><h2>Join or sign in to save this job</h2><p>Email or phone</p></div>
 <div class="show-more-less-html__markup"><p>Build <strong>distributed</strong> systems.</p><ul><li>Go</li><li>Postgres</li></ul></div>
 <script>window.x = "authwall"</script>`
 	viewPage = `<html><head><title>Acme hiring Senior Go Engineer | LinkedIn</title>
-<meta property="og:title" content="Acme hiring Senior Go Engineer"><meta property="og:site_name" content="LinkedIn">
+<meta property="og:title" content="Senior Go &amp;amp; Cloud Engineer at Acme — Monterrey | LinkedIn Jobs"><meta property="og:site_name" content="LinkedIn">
 <script type="application/ld+json">{"@type":"JobPosting","title":"Senior Go Engineer"}</script></head><body><p>x</p></body></html>`
 )
 
@@ -93,13 +94,15 @@ func TestHandleLinkedInGuestEndpointWithoutABrowser(t *testing.T) {
 			t.Errorf("markdown lacks %q:\n%s", want, res.Markdown)
 		}
 	}
-	if strings.Contains(res.Markdown, "authwall") || strings.Contains(res.Markdown, "window.x") {
-		t.Errorf("script text leaked into the markdown:\n%s", res.Markdown)
+	for _, leak := range []string{"authwall", "window.x", "Join or sign in", "Email or phone"} {
+		if strings.Contains(res.Markdown, leak) {
+			t.Errorf("page chrome %q leaked into the markdown:\n%s", leak, res.Markdown)
+		}
 	}
 	if !strings.Contains(res.RawHTML, "application/ld+json") {
 		t.Errorf("raw HTML should be the public page with its JSON-LD: %s", res.RawHTML)
 	}
-	if res.Metadata["ogTitle"] != "Acme hiring Senior Go Engineer" || res.Metadata["ogSiteName"] != "LinkedIn" {
+	if res.Metadata["ogTitle"] != "Senior Go & Cloud Engineer" || res.Metadata["ogSiteName"] != "LinkedIn" {
 		t.Errorf("metadata = %v", res.Metadata)
 	}
 	if chrome.calls.Load() != 0 {
@@ -127,7 +130,7 @@ func TestHandleLinkedInGuestFragmentAloneWhenTheViewPageIsRefused(t *testing.T) 
 		w.WriteHeader(999)
 	})
 	res := testWorker(li.URL, &fakeRenderer{}).Handle(t.Context(), Job{URL: "https://www.linkedin.com/jobs/view/3812345678"})
-	if res.Error != "" || !strings.Contains(res.Markdown, "distributed") || res.Metadata["ogTitle"] != "Senior Go Engineer" {
+	if res.Error != "" || !strings.Contains(res.Markdown, "distributed") || res.Metadata["ogTitle"] != "Senior Go & Cloud Engineer" {
 		t.Errorf("result = %+v", res)
 	}
 }
