@@ -24,6 +24,9 @@ class Api {
 class AuthService {}
 class EventsService {}
 const DestroyRef = Symbol('DestroyRef');
+// A TanStack query that has not loaded yet.
+const stubQuery = () =>
+  new Proxy({}, { get: (_, k) => (k === 'data' || k === 'error' ? () => undefined : () => false) });
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => (resolve = r));
@@ -50,8 +53,17 @@ function fixture(file) {
       },
     },
   };
+  const queries = [],
+    invalidated = [];
+  const queryClient = { invalidateQueries: async (f) => void invalidated.push(f) };
+  const tanstack = {
+    QueryClient: class {},
+    injectQuery: (opts) => (queries.push(opts), stubQuery()),
+    injectInfiniteQuery: (opts) => (queries.push(opts), stubQuery()),
+  };
   const core = {
     signal,
+    computed: (fn) => fn,
     input,
     Injectable: () => (x) => x,
     effect: (fn) => {
@@ -63,6 +75,7 @@ function fixture(file) {
       if (token === Api) return api;
       if (token === AuthService) return auth;
       if (token === EventsService) return events;
+      if (token === tanstack.QueryClient) return queryClient;
       if (token === DestroyRef) return { onDestroy: (fn) => cleanup.push(fn) };
       return {};
     },
@@ -84,6 +97,8 @@ function fixture(file) {
   const requireStub = (name) =>
     name === '@angular/core'
       ? core
+      : name === '@tanstack/angular-query'
+        ? tanstack
       : name.endsWith('/api')
         ? { Api }
         : name.endsWith('/auth.service')
@@ -106,6 +121,8 @@ function fixture(file) {
   });
   return {
     types: module.exports,
+    queries,
+    invalidated,
     effects,
     requests,
     auth,
@@ -134,23 +151,18 @@ test('owner permissions cannot return from an earlier signed-in identity', async
   assert.equal(account.me().membership, null);
 });
 
-test('usage page discards old-account usage and charge responses', async (t) => {
+test('usage page caches each member separately and refreshes only their entries', async (t) => {
   const f = fixture('usage/usage.page.ts');
   t.after(f.close);
   const page = new f.types.UsagePage();
-  const old = page.load();
+  const keys = () => f.queries.map((q) => [...q().queryKey]);
+  assert.deepEqual(keys(), [['usage', 'alice'], ['usage-entries', 'alice']]);
   f.auth.identity.set('bob');
-  const fresh = page.load();
-  f.requests[2].resolve(
-    ok({ membership: null, next_capacity_at: null, blocked_reason: 'membership_required' }),
-  );
-  f.requests[3].resolve(ok([]));
-  await fresh;
-  f.requests[0].resolve(ok({ membership: { plan_name: 'Alice plan' }, next_capacity_at: null }));
-  f.requests[1].resolve(ok([{ id: 'private-alice-charge' }]));
-  await old;
-  assert.equal(page.usage().membership, null);
-  assert.equal(page.entries().length, 0);
+  assert.deepEqual(keys(), [['usage', 'bob'], ['usage-entries', 'bob']]);
+  await page.load();
+  assert.deepEqual(f.invalidated.map((x) => [...x.queryKey]), [['usage', 'bob'], ['usage-entries', 'bob']]);
+  f.auth.identity.set(null);
+  assert.equal(f.queries.every((q) => q().enabled === false), true);
 });
 
 test('a route check receives its owner result while another account refresh is pending', async (t) => {
@@ -168,20 +180,13 @@ test('a route check receives its owner result while another account refresh is p
   assert.equal(account.me().platform_role, 'owner');
 });
 
-test('a late charge page cannot repopulate a refreshed usage list', async (t) => {
+test('usage activity pages continue from the last entry of a full page', (t) => {
   const f = fixture('usage/usage.page.ts');
   t.after(f.close);
-  const page = new f.types.UsagePage();
-  page.entries.set([{ id: '50' }]);
-  const older = page.more();
-  const fresh = page.load();
-  f.requests[1].resolve(ok({ membership: null, next_capacity_at: null }));
-  f.requests[2].resolve(ok([{ id: 'new-charge' }]));
-  await fresh;
-  f.requests[0].resolve(ok([{ id: 'old-charge' }]));
-  await older;
-  assert.equal(page.entries().length, 1);
-  assert.equal(page.entries()[0].id, 'new-charge');
+  new f.types.UsagePage();
+  const next = f.queries[1]().getNextPageParam;
+  assert.equal(next(Array.from({ length: 50 }, (_, i) => ({ id: String(i) }))), '49');
+  assert.equal(next([{ id: 'only' }]), undefined);
 });
 
 test('summary provider dropdown discards stale model responses and selects the sole endpoint', async () => {
