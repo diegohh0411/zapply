@@ -52,10 +52,14 @@ func (q *trimQueue) Pop() any {
 	return n
 }
 
+// ownWeight is how much an entry's own relevance counts against its best
+// surviving detail when ranking the entry.
+const ownWeight = 2
+
 // scoredTrimOrder greedily removes the least useful optional material per
 // estimated line. Actual page counts remain the browser compiler's decision.
-// Containers inherit their strongest surviving detail's priority, so removing
-// an otherwise weak role cannot accidentally remove a highly relevant bullet.
+// Containers blend their own relevance (weighted ownWeight) with their
+// strongest surviving detail, and leave only after their descendants.
 // Repeated wording contributes once; its best remaining copy is recomputed
 // after removal. This is deliberately lexical, not semantic deduplication.
 func scoredTrimOrder(c Content, relevance, highlights map[string]float64, pinned, supports map[string]bool) []string {
@@ -116,12 +120,18 @@ func scoredTrimOrder(c Content, relevance, highlights map[string]float64, pinned
 		if n.duplicate != nil && n.duplicate.members[n.duplicate.first] != n {
 			value = 0
 		}
+		best, any := 0., false
 		for _, child := range n.children {
 			if child.active {
-				value = math.Max(value, child.priority)
+				best, any = math.Max(best, child.priority), true
 			}
 		}
-		return value
+		if !any {
+			return value
+		}
+		// The container's own relevance counts twice its best detail, so a
+		// weak role cannot ride on one well-scored short bullet.
+		return (ownWeight*value + best) / (ownWeight + 1)
 	}
 	// Preorder construction lets a reverse pass propagate pins and priorities.
 	for i := len(nodes) - 1; i >= 0; i-- {
@@ -166,25 +176,22 @@ func scoredTrimOrder(c Content, relevance, highlights map[string]float64, pinned
 	for i := len(skills) - 1; i >= KeptSkills; i-- {
 		out = append(out, skills[i])
 	}
-	for q.Len() > 0 {
-		n := heap.Pop(q).(*trimCandidate)
-		out = append(out, n.id)
-		n.active = false
-		// Descendants leave before containers at equal priority. All optional
-		// descendants have already gone; deactivate retained anchor bullets.
-		for _, child := range n.children {
+	// remove takes n out with its remaining descendants, deepest and weakest
+	// first, so the browser's reverse-order refill restores containers first.
+	var remove func(*trimCandidate)
+	remove = func(n *trimCandidate) {
+		children := append([]*trimCandidate{}, n.children...)
+		sort.SliceStable(children, func(i, j int) bool { return children[i].priority < children[j].priority })
+		for _, child := range children {
 			if child.active {
-				child.active = false
-				if group := child.duplicate; group != nil && group.members[group.first] == child {
-					for group.first < len(group.members) && !group.members[group.first].active {
-						group.first++
-					}
-					if group.first < len(group.members) {
-						update(group.members[group.first])
-					}
-				}
+				remove(child)
 			}
 		}
+		if n.index >= 0 {
+			heap.Remove(q, n.index)
+			out = append(out, n.id)
+		}
+		n.active = false
 		if group := n.duplicate; group != nil && group.members[group.first] == n {
 			for group.first < len(group.members) && !group.members[group.first].active {
 				group.first++
@@ -193,6 +200,10 @@ func scoredTrimOrder(c Content, relevance, highlights map[string]float64, pinned
 				update(group.members[group.first])
 			}
 		}
+	}
+	for q.Len() > 0 {
+		n := (*q)[0]
+		remove(n)
 		update(n.parent)
 	}
 	return out
