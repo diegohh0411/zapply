@@ -14,6 +14,7 @@ import {
   lucideArchive,
   lucideArchiveRestore,
   lucideBellOff,
+  lucideBookmarkPlus,
   lucideBriefcase,
   lucideCheck,
   lucideCheckCheck,
@@ -21,6 +22,7 @@ import {
   lucideInbox,
   lucideMail,
   lucideMailOpen,
+  lucideRadar,
   lucideX,
 } from '@ng-icons/lucide';
 
@@ -50,8 +52,8 @@ const mailVerb: Record<string, string> = {
 
 /**
  * The notification inbox. Rows read "who did what" with the thing it is about
- * underneath, like Notion's and Linear's inboxes. Each kind renders its own row;
- * today the only kind is mail.
+ * underneath, like Notion's and Linear's inboxes. Each kind renders its own row:
+ * mail about an application, or a new opening on a watched job board.
  */
 @Component({
   selector: 'app-notifications-page',
@@ -61,6 +63,7 @@ const mailVerb: Record<string, string> = {
       lucideArchive,
       lucideArchiveRestore,
       lucideBellOff,
+      lucideBookmarkPlus,
       lucideBriefcase,
       lucideCheck,
       lucideCheckCheck,
@@ -68,6 +71,7 @@ const mailVerb: Record<string, string> = {
       lucideInbox,
       lucideMail,
       lucideMailOpen,
+      lucideRadar,
       lucideX,
     }),
   ],
@@ -237,10 +241,21 @@ export class NotificationsPage {
   open(n: Notification, e: Event): void {
     if ((e.target as HTMLElement).closest('button, a')) return;
     void this.read(n);
+    if (n.job_alert) {
+      window.open(n.job_alert.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const m = n.mail;
     if (!m) return;
     if (m.job_id) void this.router.navigate(['/jobs'], { queryParams: { job: m.job_id } });
     else window.open(m.gmail_url, '_blank', 'noopener,noreferrer');
+  }
+
+  /** Starts a job from the alert's posting: the new-job sheet reads it at once. */
+  saveAlert(n: Notification): void {
+    if (!n.job_alert) return;
+    void this.read(n);
+    void this.router.navigate(['/jobs'], { queryParams: { job: 'new', url: n.job_alert.url } });
   }
 
   /** Read state changes in place, so a row doesn't vanish from under the pointer. */

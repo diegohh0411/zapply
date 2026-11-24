@@ -536,6 +536,6 @@ test('job tab URLs preserve the saved view and clear when switching or closing a
     { queryParams: { tab: 'cv' }, queryParamsHandling: 'merge' },
     { queryParams: { tab: null }, queryParamsHandling: 'merge' },
     { queryParams: { job: 'another-job', tab: null }, queryParamsHandling: 'merge' },
-    { queryParams: { job: null, tab: null }, queryParamsHandling: 'merge' },
+    { queryParams: { job: null, tab: null, url: null }, queryParamsHandling: 'merge' },
   ]);
 });

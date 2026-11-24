@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/diegohh0411/zapply/internal/alerts"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/mail"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -16,7 +17,7 @@ import (
 )
 
 // Kinds of notification. Each kind carries its own payload field on Item.
-var Kinds = []string{"mail"}
+var Kinds = []string{"mail", "job_alert"}
 
 type Item struct {
 	ID         uuid.UUID  `json:"id"`
@@ -25,6 +26,8 @@ type Item struct {
 	ReadAt     *time.Time `json:"read_at"`
 	ArchivedAt *time.Time `json:"archived_at"`
 	Mail       *mail.Item `json:"mail"`
+	// JobAlert is set when Kind is job_alert: a new posting on a watched board.
+	JobAlert *alerts.Alert `json:"job_alert"`
 }
 
 type Summary struct {
@@ -51,8 +54,8 @@ func invalid(field, msg string) error {
 // List returns notifications newest first.
 func (s *Service) List(ctx context.Context, u uuid.UUID, f Filter) ([]Item, error) {
 	f.Limit = min(100, max(1, f.Limit))
-	if f.Kind != "" && f.Kind != "mail" {
-		return nil, invalid("kind", "must be mail")
+	if f.Kind != "" && f.Kind != "mail" && f.Kind != "job_alert" {
+		return nil, invalid("kind", "must be mail or job_alert")
 	}
 	switch f.View {
 	case "":
@@ -63,7 +66,7 @@ func (s *Service) List(ctx context.Context, u uuid.UUID, f Filter) ([]Item, erro
 	}
 	out := []Item{}
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		rows, e := tx.Query(ctx, `SELECT n.id,n.kind,n.occurred_at,n.read_at,n.archived_at,n.mail_message_id FROM notification n
+		rows, e := tx.Query(ctx, `SELECT n.id,n.kind,n.occurred_at,n.read_at,n.archived_at,n.mail_message_id,n.job_alert_id FROM notification n
  WHERE n.user_id=$1 AND ($2='' OR n.kind=$2)
  AND (CASE $3 WHEN 'archived' THEN n.archived_at IS NOT NULL WHEN 'unread' THEN n.archived_at IS NULL AND n.read_at IS NULL ELSE n.archived_at IS NULL END)
  AND ($4::uuid IS NULL OR (n.occurred_at,n.id) < (SELECT occurred_at,id FROM notification WHERE user_id=$1 AND id=$4))
@@ -71,18 +74,22 @@ func (s *Service) List(ctx context.Context, u uuid.UUID, f Filter) ([]Item, erro
 		if e != nil {
 			return e
 		}
-		var mailIDs []uuid.UUID
-		refs := map[uuid.UUID]uuid.UUID{}
+		var mailIDs, alertIDs []uuid.UUID
+		refs, alertRefs := map[uuid.UUID]uuid.UUID{}, map[uuid.UUID]uuid.UUID{}
 		for rows.Next() {
 			var it Item
-			var ref *uuid.UUID
-			if e = rows.Scan(&it.ID, &it.Kind, &it.OccurredAt, &it.ReadAt, &it.ArchivedAt, &ref); e != nil {
+			var ref, alertRef *uuid.UUID
+			if e = rows.Scan(&it.ID, &it.Kind, &it.OccurredAt, &it.ReadAt, &it.ArchivedAt, &ref, &alertRef); e != nil {
 				rows.Close()
 				return e
 			}
 			if ref != nil {
 				mailIDs = append(mailIDs, *ref)
 				refs[it.ID] = *ref
+			}
+			if alertRef != nil {
+				alertIDs = append(alertIDs, *alertRef)
+				alertRefs[it.ID] = *alertRef
 			}
 			out = append(out, it)
 		}
@@ -94,9 +101,16 @@ func (s *Service) List(ctx context.Context, u uuid.UUID, f Filter) ([]Item, erro
 		if e != nil {
 			return e
 		}
+		found, e := alerts.AlertsByID(ctx, tx, u, alertIDs)
+		if e != nil {
+			return e
+		}
 		for i := range out {
 			if m, ok := msgs[refs[out[i].ID]]; ok {
 				out[i].Mail = &m
+			}
+			if a, ok := found[alertRefs[out[i].ID]]; ok {
+				out[i].JobAlert = &a
 			}
 		}
 		return nil

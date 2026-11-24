@@ -1346,7 +1346,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The member's notifications, newest first. `view` is `inbox` (default: everything not archived), `unread` (unread and not archived) or `archived`. Today every notification is `mail`, carried in `mail`. */
+        /** @description The member's notifications, newest first. `view` is `inbox` (default: everything not archived), `unread` (unread and not archived) or `archived`. A `mail` notification carries `mail`; a `job_alert` notification carries `job_alert`. */
         get: operations["listNotifications"];
         put?: never;
         post?: never;
@@ -1363,7 +1363,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description How many inbox notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events. */
+        /** @description How many inbox notifications are unread. Refetch on `notification.updated` (also sent when job alerts arrive) and `mail.message.classified` events. */
         get: operations["getNotificationSummary"];
         put?: never;
         post?: never;
@@ -1405,6 +1405,44 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/job-watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The job boards the member watches, newest first. The worker reads each board every 30 minutes and files a `job_alert` notification for every new posting that matches the watch's filters. */
+        get: operations["listJobWatches"];
+        put?: never;
+        /** @description Starts watching the Greenhouse, Lever or Ashby board a careers link names. The board is read once to check it exists (422 on `url` otherwise); what is open now is not announced, only what opens later. Watching a board twice answers 409. */
+        post: operations["createJobWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/job-watches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Stops watching the board, removing its alerts. */
+        delete: operations["deleteJobWatch"];
+        options?: never;
+        head?: never;
+        /** @description Changes the name, filters or pause of a watch; omitted fields stay. */
+        patch: operations["updateJobWatch"];
         trace?: never;
     };
 }
@@ -2387,7 +2425,7 @@ export interface components {
             next_cursor?: string;
         };
         /** @enum {string} */
-        NotificationKind: "mail";
+        NotificationKind: "mail" | "job_alert";
         Notification: {
             /** Format: uuid */
             id: string;
@@ -2400,6 +2438,73 @@ export interface components {
             archived_at: string | null;
             /** @description Set when `kind` is `mail`. */
             mail: components["schemas"]["MailMessage"] | null;
+            /** @description Set when `kind` is `job_alert`. */
+            job_alert: components["schemas"]["JobAlert"] | null;
+        };
+        /** @description A new posting on a watched board that matched its filters. */
+        JobAlert: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            watch_id: string;
+            company: string;
+            title: string;
+            location: string;
+            /** @description The posting on the employer's board. */
+            url: string;
+            remote: boolean;
+            /**
+             * Format: date-time
+             * @description When the ATS says it was published.
+             */
+            published_at: string | null;
+            /** Format: date-time */
+            found_at: string;
+        };
+        /** @enum {string} */
+        JobAts: "greenhouse" | "lever" | "ashby";
+        JobWatch: {
+            /** Format: uuid */
+            id: string;
+            ats: components["schemas"]["JobAts"];
+            /** @description The employer's board slug. */
+            board: string;
+            board_url: string;
+            company: string;
+            /** @description A posting matches when its title contains any (empty matches all). */
+            keywords: string[];
+            /** @description A posting matches when its location contains any (empty matches all). */
+            locations: string[];
+            remote_only: boolean;
+            paused: boolean;
+            /**
+             * Format: date-time
+             * @description The board's last successful read.
+             */
+            last_checked_at: string | null;
+            /** @description Why the last read failed */
+            last_error: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        JobWatchList: {
+            items: components["schemas"]["JobWatch"][];
+        };
+        JobWatchInput: {
+            /** @description A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one. */
+            url: string;
+            /** @description Defaults to the name the board publishes */
+            company?: string;
+            keywords?: string[];
+            locations?: string[];
+            remote_only?: boolean;
+        };
+        JobWatchPatch: {
+            company?: string;
+            keywords?: string[];
+            locations?: string[];
+            remote_only?: boolean;
+            paused?: boolean;
         };
         NotificationPage: {
             items: components["schemas"]["Notification"][];
@@ -5114,6 +5219,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listJobWatches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The watches. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobWatchList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createJobWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobWatchInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobWatch"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteJobWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateJobWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobWatchPatch"];
+            };
+        };
+        responses: {
+            /** @description The updated watch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobWatch"];
                 };
             };
             default: components["responses"]["Problem"];
