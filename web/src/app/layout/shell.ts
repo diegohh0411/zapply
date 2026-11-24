@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
+  lucideBell,
   lucideBuilding2,
   lucideCpu,
   lucideCreditCard,
@@ -10,8 +11,8 @@ import {
   lucideKeyRound,
   lucideLayoutDashboard,
   lucideLogOut,
-  lucideMail,
   lucideReceipt,
+  lucideSettings,
   lucideSparkles,
   lucideSquareKanban,
   lucideUser,
@@ -23,12 +24,15 @@ import { ZardSidebarImports } from '@/shared/components/sidebar';
 import { AuthService } from '../core/auth.service';
 import { AccountService } from '../core/account.service';
 import { EventsService } from '../core/events.service';
+import { NotificationsService } from '../core/notifications.service';
 import { ConfigService } from '../core/config';
 
 interface NavItem {
   path: string;
   label: string;
   icon: string;
+  /** A count shown beside the label, hidden at zero. */
+  badge?: number;
 }
 
 /** App frame: ZardUI sidebar (collapses to icons; a drawer on mobile) and the routed page. */
@@ -43,7 +47,8 @@ interface NavItem {
       lucideBuilding2,
       lucideSparkles,
       lucideLogOut,
-      lucideMail,
+      lucideBell,
+      lucideSettings,
       lucideLayoutDashboard,
       lucideCreditCard,
       lucideUsers,
@@ -60,11 +65,7 @@ interface NavItem {
         <z-sidebar-header>
           <ul z-sidebar-menu>
             <li z-sidebar-menu-item>
-              <a
-                z-sidebar-menu-button
-                zSize="lg"
-                routerLink="/jobs"
-              >
+              <a z-sidebar-menu-button zSize="lg" routerLink="/jobs">
                 <img src="icon.svg" alt="" class="size-8 shrink-0 rounded-md" />
                 <span class="text-base font-semibold tracking-tight">zapply</span>
               </a>
@@ -86,11 +87,16 @@ interface NavItem {
                         routerLinkActive
                         #rla="routerLinkActive"
                         [zActive]="rla.isActive"
-                        [zTooltip]="item.label"
+                        [zTooltip]="item.badge ? item.label + ' (' + item.badge + ')' : item.label"
                       >
                         <ng-icon [name]="item.icon" />
                         <span>{{ item.label }}</span>
                       </a>
+                      @if (item.badge) {
+                        <z-sidebar-menu-badge [attr.aria-label]="item.badge + ' unread'">{{
+                          item.badge > 99 ? '99+' : item.badge
+                        }}</z-sidebar-menu-badge>
+                      }
                     </li>
                   }
                 </ul>
@@ -114,7 +120,9 @@ interface NavItem {
             </li>
           </ul>
           @if (buildLabel()) {
-            <p class="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">{{ buildLabel() }}</p>
+            <p class="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+              {{ buildLabel() }}
+            </p>
           }
         </z-sidebar-footer>
 
@@ -154,6 +162,7 @@ export class Shell {
   protected readonly auth = inject(AuthService);
   private readonly account = inject(AccountService);
   protected readonly events = inject(EventsService);
+  private readonly notifications = inject(NotificationsService);
   private readonly config = inject(ConfigService);
   protected readonly buildLabel = computed(() => {
     const { build_commit, built_at } = this.config.config();
@@ -162,8 +171,14 @@ export class Shell {
     if (built_at) {
       const date = new Date(built_at);
       if (!Number.isNaN(date.getTime())) {
-        const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
-        const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
+        const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+          date,
+        );
+        const time = new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).format(date);
         parts.push(`${day}, ${time}`);
       }
     }
@@ -175,7 +190,12 @@ export class Shell {
       label: 'Applications',
       items: [
         { path: '/jobs', label: 'Jobs', icon: 'lucideSquareKanban' },
-        { path: '/mail', label: 'Mail', icon: 'lucideMail' },
+        {
+          path: '/notifications',
+          label: 'Notifications',
+          icon: 'lucideBell',
+          badge: this.notifications.unread(),
+        },
       ],
     },
     {
@@ -187,7 +207,13 @@ export class Shell {
         { path: '/library/skills', label: 'Skills', icon: 'lucideSparkles' },
       ],
     },
-    { label: 'Account', items: [{ path: '/usage', label: 'Usage', icon: 'lucideSparkles' }] },
+    {
+      label: 'Account',
+      items: [
+        { path: '/usage', label: 'Usage', icon: 'lucideSparkles' },
+        { path: '/settings', label: 'Settings', icon: 'lucideSettings' },
+      ],
+    },
     ...(this.account.me()?.platform_role === 'owner'
       ? [
           {

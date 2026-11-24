@@ -1,0 +1,280 @@
+:host {
+  display: block;
+  --cat-received: var(--muted-foreground);
+  --cat-assessment: oklch(0.62 0.13 235);
+  --cat-interview: oklch(0.58 0.18 295);
+  --cat-rejection: var(--destructive);
+  --cat-offer: oklch(0.62 0.15 160);
+}
+.inbox {
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: 1.75rem 1rem 3rem;
+}
+.inbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-inline: 0.5rem;
+}
+.inbox-head h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.inbox-tools {
+  display: flex;
+  gap: 0.25rem;
+  color: var(--muted-foreground);
+}
+.views {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.views button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.views button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.views button[aria-selected='true'] {
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 500;
+}
+.views button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.views-count {
+  min-width: 1.25rem;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  font-size: 0.75rem;
+  text-align: center;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.inbox-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.75rem 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+.day {
+  margin: 1.25rem 0 0.25rem;
+  padding-inline: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.5rem 2rem 1fr auto;
+  column-gap: 0.75rem;
+  align-items: start;
+  border-radius: 0.625rem;
+  padding: 0.75rem 0.75rem 0.75rem 0.5rem;
+  cursor: pointer;
+  --cat: var(--cat-received);
+}
+.row[data-category='assessment'] {
+  --cat: var(--cat-assessment);
+}
+.row[data-category='interview'] {
+  --cat: var(--cat-interview);
+}
+.row[data-category='rejection'] {
+  --cat: var(--cat-rejection);
+}
+.row[data-category='offer'] {
+  --cat: var(--cat-offer);
+}
+.row:hover,
+.row:focus-within {
+  background: var(--muted);
+}
+.dot {
+  margin-top: 0.75rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.row.unread .dot {
+  background: var(--primary);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  color: var(--cat);
+  background: color-mix(in oklch, var(--cat) 14%, transparent);
+}
+.body {
+  min-width: 0;
+}
+.line {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.line strong {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.tag {
+  margin-left: 0.25rem;
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--cat);
+  background: color-mix(in oklch, var(--cat) 12%, transparent);
+  vertical-align: 0.05em;
+}
+.subject {
+  margin-top: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.row.unread .subject {
+  color: var(--foreground);
+}
+.snippet {
+  margin-top: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  opacity: 0.8;
+}
+.about {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  color: var(--foreground);
+}
+.about:hover {
+  background: var(--background);
+}
+.body app-mail-status-change {
+  display: block;
+  margin-top: 0.4rem;
+}
+.when {
+  grid-column: 4;
+  grid-row: 1;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+/* Row actions replace the time on hover, as in Notion and Linear. */
+.actions {
+  grid-column: 4;
+  grid-row: 1;
+  display: flex;
+  gap: 0.125rem;
+  margin-top: -0.35rem;
+  opacity: 0;
+  pointer-events: none;
+}
+.row:hover .actions,
+.row:focus-within .actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.row:hover .when,
+.row:focus-within .when {
+  visibility: hidden;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.empty ng-icon {
+  margin-bottom: 0.5rem;
+  font-size: 1.75rem;
+}
+.empty-title {
+  font-weight: 500;
+  color: var(--foreground);
+}
+.empty a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.older {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+/* Touch screens have no hover: keep the actions visible. */
+@media (hover: none) {
+  .actions {
+    opacity: 1;
+    pointer-events: auto;
+    grid-row: 2;
+    margin-top: 0.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .inbox {
+    padding-inline: 0.25rem;
+  }
+  .tool-label {
+    display: none;
+  }
+  .row {
+    grid-template-columns: 0.5rem 2rem 1fr;
+  }
+  .when {
+    grid-column: 3;
+    grid-row: 2;
+    margin-top: 0.35rem;
+  }
+  .actions {
+    display: none;
+  }
+}

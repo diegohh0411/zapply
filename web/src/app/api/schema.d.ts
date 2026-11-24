@@ -1339,6 +1339,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The member's notifications, newest first. `view` is `inbox` (default: everything not archived), `unread` (unread and not archived) or `archived`. Today every notification is `mail`, carried in `mail`. */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description How many inbox notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events. */
+        get: operations["getNotificationSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks the named notifications read (or unread, with `unread`), or every inbox notification read when `all` is true. */
+        post: operations["markNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Archives the named notifications, or every read one in the inbox when `read` is true. Archiving also marks them read. `restore` moves the named ones back to the inbox. */
+        post: operations["archiveNotifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2317,6 +2385,42 @@ export interface components {
             items: components["schemas"]["MatchRun"][];
             /** Format: uuid */
             next_cursor?: string;
+        };
+        /** @enum {string} */
+        NotificationKind: "mail";
+        Notification: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["NotificationKind"];
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: date-time */
+            read_at: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
+            /** @description Set when `kind` is `mail`. */
+            mail: components["schemas"]["MailMessage"] | null;
+        };
+        NotificationPage: {
+            items: components["schemas"]["Notification"][];
+            /** Format: uuid */
+            next_cursor?: string;
+        };
+        NotificationSummary: {
+            unread: number;
+        };
+        NotificationRead: {
+            ids?: string[];
+            all?: boolean;
+            /** @description Mark the named ones unread instead. */
+            unread?: boolean;
+        };
+        NotificationArchive: {
+            ids?: string[];
+            /** @description Archive every read notification in the inbox. */
+            read?: boolean;
+            /** @description Move the named ones back to the inbox. */
+            restore?: boolean;
         };
         /** @enum {string} */
         MailCategory: "received" | "assessment" | "interview" | "rejection" | "offer";
@@ -4913,6 +5017,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailMessage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["NotificationKind"];
+                view?: "inbox" | "unread" | "archived";
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of notifications. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getNotificationSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    markNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationRead"];
+            };
+        };
+        responses: {
+            /** @description The summary after marking. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    archiveNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationArchive"];
+            };
+        };
+        responses: {
+            /** @description The summary after archiving. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSummary"];
                 };
             };
             default: components["responses"]["Problem"];

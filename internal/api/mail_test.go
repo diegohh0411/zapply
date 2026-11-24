@@ -89,7 +89,7 @@ func TestMailIsOffUntilConfigured(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/mail?oauth_code=y&oauth_state=x" {
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/settings/connections?oauth_code=y&oauth_state=x" {
 		t.Fatalf("callback = %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
 	alice.must(503, "POST", "/v1/mail/accounts/google/complete", map[string]any{"state": "x", "code": "y"})
@@ -122,9 +122,9 @@ func TestMailConnectAndPush(t *testing.T) {
 	// The callback only hands the result to the app, which finishes the flow as
 	// the signed-in member.
 	for query, want := range map[string]string{
-		"state=nope&code=c&scope=x": "/mail?oauth_code=c&oauth_state=nope",
-		"error=access_denied":       "/mail?error=denied",
-		"state=only":                "/mail?error=expired",
+		"state=nope&code=c&scope=x": "/settings/connections?oauth_code=c&oauth_state=nope",
+		"error=access_denied":       "/settings/connections?error=denied",
+		"state=only":                "/settings/connections?error=expired",
 	} {
 		res, err := alice.http.Get(base + "/oauth/google/callback?" + query)
 		if err != nil {

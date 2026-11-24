@@ -115,7 +115,7 @@ func (s *server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		back.Set("oauth_code", q.Get("code"))
 	}
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	http.Redirect(w, r, "/mail?"+back.Encode(), http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/connections?"+back.Encode(), http.StatusSeeOther)
 }
 
 // lazyVerifier builds the Google OIDC verifier on first use, so the API starts

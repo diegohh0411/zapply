@@ -521,3 +521,25 @@ func (s *Service) HandlePush(ctx context.Context, address, cursor string) error 
 		return s.enqueue(ctx, tx, SyncArgs{UserID: a.UserID, AccountID: a.AccountID, Tick: "push:" + cursor})
 	})
 }
+
+// ItemsByID loads relevant messages by id inside the caller's tenant
+// transaction, for lists (such as notifications) that point at mail.
+func ItemsByID(ctx context.Context, tx pgx.Tx, u uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]Item, error) {
+	out := map[uuid.UUID]Item{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT `+itemColumns+` FROM mail_message WHERE user_id=$1 AND id=ANY($2) AND state='classified' AND category<>'other'`, u, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		m, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[m.ID] = m
+	}
+	return out, rows.Err()
+}

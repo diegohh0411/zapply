@@ -29,6 +29,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
+	"github.com/diegohh0411/zapply/internal/notify"
 	"github.com/diegohh0411/zapply/internal/posting"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
@@ -81,6 +82,7 @@ func Handler(d Deps) http.Handler {
 		queue = nil
 	}
 	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue, postings: d.Postings}
+	srv.notify = notify.New(d.Store)
 	srv.matcher = match.New(d.Store, queue)
 	srv.jobs.Matcher = srv.matcher
 	srv.cv = render.NewService(d.Store, render.NewCompiler(d.TypstDir))
