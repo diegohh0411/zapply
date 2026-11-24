@@ -29,6 +29,7 @@ class JobsStoreToken {}
 class ZardSonnerService {}
 class ConfirmService {}
 const DestroyRef = Symbol('DestroyRef');
+const ChangeDetectorRef = Symbol('ChangeDetectorRef');
 const toast = { error() {}, success() {}, warning() {} };
 const core = {
   signal,
@@ -40,12 +41,14 @@ const core = {
   output: () => ({ emit() {} }),
   viewChild: () => () => undefined,
   DestroyRef,
+  ChangeDetectorRef,
   inject(token) {
     if (token === AuthService) return currentAuth;
     if (token === Api) return { client: apiClient };
     if (token === EventsService) return currentEvents;
     if (token === JobsStoreToken) return currentStore;
     if (token === ZardSonnerService) return toast;
+    if (token === ChangeDetectorRef) return { markForCheck() {} };
     return {};
   },
   Injectable: () => (x) => x,
@@ -366,6 +369,120 @@ test('capture rejects blank titles, saves minimal input once, and opens the save
   await saving;
   assert.deepEqual(opened, ['created']);
   assert.equal(sheet.saving(), false);
+});
+
+const until = async (check) => {
+  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(check(), 'condition not reached');
+};
+
+test('a pasted link reads behind a loader and opens a form with the extraction already in it', async () => {
+  const page = deferred();
+  const sheet = sheetStore({
+    readPosting: () => page.promise,
+    postingExtraction: async () => ({
+      status: 'completed',
+      title: 'ML Engineer',
+      salary_min: 150400,
+      salary_max: 277600,
+      salary_currency: 'USD',
+      salary_period: 'year',
+    }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/en-us/details/1/ml-engineer';
+  const reading = sheet.continueFromLink();
+  assert.equal(sheet.step(), 'reading');
+  assert.equal(sheet.reading(), true);
+  page.resolve({ description: 'Raw page text', extraction_id: 'x1' });
+  await until(() => sheet.extracting());
+  assert.equal(sheet.step(), 'reading', 'the loader stays up while the model reads');
+  await reading;
+  assert.equal(sheet.step(), 'review');
+  assert.equal(sheet.form.title, 'ML Engineer');
+  assert.equal(sheet.form.salary_min, 150400);
+  assert.equal(sheet.form.salary_max, 277600);
+  assert.equal(sheet.form.salary_currency, 'USD');
+  assert.equal(sheet.filled().has('salary_min'), true);
+});
+
+test('skipping the loader opens the form now and the extraction still lands in it', async () => {
+  const extraction = deferred();
+  const sheet = sheetStore({
+    readPosting: async () => ({ description: 'Raw page text', extraction_id: 'x1' }),
+    postingExtraction: () => extraction.promise,
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/1';
+  const reading = sheet.continueFromLink();
+  await until(() => sheet.extracting());
+  sheet.skipWaiting();
+  assert.equal(sheet.step(), 'review');
+  assert.equal(
+    sheet.form.title,
+    'Raw page text',
+    'until the model answers, the page text gives a guess',
+  );
+  sheet.step.set('link'); // back to the link while the model is still reading
+  extraction.resolve({ status: 'completed', title: 'Late title' });
+  await reading;
+  await until(() => sheet.form.title === 'Late title');
+  assert.equal(sheet.extracting(), false);
+  assert.equal(sheet.step(), 'link', 'a late answer does not pull the person off the link');
+});
+
+test('cancelling the loader returns to the link and drops the late answer', async () => {
+  const page = deferred();
+  const sheet = sheetStore({ readPosting: () => page.promise });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/1';
+  const reading = sheet.continueFromLink();
+  sheet.cancelReading();
+  assert.equal(sheet.step(), 'link');
+  assert.equal(sheet.reading(), false);
+  page.resolve({ description: 'Raw page text', title: 'Late title' });
+  await reading;
+  assert.equal(sheet.step(), 'link');
+  assert.equal(sheet.form.title, '');
+  assert.equal(sheet.form.description, '');
+});
+
+test('a failed extraction still opens the form, with a note', async () => {
+  const sheet = sheetStore({
+    readPosting: async () => ({ description: 'Raw page text', extraction_id: 'x1' }),
+    postingExtraction: async () => ({ status: 'failed' }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/1';
+  await sheet.continueFromLink();
+  assert.equal(sheet.step(), 'review');
+  assert.match(sheet.readProblem(), /Couldn’t read the details/);
+  assert.equal(sheet.form.description, 'Raw page text');
+});
+
+test('when the page cannot be read, the form opens for a pasted description that is then read', async () => {
+  const calls = [];
+  const sheet = sheetStore({
+    readPosting: async (url, text) => {
+      calls.push(text);
+      if (!text) throw Object.assign(new Error('blocked'), { status: 502, fieldErrors: [] });
+      return { description: '', extraction_id: 'x2' };
+    },
+    postingExtraction: async () => ({ status: 'completed', title: 'Pasted role', company: 'Acme' }),
+  });
+  await sheet.load({ new: true });
+  sheet.form.url = 'https://jobs.example.com/1';
+  await sheet.continueFromLink();
+  assert.equal(sheet.step(), 'review');
+  assert.match(sheet.readProblem(), /Couldn’t read the page/);
+  assert.equal(sheet.descriptionOpen(), true, 'the description is open to paste into');
+  sheet.form.description = 'Acme is hiring a role. '.repeat(20);
+  await sheet.readPastedText();
+  await until(() => sheet.step() === 'review' && sheet.form.company === 'Acme');
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /Acme is hiring/);
+  assert.equal(sheet.form.title, 'Pasted role');
+  assert.equal(sheet.readProblem(), '');
 });
 
 test('closing capture preserves a rejected draft and restores the dialog after Escape', async () => {

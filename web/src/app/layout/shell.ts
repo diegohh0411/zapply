@@ -3,12 +3,19 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideBuilding2,
+  lucideCpu,
+  lucideCreditCard,
   lucideFolderOpen,
+  lucideGlobe,
+  lucideKeyRound,
+  lucideLayoutDashboard,
   lucideLogOut,
   lucideMail,
+  lucideReceipt,
   lucideSparkles,
   lucideSquareKanban,
   lucideUser,
+  lucideUsers,
 } from '@ng-icons/lucide';
 
 import { ZardSidebarImports } from '@/shared/components/sidebar';
@@ -37,6 +44,13 @@ interface NavItem {
       lucideSparkles,
       lucideLogOut,
       lucideMail,
+      lucideLayoutDashboard,
+      lucideCreditCard,
+      lucideUsers,
+      lucideCpu,
+      lucideGlobe,
+  lucideKeyRound,
+      lucideReceipt,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -173,12 +187,20 @@ export class Shell {
         { path: '/library/skills', label: 'Skills', icon: 'lucideSparkles' },
       ],
     },
-    { label: 'Account', items: [{ path: '/usage', label: 'Model usage', icon: 'lucideSparkles' }] },
+    { label: 'Account', items: [{ path: '/usage', label: 'Usage', icon: 'lucideSparkles' }] },
     ...(this.account.me()?.platform_role === 'owner'
       ? [
           {
             label: 'Platform',
-            items: [{ path: '/admin/plans', label: 'Administration', icon: 'lucideBuilding2' }],
+            items: [
+              { path: '/admin/overview', label: 'Overview', icon: 'lucideLayoutDashboard' },
+              { path: '/admin/plans', label: 'Plans', icon: 'lucideCreditCard' },
+              { path: '/admin/members', label: 'Members', icon: 'lucideUsers' },
+              { path: '/admin/models', label: 'Models', icon: 'lucideCpu' },
+              { path: '/admin/keys', label: 'Keys & checks', icon: 'lucideKeyRound' },
+              { path: '/admin/scraping', label: 'Scraping', icon: 'lucideGlobe' },
+              { path: '/admin/usage', label: 'Unresolved usage', icon: 'lucideReceipt' },
+            ],
           },
         ]
       : []),

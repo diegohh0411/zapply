@@ -81,6 +81,8 @@ function load(file, core) {
     Map,
     Set,
     Promise,
+    setTimeout,
+    clearTimeout,
   });
   return module.exports;
 }

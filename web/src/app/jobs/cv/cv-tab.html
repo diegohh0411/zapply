@@ -355,8 +355,19 @@
         }
       </div>
       <aside class="cv-preview min-w-0" aria-label="Document preview">
-        <div class="preview-settings">
-          <h3>PDF preview</h3>
+        <div class="preview-bar">
+          <p class="preview-status" role="status">
+            @if (fitting()) {
+              Updating…
+            } @else if (fitted(); as f) {
+              {{ f.pages }} of {{ p.draft.page_budget }}
+              {{ p.draft.page_budget === 1 ? 'page' : 'pages' }}
+              @if (trimmedCount()) {
+                · {{ trimmedCount() }} left out to fit
+              }
+            }
+          </p>
+          <div class="preview-settings">
           <label
             >Language
             <z-select
@@ -385,18 +396,8 @@
               }
             </z-select>
           </label>
+          </div>
         </div>
-        <p class="my-2.5 text-[11px] leading-normal text-muted-foreground" role="status">
-          @if (fitting()) {
-            Updating preview…
-          } @else if (fitted(); as f) {
-            {{ f.pages }} of {{ p.draft.page_budget }}
-            {{ p.draft.page_budget === 1 ? 'page' : 'pages' }}
-            @if (trimmedCount()) {
-              · {{ trimmedCount() }} optional items left out to fit
-            }
-          }
-        </p>
         @if (overflow()) {
           <p class="cv-alert" role="status">
             This CV exceeds the page limit. Increase the length or switch “Always keep” items to
@@ -416,9 +417,6 @@
             </div>
           }
         </div>
-        <p class="my-2.5 text-[11px] leading-normal text-muted-foreground">
-          {{ p.template.name }} · Changes save automatically. Summary edits need saving.
-        </p>
       </aside>
     </div>
   } @else if (!error()) {

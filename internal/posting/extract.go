@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/model/extraction"
@@ -70,7 +71,11 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 		_ = json.Unmarshal(a.Value, &s)
 		return strings.Join(strings.Fields(s), " ")
 	}
-	num := func(name string) *int64 {
+	// num reads a salary bound: typed models answer a number; the rest answer
+	// text, which is parsed. A text answer holding a whole range ("$150,400 -
+	// $277,600") gives its lowest amount for a minimum and its highest for a
+	// maximum.
+	num := func(name string, highest bool) *int64 {
 		a, ok := answers[name]
 		if !ok || (a.Confidence != nil && *a.Confidence < minConfidence) {
 			return nil
@@ -80,9 +85,9 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 			if json.Unmarshal(a.Value, &f) != nil {
 				return nil
 			}
-			return number(f)
+			return positive(number(f))
 		}
-		return amount(str(name))
+		return amount(str(name), highest)
 	}
 	p := Posting{
 		Title:          limit(str("title"), 300),
@@ -90,8 +95,8 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 		Location:       limit(str("location"), 300),
 		WorkMode:       workMode(str("work_mode")),
 		EmploymentType: employmentWords(str("employment_type")),
-		SalaryMin:      num("salary_min"),
-		SalaryMax:      num("salary_max"),
+		SalaryMin:      num("salary_min", false),
+		SalaryMax:      num("salary_max", true),
 		SalaryCurrency: currency(str("salary_currency")),
 		SalaryPeriod:   period(str("salary_period")),
 		Description:    description(answers, r.State),
@@ -182,7 +187,27 @@ func period(s string) string {
 }
 
 // currencySymbols maps unambiguous symbols; a bare "$" is left for the person.
-var currencySymbols = map[string]string{"€": "EUR", "£": "GBP", "¥": "JPY", "₹": "INR", "US$": "USD", "C$": "CAD", "A$": "AUD", "MX$": "MXN"}
+var currencySymbols = map[string]string{"€": "EUR", "£": "GBP", "¥": "JPY", "₹": "INR", "US$": "USD", "C$": "CAD", "CA$": "CAD", "A$": "AUD", "AU$": "AUD", "MX$": "MXN", "MXN$": "MXN"}
+
+// currencyCodes are the ISO 4217 codes a job posting is likely to use. A
+// three-letter word is only a currency when it is one of these: "PER" and
+// "THE" are not.
+var currencyCodes = func() map[string]bool {
+	m := map[string]bool{}
+	for _, c := range strings.Fields(`USD EUR GBP MXN CAD AUD NZD CHF JPY CNY INR BRL ARS CLP COP PEN UYU
+		SEK NOK DKK PLN CZK HUF RON BGN TRY ILS AED SAR QAR ZAR EGP NGN KES SGD HKD KRW TWD THB VND PHP IDR MYR UAH`) {
+		m[c] = true
+	}
+	return m
+}()
+
+// currencyNames maps how postings spell currencies out, most specific first.
+var currencyNames = [][2]string{
+	{"canadian dollar", "CAD"}, {"australian dollar", "AUD"}, {"new zealand dollar", "NZD"},
+	{"us dollar", "USD"}, {"u.s. dollar", "USD"}, {"american dollar", "USD"}, {"united states dollar", "USD"},
+	{"mexican peso", "MXN"}, {"pesos mexicanos", "MXN"}, {"peso mexicano", "MXN"},
+	{"euro", "EUR"}, {"pound", "GBP"}, {"sterling", "GBP"},
+}
 
 var isoCode = regexp.MustCompile(`\b[A-Z]{3}\b`)
 
@@ -191,30 +216,144 @@ func currency(s string) string {
 	if c, ok := currencySymbols[s]; ok {
 		return c
 	}
-	if m := isoCode.FindString(strings.ToUpper(s)); m != "" {
-		return m
+	for _, m := range isoCode.FindAllString(strings.ToUpper(s), -1) {
+		if currencyCodes[m] {
+			return m
+		}
+	}
+	lower := strings.ToLower(s)
+	for _, n := range currencyNames {
+		if strings.Contains(lower, n[0]) {
+			return n[1]
+		}
 	}
 	return ""
 }
 
-var amountPattern = regexp.MustCompile(`(\d[\d,.\s]*)\s*([kKmM])?`)
+// moneyToken is one amount in running text: thousands grouped by a comma,
+// dot, space or apostrophe ("150,400", "150.400", "85 000", "1'200"), or plain
+// digits with an optional decimal part ("45.5", "1,5"), then an optional scale
+// word ("120k", "1.2M", "30 mil", "2 million"). The scale must end at a word
+// boundary so "30,000 monthly" does not read as millions.
+var moneyToken = regexp.MustCompile(`(?i)(\d{1,3}(?:[ ,.\x{00a0}\x{202f}'’]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?)(?:(k|mm|m)\b|\s*(mil|millones|millon|millions?|thousand)\b)?`)
 
-// amount reads the first amount in text: "$120,000", "120k", "1.2M".
-func amount(s string) *int64 {
-	m := amountPattern.FindStringSubmatch(s)
-	if m == nil {
+// notMoney marks numbers followed by a unit that is not a currency: "3+
+// years", "40 hours", "10%".
+var notMoney = regexp.MustCompile(`(?i)^\s*(?:\+|%|(?:years?|yrs?|months?|weeks?|days?|hours?)\b)`)
+
+// rangeJoin is what may sit between the two ends of a range.
+var rangeJoin = regexp.MustCompile(`(?i)^[\s$€£¥₹~]*(?:-|–|—|to|and|a|y)?[\s$€£¥₹~]*$`)
+
+// amountsIn reads every salary-like amount in text, in order. Both ends of a
+// range share a scale written once: "100-120k" is 100,000 to 120,000.
+func amountsIn(text string) []float64 {
+	type found struct {
+		value float64
+		scale float64
+		start int
+		end   int
+	}
+	var all []found
+	for _, m := range moneyToken.FindAllStringSubmatchIndex(text, -1) {
+		if !standsAlone(text[:m[0]]) {
+			continue // part of a code: ID98062, Q4
+		}
+		if notMoney.MatchString(text[m[1]:]) {
+			continue
+		}
+		scale := 1.0
+		if m[4] >= 0 || m[6] >= 0 {
+			word := strings.ToLower(text[max(m[4], m[6]):max(m[5], m[7])])
+			switch word {
+			case "k", "mil", "thousand":
+				scale = 1_000
+			default:
+				scale = 1_000_000
+			}
+		}
+		v, ok := parseDigits(text[m[2]:m[3]], scale > 1)
+		if !ok {
+			continue
+		}
+		all = append(all, found{value: v, scale: scale, start: m[0], end: m[1]})
+	}
+	for i := 0; i+1 < len(all); i++ {
+		a, b := &all[i], all[i+1]
+		if a.scale == 1 && b.scale > 1 && a.value <= b.value && rangeJoin.MatchString(text[a.end:b.start]) {
+			a.scale = b.scale
+		}
+	}
+	out := make([]float64, 0, len(all))
+	for _, f := range all {
+		out = append(out, f.value*f.scale)
+	}
+	return out
+}
+
+// standsAlone reports whether an amount starting after before is not the tail
+// of a word: "USD150" is an amount, "ID98062" and "Q4" are not.
+func standsAlone(before string) bool {
+	end := len(before)
+	start := end
+	for start > 0 {
+		r, size := utf8.DecodeLastRuneInString(before[:start])
+		if !unicode.IsLetter(r) {
+			break
+		}
+		start -= size
+	}
+	return start == end || currencyCodes[strings.ToUpper(before[start:end])]
+}
+
+// parseDigits reads digits with grouping and a decimal mark in either
+// convention. A single separator followed by exactly three digits is a
+// thousands mark ("1.200" is 1200) unless a scale follows ("1.500M").
+func parseDigits(tok string, scaled bool) (float64, bool) {
+	tok = strings.NewReplacer(" ", "", "\u00a0", "", "\u202f", "", "'", "", "’", "").Replace(tok)
+	dot, comma := strings.Count(tok, "."), strings.Count(tok, ",")
+	switch {
+	case dot > 0 && comma > 0:
+		// The mark that comes last is the decimal one.
+		if strings.LastIndex(tok, ".") > strings.LastIndex(tok, ",") {
+			tok = strings.ReplaceAll(tok, ",", "")
+		} else {
+			tok = strings.ReplaceAll(strings.ReplaceAll(tok, ".", ""), ",", ".")
+		}
+	case dot+comma > 1:
+		tok = strings.NewReplacer(".", "", ",", "").Replace(tok)
+	case dot+comma == 1:
+		i := strings.IndexAny(tok, ".,")
+		if len(tok)-i-1 == 3 && i > 0 && tok[0] != '0' && !scaled {
+			tok = tok[:i] + tok[i+1:]
+		} else {
+			tok = strings.Replace(tok, ",", ".", 1)
+		}
+	}
+	f, err := strconv.ParseFloat(tok, 64)
+	return f, err == nil
+}
+
+// amount reads a salary bound from an extraction model's text answer: the
+// lowest amount it states, or the highest. Nothing when it states none.
+func amount(s string, highest bool) *int64 {
+	var pick *float64
+	for _, v := range amountsIn(s) {
+		v := v
+		if pick == nil || (highest && v > *pick) || (!highest && v < *pick) {
+			pick = &v
+		}
+	}
+	if pick == nil {
 		return nil
 	}
-	digits := strings.NewReplacer(",", "", " ", "").Replace(strings.TrimSpace(m[1]))
-	f, err := strconv.ParseFloat(strings.TrimRight(digits, "."), 64)
-	if err != nil {
+	return positive(number(*pick))
+}
+
+// positive drops a zero amount: no posting offers a salary of 0, a model
+// answering 0 means it found none.
+func positive(n *int64) *int64 {
+	if n == nil || *n <= 0 {
 		return nil
 	}
-	switch strings.ToLower(m[2]) {
-	case "k":
-		f *= 1_000
-	case "m":
-		f *= 1_000_000
-	}
-	return number(f)
+	return n
 }

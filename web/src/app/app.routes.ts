@@ -53,9 +53,12 @@ export const routes: Routes = [
       },
       {
         path: 'usage',
-        title: 'Model usage · zapply',
+        title: 'Usage · zapply',
         loadComponent: () => import('./usage/usage.page').then((m) => m.UsagePage),
       },
+      { path: 'admin', pathMatch: 'full', redirectTo: 'admin/overview' },
+      // Renamed: the keys page now owns the key list and the access check.
+      { path: 'admin/system-keys', redirectTo: 'admin/keys' },
       {
         path: 'admin/:section',
         canActivate: [owner],

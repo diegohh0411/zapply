@@ -463,7 +463,12 @@ export class CvTab {
       return;
     }
     this.url = URL.createObjectURL(new Blob([f.pdf as BlobPart], { type: 'application/pdf' }));
-    this.fitted.set({ ...f, url: this.sanitizer.bypassSecurityTrustResourceUrl(this.url) });
+    // Asks the viewer to fit the whole page. Chrome's built-in viewer ignored this
+    // fragment in testing; Safari's is unverified.
+    this.fitted.set({
+      ...f,
+      url: this.sanitizer.bypassSecurityTrustResourceUrl(`${this.url}#zoom=page-fit`),
+    });
   }
 
   /** Saves draft settings; the response is the rebuilt preview. */

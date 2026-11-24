@@ -1,8 +1,11 @@
-/** Preserve the server's exact decimal amount; numbers are used only for progress. */
+/**
+ * Preserve the server's exact decimal amount; numbers are used only for progress.
+ * Trailing zeros go, but cents always show two digits: $0.50, not $0.5.
+ */
 export function usd(value: string): string {
   const [whole, fraction = ''] = value.split('.');
   const trimmed = fraction.replace(/0+$/, '');
-  return '$' + whole + (trimmed ? '.' + trimmed : '.00');
+  return '$' + whole + '.' + (trimmed ? trimmed.padEnd(2, '0') : '00');
 }
 
 /** Show usage amounts at cent precision without making sub-cent charges look free. */
@@ -10,7 +13,7 @@ export function usageUsd(value: string): string {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return usd(value);
   if (amount !== 0 && Math.abs(amount) < 0.01) {
-    return amount < 0 ? '>-$0.01' : '<$0.01';
+    return amount < 0 ? '-$0.01' : 'under $0.01';
   }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -48,7 +51,7 @@ export function blockMessage(reason: string, status = ''): string {
     membership_suspended:
       'Your model access is suspended. Your library, jobs, and existing results remain available.',
     usage_limit:
-      'Your model allowance is currently used up. Capacity returns as older usage leaves the rolling windows.',
+      'You have used your allowance for now. It grows back gradually as older usage falls outside the last 7 and 30 days.',
     request_exceeds_plan: 'This request needs a larger reservation than your plan allows.',
     accounting_pending:
       'A model charge is being reconciled. Its reservation stays in place until the charge is confirmed.',

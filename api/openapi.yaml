@@ -2489,13 +2489,14 @@ components:
         "usage":
           "$ref": "#/components/schemas/Usage"
     "UsageEntry":
+      "description": "One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list."
       "type": "object"
       "required":
         - "id"
         - "amount_usd"
         - "accounted_at"
-        - "model"
-        - "source"
+        - "app"
+        - "steps"
       "properties":
         "id":
           "type": "string"
@@ -2504,10 +2505,20 @@ components:
         "accounted_at":
           "type": "string"
           "format": "date-time"
-        "model":
+        "app":
           "type": "string"
-        "source":
+          "enum": ["jobs", "mail"]
+        "title":
           "type": "string"
+          "nullable": true
+        "company":
+          "type": "string"
+          "nullable": true
+        "steps":
+          "type": "array"
+          "items":
+            "type": "string"
+            "enum": ["match", "summary", "extraction", "mail", "other"]
     "SystemKey":
       "type": "object"
       "required":

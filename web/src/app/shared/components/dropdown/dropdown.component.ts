@@ -93,6 +93,8 @@ export class ZardDropdownMenuComponent implements OnDestroy {
 
   readonly class = input<ClassValue>('');
   readonly disabled = input(false, { transform: booleanAttribute });
+  /** Which trigger edge the menu lines up with. Use `end` for triggers near the right edge of the viewport. */
+  readonly zAlign = input<'start' | 'end'>('start');
   readonly zDisabled = input<boolean | undefined, unknown>(undefined, {
     transform: value => (value === undefined ? undefined : booleanAttribute(value)),
   });
@@ -220,20 +222,21 @@ export class ZardDropdownMenuComponent implements OnDestroy {
 
     if (isPlatformBrowser(this.platformId)) {
       try {
+        const align = this.zAlign();
         const positionStrategy = this.overlayPositionBuilder
           .flexibleConnectedTo(this.elementRef)
           .withPositions([
             {
-              originX: 'start',
+              originX: align,
               originY: 'bottom',
-              overlayX: 'start',
+              overlayX: align,
               overlayY: 'top',
               offsetY: 4,
             },
             {
-              originX: 'start',
+              originX: align,
               originY: 'top',
-              overlayX: 'start',
+              overlayX: align,
               overlayY: 'bottom',
               offsetY: -4,
             },

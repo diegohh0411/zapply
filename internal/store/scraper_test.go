@@ -17,7 +17,7 @@ import (
 )
 
 func TestScraperSettingsMigrationWithoutInheritedPlatformOwnership(t *testing.T) {
-	db := testdb.NewAtVersion(t, 31)
+	db := testdb.NewAtVersion(t, 32)
 	ctx := context.Background()
 	admin := db.Admin(t)
 	role := "migration_" + strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -45,10 +45,10 @@ func TestScraperSettingsMigrationWithoutInheritedPlatformOwnership(t *testing.T)
 		t.Fatal(err)
 	}
 	migrationURL.User = url.UserPassword(role, password)
-	if err := store.MigrateTo(ctx, migrationURL.String(), 32, discardLogger()); err != nil {
+	if err := store.MigrateTo(ctx, migrationURL.String(), 33, discardLogger()); err != nil {
 		t.Fatalf("migration: %v", err)
 	}
-	source, err := os.ReadFile("migrations/00032_scraper_settings.sql")
+	source, err := os.ReadFile("migrations/00033_scraper_settings.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

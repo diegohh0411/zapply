@@ -13,6 +13,8 @@ const signal = (initial) => {
   read.update = (fn) => (value = fn(value));
   return read;
 };
+// Model settings declares its tab as an input signal; the stub mirrors that shape.
+const input = (initial) => signal(initial);
 class Api {
   static ok(r) {
     if (!r.response.ok) throw Error('request failed');
@@ -50,6 +52,7 @@ function fixture(file) {
   };
   const core = {
     signal,
+    input,
     Injectable: () => (x) => x,
     effect: (fn) => {
       effects.push(fn);

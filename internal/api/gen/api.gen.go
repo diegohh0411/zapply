@@ -754,6 +754,51 @@ func (e SystemKeyKind) Valid() bool {
 	}
 }
 
+// Defines values for UsageEntryApp.
+const (
+	UsageEntryAppJobs UsageEntryApp = "jobs"
+	UsageEntryAppMail UsageEntryApp = "mail"
+)
+
+// Valid indicates whether the value is a known member of the UsageEntryApp enum.
+func (e UsageEntryApp) Valid() bool {
+	switch e {
+	case UsageEntryAppJobs:
+		return true
+	case UsageEntryAppMail:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UsageEntrySteps.
+const (
+	UsageEntryStepsExtraction UsageEntrySteps = "extraction"
+	UsageEntryStepsMail       UsageEntrySteps = "mail"
+	UsageEntryStepsMatch      UsageEntrySteps = "match"
+	UsageEntryStepsOther      UsageEntrySteps = "other"
+	UsageEntryStepsSummary    UsageEntrySteps = "summary"
+)
+
+// Valid indicates whether the value is a known member of the UsageEntrySteps enum.
+func (e UsageEntrySteps) Valid() bool {
+	switch e {
+	case UsageEntryStepsExtraction:
+		return true
+	case UsageEntryStepsMail:
+		return true
+	case UsageEntryStepsMatch:
+		return true
+	case UsageEntryStepsOther:
+		return true
+	case UsageEntryStepsSummary:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkMode.
 const (
 	Hybrid WorkMode = "hybrid"
@@ -2003,14 +2048,22 @@ type Usage struct {
 	Spent7dUsd      string      `json:"spent_7d_usd"`
 }
 
-// UsageEntry defines model for UsageEntry.
+// UsageEntry One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list.
 type UsageEntry struct {
-	AccountedAt time.Time `json:"accounted_at"`
-	AmountUsd   string    `json:"amount_usd"`
-	Id          string    `json:"id"`
-	Model       string    `json:"model"`
-	Source      string    `json:"source"`
+	AccountedAt time.Time         `json:"accounted_at"`
+	AmountUsd   string            `json:"amount_usd"`
+	App         UsageEntryApp     `json:"app"`
+	Company     *string           `json:"company,omitempty"`
+	Id          string            `json:"id"`
+	Steps       []UsageEntrySteps `json:"steps"`
+	Title       *string           `json:"title,omitempty"`
 }
+
+// UsageEntryApp defines model for UsageEntry.App.
+type UsageEntryApp string
+
+// UsageEntrySteps defines model for UsageEntry.Steps.
+type UsageEntrySteps string
 
 // WorkMode defines model for WorkMode.
 type WorkMode string
