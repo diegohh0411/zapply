@@ -862,6 +862,27 @@ func (e PutMatchOverrideJSONBodyClass) Valid() bool {
 	}
 }
 
+// Defines values for ListNotificationsParamsView.
+const (
+	Archived ListNotificationsParamsView = "archived"
+	Inbox    ListNotificationsParamsView = "inbox"
+	Unread   ListNotificationsParamsView = "unread"
+)
+
+// Valid indicates whether the value is a known member of the ListNotificationsParamsView enum.
+func (e ListNotificationsParamsView) Valid() bool {
+	switch e {
+	case Archived:
+		return true
+	case Inbox:
+		return true
+	case Unread:
+		return true
+	default:
+		return false
+	}
+}
+
 // AttemptResolutionInput defines model for AttemptResolutionInput.
 type AttemptResolutionInput struct {
 	AmountUsd    string  `json:"amount_usd"`
@@ -1736,13 +1757,25 @@ type ModelSettingsSummaryReasoningEffort string
 
 // Notification defines model for Notification.
 type Notification struct {
-	Id   openapi_types.UUID `json:"id"`
-	Kind NotificationKind   `json:"kind"`
+	ArchivedAt *time.Time         `json:"archived_at"`
+	Id         openapi_types.UUID `json:"id"`
+	Kind       NotificationKind   `json:"kind"`
 
 	// Mail Set when `kind` is `mail`.
 	Mail       *MailMessage `json:"mail"`
 	OccurredAt time.Time    `json:"occurred_at"`
 	ReadAt     *time.Time   `json:"read_at"`
+}
+
+// NotificationArchive defines model for NotificationArchive.
+type NotificationArchive struct {
+	Ids *[]openapi_types.UUID `json:"ids,omitempty"`
+
+	// Read Archive every read notification in the inbox.
+	Read *bool `json:"read,omitempty"`
+
+	// Restore Move the named ones back to the inbox.
+	Restore *bool `json:"restore,omitempty"`
 }
 
 // NotificationKind defines model for NotificationKind.
@@ -1758,6 +1791,9 @@ type NotificationPage struct {
 type NotificationRead struct {
 	All *bool                 `json:"all,omitempty"`
 	Ids *[]openapi_types.UUID `json:"ids,omitempty"`
+
+	// Unread Mark the named ones unread instead.
+	Unread *bool `json:"unread,omitempty"`
 }
 
 // NotificationSummary defines model for NotificationSummary.
@@ -2209,12 +2245,14 @@ type ListMailMessagesParams struct {
 
 // ListNotificationsParams defines parameters for ListNotifications.
 type ListNotificationsParams struct {
-	Kind     *NotificationKind   `form:"kind,omitempty" json:"kind,omitempty"`
-	Category *MailCategory       `form:"category,omitempty" json:"category,omitempty"`
-	Unread   *bool               `form:"unread,omitempty" json:"unread,omitempty"`
-	Before   *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
-	Limit    *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Kind   *NotificationKind            `form:"kind,omitempty" json:"kind,omitempty"`
+	View   *ListNotificationsParamsView `form:"view,omitempty" json:"view,omitempty"`
+	Before *openapi_types.UUID          `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                         `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListNotificationsParamsView defines parameters for ListNotifications.
+type ListNotificationsParamsView string
 
 // PutProfileParams defines parameters for PutProfile.
 type PutProfileParams struct {
@@ -2311,6 +2349,9 @@ type RescanMailAccountJSONRequestBody RescanMailAccountJSONBody
 
 // ResolveMailStatusChangeJSONRequestBody defines body for ResolveMailStatusChange for application/json ContentType.
 type ResolveMailStatusChangeJSONRequestBody = MailStatusChangeAction
+
+// ArchiveNotificationsJSONRequestBody defines body for ArchiveNotifications for application/json ContentType.
+type ArchiveNotificationsJSONRequestBody = NotificationArchive
 
 // MarkNotificationsReadJSONRequestBody defines body for MarkNotificationsRead for application/json ContentType.
 type MarkNotificationsReadJSONRequestBody = NotificationRead
@@ -2560,6 +2601,9 @@ type ServerInterface interface {
 
 	// (GET /v1/notifications)
 	ListNotifications(w http.ResponseWriter, r *http.Request, params ListNotificationsParams)
+
+	// (POST /v1/notifications/archive)
+	ArchiveNotifications(w http.ResponseWriter, r *http.Request)
 
 	// (POST /v1/notifications/read)
 	MarkNotificationsRead(w http.ResponseWriter, r *http.Request)
@@ -5004,28 +5048,15 @@ func (siw *ServerInterfaceWrapper) ListNotifications(w http.ResponseWriter, r *h
 		return
 	}
 
-	// ------------- Optional query parameter "category" -------------
+	// ------------- Optional query parameter "view" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "view", r.URL.Query(), &params.View, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "view"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "unread" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "unread", r.URL.Query(), &params.Unread, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "unread"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "unread", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
 		}
 		return
 	}
@@ -5058,6 +5089,20 @@ func (siw *ServerInterfaceWrapper) ListNotifications(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListNotifications(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveNotifications operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveNotifications(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveNotifications(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5678,6 +5723,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notifications", wrapper.ListNotifications)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notifications/summary", wrapper.GetNotificationSummary)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notifications/read", wrapper.MarkNotificationsRead)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notifications/archive", wrapper.ArchiveNotifications)
 
 	return m
 }
@@ -8729,6 +8775,45 @@ func (response ListNotificationsdefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ArchiveNotificationsRequestObject struct {
+	Body *ArchiveNotificationsJSONRequestBody
+}
+
+type ArchiveNotificationsResponseObject interface {
+	VisitArchiveNotificationsResponse(w http.ResponseWriter) error
+}
+
+type ArchiveNotifications200JSONResponse NotificationSummary
+
+func (response ArchiveNotifications200JSONResponse) VisitArchiveNotificationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveNotificationsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ArchiveNotificationsdefaultApplicationProblemPlusJSONResponse) VisitArchiveNotificationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MarkNotificationsReadRequestObject struct {
 	Body *MarkNotificationsReadJSONRequestBody
 }
@@ -9662,6 +9747,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/notifications)
 	ListNotifications(ctx context.Context, request ListNotificationsRequestObject) (ListNotificationsResponseObject, error)
+
+	// (POST /v1/notifications/archive)
+	ArchiveNotifications(ctx context.Context, request ArchiveNotificationsRequestObject) (ArchiveNotificationsResponseObject, error)
 
 	// (POST /v1/notifications/read)
 	MarkNotificationsRead(ctx context.Context, request MarkNotificationsReadRequestObject) (MarkNotificationsReadResponseObject, error)
@@ -11848,6 +11936,37 @@ func (sh *strictHandler) ListNotifications(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListNotificationsResponseObject); ok {
 		if err := validResponse.VisitListNotificationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveNotifications operation middleware
+func (sh *strictHandler) ArchiveNotifications(w http.ResponseWriter, r *http.Request) {
+	var request ArchiveNotificationsRequestObject
+
+	var body ArchiveNotificationsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveNotifications(ctx, request.(ArchiveNotificationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveNotifications")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveNotificationsResponseObject); ok {
+		if err := validResponse.VisitArchiveNotificationsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

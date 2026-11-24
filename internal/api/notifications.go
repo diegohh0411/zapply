@@ -13,11 +13,8 @@ func (s *server) ListNotifications(ctx context.Context, req gen.ListNotification
 	if req.Params.Kind != nil {
 		f.Kind = string(*req.Params.Kind)
 	}
-	if req.Params.Category != nil {
-		f.Category = string(*req.Params.Category)
-	}
-	if req.Params.Unread != nil {
-		f.Unread = *req.Params.Unread
+	if req.Params.View != nil {
+		f.View = string(*req.Params.View)
 	}
 	items, err := s.notify.List(ctx, uid(ctx), f)
 	if err != nil {
@@ -40,7 +37,17 @@ func (s *server) MarkNotificationsRead(ctx context.Context, req gen.MarkNotifica
 	if req.Body.Ids != nil {
 		ids = *req.Body.Ids
 	}
-	all := req.Body.All != nil && *req.Body.All
-	sum, err := s.notify.MarkRead(ctx, uid(ctx), ids, all)
+	sum, err := s.notify.MarkRead(ctx, uid(ctx), ids, flag(req.Body.All), flag(req.Body.Unread))
 	return mailValue[gen.MarkNotificationsRead200JSONResponse](sum, err)
 }
+
+func (s *server) ArchiveNotifications(ctx context.Context, req gen.ArchiveNotificationsRequestObject) (gen.ArchiveNotificationsResponseObject, error) {
+	var ids []uuid.UUID
+	if req.Body.Ids != nil {
+		ids = *req.Body.Ids
+	}
+	sum, err := s.notify.Archive(ctx, uid(ctx), ids, flag(req.Body.Read), flag(req.Body.Restore))
+	return mailValue[gen.ArchiveNotifications200JSONResponse](sum, err)
+}
+
+func flag(b *bool) bool { return b != nil && *b }

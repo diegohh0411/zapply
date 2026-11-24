@@ -14,22 +14,24 @@ CREATE TABLE notification (
  -- When the thing happened (a message's received time), which orders the list.
  occurred_at timestamptz NOT NULL,
  read_at timestamptz,
+ -- Archived notifications leave the inbox; they stay listed under Archived.
+ archived_at timestamptz,
  created_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(user_id,id), UNIQUE(user_id,mail_message_id),
  FOREIGN KEY(user_id,mail_message_id) REFERENCES mail_message(user_id,id) ON DELETE CASCADE,
  CHECK((kind='mail') = (mail_message_id IS NOT NULL))
 );
 CREATE INDEX notification_list ON notification(user_id,occurred_at DESC,id DESC);
-CREATE INDEX notification_unread ON notification(user_id) WHERE read_at IS NULL;
+CREATE INDEX notification_unread ON notification(user_id) WHERE read_at IS NULL AND archived_at IS NULL;
 -- Mail found before notifications existed was already seen on the old Mail page.
 INSERT INTO notification(user_id,kind,mail_message_id,occurred_at,read_at)
  SELECT user_id,'mail',id,received_at,now() FROM mail_message WHERE state='classified' AND category <> 'other';
 ALTER TABLE notification ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant ON notification TO zapply_app,zapply_worker USING(user_id=app_user_id()) WITH CHECK(user_id=app_user_id());
--- Members only mark notifications read; the worker makes them (via the trigger).
+-- Members only mark notifications read or archive them; the worker makes them (via the trigger).
 REVOKE ALL ON notification FROM zapply_app;
-GRANT SELECT,UPDATE(read_at) ON notification TO zapply_app;
+GRANT SELECT,UPDATE(read_at,archived_at) ON notification TO zapply_app;
 GRANT SELECT,INSERT ON notification TO zapply_worker;
 
 CREATE FUNCTION public.notify_mail_message() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$ BEGIN

@@ -17,11 +17,11 @@ import (
 	"github.com/diegohh0411/zapply/internal/jobs"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/mail"
-	"github.com/diegohh0411/zapply/internal/notify"
 	"github.com/diegohh0411/zapply/internal/membership"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/model/billing"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
+	"github.com/diegohh0411/zapply/internal/notify"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/diegohh0411/zapply/internal/testdb"
@@ -495,18 +495,37 @@ func TestSyncClassifyRetentionAndScrub(t *testing.T) {
 	if e != nil || sum.Unread != 3 {
 		t.Fatalf("unread %+v %v", sum, e)
 	}
-	list, e := notes.List(ctx, f.u, notify.Filter{Category: "offer", Limit: 50})
-	if e != nil || len(list) != 1 || list[0].Mail == nil || list[0].Mail.ID != ids["m5"] || list[0].ReadAt != nil {
-		t.Fatalf("offer notifications %+v %v", list, e)
+	list, e := notes.List(ctx, f.u, notify.Filter{Limit: 50})
+	if e != nil || len(list) != 3 || list[0].Mail == nil || list[0].Mail.ID != ids["m5"] || list[0].ReadAt != nil {
+		t.Fatalf("inbox %+v %v", list, e)
 	}
-	if sum, e = notes.MarkRead(ctx, f.u, []uuid.UUID{list[0].ID}, false); e != nil || sum.Unread != 2 {
+	if sum, e = notes.MarkRead(ctx, f.u, []uuid.UUID{list[0].ID}, false, false); e != nil || sum.Unread != 2 {
 		t.Fatalf("after one read %+v %v", sum, e)
 	}
-	if unread, e := notes.List(ctx, f.u, notify.Filter{Unread: true, Limit: 50}); e != nil || len(unread) != 2 {
+	if sum, e = notes.MarkRead(ctx, f.u, []uuid.UUID{list[0].ID}, false, true); e != nil || sum.Unread != 3 {
+		t.Fatalf("after unread %+v %v", sum, e)
+	}
+	// Archiving leaves the inbox and the count; restoring brings it back read.
+	if sum, e = notes.Archive(ctx, f.u, []uuid.UUID{list[1].ID}, false, false); e != nil || sum.Unread != 2 {
+		t.Fatalf("after archive %+v %v", sum, e)
+	}
+	if arch, e := notes.List(ctx, f.u, notify.Filter{View: "archived", Limit: 50}); e != nil || len(arch) != 1 || arch[0].ReadAt == nil {
+		t.Fatalf("archived %+v %v", arch, e)
+	}
+	if unread, e := notes.List(ctx, f.u, notify.Filter{View: "unread", Limit: 50}); e != nil || len(unread) != 2 {
 		t.Fatalf("unread list %d %v", len(unread), e)
 	}
-	if sum, e = notes.MarkRead(ctx, f.u, nil, true); e != nil || sum.Unread != 0 {
+	if _, e = notes.Archive(ctx, f.u, []uuid.UUID{list[1].ID}, false, true); e != nil {
+		t.Fatal(e)
+	}
+	if sum, e = notes.MarkRead(ctx, f.u, nil, true, false); e != nil || sum.Unread != 0 {
 		t.Fatalf("after all read %+v %v", sum, e)
+	}
+	if _, e = notes.Archive(ctx, f.u, nil, true, false); e != nil {
+		t.Fatal(e)
+	}
+	if inbox, e := notes.List(ctx, f.u, notify.Filter{Limit: 50}); e != nil || len(inbox) != 0 {
+		t.Fatalf("inbox after archive read %d %v", len(inbox), e)
 	}
 	// Replaying a finished request's completion is harmless.
 	var op worker.Operation

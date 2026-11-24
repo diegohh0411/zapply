@@ -1622,19 +1622,16 @@ paths:
       operationId: listNotifications
       tags: [notifications]
       description: >
-        The member's notifications, newest first. Today every notification is
-        `mail`: a message classified as about an application, carried in `mail`.
-        `category` narrows mail notifications; `unread` keeps only unread ones.
+        The member's notifications, newest first. `view` is `inbox` (default:
+        everything not archived), `unread` (unread and not archived) or
+        `archived`. Today every notification is `mail`, carried in `mail`.
       parameters:
         - name: kind
           in: query
           schema: { $ref: "#/components/schemas/NotificationKind" }
-        - name: category
+        - name: view
           in: query
-          schema: { $ref: "#/components/schemas/MailCategory" }
-        - name: unread
-          in: query
-          schema: { type: boolean }
+          schema: { type: string, enum: [inbox, unread, archived] }
         - name: before
           in: query
           schema: { type: string, format: uuid }
@@ -1653,7 +1650,7 @@ paths:
     get:
       operationId: getNotificationSummary
       tags: [notifications]
-      description: How many notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events.
+      description: How many inbox notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events.
       responses:
         "200":
           description: The summary.
@@ -1666,7 +1663,9 @@ paths:
     post:
       operationId: markNotificationsRead
       tags: [notifications]
-      description: Marks the named notifications read, or all of them when `all` is true.
+      description: >
+        Marks the named notifications read (or unread, with `unread`), or every
+        inbox notification read when `all` is true.
       requestBody:
         required: true
         content:
@@ -1675,6 +1674,27 @@ paths:
       responses:
         "200":
           description: The summary after marking.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSummary" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/notifications/archive:
+    post:
+      operationId: archiveNotifications
+      tags: [notifications]
+      description: >
+        Archives the named notifications, or every read one in the inbox when
+        `read` is true. Archiving also marks them read. `restore` moves the
+        named ones back to the inbox.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationArchive" }
+      responses:
+        "200":
+          description: The summary after archiving.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NotificationSummary" }
@@ -2909,12 +2929,13 @@ components:
       enum: [mail]
     Notification:
       type: object
-      required: [id, kind, occurred_at, read_at, mail]
+      required: [id, kind, occurred_at, read_at, archived_at, mail]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/NotificationKind' }
         occurred_at: { type: string, format: date-time }
         read_at: { type: string, format: date-time, nullable: true }
+        archived_at: { type: string, format: date-time, nullable: true }
         mail:
           nullable: true
           description: Set when `kind` is `mail`.
@@ -2938,6 +2959,16 @@ components:
           maxItems: 500
           items: { type: string, format: uuid }
         all: { type: boolean }
+        unread: { type: boolean, description: Mark the named ones unread instead. }
+    NotificationArchive:
+      type: object
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          items: { type: string, format: uuid }
+        read: { type: boolean, description: Archive every read notification in the inbox. }
+        restore: { type: boolean, description: Move the named ones back to the inbox. }
     MailCategory:
       type: string
       enum: [received, assessment, interview, rejection, offer]

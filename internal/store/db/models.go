@@ -1044,6 +1044,7 @@ type Notification struct {
 	MailMessageID *uuid.UUID
 	OccurredAt    time.Time
 	ReadAt        *time.Time
+	ArchivedAt    *time.Time
 	CreatedAt     time.Time
 }
 

@@ -55,14 +55,35 @@ export class NotificationsService {
 
   async markRead(ids: string[]): Promise<void> {
     if (!ids.length) return;
-    const sum = Api.ok(await this.api.client.POST('/v1/notifications/read', { body: { ids } }));
-    this.unread.set(sum.unread);
+    this.set(await this.api.client.POST('/v1/notifications/read', { body: { ids } }));
+  }
+
+  async markUnread(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    this.set(await this.api.client.POST('/v1/notifications/read', { body: { ids, unread: true } }));
   }
 
   async markAllRead(): Promise<void> {
-    const sum = Api.ok(
-      await this.api.client.POST('/v1/notifications/read', { body: { all: true } }),
+    this.set(await this.api.client.POST('/v1/notifications/read', { body: { all: true } }));
+  }
+
+  async archive(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    this.set(await this.api.client.POST('/v1/notifications/archive', { body: { ids } }));
+  }
+
+  async restore(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    this.set(
+      await this.api.client.POST('/v1/notifications/archive', { body: { ids, restore: true } }),
     );
-    this.unread.set(sum.unread);
+  }
+
+  async archiveRead(): Promise<void> {
+    this.set(await this.api.client.POST('/v1/notifications/archive', { body: { read: true } }));
+  }
+
+  private set(res: { data?: { unread: number }; error?: unknown; response: Response }): void {
+    this.unread.set(Api.ok(res).unread);
   }
 }
