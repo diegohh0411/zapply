@@ -128,6 +128,72 @@
               </button>
             </div>
           </li>
+        } @else if (n.job_alert; as a) {
+          <li class="row" [class.unread]="!n.read_at" (click)="open(n, $event)">
+            <span class="dot" [attr.aria-label]="n.read_at ? null : 'Unread'"></span>
+            <span class="avatar" aria-hidden="true"><ng-icon name="lucideRadar" /></span>
+            <div class="body">
+              <p class="line">
+                <strong>{{ a.company }}</strong>
+                posted a new role
+                @if (a.remote) {
+                  <span class="tag">Remote</span>
+                }
+              </p>
+              <p class="subject">{{ a.title }}</p>
+              @if (a.location) {
+                <p class="snippet">{{ a.location }}</p>
+              }
+              <div>
+                <button z-button zSize="sm" zType="outline" (click)="saveAlert(n)">
+                  <ng-icon name="lucideBookmarkPlus" />Save to Jobs
+                </button>
+              </div>
+            </div>
+            <time
+              class="when"
+              [attr.datetime]="a.found_at"
+              [title]="a.published_at ?? a.found_at"
+              >{{ ago(a.found_at) }}</time
+            >
+            <div class="actions">
+              <a
+                z-button
+                zType="ghost"
+                zSize="icon-sm"
+                [href]="a.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open posting"
+                title="Open posting"
+                (click)="read(n)"
+              >
+                <ng-icon name="lucideExternalLink" />
+              </a>
+              @if (!n.archived_at) {
+                <button
+                  z-button
+                  zType="ghost"
+                  zSize="icon-sm"
+                  [attr.aria-label]="n.read_at ? 'Mark unread' : 'Mark read'"
+                  [title]="n.read_at ? 'Mark unread' : 'Mark read'"
+                  (click)="toggleRead(n)"
+                >
+                  <ng-icon [name]="n.read_at ? 'lucideMailOpen' : 'lucideCheck'" />
+                </button>
+              }
+              <button
+                z-button
+                zType="ghost"
+                zSize="icon-sm"
+                [attr.aria-label]="n.archived_at ? 'Move to inbox' : 'Archive'"
+                [title]="n.archived_at ? 'Move to inbox' : 'Archive'"
+                (click)="archive(n)"
+              >
+                <ng-icon [name]="n.archived_at ? 'lucideArchiveRestore' : 'lucideArchive'" />
+              </button>
+            </div>
+          </li>
         }
       }
     </ul>
@@ -154,6 +220,10 @@
             } @else {
               <p>New notifications show up here.</p>
             }
+            <p>
+              <a routerLink="/alerts">Watch a company</a> to hear about new openings within 30
+              minutes.
+            </p>
           }
         }
       </div>

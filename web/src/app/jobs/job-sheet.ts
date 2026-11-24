@@ -81,7 +81,8 @@ const workspaceTabs = [
 ] as const;
 
 /** What the workspace shows: an existing job, or a new one in a status. */
-export type SheetTarget = { id: string } | { new: true; statusId?: string };
+/** A new job may start from a posting link (a job alert's "Save"), which is read at once. */
+export type SheetTarget = { id: string } | { new: true; statusId?: string; url?: string };
 
 interface Form {
   status_id: string;
@@ -574,6 +575,10 @@ export class JobSheet {
           this.store.statuses()[0]?.id ??
           '',
       );
+      if (t.url) {
+        this.form.url = t.url;
+        void this.continueFromLink();
+      }
       return;
     }
     this.isNew.set(false);

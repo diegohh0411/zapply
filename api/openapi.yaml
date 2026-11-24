@@ -1756,7 +1756,8 @@ paths:
       description: >
         The member's notifications, newest first. `view` is `inbox` (default:
         everything not archived), `unread` (unread and not archived) or
-        `archived`. Today every notification is `mail`, carried in `mail`.
+        `archived`. A `mail` notification carries `mail`; a `job_alert`
+        notification carries `job_alert`.
       parameters:
         - name: kind
           in: query
@@ -1782,7 +1783,7 @@ paths:
     get:
       operationId: getNotificationSummary
       tags: [notifications]
-      description: How many inbox notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events.
+      description: How many inbox notifications are unread. Refetch on `notification.updated` (also sent when job alerts arrive) and `mail.message.classified` events.
       responses:
         "200":
           description: The summary.
@@ -1830,6 +1831,69 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NotificationSummary" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/job-watches:
+    get:
+      operationId: listJobWatches
+      tags: [job-alerts]
+      description: >
+        The job boards the member watches, newest first. The worker reads each
+        board every 30 minutes and files a `job_alert` notification for every
+        new posting that matches the watch's filters.
+      responses:
+        "200":
+          description: The watches.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobWatchList" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createJobWatch
+      tags: [job-alerts]
+      description: >
+        Starts watching the Greenhouse, Lever or Ashby board a careers link
+        names. The board is read once to check it exists (422 on `url`
+        otherwise); what is open now is not announced, only what opens later.
+        Watching a board twice answers 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobWatchInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobWatch" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/job-watches/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      operationId: updateJobWatch
+      tags: [job-alerts]
+      description: Changes the name, filters or pause of a watch; omitted fields stay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobWatchPatch" }
+      responses:
+        "200":
+          description: The updated watch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobWatch" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteJobWatch
+      tags: [job-alerts]
+      description: Stops watching the board, removing its alerts.
+      responses:
+        "204": { description: Deleted. }
         default: { $ref: "#/components/responses/Problem" }
 
 components:
@@ -3167,10 +3231,10 @@ components:
 
     NotificationKind:
       type: string
-      enum: [mail]
+      enum: [mail, job_alert]
     Notification:
       type: object
-      required: [id, kind, occurred_at, read_at, archived_at, mail]
+      required: [id, kind, occurred_at, read_at, archived_at, mail, job_alert]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/NotificationKind' }
@@ -3181,6 +3245,65 @@ components:
           nullable: true
           description: Set when `kind` is `mail`.
           allOf: [{ $ref: '#/components/schemas/MailMessage' }]
+        job_alert:
+          nullable: true
+          description: Set when `kind` is `job_alert`.
+          allOf: [{ $ref: '#/components/schemas/JobAlert' }]
+    JobAlert:
+      type: object
+      description: A new posting on a watched board that matched its filters.
+      required: [id, watch_id, company, title, location, url, remote, published_at, found_at]
+      properties:
+        id: { type: string, format: uuid }
+        watch_id: { type: string, format: uuid }
+        company: { type: string }
+        title: { type: string }
+        location: { type: string }
+        url: { type: string, description: The posting on the employer's board. }
+        remote: { type: boolean }
+        published_at: { type: string, format: date-time, nullable: true, description: When the ATS says it was published. }
+        found_at: { type: string, format: date-time }
+    JobAts:
+      type: string
+      enum: [greenhouse, lever, ashby]
+    JobWatch:
+      type: object
+      required: [id, ats, board, board_url, company, keywords, locations, remote_only, paused, last_checked_at, last_error, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        ats: { $ref: '#/components/schemas/JobAts' }
+        board: { type: string, description: The employer's board slug. }
+        board_url: { type: string }
+        company: { type: string }
+        keywords: { type: array, items: { type: string }, description: A posting matches when its title contains any (empty matches all). }
+        locations: { type: array, items: { type: string }, description: A posting matches when its location contains any (empty matches all). }
+        remote_only: { type: boolean }
+        paused: { type: boolean }
+        last_checked_at: { type: string, format: date-time, nullable: true, description: The board's last successful read. }
+        last_error: { type: string, description: Why the last read failed, or empty. }
+        created_at: { type: string, format: date-time }
+    JobWatchList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/JobWatch' } }
+    JobWatchInput:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 2048, description: "A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one." }
+        company: { type: string, maxLength: 200, description: Defaults to the name the board publishes, or one made from its slug. }
+        keywords: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
+        locations: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
+        remote_only: { type: boolean }
+    JobWatchPatch:
+      type: object
+      properties:
+        company: { type: string, maxLength: 200 }
+        keywords: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
+        locations: { type: array, maxItems: 20, items: { type: string, maxLength: 100 } }
+        remote_only: { type: boolean }
+        paused: { type: boolean }
     NotificationPage:
       type: object
       required: [items]

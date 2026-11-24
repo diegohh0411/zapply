@@ -256,6 +256,27 @@ func (e JobActivityType) Valid() bool {
 	}
 }
 
+// Defines values for JobAts.
+const (
+	Ashby      JobAts = "ashby"
+	Greenhouse JobAts = "greenhouse"
+	Lever      JobAts = "lever"
+)
+
+// Valid indicates whether the value is a known member of the JobAts enum.
+func (e JobAts) Valid() bool {
+	switch e {
+	case Ashby:
+		return true
+	case Greenhouse:
+		return true
+	case Lever:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for JobSort.
 const (
 	MinusCreatedAt JobSort = "-created_at"
@@ -594,12 +615,15 @@ func (e ModelSettingsSummaryReasoningEffort) Valid() bool {
 
 // Defines values for NotificationKind.
 const (
-	NotificationKindMail NotificationKind = "mail"
+	NotificationKindJobAlert NotificationKind = "job_alert"
+	NotificationKindMail     NotificationKind = "mail"
 )
 
 // Valid indicates whether the value is a known member of the NotificationKind enum.
 func (e NotificationKind) Valid() bool {
 	switch e {
+	case NotificationKindJobAlert:
+		return true
 	case NotificationKindMail:
 		return true
 	default:
@@ -1446,6 +1470,26 @@ type JobActivity struct {
 // JobActivityType defines model for JobActivityType.
 type JobActivityType string
 
+// JobAlert A new posting on a watched board that matched its filters.
+type JobAlert struct {
+	Company  string             `json:"company"`
+	FoundAt  time.Time          `json:"found_at"`
+	Id       openapi_types.UUID `json:"id"`
+	Location string             `json:"location"`
+
+	// PublishedAt When the ATS says it was published.
+	PublishedAt *time.Time `json:"published_at"`
+	Remote      bool       `json:"remote"`
+	Title       string     `json:"title"`
+
+	// Url The posting on the employer's board.
+	Url     string             `json:"url"`
+	WatchId openapi_types.UUID `json:"watch_id"`
+}
+
+// JobAts defines model for JobAts.
+type JobAts string
+
 // JobInput defines model for JobInput.
 type JobInput struct {
 	// AppliedOn Set automatically the first time the job enters an active or offer stage.
@@ -1581,6 +1625,58 @@ type JobViewInput struct {
 
 // JobViewLayout defines model for JobViewLayout.
 type JobViewLayout string
+
+// JobWatch defines model for JobWatch.
+type JobWatch struct {
+	Ats JobAts `json:"ats"`
+
+	// Board The employer's board slug.
+	Board     string             `json:"board"`
+	BoardUrl  string             `json:"board_url"`
+	Company   string             `json:"company"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Keywords A posting matches when its title contains any (empty matches all).
+	Keywords []string `json:"keywords"`
+
+	// LastCheckedAt The board's last successful read.
+	LastCheckedAt *time.Time `json:"last_checked_at"`
+
+	// LastError Why the last read failed
+	LastError string `json:"last_error"`
+
+	// Locations A posting matches when its location contains any (empty matches all).
+	Locations  []string `json:"locations"`
+	Paused     bool     `json:"paused"`
+	RemoteOnly bool     `json:"remote_only"`
+}
+
+// JobWatchInput defines model for JobWatchInput.
+type JobWatchInput struct {
+	// Company Defaults to the name the board publishes
+	Company    *string   `json:"company,omitempty"`
+	Keywords   *[]string `json:"keywords,omitempty"`
+	Locations  *[]string `json:"locations,omitempty"`
+	RemoteOnly *bool     `json:"remote_only,omitempty"`
+
+	// Url A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one.
+	Url string `json:"url"`
+}
+
+// JobWatchList defines model for JobWatchList.
+type JobWatchList struct {
+	Items []JobWatch `json:"items"`
+}
+
+// JobWatchPatch defines model for JobWatchPatch.
+type JobWatchPatch struct {
+	Company    *string   `json:"company,omitempty"`
+	Keywords   *[]string `json:"keywords,omitempty"`
+	Locations  *[]string `json:"locations,omitempty"`
+	Paused     *bool     `json:"paused,omitempty"`
+	RemoteOnly *bool     `json:"remote_only,omitempty"`
+}
 
 // KeyActivationInput defines model for KeyActivationInput.
 type KeyActivationInput struct {
@@ -1875,7 +1971,10 @@ type ModelSettingsSummaryReasoningEffort string
 type Notification struct {
 	ArchivedAt *time.Time         `json:"archived_at"`
 	Id         openapi_types.UUID `json:"id"`
-	Kind       NotificationKind   `json:"kind"`
+
+	// JobAlert Set when `kind` is `job_alert`.
+	JobAlert *JobAlert        `json:"job_alert"`
+	Kind     NotificationKind `json:"kind"`
 
 	// Mail Set when `kind` is `mail`.
 	Mail       *MailMessage `json:"mail"`
@@ -2501,6 +2600,12 @@ type CreateJobViewJSONRequestBody = JobViewInput
 // PutJobViewJSONRequestBody defines body for PutJobView for application/json ContentType.
 type PutJobViewJSONRequestBody = JobViewInput
 
+// CreateJobWatchJSONRequestBody defines body for CreateJobWatch for application/json ContentType.
+type CreateJobWatchJSONRequestBody = JobWatchInput
+
+// UpdateJobWatchJSONRequestBody defines body for UpdateJobWatch for application/json ContentType.
+type UpdateJobWatchJSONRequestBody = JobWatchPatch
+
 // CreateJobJSONRequestBody defines body for CreateJob for application/json ContentType.
 type CreateJobJSONRequestBody = JobInput
 
@@ -2701,6 +2806,18 @@ type ServerInterface interface {
 
 	// (PUT /v1/job-views/{id})
 	PutJobView(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/job-watches)
+	ListJobWatches(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/job-watches)
+	CreateJobWatch(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /v1/job-watches/{id})
+	DeleteJobWatch(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (PATCH /v1/job-watches/{id})
+	UpdateJobWatch(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (GET /v1/jobs)
 	ListJobs(w http.ResponseWriter, r *http.Request, params ListJobsParams)
@@ -4237,6 +4354,86 @@ func (siw *ServerInterfaceWrapper) PutJobView(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutJobView(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListJobWatches operation middleware
+func (siw *ServerInterfaceWrapper) ListJobWatches(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListJobWatches(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateJobWatch operation middleware
+func (siw *ServerInterfaceWrapper) CreateJobWatch(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateJobWatch(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteJobWatch operation middleware
+func (siw *ServerInterfaceWrapper) DeleteJobWatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteJobWatch(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateJobWatch operation middleware
+func (siw *ServerInterfaceWrapper) UpdateJobWatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateJobWatch(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6105,6 +6302,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notifications/summary", wrapper.GetNotificationSummary)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notifications/read", wrapper.MarkNotificationsRead)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notifications/archive", wrapper.ArchiveNotifications)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/job-watches", wrapper.ListJobWatches)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/job-watches", wrapper.CreateJobWatch)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/job-watches/{id}", wrapper.DeleteJobWatch)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/job-watches/{id}", wrapper.UpdateJobWatch)
 
 	return m
 }
@@ -7916,6 +8117,156 @@ type PutJobViewdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PutJobViewdefaultApplicationProblemPlusJSONResponse) VisitPutJobViewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJobWatchesRequestObject struct {
+}
+
+type ListJobWatchesResponseObject interface {
+	VisitListJobWatchesResponse(w http.ResponseWriter) error
+}
+
+type ListJobWatches200JSONResponse JobWatchList
+
+func (response ListJobWatches200JSONResponse) VisitListJobWatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListJobWatchesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListJobWatchesdefaultApplicationProblemPlusJSONResponse) VisitListJobWatchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateJobWatchRequestObject struct {
+	Body *CreateJobWatchJSONRequestBody
+}
+
+type CreateJobWatchResponseObject interface {
+	VisitCreateJobWatchResponse(w http.ResponseWriter) error
+}
+
+type CreateJobWatch201JSONResponse JobWatch
+
+func (response CreateJobWatch201JSONResponse) VisitCreateJobWatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateJobWatchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateJobWatchdefaultApplicationProblemPlusJSONResponse) VisitCreateJobWatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteJobWatchRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type DeleteJobWatchResponseObject interface {
+	VisitDeleteJobWatchResponse(w http.ResponseWriter) error
+}
+
+type DeleteJobWatch204Response struct {
+}
+
+func (response DeleteJobWatch204Response) VisitDeleteJobWatchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteJobWatchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteJobWatchdefaultApplicationProblemPlusJSONResponse) VisitDeleteJobWatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateJobWatchRequestObject struct {
+	Id   ID `json:"id"`
+	Body *UpdateJobWatchJSONRequestBody
+}
+
+type UpdateJobWatchResponseObject interface {
+	VisitUpdateJobWatchResponse(w http.ResponseWriter) error
+}
+
+type UpdateJobWatch200JSONResponse JobWatch
+
+func (response UpdateJobWatch200JSONResponse) VisitUpdateJobWatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateJobWatchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateJobWatchdefaultApplicationProblemPlusJSONResponse) VisitUpdateJobWatchResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10274,6 +10625,18 @@ type StrictServerInterface interface {
 	// (PUT /v1/job-views/{id})
 	PutJobView(ctx context.Context, request PutJobViewRequestObject) (PutJobViewResponseObject, error)
 
+	// (GET /v1/job-watches)
+	ListJobWatches(ctx context.Context, request ListJobWatchesRequestObject) (ListJobWatchesResponseObject, error)
+
+	// (POST /v1/job-watches)
+	CreateJobWatch(ctx context.Context, request CreateJobWatchRequestObject) (CreateJobWatchResponseObject, error)
+
+	// (DELETE /v1/job-watches/{id})
+	DeleteJobWatch(ctx context.Context, request DeleteJobWatchRequestObject) (DeleteJobWatchResponseObject, error)
+
+	// (PATCH /v1/job-watches/{id})
+	UpdateJobWatch(ctx context.Context, request UpdateJobWatchRequestObject) (UpdateJobWatchResponseObject, error)
+
 	// (GET /v1/jobs)
 	ListJobs(ctx context.Context, request ListJobsRequestObject) (ListJobsResponseObject, error)
 
@@ -11718,6 +12081,120 @@ func (sh *strictHandler) PutJobView(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutJobViewResponseObject); ok {
 		if err := validResponse.VisitPutJobViewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListJobWatches operation middleware
+func (sh *strictHandler) ListJobWatches(w http.ResponseWriter, r *http.Request) {
+	var request ListJobWatchesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListJobWatches(ctx, request.(ListJobWatchesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListJobWatches")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListJobWatchesResponseObject); ok {
+		if err := validResponse.VisitListJobWatchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateJobWatch operation middleware
+func (sh *strictHandler) CreateJobWatch(w http.ResponseWriter, r *http.Request) {
+	var request CreateJobWatchRequestObject
+
+	var body CreateJobWatchJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateJobWatch(ctx, request.(CreateJobWatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateJobWatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateJobWatchResponseObject); ok {
+		if err := validResponse.VisitCreateJobWatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteJobWatch operation middleware
+func (sh *strictHandler) DeleteJobWatch(w http.ResponseWriter, r *http.Request, id ID) {
+	var request DeleteJobWatchRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteJobWatch(ctx, request.(DeleteJobWatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteJobWatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteJobWatchResponseObject); ok {
+		if err := validResponse.VisitDeleteJobWatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateJobWatch operation middleware
+func (sh *strictHandler) UpdateJobWatch(w http.ResponseWriter, r *http.Request, id ID) {
+	var request UpdateJobWatchRequestObject
+
+	request.Id = id
+
+	var body UpdateJobWatchJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateJobWatch(ctx, request.(UpdateJobWatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateJobWatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateJobWatchResponseObject); ok {
+		if err := validResponse.VisitUpdateJobWatchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

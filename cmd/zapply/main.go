@@ -16,6 +16,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/diegohh0411/zapply/internal/alerts"
 	"log/slog"
 	"net"
 	"net/http"
@@ -239,12 +240,14 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 		return matcher.OnTerminal(ctx, tx, op)
 	}
+	watcher := alerts.New(st, nil)
 	runtime.AddWorkers = func(w *river.Workers) {
 		matcher.AddWorkers(w)
 		mailer.AddWorkers(w)
+		watcher.AddWorkers(w)
 	}
 	runtime.RecoverFeatures = func(ctx context.Context, c *river.Client[pgx.Tx]) error {
-		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c))
+		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c), watcher.Recover(ctx, c))
 	}
 	summaries := render.NewService(st, nil)
 	// Woken by dirty cv_summary rows, with a slow poll as fallback. The

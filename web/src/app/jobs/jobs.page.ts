@@ -89,8 +89,9 @@ export class JobsPage {
   private readonly toast = inject(ZardSonnerService);
   private readonly confirm = inject(ConfirmService);
 
-  /** ?job=<id> opens a job; ?job=new a blank one. ?view=<id> selects a saved view. */
+  /** ?job=<id> opens a job; ?job=new a blank one (?url= starts it from a posting link). ?view=<id> selects a saved view. */
   readonly job = input<string>();
+  readonly url = input<string>();
   readonly view = input<string>();
   readonly tab = input<string>();
 
@@ -179,7 +180,9 @@ export class JobsPage {
           this.sheetOpen.set(false);
           return;
         }
-        this.sheetTarget.set(id === 'new' ? { new: true, statusId: this.newInStatus } : { id });
+        this.sheetTarget.set(
+          id === 'new' ? { new: true, statusId: this.newInStatus, url: this.url() } : { id },
+        );
         this.sheetOpen.set(true);
       });
     });
@@ -348,7 +351,7 @@ export class JobsPage {
     this.sheetOpen.set(v);
     if (!v)
       void this.router.navigate([], {
-        queryParams: { job: null, tab: null },
+        queryParams: { job: null, tab: null, url: null },
         queryParamsHandling: 'merge',
       });
   }
