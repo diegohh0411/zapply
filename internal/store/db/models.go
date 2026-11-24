@@ -862,6 +862,20 @@ type JobActivity struct {
 	UpdatedAt  time.Time
 }
 
+type JobAlert struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	WatchID     uuid.UUID
+	PostingKey  string
+	Company     string
+	Title       string
+	Location    string
+	Url         string
+	Remote      bool
+	PublishedAt *time.Time
+	FoundAt     time.Time
+}
+
 type JobStatus struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
@@ -884,6 +898,21 @@ type JobView struct {
 	Position  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type JobWatch struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Ats        string
+	Board      string
+	Company    string
+	Keywords   []string
+	Locations  []string
+	RemoteOnly bool
+	Paused     bool
+	Version    int32
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type MailAccount struct {
@@ -1046,6 +1075,7 @@ type Notification struct {
 	ReadAt        *time.Time
 	ArchivedAt    *time.Time
 	CreatedAt     time.Time
+	JobAlertID    *uuid.UUID
 }
 
 type Organization struct {
@@ -1068,6 +1098,29 @@ type Outbox struct {
 	CreatedAt   time.Time
 	Seq         *int64
 	PublishedAt *time.Time
+}
+
+type PlatformAtsBoard struct {
+	Ats        string
+	Board      string
+	NextPollAt time.Time
+	LastOkAt   *time.Time
+	Failures   int32
+	LastError  string
+}
+
+type PlatformAtsPosting struct {
+	Ats         string
+	Board       string
+	PostingKey  string
+	Title       string
+	Location    string
+	Url         string
+	Remote      bool
+	PublishedAt *time.Time
+	FirstSeenAt time.Time
+	LastSeenAt  time.Time
+	Delivered   bool
 }
 
 type PlatformAudit struct {
@@ -1095,6 +1148,19 @@ type PlatformEdgeWorker struct {
 	Version       int32
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type PlatformJobWatchIndex struct {
+	WatchID    uuid.UUID
+	UserID     uuid.UUID
+	Ats        string
+	Board      string
+	Company    string
+	Keywords   []string
+	Locations  []string
+	RemoteOnly bool
+	Paused     bool
+	CreatedAt  time.Time
 }
 
 type PlatformMailAccountIndex struct {
