@@ -1243,6 +1243,20 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SearchSettings' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/search-balance:
+    get:
+      operationId: getSearchBalance
+      tags: [platform]
+      description: >
+        The team's live TheirStack API credit balance, read with the key the
+        search settings name (owner only). Reading it costs no credits.
+      responses:
+        '200':
+          description: The balance, or why it could not be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchBalance' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/edge-workers:
     get:
       operationId: listEdgeWorkers
@@ -3060,6 +3074,15 @@ components:
         max_results: { type: integer, description: The most postings one poll asks for. }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
+    SearchBalance:
+      type: object
+      required: [configured, credits, used, expires_at, error]
+      properties:
+        configured: { type: boolean, description: False when no TheirStack key is chosen. }
+        credits: { type: integer, nullable: true, description: API credits left. }
+        used: { type: integer, nullable: true, description: API credits used this billing cycle. }
+        expires_at: { type: string, format: date-time, nullable: true, description: When the earliest credits expire. }
+        error: { type: string, description: Why the balance could not be read; empty when it was. }
     SearchSettingsInput:
       type: object
       required: [key_id, credit_usd, max_results]

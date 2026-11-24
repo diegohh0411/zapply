@@ -239,3 +239,50 @@ func discoveredAt(s string) time.Time {
 
 // ErrNotConfigured answers when the owner has not set up a search provider.
 var ErrNotConfigured = errors.New("job search is not configured")
+
+// Balance is the team's TheirStack API credits.
+type Balance struct {
+	// Credits are those left to spend.
+	Credits int
+	// Used are those spent in the current billing cycle.
+	Used int
+	// Expires is when the earliest of them expire, if known.
+	Expires *time.Time
+}
+
+// Balance reads the team's API credit balance; it costs no credits.
+func (t *TheirStack) Balance(ctx context.Context, key string) (Balance, error) {
+	base := t.BaseURL
+	if base == "" {
+		base = TheirStackURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+"/v0/billing/credit-balance", nil)
+	if err != nil {
+		return Balance{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	client := t.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return Balance{}, &Error{Reason: "the job search provider did not answer"}
+	}
+	defer res.Body.Close()
+	switch {
+	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
+		return Balance{}, &Error{Reason: "the job search provider rejected its key"}
+	case res.StatusCode != http.StatusOK:
+		return Balance{}, &Error{Reason: fmt.Sprintf("the job search provider failed (%d)", res.StatusCode)}
+	}
+	var b struct {
+		APICredits         int        `json:"api_credits"`
+		UsedAPICredits     int        `json:"used_api_credits"`
+		EarliestExpiration *time.Time `json:"earliest_expiration"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&b); err != nil {
+		return Balance{}, &Error{Reason: "the job search provider's answer was unreadable"}
+	}
+	return Balance{Credits: b.APICredits, Used: b.UsedAPICredits, Expires: b.EarliestExpiration}, nil
+}

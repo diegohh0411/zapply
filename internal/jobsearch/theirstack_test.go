@@ -83,3 +83,23 @@ func TestTheirStackErrors(t *testing.T) {
 		t.Errorf("unreachable: %v", err)
 	}
 }
+
+func TestBalance(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v0/billing/credit-balance" || r.Header.Get("Authorization") != "Bearer k" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"api_credits":8200,"used_api_credits":1800,"ui_credits":50,"used_ui_credits":0,"earliest_expiration":"2026-12-24T00:00:00Z"}`))
+	}))
+	defer srv.Close()
+	ts := &TheirStack{BaseURL: srv.URL}
+	b, err := ts.Balance(context.Background(), "k")
+	if err != nil || b.Credits != 8200 || b.Used != 1800 || b.Expires == nil {
+		t.Fatalf("balance = %+v, %v", b, err)
+	}
+	var e *Error
+	if _, err := ts.Balance(context.Background(), "bad"); !errors.As(err, &e) {
+		t.Fatalf("bad key err = %v", err)
+	}
+}

@@ -31,6 +31,7 @@ import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { ConfirmService } from '../core/confirm.service';
 import { relativeTime } from '../mail/format';
+import { TagInput } from '../shared/tag-input';
 import { usageUsd } from '../usage/format';
 
 type Watch = Schemas['JobWatch'];
@@ -40,8 +41,14 @@ type WatchList = Schemas['JobWatchList'];
 const watchesKey = (identity: string | null) => ['job-watches', identity] as const;
 type Every = 1 | 2 | 6 | 24;
 
-const everyLabel: Record<Every, string> = { 1: 'Every hour', 2: 'Every 2 hours', 6: 'Every 6 hours', 24: 'Once a day' };
-const asEvery = (v: unknown): Every => (v === 1 || v === 6 || v === 24 || v === '1' || v === '6' || v === '24' ? (Number(v) as Every) : 2);
+const everyLabel: Record<Every, string> = {
+  1: 'Every hour',
+  2: 'Every 2 hours',
+  6: 'Every 6 hours',
+  24: 'Once a day',
+};
+const asEvery = (v: unknown): Every =>
+  v === 1 || v === 6 || v === 24 || v === '1' || v === '6' || v === '24' ? (Number(v) as Every) : 2;
 
 /** Why a due search did not run, in the member's terms. */
 const blockedLabel: Record<string, string> = {
@@ -59,20 +66,12 @@ const atsLabel: Record<string, string> = {
   ashby: 'Ashby',
 };
 
-/** "react, go , ,backend" → ["react", "go", "backend"] */
-function splitTerms(s: string): string[] {
-  return s
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
 interface Draft {
   kind: 'board' | 'search';
   url: string;
   company: string;
-  keywords: string;
-  locations: string;
+  keywords: string[];
+  locations: string[];
   country: string;
   every: Every;
   remoteOnly: boolean;
@@ -82,8 +81,8 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
   kind,
   url: '',
   company: '',
-  keywords: '',
-  locations: '',
+  keywords: [],
+  locations: [],
   country: '',
   every: 2,
   remoteOnly: false,
@@ -104,6 +103,7 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
     ZardButtonComponent,
     ZardInputComponent,
     ZardPageComponent,
+    TagInput,
     ...ZardSelectImports,
   ],
   providers: [
@@ -131,7 +131,13 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
     >
         @if (!formOpen()) {
           <div actions class="flex flex-wrap gap-2">
-            <button z-button zType="outline" [zDisabled]="list.isPending() || !canSearch()" [title]="searchNote()" (click)="openForm('search')">
+            <button
+              z-button
+              zType="outline"
+              [zDisabled]="list.isPending() || !canSearch()"
+              [title]="searchNote()"
+              (click)="openForm('search')"
+            >
               <ng-icon name="lucideSearch" />Search across companies
             </button>
             <button z-button [zDisabled]="list.isPending()" (click)="openForm('board')">
@@ -142,7 +148,9 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
       @if (allowance(); as a) {
         @if (a.allowed > 0 || a.used > 0) {
           <p subtitle class="mt-3 text-xs text-muted-foreground">
-            Search watchers: {{ a.used }} of {{ a.allowed }} on your plan.{{ a.available ? '' : " Job search isn't set up on this server yet." }}
+            Search watchers: {{ a.used }} of {{ a.allowed }} on your plan.{{
+              a.available ? '' : " Job search isn't set up on this server yet."
+            }}
           </p>
         }
       }
@@ -172,12 +180,19 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
           aria-labelledby="watch-form-title"
         >
           <h2 id="watch-form-title" class="text-sm font-semibold">
-            {{ editing() ? 'Edit ' + editing()!.company : draft.kind === 'search' ? 'Search across companies' : 'Watch a company' }}
+            {{
+              editing()
+                ? 'Edit ' + editing()!.company
+                : draft.kind === 'search'
+                  ? 'Search across companies'
+                  : 'Watch a company'
+            }}
           </h2>
           @if (draft.kind === 'search' && !editing()) {
             <p class="text-sm text-muted-foreground">
               Finds new roles on LinkedIn, job boards and careers pages. Each search costs
-              {{ creditCost() }} per posting it finds, paid from your plan; a quiet search costs nothing.
+              {{ creditCost() }} per posting it finds, paid from your plan; a quiet search costs
+              nothing.
             </p>
           }
           @if (!editing() && draft.kind === 'board') {
@@ -209,45 +224,51 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
               z-input
               name="company"
               [(ngModel)]="draft.company"
-              [placeholder]="draft.kind === 'search' ? 'Taken from what you search for' : 'Taken from the board'"
+              [placeholder]="
+                draft.kind === 'search' ? 'Taken from what you search for' : 'Taken from the board'
+              "
             />
             @if (fieldError()['company']; as m) {
               <span class="text-xs text-destructive">{{ m }}</span>
             }
           </label>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="grid gap-1.5 text-sm">
-              <span class="font-medium">Title keywords</span>
-              <input
-                z-input
+            <div class="grid content-start gap-1.5 text-sm">
+              <label class="font-medium" for="alert-keywords">Title keywords</label>
+              <app-tag-input
                 name="keywords"
+                inputId="alert-keywords"
+                describedBy="alert-keywords-help"
                 [(ngModel)]="draft.keywords"
-                placeholder="engineer, backend"
+                [invalid]="!!fieldError()['keywords']"
+                placeholder="Type a title, then Enter"
               />
-              <span class="text-xs text-muted-foreground">{{
+              <span id="alert-keywords-help" class="text-xs text-muted-foreground">{{
                 draft.kind === 'search'
-                  ? 'Comma-separated, at least one. A title matches when it has every word of one.'
-                  : 'Comma-separated. Empty alerts on every opening.'
+                  ? 'Press Enter or comma to add each. At least one; a title matches when it has every word of one.'
+                  : 'Press Enter or comma to add each. A title matches when it has every word of one; none alerts on every opening.'
               }}</span>
               @if (fieldError()['keywords']; as m) {
                 <span class="text-xs text-destructive">{{ m }}</span>
               }
-            </label>
-            <label class="grid gap-1.5 text-sm">
-              <span class="font-medium">Locations</span>
-              <input
-                z-input
+            </div>
+            <div class="grid content-start gap-1.5 text-sm">
+              <label class="font-medium" for="alert-locations">Locations</label>
+              <app-tag-input
                 name="locations"
+                inputId="alert-locations"
+                describedBy="alert-locations-help"
                 [(ngModel)]="draft.locations"
-                placeholder="New York, Mexico"
+                [invalid]="!!fieldError()['locations']"
+                placeholder="Type a city or country, then Enter"
               />
-              <span class="text-xs text-muted-foreground"
-                >Comma-separated. Empty matches anywhere.</span
+              <span id="alert-locations-help" class="text-xs text-muted-foreground"
+                >Press Enter or comma to add each. None matches anywhere.</span
               >
               @if (fieldError()['locations']; as m) {
                 <span class="text-xs text-destructive">{{ m }}</span>
               }
-            </label>
+            </div>
           </div>
           @if (draft.kind === 'search') {
             <div class="grid gap-4 sm:grid-cols-2">
@@ -263,14 +284,21 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
                   maxlength="2"
                   autocapitalize="characters"
                 />
-                <span class="text-xs text-muted-foreground">A two-letter code, such as MX or US.</span>
+                <span class="text-xs text-muted-foreground"
+                  >A two-letter code, such as MX or US.</span
+                >
                 @if (fieldError()['country']; as m) {
                   <span class="text-xs text-destructive">{{ m }}</span>
                 }
               </label>
               <div class="grid gap-1.5 text-sm">
                 <span class="font-medium">How often</span>
-                <z-select aria-label="How often" name="every" [ngModel]="'' + draft.every" (ngModelChange)="draft.every = every($event)">
+                <z-select
+                  aria-label="How often"
+                  name="every"
+                  [ngModel]="'' + draft.every"
+                  (ngModelChange)="draft.every = every($event)"
+                >
                   @for (n of intervals; track n) {
                     <z-select-item [zValue]="'' + n">{{ intervalLabel(n) }}</z-select-item>
                   }
@@ -294,7 +322,9 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
           <div class="flex justify-end gap-2">
             <button z-button zType="ghost" type="button" (click)="closeForm()">Cancel</button>
             <button z-button type="submit" [zLoading]="saving()">
-              {{ editing() ? 'Save' : draft.kind === 'search' ? 'Start searching' : 'Start watching' }}
+              {{
+                editing() ? 'Save' : draft.kind === 'search' ? 'Start searching' : 'Start watching'
+              }}
             </button>
           </div>
         </form>
@@ -322,7 +352,9 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
                     Paused: not being checked
                   } @else if (w.blocked_reason) {
                     <ng-icon name="lucideTriangleAlert" class="text-amber-600" aria-hidden="true" />
-                    <span class="text-amber-700 dark:text-amber-400">{{ blocked(w.blocked_reason) }}</span>
+                    <span class="text-amber-700 dark:text-amber-400">{{
+                      blocked(w.blocked_reason)
+                    }}</span>
                   } @else if (w.last_error) {
                     <ng-icon name="lucideTriangleAlert" class="text-amber-600" aria-hidden="true" />
                     <span class="text-amber-700 dark:text-amber-400">{{ w.last_error }}</span>
@@ -335,7 +367,8 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
                   }
                   @if (w.kind === 'search') {
                     <span aria-hidden="true">·</span>
-                    {{ intervalLabel(w.every_hours ?? 2) }} · {{ money(w.spent_30d_usd) }} in the last 30 days
+                    {{ intervalLabel(w.every_hours ?? 2) }} · {{ money(w.spent_30d_usd) }} in the
+                    last 30 days
                   }
                 </p>
               </div>
@@ -499,8 +532,8 @@ export class AlertsPage {
       kind: w.kind,
       url: w.board_url ?? '',
       company: w.company,
-      keywords: w.keywords.join(', '),
-      locations: w.locations.join(', '),
+      keywords: [...w.keywords],
+      locations: [...w.locations],
       country: w.country ?? '',
       every: asEvery(w.every_hours),
       remoteOnly: w.remote_only,
@@ -531,10 +564,12 @@ export class AlertsPage {
       editing = this.editing();
     const body = {
       company: d.company.trim() || undefined,
-      keywords: splitTerms(d.keywords),
-      locations: splitTerms(d.locations),
+      keywords: d.keywords,
+      locations: d.locations,
       remote_only: d.remoteOnly,
-      ...(d.kind === 'search' ? { country: d.country.trim().toUpperCase(), every_hours: d.every } : {}),
+      ...(d.kind === 'search'
+        ? { country: d.country.trim().toUpperCase(), every_hours: d.every }
+        : {}),
     };
     this.saving.set(true);
     this.fieldError.set({});

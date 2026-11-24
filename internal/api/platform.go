@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/diegohh0411/zapply/internal/api/gen"
 	"github.com/diegohh0411/zapply/internal/httpx"
+	"github.com/diegohh0411/zapply/internal/jobsearch"
 	"github.com/diegohh0411/zapply/internal/membership"
 	"github.com/google/uuid"
 )
@@ -194,4 +196,20 @@ func (s *server) PutSearchSettings(ctx context.Context, req gen.PutSearchSetting
 		return nil, err
 	}
 	return gen.PutSearchSettings200JSONResponse(v), nil
+}
+
+// GetSearchBalance reads the team's TheirStack credit balance (owner only). A
+// provider failure is reported in the body, so the settings page still loads.
+func (s *server) GetSearchBalance(ctx context.Context, _ gen.GetSearchBalanceRequestObject) (gen.GetSearchBalanceResponseObject, error) {
+	b, err := s.members.SearchBalance(ctx, uid(ctx), &jobsearch.TheirStack{})
+	var pe *jobsearch.Error
+	switch {
+	case errors.As(err, &pe):
+		return gen.GetSearchBalance200JSONResponse{Configured: true, Error: pe.Reason}, nil
+	case err != nil:
+		return nil, err
+	case b == nil:
+		return gen.GetSearchBalance200JSONResponse{}, nil
+	}
+	return gen.GetSearchBalance200JSONResponse{Configured: true, Credits: &b.Credits, Used: &b.Used, ExpiresAt: b.Expires}, nil
 }
