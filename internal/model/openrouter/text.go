@@ -67,7 +67,7 @@ func (c *Client) TextEndpoints(ctx context.Context, model string) ([]TextEndpoin
 		if e.Tag == "" || seen[e.Tag] || e.Context <= 0 || !slices.Contains(e.Supported, "max_tokens") || (e.MaxOutput != nil && *e.MaxOutput < 1) {
 			continue
 		}
-		sheet := billing.Sheet{OutputEnforced: true}
+		sheet := billing.Sheet{OutputEnforced: true, Context: e.Context}
 		if price(&sheet, e.Pricing) != "" {
 			continue
 		}

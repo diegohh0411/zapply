@@ -51,13 +51,14 @@ func TestTextEndpointsAcceptsOpenRouterAliases(t *testing.T) {
 		if r.URL.Path != "/models/~openai/gpt-luna-latest/endpoints" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"endpoints": []any{map[string]any{"tag": "openai", "context_length": 1000, "max_completion_tokens": 256, "supported_parameters": []string{"max_tokens"}, "pricing": map[string]string{"prompt": "0.00001", "completion": "0.00002"}}}}})
+		// OpenRouter's router alias lists no providers of its own.
+		json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"endpoints": []any{}}})
 	}))
 	defer server.Close()
 	c := New("", "")
 	c.BaseURL = server.URL
 	endpoints, err := c.TextEndpoints(context.Background(), "~openai/gpt-luna-latest")
-	if err != nil || len(endpoints) != 1 || endpoints[0].Tag != "openai" {
+	if err != nil || len(endpoints) != 0 {
 		t.Fatalf("endpoints=%+v err=%v", endpoints, err)
 	}
 }
