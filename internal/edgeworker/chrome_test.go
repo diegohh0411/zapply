@@ -7,31 +7,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 )
 
-// chromeBinary finds a Chrome for the browser tests, which are skipped without
-// one: ZAPPLY_EDGE_TEST_CHROME names it, else the usual install locations.
+// chromeBinary returns the Chrome the browser tests run, named by
+// ZAPPLY_EDGE_TEST_CHROME. The tests are opt-in: a Chrome found on a CI runner
+// often cannot start (its sandbox needs user namespaces the runner forbids).
 func chromeBinary(t *testing.T) string {
 	t.Helper()
-	if p := os.Getenv("ZAPPLY_EDGE_TEST_CHROME"); p != "" {
-		return p
+	p := os.Getenv("ZAPPLY_EDGE_TEST_CHROME")
+	if p == "" {
+		t.Skip("set ZAPPLY_EDGE_TEST_CHROME to a Chrome binary to run the browser tests")
 	}
-	for _, p := range []string{"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"} {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	for _, name := range []string{"chromium", "chromium-browser", "google-chrome", "chrome"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p
-		}
-	}
-	t.Skip("no Chrome found; set ZAPPLY_EDGE_TEST_CHROME")
-	return ""
+	return p
 }
 
 func TestChromeRendersWithAFreshContextPerJob(t *testing.T) {
