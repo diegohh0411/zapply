@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const ts = require('typescript');
 const { Subject } = require('rxjs');
+const { queryHarness } = require('./query-harness.cjs');
 const signal = (value) =>
   Object.assign(() => value, {
     set: (next) => {
@@ -86,16 +87,21 @@ function fixture(
   compile = async () => ({ pages: 1, pdf: new Uint8Array([37, 80, 68, 70]) }),
 ) {
   const auth = { identity: signal('alice') };
+  const queries = queryHarness();
   const effects = [];
   let destroy;
   // The server keeps the fit the browser reports and returns it with each preview.
   const reported = { fit: null };
   const api = {
     ...client,
-    GET: client.GET && (async (path, request) => {
-      const r = await client.GET(path, request);
-      return path.endsWith('/cv') && r.data ? { ...r, data: { ...r.data, fit: reported.fit } } : r;
-    }),
+    GET:
+      client.GET &&
+      (async (path, request) => {
+        const r = await client.GET(path, request);
+        return path.endsWith('/cv') && r.data
+          ? { ...r, data: { ...r.data, fit: reported.fit } }
+          : r;
+      }),
     PUT: async (path, request) => {
       if (!path.endsWith('/fit')) return client.PUT(path, request);
       reported.fit = { dropped: request.body.dropped };
@@ -113,6 +119,7 @@ function fixture(
     DestroyRef,
     inject: (token) => {
       if (token === AuthService) return auth;
+      if (token === queries.QueryClientToken) return queries.client;
       if (token === EventsService) return { changes: new Subject(), resync: new Subject() };
       if (token === TypstService) return { compile, preload() {} };
       if (token === DomSanitizer) return { bypassSecurityTrustResourceUrl: (url) => url };
@@ -130,6 +137,7 @@ function fixture(
     if (name === '@angular/core') return core;
     if (name === '@angular/core/rxjs-interop') return { takeUntilDestroyed: () => (x) => x };
     if (name === '@angular/platform-browser') return { DomSanitizer };
+    if (name === '@tanstack/angular-query') return queries.tanstack;
     if (name.endsWith('/api')) return { Api, ApiError };
     if (name.endsWith('/auth.service')) return { AuthService };
     if (name.endsWith('/events.service')) return { EventsService };
@@ -356,7 +364,11 @@ test('summary failures distinguish length validation from empty model output', (
     summary_reason: 'summary_empty_output',
   });
   assert.match(f.tab.summaryMessage(), /returned no summary text/);
-  f.tab.preview.set({ ...preview(1), summary_status: 'failed', summary_reason: 'summary_row_limit' });
+  f.tab.preview.set({
+    ...preview(1),
+    summary_status: 'failed',
+    summary_reason: 'summary_row_limit',
+  });
   assert.match(f.tab.summaryMessage(), /didn’t fit its rows/);
 });
 
