@@ -8,6 +8,8 @@ const root = require('node:path').resolve(__dirname, '../..');
 const test = require('node:test');
 const ts = require(root + '/web/node_modules/typescript');
 const { Subject } = require(root + '/web/node_modules/rxjs');
+const { queryHarness } = require('./query-harness.cjs');
+let queries = queryHarness();
 function signal(v) {
   const s = () => v;
   s.set = (x) => (v = x);
@@ -44,6 +46,7 @@ const core = {
   ChangeDetectorRef,
   inject(token) {
     if (token === AuthService) return currentAuth;
+    if (token === queries.QueryClientToken) return queries.client;
     if (token === Api) return { client: apiClient };
     if (token === EventsService) return currentEvents;
     if (token === JobsStoreToken) return currentStore;
@@ -81,11 +84,16 @@ function load(file, names) {
     if (name === '@angular/core') return core;
     if (name === '@angular/core/rxjs-interop') return { takeUntilDestroyed: () => (s) => s };
     if (name === 'rxjs') return { Subject };
+    if (name === '@tanstack/angular-query') return queries.tanstack;
     if (name.endsWith('/auth.service')) return { AuthService };
     if (name.endsWith('/api'))
       return { Api, etagOf: (r) => r.response.headers.get('ETag'), ApiError: Error };
     if (name.endsWith('/events.service')) return { EventsService };
-    if (name.endsWith('/jobs.store')) return { JobsStore: JobsStoreToken };
+    if (name.endsWith('/jobs.store'))
+      return {
+        JobsStore: JobsStoreToken,
+        jobActivitiesKey: (identity, id) => ['job-activities', identity, id],
+      };
     if (name.endsWith('/confirm.service')) return { ConfirmService };
     // Plain data and parsing helpers: the sheet builds its options from them.
     if (name === './format') return load('web/src/app/jobs/format.ts');
@@ -136,82 +144,147 @@ const job = (version = 1, id = 'j') => ({
 
 const tick = () => new Promise((r) => setImmediate(r));
 function setup(client) {
+  queries.client.clear();
   currentAuth.identity.set('alice');
   currentEvents = events();
   apiClient = client;
   return new JobsStore();
 }
+const until = async (check) => {
+  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+  assert.ok(check(), 'condition not reached');
+};
+/** Loads the board and waits for its first list. */
+async function loaded(store) {
+  store.ensureLoaded();
+  await until(() => !store.loading());
+}
 
-test('account switch clears all caches and rejects prior-account responses', async () => {
-  let account = 'alice';
-  const pending = deferred();
-  let delayed = false;
+test('each member reads their own cached board and a late old-account list stays theirs', async () => {
+  const late = deferred();
   const store = setup({
     GET: async (path) =>
       path === '/v1/jobs'
-        ? delayed
-          ? pending.promise
-          : ok({ items: [job(1, account)] })
-        : ok([{ id: account }]),
+        ? currentAuth.identity() === 'alice'
+          ? late.promise
+          : ok({ items: [job(1, 'bob')] })
+        : ok([{ id: currentAuth.identity() }]),
   });
-  await store.ensureLoaded();
-  assert.equal(store.jobs()[0].id, 'alice');
-  delayed = true;
-  const old = store.load();
+  store.ensureLoaded();
+  store.jobs();
   currentAuth.identity.set('bob');
-  account = 'bob';
-  delayed = false;
-  await store.ensureLoaded();
-  assert.equal(store.jobs()[0].id, 'bob');
-  pending.resolve(ok({ items: [job(9, 'alice')] }));
-  await old;
-  assert.equal(store.jobs().length, 1);
-  assert.equal(store.jobs()[0].id, 'bob');
+  await until(() => store.jobs().length === 1 && store.statuses().length && store.views().length);
+  late.resolve(ok({ items: [job(9, 'alice')] }));
+  await tick();
+  assert.equal(
+    store
+      .jobs()
+      .map((j) => j.id)
+      .join(),
+    'bob',
+  );
   assert.equal(store.statuses()[0].id, 'bob');
   assert.equal(store.views()[0].id, 'bob');
   currentAuth.identity.set(null);
-  store.syncSession(); // the identity effect invokes this at sign-out
   assert.equal(store.jobs().length, 0);
   assert.equal(store.statuses().length, 0);
   assert.equal(store.views().length, 0);
 });
 
-test('late lists and moves preserve newer events and deleted jobs', async () => {
-  const list = deferred(),
-    moved = deferred();
+test('a move shows at once, a late list cannot undo it, and a deletion removes the job', async () => {
+  let list = Promise.resolve(ok({ items: [job(1)] }));
+  const moved = deferred();
   const store = setup({
-    GET: async (path) =>
-      path === '/v1/jobs' ? list.promise : path === '/v1/jobs/{id}' ? ok(job(3)) : ok([]),
+    GET: async (path) => (path === '/v1/jobs' ? list : ok([])),
     POST: async () => moved.promise,
   });
-  const loading = store.load();
-  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 3 } });
+  await loaded(store);
+  const late = deferred();
+  list = late.promise;
+  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 2 } });
   await tick();
-  list.resolve(ok({ items: [job(1)] }));
-  await loading;
-  assert.equal(store.jobs()[0].version, 3);
   const move = store.move('j', 'active');
-  store.upsert(job(5));
-  moved.resolve(ok(job(4)));
+  await until(() => store.jobs()[0].status_id === 'active');
+  late.resolve(ok({ items: [job(2)] }));
+  await tick();
+  assert.equal(store.jobs()[0].status_id, 'active');
+  moved.resolve(ok({ ...job(4), status_id: 'active' }));
   await move;
-  assert.equal(store.jobs()[0].version, 5);
-  store.upsert({ ...job(4), archived: true });
-  assert.equal(store.jobs()[0].version, 5);
-  store.upsert({ ...job(6), archived: true });
-  store.upsert(job(5));
-  assert.equal(store.jobs().length, 0);
+  assert.equal(store.jobs()[0].version, 4);
   currentEvents.changes.next({ topic: 'job.deleted', data: { id: 'j' } });
-  store.upsert(job(10));
+  await until(() => store.jobs().length === 0);
+});
+
+test('an event during paging wins over the late list it replaces', async () => {
+  const stale = deferred();
+  let lists = 0;
+  const store = setup({
+    GET: async (path) =>
+      path === '/v1/jobs' ? (++lists === 1 ? stale.promise : ok({ items: [job(3)] })) : ok([]),
+  });
+  store.ensureLoaded();
+  store.jobs();
+  await tick();
+  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 3 } });
+  await until(() => store.jobs()[0]?.version === 3);
+  stale.resolve(ok({ items: [job(1)] }));
+  await tick();
+  assert.equal(store.jobs()[0].version, 3);
+});
+
+test('older mutation responses cannot replace a newer copy of the job', async () => {
+  let items = [job(1)];
+  const responses = [];
+  const store = setup({
+    GET: async (path) => (path === '/v1/jobs' ? ok({ items }) : ok([])),
+    POST: async () => ok(responses.shift()),
+  });
+  await loaded(store);
+  items = [job(5)];
+  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 5 } });
+  await until(() => store.jobs()[0]?.version === 5);
+  responses.push({ ...job(4), status_id: 'active' });
+  await store.move('j', 'active');
+  assert.equal(store.jobs()[0].version, 5);
+  responses.push({ ...job(4), archived: true });
+  await store.setArchived('j', true);
+  assert.equal(store.jobs().length, 1, 'an older archive response leaves the newer job listed');
+  responses.push({ ...job(6), archived: true });
+  await store.setArchived('j', true);
+  assert.equal(store.jobs().length, 0, 'a newer archive removes it from the unarchived list');
+});
+
+test('a late mutation response cannot resurrect a deleted job', async () => {
+  const moved = deferred();
+  const store = setup({
+    GET: async (path) => (path === '/v1/jobs' ? ok({ items: [job(1)] }) : ok([])),
+    POST: async () => moved.promise,
+  });
+  await loaded(store);
+  const move = store.move('j', 'active');
+  await tick();
+  currentEvents.changes.next({ topic: 'job.deleted', data: { id: 'j' } });
+  await until(() => store.jobs().length === 0);
+  moved.resolve(ok({ ...job(10), status_id: 'active' }));
+  await move;
   assert.equal(store.jobs().length, 0);
 });
 
 test('deletion during paging cannot be resurrected by a late list', async () => {
-  const pending = deferred();
-  const store = setup({ GET: async (path) => (path === '/v1/jobs' ? pending.promise : ok([])) });
-  const loading = store.load();
+  const stale = deferred();
+  let lists = 0;
+  const store = setup({
+    GET: async (path) =>
+      path === '/v1/jobs' ? (++lists === 1 ? stale.promise : ok({ items: [] })) : ok([]),
+  });
+  store.ensureLoaded();
+  store.jobs();
+  await tick();
   currentEvents.changes.next({ topic: 'job.deleted', data: { id: 'j' } });
-  pending.resolve(ok({ items: [job(1)] }));
-  await loading;
+  await tick();
+  stale.resolve(ok({ items: [job(1)] }));
+  await until(() => !store.loading());
+  await tick();
   assert.equal(store.jobs().length, 0);
 });
 
@@ -220,7 +293,7 @@ function sheetStore(overrides = {}) {
   currentStore = {
     jobs: signal([]),
     statuses: signal([]),
-    activityChanged: new Subject(),
+    cached: () => undefined,
     activities: async () => [],
     ...overrides,
   };
@@ -306,10 +379,13 @@ test('saved views ignore removed status IDs for both columns and jobs', () => {
 });
 
 test('resync removes jobs absent from a fresh list after missed events', async () => {
-  const store = setup({ GET: async (path) => ok(path === '/v1/jobs' ? { items: [] } : []) });
-  store.upsert(job(3));
-  await store.load();
-  assert.equal(store.jobs().length, 0);
+  let items = [job(3)];
+  const store = setup({ GET: async (path) => ok(path === '/v1/jobs' ? { items } : []) });
+  await loaded(store);
+  assert.equal(store.jobs().length, 1);
+  items = [];
+  await queries.client.invalidateQueries(); // what core/query.ts does on resync
+  await until(() => store.jobs().length === 0);
 });
 
 test('database tabs select views without opening settings and keep layout controlled', () => {
@@ -370,11 +446,6 @@ test('capture rejects blank titles, saves minimal input once, and opens the save
   assert.deepEqual(opened, ['created']);
   assert.equal(sheet.saving(), false);
 });
-
-const until = async (check) => {
-  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
-  assert.ok(check(), 'condition not reached');
-};
 
 test('a pasted link reads behind a loader and opens a form with the extraction already in it', async () => {
   const page = deferred();

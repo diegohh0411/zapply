@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const ts = require('typescript');
 const { Subject } = require('rxjs');
+const { queryHarness } = require('./query-harness.cjs');
+let queries;
 class AuthService {}
 class EventsService {}
 class StoreToken {}
@@ -26,6 +28,10 @@ class Api {
 }
 const ok = (data) => ({ data, response: { ok: true, headers: { get: () => '"1"' } } });
 const tick = () => new Promise((r) => setImmediate(r));
+const until = async (check, flush = () => {}) => {
+  for (let i = 0; i < 100 && (flush(), !check()); i++) await new Promise((r) => setTimeout(r, 5));
+  assert.ok(check(), 'condition not reached');
+};
 const job = (id, version = 1) => ({
   id,
   version,
@@ -60,9 +66,14 @@ function load(file, core) {
     if (name === '@angular/core') return core;
     if (name === '@angular/core/rxjs-interop') return { takeUntilDestroyed: () => (s) => s };
     if (name === 'rxjs') return { Subject };
+    if (name === '@tanstack/angular-query') return queries.tanstack;
     if (name.endsWith('/auth.service')) return { AuthService };
     if (name.endsWith('/events.service')) return { EventsService };
-    if (name.endsWith('/jobs.store')) return { JobsStore: StoreToken };
+    if (name.endsWith('/jobs.store'))
+      return {
+        JobsStore: StoreToken,
+        jobActivitiesKey: (identity, id) => ['job-activities', identity, id],
+      };
     if (name.endsWith('/api'))
       return { Api, ApiError, etagOf: (r) => r.response.headers.get('ETag') };
     if (name.endsWith('/sonner')) return { ZardSonnerService: Toast };
@@ -88,6 +99,7 @@ function load(file, core) {
 }
 async function fixture(t, overrides = {}) {
   const core = await import('@angular/core');
+  queries = queryHarness(core.signal);
   const pending = new Set();
   const scheduler = {
     add: (e) => pending.add(e),
@@ -116,6 +128,7 @@ async function fixture(t, overrides = {}) {
     { provide: core.ɵEffectScheduler, useValue: scheduler },
     { provide: core.ChangeDetectorRef, useValue: { markForCheck() {} } },
     { provide: AuthService, useValue: auth },
+    { provide: queries.QueryClientToken, useValue: queries.client },
     { provide: EventsService, useValue: events },
     { provide: Api, useValue: { client } },
     { provide: Toast, useValue: { error() {}, success() {}, warning() {} } },
@@ -125,14 +138,17 @@ async function fixture(t, overrides = {}) {
       useValue: {
         jobs: core.signal([]),
         statuses: core.signal([]),
-        activityChanged: new Subject(),
+        cached: () => undefined,
         get: async (id) => ({ job: job(id), etag: '"1"' }),
         activities: async () => [],
         ...overrides,
       },
     },
   ]);
-  t.after(() => injector.destroy());
+  t.after(() => {
+    injector.destroy();
+    queries.client.clear();
+  });
   return {
     core,
     auth,
@@ -147,15 +163,11 @@ test('mounted board reloads for a new principal without remount or SSE', async (
   const f = await fixture(t);
   const store = f.create('jobs/jobs.store.ts', 'JobsStore');
   f.flush();
-  await store.ensureLoaded();
-  f.flush();
-  assert.equal(store.jobs()[0].id, 'alice');
+  store.ensureLoaded();
+  await until(() => store.jobs()[0]?.id === 'alice', f.flush);
   const before = f.requests();
   f.auth.identity.set('bob');
-  f.flush();
-  await tick();
-  f.flush();
-  assert.equal(store.jobs()[0].id, 'bob');
+  await until(() => store.jobs()[0]?.id === 'bob', f.flush);
   assert.ok(f.requests() > before);
   f.auth.identity.set(null);
   f.flush();
@@ -302,10 +314,10 @@ test('a timeline error keeps the job open and can be retried', async (t) => {
   await sheet.load({ id: 'job' });
   assert.equal(sheet.visible(), true);
   assert.equal(sheet.job().id, 'job');
-  assert.equal(sheet.activityError(), 'Timeline unavailable');
+  await until(() => sheet.activityError() === 'Timeline unavailable', f.flush);
   assert.equal(sheet.activityLoading(), false);
   fail = false;
   await sheet.loadActivities('job');
+  await until(() => sheet.activities()[0]?.id === 'restored-note', f.flush);
   assert.equal(sheet.activityError(), '');
-  assert.equal(sheet.activities()[0].id, 'restored-note');
 });
