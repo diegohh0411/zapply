@@ -8,8 +8,15 @@ import (
 	"strings"
 )
 
-// KindFirecrawl is a Firecrawl v2 API.
-const KindFirecrawl = "firecrawl"
+// Scraper provider kinds.
+const (
+	// KindFirecrawl is a Firecrawl v2 API, hosted or self-hosted.
+	KindFirecrawl = "firecrawl"
+	// KindCrawl4AI is a self-hosted Crawl4AI Docker server.
+	KindCrawl4AI = "crawl4ai"
+	// KindEdge reads pages through edge workers on residential machines.
+	KindEdge = "edge"
+)
 
 // Bounds on scraper settings, matching the database's checks.
 const (
@@ -18,8 +25,9 @@ const (
 )
 
 // ProviderConfig is one scraper in the chain. KeyID names the system key sent
-// to the API ("" sends none); BaseURL is the API's address ("" is the
-// provider's hosted API).
+// to the API ("" sends none) and must be a key of the provider's own kind;
+// BaseURL is the API's address ("" is Firecrawl's hosted API; Crawl4AI has no
+// hosted API and needs one).
 type ProviderConfig struct {
 	Kind    string `json:"kind"`
 	BaseURL string `json:"base_url,omitempty"`
@@ -56,6 +64,10 @@ func (s Settings) Order(host string) []int {
 	return all
 }
 
+// ValidHostname reports whether h is a bare lowercase hostname such as
+// linkedin.com, without a scheme, port or path.
+func ValidHostname(h string) bool { return len(h) <= 253 && hostname.MatchString(h) }
+
 func normalizeHost(host string) string {
 	return strings.TrimSuffix(strings.ToLower(host), ".")
 }
@@ -78,8 +90,14 @@ func (s Settings) Validate() error {
 	}
 	for i, p := range s.Providers {
 		field := fmt.Sprintf("providers[%d]", i)
-		if p.Kind != KindFirecrawl {
+		if p.Kind != KindFirecrawl && p.Kind != KindCrawl4AI && p.Kind != KindEdge {
 			return &SettingsError{field + ".kind", "select a supported scraper"}
+		}
+		if p.Kind == KindCrawl4AI && p.BaseURL == "" {
+			return &SettingsError{field + ".base_url", "Crawl4AI has no hosted API: enter your server's address"}
+		}
+		if p.Kind == KindEdge && (p.BaseURL != "" || p.KeyID != "") {
+			return &SettingsError{field + ".base_url", "edge workers need no address or key: they pull jobs from this server"}
 		}
 		if p.BaseURL != "" {
 			u, err := url.Parse(p.BaseURL)

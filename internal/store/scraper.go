@@ -16,8 +16,8 @@ func (s *Store) ScraperSettings(ctx context.Context) (json.RawMessage, error) {
 	return raw, err
 }
 
-// ScraperKey returns a Firecrawl system key sealed as the key ring stores it.
-// ok is false when no Firecrawl key has that ID.
+// ScraperKey returns a scraper (Firecrawl or Crawl4AI) system key sealed as the
+// key ring stores it. ok is false when no scraper key has that ID.
 func (s *Store) ScraperKey(ctx context.Context, id uuid.UUID) (ciphertext []byte, version string, ok bool, err error) {
 	rows, err := s.pool.Query(ctx, `SELECT ciphertext,encryption_version FROM platform.scraper_key($1)`, id)
 	if err != nil {

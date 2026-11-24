@@ -255,7 +255,7 @@ func TestChainUnbuildableProviderFallsThrough(t *testing.T) {
 
 func TestSettingsValidate(t *testing.T) {
 	ok := Settings{
-		Providers: []ProviderConfig{{Kind: KindFirecrawl}, {Kind: KindFirecrawl, BaseURL: "http://127.0.0.1:3002"}},
+		Providers: []ProviderConfig{{Kind: KindFirecrawl}, {Kind: KindFirecrawl, BaseURL: "http://127.0.0.1:3002"}, {Kind: KindCrawl4AI, BaseURL: "http://crawl4ai:11235"}},
 		Rules:     []Rule{{Host: "linkedin.com", Providers: []int{1, 0}}, {Host: "boards.greenhouse.io", Providers: []int{0}}},
 	}
 	if err := ok.Validate(); err != nil {
@@ -268,19 +268,20 @@ func TestSettingsValidate(t *testing.T) {
 		mutate func(*Settings)
 		field  string
 	}{
-		"unknown kind":   {func(s *Settings) { s.Providers[0].Kind = "other" }, "providers[0].kind"},
-		"relative url":   {func(s *Settings) { s.Providers[1].BaseURL = "127.0.0.1:3002" }, "providers[1].base_url"},
-		"ftp url":        {func(s *Settings) { s.Providers[1].BaseURL = "ftp://example.com" }, "providers[1].base_url"},
-		"scheme in host": {func(s *Settings) { s.Rules[0].Host = "https://linkedin.com" }, "rules[0].host"},
-		"uppercase host": {func(s *Settings) { s.Rules[0].Host = "LinkedIn.com" }, "rules[0].host"},
-		"host with path": {func(s *Settings) { s.Rules[0].Host = "linkedin.com/jobs" }, "rules[0].host"},
-		"host with port": {func(s *Settings) { s.Rules[0].Host = "linkedin.com:443" }, "rules[0].host"},
-		"empty host":     {func(s *Settings) { s.Rules[0].Host = "" }, "rules[0].host"},
-		"duplicate host": {func(s *Settings) { s.Rules[1].Host = "linkedin.com" }, "rules[1].host"},
-		"no providers":   {func(s *Settings) { s.Rules[0].Providers = nil }, "rules[0].providers"},
-		"unknown ref":    {func(s *Settings) { s.Rules[0].Providers = []int{2} }, "rules[0].providers"},
-		"negative ref":   {func(s *Settings) { s.Rules[0].Providers = []int{-1} }, "rules[0].providers"},
-		"repeated ref":   {func(s *Settings) { s.Rules[0].Providers = []int{0, 0} }, "rules[0].providers"},
+		"unknown kind":              {func(s *Settings) { s.Providers[0].Kind = "other" }, "providers[0].kind"},
+		"crawl4ai needs an address": {func(s *Settings) { s.Providers[0].Kind = KindCrawl4AI }, "providers[0].base_url"},
+		"relative url":              {func(s *Settings) { s.Providers[1].BaseURL = "127.0.0.1:3002" }, "providers[1].base_url"},
+		"ftp url":                   {func(s *Settings) { s.Providers[1].BaseURL = "ftp://example.com" }, "providers[1].base_url"},
+		"scheme in host":            {func(s *Settings) { s.Rules[0].Host = "https://linkedin.com" }, "rules[0].host"},
+		"uppercase host":            {func(s *Settings) { s.Rules[0].Host = "LinkedIn.com" }, "rules[0].host"},
+		"host with path":            {func(s *Settings) { s.Rules[0].Host = "linkedin.com/jobs" }, "rules[0].host"},
+		"host with port":            {func(s *Settings) { s.Rules[0].Host = "linkedin.com:443" }, "rules[0].host"},
+		"empty host":                {func(s *Settings) { s.Rules[0].Host = "" }, "rules[0].host"},
+		"duplicate host":            {func(s *Settings) { s.Rules[1].Host = "linkedin.com" }, "rules[1].host"},
+		"no providers":              {func(s *Settings) { s.Rules[0].Providers = nil }, "rules[0].providers"},
+		"unknown ref":               {func(s *Settings) { s.Rules[0].Providers = []int{3} }, "rules[0].providers"},
+		"negative ref":              {func(s *Settings) { s.Rules[0].Providers = []int{-1} }, "rules[0].providers"},
+		"repeated ref":              {func(s *Settings) { s.Rules[0].Providers = []int{0, 0} }, "rules[0].providers"},
 	} {
 		s := Settings{Providers: append([]ProviderConfig(nil), ok.Providers...), Rules: nil}
 		for _, r := range ok.Rules {

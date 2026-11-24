@@ -13,10 +13,13 @@ type SystemKey = Schemas['SystemKey'];
 
 // What the form edits. `key_id` is '' for no key, and rule providers are
 // positions in the provider list, as the API stores them.
-interface Provider { kind: 'firecrawl'; base_url: string; key_id: string }
+type Kind = Schemas['ScraperProvider']['kind'];
+interface Provider { kind: Kind; base_url: string; key_id: string }
 interface Rule { host: string; providers: number[] }
 
 const NO_KEY = 'none';
+const KIND_LABEL: Record<Kind, string> = { firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI', edge: 'Edge workers' };
+const asKind = (value: string): Kind => (value === 'crawl4ai' || value === 'edge' ? value : 'firecrawl');
 const single = (value: string | string[] | null): string => (Array.isArray(value) ? (value[0] ?? '') : (value ?? ''));
 
 // Scraping: posting pages are read by the providers below in order, and the
@@ -50,38 +53,61 @@ const single = (value: string | string[] | null): string => (Array.isArray(value
             @for (p of providers; track p; let i = $index; let first = $first; let last = $last) {
               <li class="space-y-3 rounded-lg border p-4">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <h3 class="text-sm font-medium">{{ i + 1 }}. Firecrawl</h3>
+                  <h3 class="text-sm font-medium">{{ i + 1 }}. {{ kindLabel(p.kind) }}</h3>
                   <div class="flex gap-1">
                     <button z-button zType="outline" zSize="sm" [attr.aria-label]="'Move provider ' + (i + 1) + ' up'" [zDisabled]="first || busy()" (click)="moveProvider(i, -1)">Up</button>
                     <button z-button zType="outline" zSize="sm" [attr.aria-label]="'Move provider ' + (i + 1) + ' down'" [zDisabled]="last || busy()" (click)="moveProvider(i, 1)">Down</button>
                     <button z-button zType="outline" zSize="sm" [attr.aria-label]="'Remove provider ' + (i + 1)" [zDisabled]="busy()" (click)="removeProvider(i)">Remove</button>
                   </div>
                 </div>
-                <div class="grid gap-4 md:grid-cols-2">
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div class="field"
+                    ><span>Scraper</span>
+                    <z-select [attr.aria-label]="'Scraper for provider ' + (i + 1)" [ngModel]="p.kind" (ngModelChange)="selectKind(p, single($event))" [zDisabled]="busy()">
+                      <z-select-item zValue="firecrawl">Firecrawl</z-select-item>
+                      <z-select-item zValue="crawl4ai">Crawl4AI</z-select-item>
+                      <z-select-item zValue="edge">Edge workers</z-select-item>
+                    </z-select>
+                  </div>
+                  @if (p.kind === 'edge') {
+                    <p class="text-sm text-muted-foreground md:col-span-2">
+                      Pages are read by your edge workers, on home machines whose addresses sites do not block. They need no address or key. Manage them below; a
+                      worker opens only the sites listed there. If no worker is online for a site, the next provider is tried at once.
+                    </p>
+                  } @else {
                   <label class="field"
                     ><span>API address</span
-                    ><input z-input [name]="'base-url-' + i" [(ngModel)]="p.base_url" (ngModelChange)="touch()" placeholder="https://api.firecrawl.dev" maxlength="2048" autocomplete="off" />
-                    <span class="text-xs font-normal text-muted-foreground">Leave empty for Firecrawl's hosted API. Self-hosted servers and Firecrawl Local use their own http(s) address.</span>
+                    ><input z-input [name]="'base-url-' + i" [(ngModel)]="p.base_url" (ngModelChange)="touch()" [placeholder]="p.kind === 'crawl4ai' ? 'http://crawl4ai:11235' : 'https://api.firecrawl.dev'" maxlength="2048" autocomplete="off" [required]="p.kind === 'crawl4ai'" />
+                    @if (p.kind === 'crawl4ai') {
+                      <span class="text-xs font-normal text-muted-foreground">Required: the address of your Crawl4AI server (port 11235). It has no hosted API.</span>
+                    } @else {
+                      <span class="text-xs font-normal text-muted-foreground">Leave empty for Firecrawl's hosted API. Self-hosted servers and Firecrawl Local use their own http(s) address.</span>
+                    }
                   </label>
                   <div class="field"
-                    ><span>API key</span>
-                    <z-select [attr.aria-label]="'API key for provider ' + (i + 1)" zPlaceholder="No key" [ngModel]="p.key_id || noKey" (ngModelChange)="selectKey(p, single($event))" [zDisabled]="busy()">
+                    ><span>{{ p.kind === 'crawl4ai' ? 'API token' : 'API key' }}</span>
+                    <z-select [attr.aria-label]="(p.kind === 'crawl4ai' ? 'API token for provider ' : 'API key for provider ') + (i + 1)" zPlaceholder="No key" [ngModel]="p.key_id || noKey" (ngModelChange)="selectKey(p, single($event))" [zDisabled]="busy()">
                       <z-select-item [zValue]="noKey">No key</z-select-item>
-                      @for (k of firecrawlKeys(); track k.id) {
+                      @for (k of keysFor(p.kind); track k.id) {
                         <z-select-item [zValue]="k.id">{{ k.label }} · {{ k.fingerprint }}</z-select-item>
                       }
                     </z-select>
                     <span class="text-xs font-normal text-muted-foreground">
-                      Keys are stored encrypted with the other <a class="underline" routerLink="/admin/system-keys">system keys</a>; add a Firecrawl key there.
+                      Keys are stored encrypted with the other <a class="underline" routerLink="/admin/system-keys">system keys</a>; add a {{ kindLabel(p.kind) }} key there.
                     </span>
                   </div>
+                  }
                 </div>
               </li>
             } @empty {
               <li class="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No providers yet.</li>
             }
           </ol>
-          <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider()">Add Firecrawl provider</button>
+          <div class="flex flex-wrap gap-2">
+            <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('firecrawl')">Add Firecrawl provider</button>
+            <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('crawl4ai')">Add Crawl4AI provider</button>
+            <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('edge')">Add edge workers provider</button>
+          </div>
         </section>
 
         <section aria-labelledby="rules-heading" class="space-y-5">
@@ -163,7 +189,7 @@ export class ScraperSettings {
   protected readonly maxProviders = 10;
   protected readonly maxRules = 100;
   readonly settings = signal<Settings | null>(null);
-  readonly firecrawlKeys = signal<SystemKey[]>([]);
+  readonly scraperKeys = signal<SystemKey[]>([]);
   readonly error = signal('');
   readonly notice = signal('');
   readonly loading = signal(false);
@@ -180,7 +206,7 @@ export class ScraperSettings {
       untracked(() => {
         this.generation++;
         this.settings.set(null);
-        this.firecrawlKeys.set([]);
+        this.scraperKeys.set([]);
         this.providers = [];
         this.rules = [];
         this.notice.set('');
@@ -201,7 +227,7 @@ export class ScraperSettings {
       ]);
       if (!current()) return;
       const value = Api.ok(saved);
-      this.firecrawlKeys.set(Api.ok(keys).filter((k) => k.kind === 'firecrawl'));
+      this.scraperKeys.set(Api.ok(keys).filter((k) => k.kind !== 'openrouter'));
       this.apply(value);
     } catch (e) {
       if (current()) this.error.set(this.message(e));
@@ -248,7 +274,23 @@ export class ScraperSettings {
   providerLabel(i: number): string {
     const p = this.providers[i];
     if (!p) return 'Removed provider';
-    return `${i + 1}. Firecrawl${p.base_url ? ' (' + this.hostOf(p.base_url) + ')' : ''}`;
+    return `${i + 1}. ${KIND_LABEL[p.kind]}${p.base_url ? ' (' + this.hostOf(p.base_url) + ')' : ''}`;
+  }
+  kindLabel(kind: Kind): string {
+    return KIND_LABEL[kind];
+  }
+  /** Only a key of the provider's own kind can be sent to it. */
+  keysFor(kind: Kind): SystemKey[] {
+    return this.scraperKeys().filter((k) => k.kind === kind);
+  }
+  selectKind(p: Provider, value: string): void {
+    const kind = asKind(value);
+    if (kind === p.kind) return;
+    p.kind = kind;
+    // A key of the other kind would be refused on save, and edge workers take neither.
+    if (kind === 'edge') p.base_url = '';
+    if (p.key_id && !this.keysFor(kind).some((k) => k.id === p.key_id)) p.key_id = '';
+    this.touch();
   }
   private hostOf(url: string): string {
     try { return new URL(url).host; } catch { return url; }
@@ -259,8 +301,9 @@ export class ScraperSettings {
     this.touch();
   }
 
-  addProvider(): void {
-    this.providers.push({ kind: 'firecrawl', base_url: '', key_id: this.firecrawlKeys().length === 1 ? this.firecrawlKeys()[0]!.id : '' });
+  addProvider(kind: Kind): void {
+    const keys = this.keysFor(kind);
+    this.providers.push({ kind, base_url: '', key_id: keys.length === 1 ? keys[0]!.id : '' });
     this.touch();
   }
   removeProvider(i: number): void {

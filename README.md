@@ -70,6 +70,110 @@ the API imports them as the first provider the first time it boots, storing the
 key as a system key. After that the environment is ignored, and edits happen in
 the admin UI.
 
+#### Crawl4AI as a fallback
+
+[Crawl4AI](https://github.com/unclecode/crawl4ai) renders pages in a stealth
+Chromium, which gets past some sites that turn Firecrawl away. It has no hosted
+API: run its Docker server (`make crawl4ai` locally on `127.0.0.1:11235`; the
+`crawl4ai` service in `compose.yaml` is reachable by the app as
+`http://crawl4ai:11235`; both pin `unclecode/crawl4ai:0.9.5`, and Chromium
+wants `shm_size: 1g`). Then, as a platform owner:
+
+1. If the server has a token (`CRAWL4AI_API_TOKEN`, set from `CRAWL4AI_TOKEN`
+   in the compose files), add it under Administration, Models & keys, with
+   provider Crawl4AI. Without a token the server is open to whoever can reach
+   it, so keep it off public networks.
+2. Under Administration, Scraping, choose Add Crawl4AI provider, enter its
+   address, and pick the token. Place it after Firecrawl to use it as the
+   fallback, or first to prefer it. A provider can only use a key of its own
+   kind.
+3. For a site Firecrawl cannot read, add a site rule, for example
+   `linkedin.com` with Crawl4AI first and Firecrawl second.
+
+The server's SSRF guard refuses private addresses, and it rejects request
+fields such as `magic`, `simulate_user` and `override_navigator` from API
+callers, so Zapply relies on `enable_stealth` and a random user agent. LinkedIn
+may still block a datacenter IP; reading it reliably needs a residential
+address, which edge workers are meant to provide.
+
+#### Edge workers
+
+LinkedIn blocks datacenter addresses, so a deployment on a server cannot read
+its postings. An **edge worker** is a small program (`cmd/zapply-edge`, shipped
+in a container with its own headless Chromium) that you run on a machine with a
+residential connection, such as your laptop. It pulls scrape jobs from the API
+over HTTPS, reads each page, and posts it back. It only makes outbound requests:
+it opens no port, and NATS and Postgres are not exposed to it. Jobs wait in a
+Postgres table, so any API replica can queue a job and any other can serve the
+worker.
+
+How a page is read: for a LinkedIn posting the worker first asks LinkedIn's
+logged-out endpoints with ordinary browser headers (the guest posting fragment
+and the public page), with no browser at all. If LinkedIn answers with a
+login wall, a throttle (HTTP 429 or 999) or a redirect to its authwall, or for
+any other site, it renders the page in headless Chrome, in a new browser
+context per job (no cookies or storage carry over) and never signs in. A pause
+of 2 to 6 seconds separates jobs.
+
+Setup, as a platform owner and then on the machine (this is how it is run on a
+Mac with Podman; Docker works the same):
+
+1. Administration, Scraping, Edge workers: create a worker. Give it the sites
+   it may open (for example `linkedin.com`; a host also covers its subdomains,
+   and an empty list allows nothing) and its limits. The token is shown once;
+   only its hash is stored. Rotate it to replace a lost or leaked one.
+2. Under Providers, add an Edge workers provider, and choose where it sits in
+   the order, or add a site rule that puts it first for `linkedin.com`. If no
+   worker is online for a site the provider fails at once and the next one is
+   tried; a job that no worker takes within 45 seconds fails the same way.
+3. On the machine:
+
+   ```sh
+   cd deploy/edge
+   cp .env.example .env     # ZAPPLY_URL and ZAPPLY_EDGE_TOKEN
+   podman compose up -d
+   podman logs -f zapply-edge-edge-1
+   ```
+
+   The image pins Go 1.27 and Debian 12.12 and takes Chromium from Debian;
+   rebuild with `podman compose build --pull` now and then for its patches.
+   `restart: unless-stopped` brings it back after the Podman machine restarts.
+   To bring the Podman machine and the worker up at login on a Mac, load
+   `deploy/edge/com.zapply.edge.plist` with `launchctl bootstrap` (edit its paths
+   first); it is optional.
+
+Safety limits. The worker runs other users' links on your home network, so:
+
+- The owner decides which hosts a worker may open (`allowed_hosts`), its jobs
+  per hour and its jobs at once. The database enforces them when a job is
+  claimed, and only the worker that claimed a job can answer it.
+- The worker refuses anything but `http`/`https` on ports 80 and 443, and any
+  address that is not public: loopback, private (RFC 1918), link-local
+  (including cloud metadata at `169.254.169.254`), carrier-grade NAT, and so
+  on. Names are resolved and every answer is checked; plain HTTP connections
+  re-check the address that is really dialled, and every request the browser
+  makes (redirects and sub-resources too) is checked before it leaves.
+- The container runs as a non-root user with a read-only root filesystem,
+  every capability dropped but the one Chromium's sandbox needs, no extra
+  privileges, memory, CPU and process limits, and tmpfs for the browser
+  profile. It is not signed in to anything.
+- Results are kept only until the API reads them (once), and never more than an
+  hour; finished job rows, with the posting URL, are deleted after 25 hours.
+  Worker administration is audited.
+
+A residual risk of the browser path: the browser does its own DNS lookups, so a
+hostile name that changes its answer between the check and the connection
+(DNS rebinding) could reach a private address; the plain-HTTP path does not
+have this gap. Run the worker on a network you are comfortable with that risk
+on, or put it on a guest VLAN.
+
+LinkedIn's terms of use prohibit automated scraping and the worker's traffic
+comes from your own address. It reads only the pages anyone can open without
+signing in, never logs in, and is meant for the handful of postings a person
+pastes into the new job dialog. Keep the volume low (the default limit is 20 jobs
+an hour); whether that is acceptable for you and your users is your call, and
+LinkedIn may still block or throttle the address.
+
 Gmail push needs a public URL, so leave the `GOOGLE_PUBSUB_*` variables out and
 set `MAIL_RECONCILE_INTERVAL` (e.g. `5m`) for mail to sync while it runs. Google
 sign-in for mail needs `http://localhost:8080/oauth/google/callback` on the

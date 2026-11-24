@@ -43,5 +43,19 @@ services:
     # without JavaScript, with a warning (docs/parts/04-jobs.md).
     ports:
       - "127.0.0.1:${ZAPPLY_FIRECRAWL_PORT:-3002}:3002"
+  # Crawl4AI renders posting links in a stealth Chromium, as a scraper provider
+  # (Administration, Scraping). Opt-in: `make crawl4ai`, then add a Crawl4AI
+  # provider at http://127.0.0.1:11235.
+  crawl4ai:
+    profiles: [crawl4ai]
+    image: docker.io/unclecode/crawl4ai:0.9.5
+    # Chromium needs more shared memory than the container default.
+    shm_size: 1g
+    environment:
+      # Optional bearer token (a Crawl4AI system key holds the same value).
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_TOKEN:-}
+      CRAWL4AI_NO_CLOUD_NOTICE: "1"
+    ports:
+      - "127.0.0.1:${ZAPPLY_CRAWL4AI_PORT:-11235}:11235"
 volumes:
   pgdata:

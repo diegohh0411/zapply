@@ -1211,6 +1211,112 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ScraperSettings' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/edge-workers:
+    get:
+      operationId: listEdgeWorkers
+      tags: [platform]
+      description: Edge workers with their last-24-hours job counts (owner only).
+      responses:
+        '200':
+          description: All edge workers, newest first.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EdgeWorker' } }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createEdgeWorker
+      tags: [platform]
+      description: Registers an edge worker. The response carries its token, which is never shown again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EdgeWorkerInput' }
+      responses:
+        '201':
+          description: The worker and its token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdgeWorkerCreated' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/edge-workers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    patch:
+      operationId: updateEdgeWorker
+      tags: [platform]
+      description: Changes the fields sent; the others keep their value.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EdgeWorkerPatch' }
+      responses:
+        '200':
+          description: The updated worker.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdgeWorker' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/edge-workers/{id}/token:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      operationId: rotateEdgeWorkerToken
+      tags: [platform]
+      description: Replaces the worker's token; the old one stops working at once. The new token is shown only in this response.
+      responses:
+        '200':
+          description: The worker and its new token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdgeWorkerCreated' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/edge/jobs/claim:
+    post:
+      operationId: claimEdgeJob
+      tags: [edge]
+      security: [{ edgeToken: [] }]
+      description: |
+        Edge workers only (the `edge` tag is served by a hand-written handler,
+        outside user authentication). Long-polls up to 25 seconds for a scrape
+        job the worker may take: the oldest queued job whose host is on its
+        allowed list, within its hourly and concurrent limits. 204 when there
+        is none; poll again.
+      responses:
+        '200':
+          description: A job. Read the page at `url` and post the result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EdgeJob' }
+        '204': { description: No job within the wait. }
+        '401': { description: The token is unknown, rotated or disabled. }
+  /v1/edge/jobs/{id}/result:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      operationId: postEdgeJobResult
+      tags: [edge]
+      security: [{ edgeToken: [] }]
+      description: |
+        Edge workers only. Posts what the worker read for a job it claimed.
+        The body is limited to 6 MiB. A result with an `error` or a
+        `status_code` of 400 or more marks the job failed: with a status code
+        the page is unreadable (blocked, gone), without one the worker itself
+        failed. 404 when the job is not claimed by this worker or has expired.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EdgeJobResult' }
+      responses:
+        '204': { description: Recorded. }
+        '400': { description: Malformed or oversized result. }
+        '401': { description: The token is unknown, rotated or disabled. }
+        '404': { description: The job is not claimed by this worker, or ran out of time. }
+        '413': { description: The body or a field is too large. }
   /v1/jobs/{id}/match-estimate:
     parameters:
       - name: id
@@ -1646,6 +1752,7 @@ paths:
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    edgeToken: { type: http, scheme: bearer, description: "An edge worker's token, issued in Administration. Not a user JWT." }
 
   parameters:
     ID:
@@ -2540,6 +2647,7 @@ components:
       "enum":
         - "openrouter"
         - "firecrawl"
+        - "crawl4ai"
       "description": "Which provider the key belongs to. Only an OpenRouter key can be active."
     "SystemKeyInput":
       "type": "object"
@@ -2711,9 +2819,9 @@ components:
       type: object
       required: [kind]
       properties:
-        kind: { type: string, enum: [firecrawl], description: "The scraping API. Only Firecrawl exists today." }
-        base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API." }
-        key_id: { type: string, format: uuid, nullable: true, description: "A Firecrawl system key sent to the API; null sends none." }
+        kind: { type: string, enum: [firecrawl, crawl4ai, edge], description: "The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server." }
+        base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge." }
+        key_id: { type: string, format: uuid, nullable: true, description: "A system key of the provider's own kind, sent as a bearer token; null sends none." }
     ScraperRule:
       type: object
       required: [host, providers]
@@ -2751,6 +2859,58 @@ components:
         saved: { type: boolean, description: "False until an owner saves, or the environment is imported at first boot." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
+    EdgeWorkerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        allowed_hosts: { type: array, maxItems: 50, items: { type: string }, description: "Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none." }
+        max_per_hour: { type: integer, minimum: 1, maximum: 600, description: "Jobs the worker may take per rolling hour. Default 20." }
+        max_concurrent: { type: integer, minimum: 1, maximum: 10, description: "Jobs the worker may hold at once. Default 1." }
+    EdgeWorkerPatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        enabled: { type: boolean }
+        allowed_hosts: { type: array, maxItems: 50, items: { type: string } }
+        max_per_hour: { type: integer, minimum: 1, maximum: 600 }
+        max_concurrent: { type: integer, minimum: 1, maximum: 10 }
+    EdgeWorker:
+      type: object
+      required: [id, name, enabled, allowed_hosts, max_per_hour, max_concurrent, created_at, version, jobs_24h, done_24h, failed_24h]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        enabled: { type: boolean }
+        allowed_hosts: { type: array, items: { type: string } }
+        max_per_hour: { type: integer }
+        max_concurrent: { type: integer }
+        last_seen_at: { type: string, format: date-time, nullable: true, description: "When the worker last polled for work." }
+        created_at: { type: string, format: date-time }
+        version: { type: integer }
+        jobs_24h: { type: integer, description: "Jobs the worker took in the last 24 hours." }
+        done_24h: { type: integer }
+        failed_24h: { type: integer, description: "Failed or timed-out jobs among them." }
+    EdgeWorkerCreated:
+      type: object
+      required: [worker, token]
+      properties:
+        worker: { $ref: '#/components/schemas/EdgeWorker' }
+        token: { type: string, description: "The worker's bearer token (ZAPPLY_EDGE_TOKEN). Shown once; only its hash is stored." }
+    EdgeJob:
+      type: object
+      required: [id, url]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string }
+    EdgeJobResult:
+      type: object
+      properties:
+        markdown: { type: string, description: "At most 1 MiB." }
+        raw_html: { type: string, description: "At most 4 MiB." }
+        metadata: { type: object, additionalProperties: true, description: "At most 64 KiB serialized (og: and page metadata)." }
+        status_code: { type: integer, description: "The site's HTTP status, when it answered." }
+        error: { type: string, maxLength: 500 }
     MatchRunSummary:
       type: object
       required: [run_id, status, stale]
