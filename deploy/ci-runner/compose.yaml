@@ -1,0 +1,50 @@
+# Self-hosted runners for zapply's CI. Use scripts/ci-runner.sh rather than
+# calling compose directly: it supplies the token and the runner count.
+name: zapply-ci
+
+services:
+  # One throwaway server for every runner: each test creates its own database
+  # (internal/testdb), so concurrent runs don't collide. The cluster-wide roles
+  # from init.sql are created once, when the server starts.
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_USER: zapply
+      POSTGRES_PASSWORD: zapply
+      POSTGRES_DB: zapply
+    # Never holds real data, so skip crash safety.
+    command: [postgres, -c, fsync=off, -c, synchronous_commit=off, -c, full_page_writes=off, -c, max_connections=300]
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zapply"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  runner:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/zapply-ci-runner:latest
+    environment:
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:?run this through scripts/ci-runner.sh}
+      RUNNER_PAT: ${RUNNER_PAT:?run this through scripts/ci-runner.sh}
+      ZAPPLY_TEST_DATABASE_URL: postgres://zapply:zapply@postgres:5432/zapply?sslmode=disable
+    volumes:
+      # Go, npm and tool caches shared by every runner; survives recreation.
+      - cache:/cache
+    deploy:
+      replicas: ${ZAPPLY_RUNNERS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Lets a runner cancel its job and unregister before it is killed.
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  cache:

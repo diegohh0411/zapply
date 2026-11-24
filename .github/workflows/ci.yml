@@ -6,53 +6,21 @@ on:
   merge_group:
 
 jobs:
+  # Runs on the self-hosted runners from scripts/ci-runner.sh (deploy/ci-runner/),
+  # which provide Postgres (with init.sql's roles), Typst, poppler and the Go caches.
+  # While none is running, jobs wait in the queue rather than fail.
   go-checks:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: zapply
-          POSTGRES_PASSWORD: zapply
-          POSTGRES_DB: zapply
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U zapply"
-          --health-interval 2s --health-retries 30
-    env:
-      ZAPPLY_TEST_DATABASE_URL: postgres://zapply:zapply@localhost:5432/zapply?sslmode=disable
+    runs-on: [self-hosted, zapply]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        id: go
         with:
           go-version-file: go.mod
+          # The runners keep GOMODCACHE and GOCACHE on a local volume.
           cache: false
-      - name: Locate Go caches
-        id: go-cache
-        run: |
-          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
-          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.go-cache.outputs.modules }}
-          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
-      # Save new compilation work on each commit, even when dependencies are unchanged.
-      - name: Cache Go build outputs
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.go-cache.outputs.build }}
-          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.sum') }}-
-            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
       - name: Validate migration catalog
         run: go test -count=1 ./internal/store -run '^TestMigrationCatalogValid$'
-      - name: Create runtime role
-        run: psql "$ZAPPLY_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/postgres/init.sql
       - name: Generated code is up to date
         run: |
           go tool sqlc generate
@@ -62,16 +30,6 @@ jobs:
         run: |
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
-      # The native half of the rendering determinism gate (templates/gate_test.go).
-      # Keep the version in step with the typst field of templates/*/*/manifest.json.
-      - name: Install Typst and poppler
-        run: |
-          curl -fsSL https://github.com/typst/typst/releases/download/v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz \
-            | tar -xJ -C "$RUNNER_TEMP"
-          echo "ZAPPLY_TYPST=$RUNNER_TEMP/typst-x86_64-unknown-linux-musl/typst" >> "$GITHUB_ENV"
-          # On PATH too, for the API's server-side compile (internal/render).
-          echo "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
-          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Test
         env:
           ZAPPLY_REQUIRE_TYPST: "1"
@@ -96,7 +54,7 @@ jobs:
   go:
     if: always()
     needs: [go-checks, image]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, zapply]
     steps:
       - name: Check results
         env:
@@ -112,26 +70,18 @@ jobs:
           fi
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, zapply]
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        id: node
         with:
+          # No `cache:`: npm packages live on the runners' local volume, not in Actions cache.
           node-version-file: web/package.json
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Cache Angular build outputs
-        uses: actions/cache@v4
-        with:
-          path: web/.angular/cache
-          key: angular-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json', 'web/angular.json', 'web/tsconfig*.json') }}-${{ github.sha }}
-          restore-keys: |
-            angular-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json', 'web/angular.json', 'web/tsconfig*.json') }}-
-      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefer-offline --no-audit --no-fund
       - name: API types are up to date
         run: |
           npm run gen:api
