@@ -1,23 +1,31 @@
-import { DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable } from '@angular/core';
+import { injectQuery, QueryClient } from '@tanstack/angular-query';
 
 import { Api, type Schemas } from './api';
 import { AuthService } from './auth.service';
 import { EventsService } from './events.service';
 
+const meKey = (identity: string | null) => ['me', identity] as const;
+
+/** The signed-in member's account, cached per member so every reader shares one request. */
 @Injectable({ providedIn: 'root' })
 export class AccountService {
   private readonly api = inject(Api);
   private readonly auth = inject(AuthService);
   private readonly events = inject(EventsService);
-  readonly me = signal<Schemas['Me'] | null>(null);
-  private generation = 0;
+  private readonly client = inject(QueryClient);
+
+  private readonly query = injectQuery(() => ({
+    queryKey: meKey(this.auth.identity()),
+    queryFn: () => this.fetch(),
+    enabled: !!this.auth.identity(),
+  }));
+
+  readonly me = computed<Schemas['Me'] | null>(() =>
+    this.auth.identity() && !this.query.isError() ? (this.query.data() ?? null) : null,
+  );
 
   constructor() {
-    effect(() => {
-      this.auth.identity();
-      this.me.set(null);
-      void this.refresh();
-    });
     const sub = this.events.changes.subscribe((e) => {
       if (e.topic === 'membership.changed') void this.refresh();
     });
@@ -29,19 +37,22 @@ export class AccountService {
     });
   }
 
+  private async fetch(): Promise<Schemas['Me']> {
+    return Api.ok(await this.api.client.GET('/v1/me'));
+  }
+
+  /** Refetches the account now and returns it, or null when signed out or the fetch fails. */
   async refresh(): Promise<Schemas['Me'] | null> {
     const identity = this.auth.identity();
-    const generation = ++this.generation;
-    if (!identity) {
-      this.me.set(null);
-      return null;
-    }
+    if (!identity) return null;
     try {
-      const me = Api.ok(await this.api.client.GET('/v1/me'));
-      if (identity === this.auth.identity() && generation === this.generation) this.me.set(me);
+      const me = await this.client.fetchQuery({
+        queryKey: meKey(identity),
+        queryFn: () => this.fetch(),
+        staleTime: 0,
+      });
       return identity === this.auth.identity() ? me : null;
     } catch {
-      if (identity === this.auth.identity() && generation === this.generation) this.me.set(null);
       return null;
     }
   }
