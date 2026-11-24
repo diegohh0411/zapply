@@ -2422,6 +2422,24 @@ type SearchAllowance struct {
 	Used       int `json:"used"`
 }
 
+// SearchBalance defines model for SearchBalance.
+type SearchBalance struct {
+	// Configured False when no TheirStack key is chosen.
+	Configured bool `json:"configured"`
+
+	// Credits API credits left.
+	Credits *int `json:"credits"`
+
+	// Error Why the balance could not be read; empty when it was.
+	Error string `json:"error"`
+
+	// ExpiresAt When the earliest credits expire.
+	ExpiresAt *time.Time `json:"expires_at"`
+
+	// Used API credits used this billing cycle.
+	Used *int `json:"used"`
+}
+
 // SearchSettings defines model for SearchSettings.
 type SearchSettings struct {
 	// CreditUsd What one TheirStack API credit costs.
@@ -2954,6 +2972,9 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/scraper-settings)
 	PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams)
+
+	// (GET /v1/admin/search-balance)
+	GetSearchBalance(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/admin/search-settings)
 	GetSearchSettings(w http.ResponseWriter, r *http.Request)
@@ -3821,6 +3842,20 @@ func (siw *ServerInterfaceWrapper) PutScraperSettings(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutScraperSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSearchBalance operation middleware
+func (siw *ServerInterfaceWrapper) GetSearchBalance(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSearchBalance(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6560,6 +6595,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.PutScraperSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.GetSearchSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.PutSearchSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-balance", wrapper.GetSearchBalance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.ListEdgeWorkers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.CreateEdgeWorker)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/admin/edge-workers/{id}", wrapper.UpdateEdgeWorker)
@@ -7360,6 +7396,44 @@ type PutScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PutScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSearchBalanceRequestObject struct {
+}
+
+type GetSearchBalanceResponseObject interface {
+	VisitGetSearchBalanceResponse(w http.ResponseWriter) error
+}
+
+type GetSearchBalance200JSONResponse SearchBalance
+
+func (response GetSearchBalance200JSONResponse) VisitGetSearchBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSearchBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSearchBalancedefaultApplicationProblemPlusJSONResponse) VisitGetSearchBalanceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10918,6 +10992,9 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/scraper-settings)
 	PutScraperSettings(ctx context.Context, request PutScraperSettingsRequestObject) (PutScraperSettingsResponseObject, error)
 
+	// (GET /v1/admin/search-balance)
+	GetSearchBalance(ctx context.Context, request GetSearchBalanceRequestObject) (GetSearchBalanceResponseObject, error)
+
 	// (GET /v1/admin/search-settings)
 	GetSearchSettings(ctx context.Context, request GetSearchSettingsRequestObject) (GetSearchSettingsResponseObject, error)
 
@@ -11747,6 +11824,30 @@ func (sh *strictHandler) PutScraperSettings(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutScraperSettingsResponseObject); ok {
 		if err := validResponse.VisitPutScraperSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSearchBalance operation middleware
+func (sh *strictHandler) GetSearchBalance(w http.ResponseWriter, r *http.Request) {
+	var request GetSearchBalanceRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSearchBalance(ctx, request.(GetSearchBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSearchBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSearchBalanceResponseObject); ok {
+		if err := validResponse.VisitGetSearchBalanceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

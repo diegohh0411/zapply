@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/diegohh0411/zapply/internal/jobsearch"
 	"github.com/diegohh0411/zapply/internal/library"
 	modelapi "github.com/diegohh0411/zapply/internal/model"
 	"github.com/diegohh0411/zapply/internal/secrets"
@@ -196,4 +197,33 @@ func (s *Service) Resolve(ctx context.Context, u, id uuid.UUID, amount string, g
 		return invalid("generation_id", "invalid generation ID")
 	}
 	return s.exec(ctx, u, "SELECT platform.resolve_attempt($1,$2,$3,$4,$5)", id, n, generation, reason, version)
+}
+
+// SearchBalance reads the team's TheirStack credit balance with the key the
+// search settings name (owner only). No key gives a nil balance.
+func (s *Service) SearchBalance(ctx context.Context, u uuid.UUID, ts *jobsearch.TheirStack) (*jobsearch.Balance, error) {
+	var id uuid.UUID
+	var encrypted []byte
+	var version string
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, "SELECT key_id,ciphertext,encryption_version FROM platform.search_key()").Scan(&id, &encrypted, &version)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, Translate(err)
+	}
+	if s.ring == nil {
+		return nil, errors.New("key ring is unavailable")
+	}
+	key, err := s.ring.Decrypt(id.String(), version, encrypted)
+	if err != nil {
+		return nil, err
+	}
+	b, err := ts.Balance(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
 }

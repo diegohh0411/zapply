@@ -10,11 +10,36 @@ import { AuthService } from '../core/auth.service';
 
 type Settings = Schemas['SearchSettings'];
 type SystemKey = Schemas['SystemKey'];
+type Balance = Schemas['SearchBalance'];
+type Plan = { credits: number; usd: number };
 
 const NO_KEY = 'none';
 const single = (value: string | string[] | null): string => (Array.isArray(value) ? (value[0] ?? '') : (value ?? ''));
 /** "0.006900000000" → "0.0069" */
 const trimUSD = (v: string | null | undefined): string => (v ? v.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') : '');
+
+/**
+ * TheirStack's published monthly API plans (theirstack.com/en/pricing, November
+ * 2026). Its API has no pricing route, so the list lives here; "Custom" covers
+ * yearly, negotiated or changed prices.
+ */
+export const THEIRSTACK_PLANS: readonly Plan[] = [
+  { credits: 1_500, usd: 19 },
+  { credits: 5_000, usd: 45 },
+  { credits: 10_000, usd: 69 },
+  { credits: 20_000, usd: 85 },
+  { credits: 50_000, usd: 155 },
+  { credits: 100_000, usd: 225 },
+  { credits: 200_000, usd: 429 },
+  { credits: 500_000, usd: 799 },
+  { credits: 1_000_000, usd: 1_399 },
+  { credits: 2_000_000, usd: 2_300 },
+  { credits: 5_000_000, usd: 5_500 },
+];
+const CUSTOM = 'custom';
+/** A plan's price per credit, as the server stores it (at most 12 decimals). */
+export const perCredit = (p: Plan): string => trimUSD((p.usd / p.credits).toFixed(12));
+const planLabel = (p: Plan): string => `${p.credits.toLocaleString('en-US')} credits · $${p.usd.toLocaleString('en-US')}/month`;
 
 // Search watchers: members' saved job searches run through TheirStack, which
 // charges one API credit per posting returned. Members pay for their polls
@@ -26,13 +51,28 @@ const trimUSD = (v: string | null | undefined): string => (v ? v.replace(/(\.\d*
   template: `
     <section aria-labelledby="search-heading" class="space-y-5">
       <header class="space-y-1">
-        <h2 id="search-heading" class="text-lg font-semibold">Job search for alerts</h2>
+        <h2 id="search-heading" class="text-lg font-semibold">Job search</h2>
         <p class="max-w-2xl text-sm text-muted-foreground">
           Search watchers look for roles across every company, including those that post only on LinkedIn, through TheirStack. It charges one API credit
           per posting a search returns; each member pays for their searches from their plan, at the price below. Plans set how many search watchers a
           member can keep.
         </p>
       </header>
+      @if (balance(); as b) {
+        @if (b.configured) {
+          <p class="text-sm" role="status" [class.text-destructive]="!!b.error || low(b)">
+            @if (b.error) {
+              Couldn't read the TheirStack balance: {{ b.error }}.
+            } @else {
+              TheirStack balance: <span class="font-medium tabular-nums">{{ count(b.credits) }}</span> API credits left,
+              {{ count(b.used) }} used this billing cycle{{ b.expires_at ? '; the earliest expire ' + day(b.expires_at) : '' }}.
+              @if (low(b)) {
+                That's under a day of hourly searches; top up in TheirStack.
+              }
+            }
+          </p>
+        }
+      }
       @if (error()) {
         <p role="alert" class="rounded-lg border border-destructive p-3 text-sm text-destructive">{{ error() }}</p>
       }
@@ -48,11 +88,21 @@ const trimUSD = (v: string | null | undefined): string => (v ? v.replace(/(\.\d*
             </z-select>
             <span class="text-xs font-normal text-muted-foreground">Add one in <a class="underline" routerLink="/admin/system-keys">system keys</a>.</span>
           </div>
-          <label class="field"
-            ><span>Price per credit · USD</span
-            ><input z-input name="credit" [(ngModel)]="draft.credit_usd" inputmode="decimal" placeholder="0.0069" maxlength="20" autocomplete="off" />
-            <span class="text-xs font-normal text-muted-foreground">What a TheirStack API credit costs you, such as $69 / 10,000.</span>
-          </label>
+          <div class="field">
+            <span>TheirStack plan</span>
+            <z-select aria-label="TheirStack plan" [ngModel]="plan()" (ngModelChange)="choosePlan(single($event))" [zDisabled]="busy()">
+              @for (p of plans; track p.credits) {
+                <z-select-item [zValue]="'' + p.credits">{{ label(p) }}</z-select-item>
+              }
+              <z-select-item [zValue]="custom">Custom price</z-select-item>
+            </z-select>
+            @if (plan() === custom) {
+              <input z-input name="credit" aria-label="Price per credit in USD" [(ngModel)]="draft.credit_usd" inputmode="decimal" placeholder="0.0069" maxlength="20" autocomplete="off" />
+              <span class="text-xs font-normal text-muted-foreground">What one API credit costs you in USD, for yearly or negotiated prices.</span>
+            } @else {
+              <span class="text-xs font-normal text-muted-foreground">\${{ draft.credit_usd }} per credit, from TheirStack's published prices.</span>
+            }
+          </div>
           <label class="field"
             ><span>Postings per search</span
             ><input z-input name="max" type="number" min="1" max="100" step="1" [(ngModel)]="draft.max_results" />
@@ -80,6 +130,12 @@ export class SearchSettings {
   readonly notice = signal('');
   readonly loading = signal(false);
   readonly busy = signal(false);
+  readonly balance = signal<Balance | null>(null);
+  /** The chosen plan's credits, or "custom". */
+  readonly plan = signal(CUSTOM);
+  protected readonly plans = THEIRSTACK_PLANS;
+  protected readonly custom = CUSTOM;
+  protected readonly label = planLabel;
   draft = { key_id: '', credit_usd: '', max_results: 25 };
   private generation = 0;
 
@@ -99,6 +155,36 @@ export class SearchSettings {
     return value === NO_KEY ? '' : value;
   }
 
+  protected choosePlan(value: string): void {
+    this.notice.set('');
+    this.plan.set(value);
+    const p = THEIRSTACK_PLANS.find((x) => '' + x.credits === value);
+    if (p) this.draft.credit_usd = perCredit(p);
+  }
+
+  protected count(n: number | null | undefined): string {
+    return (n ?? 0).toLocaleString('en-US');
+  }
+
+  protected day(iso: string): string {
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  /** Fewer credits left than one watcher's hourly searches could use in a day. */
+  protected low(b: Balance): boolean {
+    const max = this.settings()?.max_results ?? 25;
+    return b.credits != null && b.credits < max * 24;
+  }
+
+  private async loadBalance(current: () => boolean): Promise<void> {
+    try {
+      const b = Api.ok(await this.api.GET('/v1/admin/search-balance'));
+      if (current()) this.balance.set(b);
+    } catch {
+      if (current()) this.balance.set(null);
+    }
+  }
+
   protected status(s: Settings): string {
     return s.key_id && s.credit_usd ? 'Search watchers are available to plans that include them.' : 'Search watchers are off until a key and a price are set.';
   }
@@ -113,6 +199,7 @@ export class SearchSettings {
       if (!current()) return;
       this.keys.set(Api.ok(keys).filter((k) => k.kind === 'theirstack'));
       this.apply(Api.ok(saved));
+      void this.loadBalance(current);
     } catch (e) {
       if (current()) this.error.set(this.message(e));
     } finally {
@@ -123,6 +210,8 @@ export class SearchSettings {
   private apply(s: Settings): void {
     this.settings.set(s);
     this.draft = { key_id: s.key_id ?? '', credit_usd: trimUSD(s.credit_usd), max_results: s.max_results };
+    const match = THEIRSTACK_PLANS.find((p) => perCredit(p) === this.draft.credit_usd);
+    this.plan.set(match ? '' + match.credits : CUSTOM);
   }
 
   async save(): Promise<void> {
@@ -147,6 +236,7 @@ export class SearchSettings {
       if (current()) {
         this.apply(value);
         this.notice.set('Job search saved.');
+        void this.loadBalance(current);
       }
     } catch (e) {
       if (current()) this.error.set(this.message(e));

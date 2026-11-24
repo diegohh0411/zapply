@@ -62,9 +62,9 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
       'Keys that power model calls, and a quick check that the platform can reach a model.',
   },
   scraping: {
-    title: 'Scraping',
+    title: 'Scraping & search',
     description:
-      'Which scraper providers read job postings, in what order, and which sites use a different order.',
+      'Which providers read job postings and in what order, the edge workers they can use, and the job search behind search watchers.',
   },
   usage: {
     title: 'Unresolved usage',

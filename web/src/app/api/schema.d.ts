@@ -866,6 +866,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/search-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The team's live TheirStack API credit balance, read with the key the search settings name (owner only). Reading it costs no credits. */
+        get: operations["getSearchBalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/edge-workers": {
         parameters: {
             query?: never;
@@ -2252,6 +2269,21 @@ export interface components {
             version: number;
             /** Format: date-time */
             updated_at: string;
+        };
+        SearchBalance: {
+            /** @description False when no TheirStack key is chosen. */
+            configured: boolean;
+            /** @description API credits left. */
+            credits: number | null;
+            /** @description API credits used this billing cycle. */
+            used: number | null;
+            /**
+             * Format: date-time
+             * @description When the earliest credits expire.
+             */
+            expires_at: string | null;
+            /** @description Why the balance could not be read; empty when it was. */
+            error: string;
         };
         SearchSettingsInput: {
             /** Format: uuid */
@@ -4484,6 +4516,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSearchBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The balance, or why it could not be read. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchBalance"];
                 };
             };
             default: components["responses"]["Problem"];
