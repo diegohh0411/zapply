@@ -6,6 +6,7 @@ const ts = require('typescript');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Subject } = require('rxjs');
+const { QueryClient } = require('@tanstack/query-core');
 const signal = (initial) => {
   let value = initial;
   const read = () => value;
@@ -50,9 +51,19 @@ function fixture(file) {
       },
     },
   };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Reads the cache entry for the options' current key, as injectQuery's signals do.
+  const angularQuery = {
+    QueryClient,
+    injectQuery: (options) => ({
+      data: () => client.getQueryData(options().queryKey),
+      isError: () => client.getQueryState(options().queryKey)?.status === 'error',
+    }),
+  };
   const core = {
     signal,
     input,
+    computed: (fn) => fn,
     Injectable: () => (x) => x,
     effect: (fn) => {
       effects.push(fn);
@@ -63,6 +74,7 @@ function fixture(file) {
       if (token === Api) return api;
       if (token === AuthService) return auth;
       if (token === EventsService) return events;
+      if (token === QueryClient) return client;
       if (token === DestroyRef) return { onDestroy: (fn) => cleanup.push(fn) };
       return {};
     },
@@ -88,7 +100,9 @@ function fixture(file) {
         ? { Api }
         : name.endsWith('/auth.service')
           ? { AuthService }
-          : name.endsWith('/events.service')
+          : name === '@tanstack/angular-query'
+            ? angularQuery
+            : name.endsWith('/events.service')
             ? { EventsService }
             : stub;
   vm.runInNewContext(code, {
@@ -120,15 +134,14 @@ test('owner permissions cannot return from an earlier signed-in identity', async
   const account = new f.types.AccountService();
   const old = account.refresh();
   f.auth.identity.set('bob');
-  f.effects[0]();
   assert.equal(account.me(), null);
+  const fresh = account.refresh();
   f.requests[1].resolve(ok({ id: 'bob', platform_role: 'member', membership: null }));
-  await Promise.resolve();
-  await Promise.resolve();
+  await fresh;
   f.requests[0].resolve(
     ok({ id: 'alice', platform_role: 'owner', membership: { plan_name: 'Private' } }),
   );
-  await old;
+  assert.equal(await old, null);
   assert.equal(account.me().id, 'bob');
   assert.equal(account.me().platform_role, 'member');
   assert.equal(account.me().membership, null);
@@ -158,13 +171,13 @@ test('a route check receives its owner result while another account refresh is p
   t.after(f.close);
   const account = new f.types.AccountService();
   const routeCheck = account.refresh();
-  f.effects[0]();
+  const focus = account.refresh();
+  // Both readers share the one in-flight request.
+  assert.equal(f.requests.length, 1);
   f.requests[0].resolve(ok({ id: 'alice', platform_role: 'owner', membership: null }));
   const result = await routeCheck;
   assert.equal(result.platform_role, 'owner');
-  f.requests[1].resolve(ok({ id: 'alice', platform_role: 'owner', membership: null }));
-  await Promise.resolve();
-  await Promise.resolve();
+  assert.equal((await focus).platform_role, 'owner');
   assert.equal(account.me().platform_role, 'owner');
 });
 

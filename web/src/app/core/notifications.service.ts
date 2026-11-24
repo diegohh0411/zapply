@@ -1,4 +1,5 @@
-import { effect, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable } from '@angular/core';
+import { injectQuery, QueryClient } from '@tanstack/angular-query';
 
 import { Api } from './api';
 import { AuthService } from './auth.service';
@@ -9,29 +10,34 @@ const TOPICS = new Set(['notification.updated', 'mail.message.classified']);
 /** Classification arrives in bursts while a backlog is read; recount at most this often. */
 const REFRESH_MS = 800;
 
+const summaryKey = (identity: string | null) => ['notifications-summary', identity] as const;
+
 /**
- * The member's unread notification count, kept current from the live feed,
- * and the actions that mark notifications read. Shared by the sidebar badge
- * and the notifications page.
+ * The member's unread notification count, cached per member and kept current
+ * from the live feed, and the actions that mark notifications read. Shared by
+ * the sidebar badge and the notifications page.
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
   private readonly api = inject(Api);
   private readonly auth = inject(AuthService);
   private readonly events = inject(EventsService);
+  private readonly client = inject(QueryClient);
 
-  readonly unread = signal(0);
+  private readonly summary = injectQuery(() => ({
+    queryKey: summaryKey(this.auth.identity()),
+    queryFn: async () => Api.ok(await this.api.client.GET('/v1/notifications/summary')),
+    enabled: !!this.auth.identity(),
+  }));
+
+  /** Unread count; 0 until the first summary loads. The badge is a hint, so errors show 0. */
+  readonly unread = computed(() => this.summary.data()?.unread ?? 0);
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    effect(() => {
-      this.unread.set(0);
-      if (this.auth.identity()) void this.refresh();
-    });
     this.events.changes.subscribe((e) => {
       if (TOPICS.has(e.topic)) this.refreshSoon();
     });
-    this.events.resync.subscribe(() => void this.refresh());
   }
 
   private refreshSoon(): void {
@@ -43,14 +49,7 @@ export class NotificationsService {
   }
 
   async refresh(): Promise<void> {
-    const identity = this.auth.identity();
-    if (!identity) return;
-    try {
-      const sum = Api.ok(await this.api.client.GET('/v1/notifications/summary'));
-      if (identity === this.auth.identity()) this.unread.set(sum.unread);
-    } catch {
-      // The badge is a hint; the next event or resync tries again.
-    }
+    await this.client.invalidateQueries({ queryKey: summaryKey(this.auth.identity()) });
   }
 
   async markRead(ids: string[]): Promise<void> {
@@ -84,6 +83,11 @@ export class NotificationsService {
   }
 
   private set(res: { data?: { unread: number }; error?: unknown; response: Response }): void {
-    this.unread.set(Api.ok(res).unread);
+    const identity = this.auth.identity();
+    const { unread } = Api.ok(res);
+    this.client.setQueryData(summaryKey(identity), (old: { unread: number } | undefined) => ({
+      ...old,
+      unread,
+    }));
   }
 }
