@@ -66,6 +66,9 @@ type Deps struct {
 	PushVerifier auth.Verifier
 	// Postings reads posting pages for POST /v1/postings/read; nil answers 503.
 	Postings *posting.Reader
+	// EdgeClaimWait is how long an edge worker's claim request waits for a
+	// job before answering 204 (default 25 s).
+	EdgeClaimWait time.Duration
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -113,6 +116,10 @@ func Handler(d Deps) http.Handler {
 	root.Handle("GET "+render.AssetsPath, templateAssets())
 	root.HandleFunc("GET /oauth/google/callback", srv.googleCallback)
 	root.HandleFunc("POST /hooks/google/pubsub", srv.googlePush)
+	// Edge workers authenticate with their own tokens, not a user's JWT, so
+	// these sit outside the /v1/ chain (the more specific patterns win).
+	root.HandleFunc("POST /v1/edge/jobs/claim", srv.edgeClaim)
+	root.HandleFunc("POST /v1/edge/jobs/{id}/result", srv.edgeResult)
 	root.Handle("/v1/", httpx.Chain(v1, auth.Middleware(d.Verifier, d.Store), srv.ownerOnly, limitBody))
 	if d.DevToken != nil {
 		root.Handle("POST /dev/token", httpx.Chain(http.HandlerFunc(d.devToken), limitBody))

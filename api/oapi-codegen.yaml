@@ -6,5 +6,6 @@ generate:
   models: true
 output-options:
   skip-prune: true
-  # GET /v1/events streams SSE from a hand-written handler (internal/api/events.go).
-  exclude-tags: [events]
+  # GET /v1/events streams SSE from a hand-written handler (internal/api/events.go),
+  # and /v1/edge/* serves workers with their own tokens (internal/api/edge.go).
+  exclude-tags: [events, edge]

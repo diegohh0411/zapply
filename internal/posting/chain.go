@@ -2,6 +2,7 @@ package posting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
@@ -72,6 +73,12 @@ func (c *Chain) buildProvider(ctx context.Context, cfg ProviderConfig) (Scraper,
 			}
 		}
 		return NewCrawl4AI(cfg.BaseURL, token), nil
+	case KindEdge:
+		q, ok := c.src.(EdgeQueue)
+		if !ok {
+			return nil, errors.New("edge workers are not available")
+		}
+		return NewEdge(q), nil
 	}
 	return nil, fmt.Errorf("unknown scraper %q", cfg.Kind)
 }

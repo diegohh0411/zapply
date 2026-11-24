@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional: start the Podman machine and the edge worker when you log in to a Mac.
+  Edit the three REPLACE paths, then:
+    cp com.zapply.edge.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zapply.edge.plist
+  Stop it with: launchctl bootout gui/$(id -u)/com.zapply.edge
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zapply.edge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>podman machine start 2>/dev/null; cd "REPLACE/path/to/zapply/deploy/edge" &amp;&amp; exec podman compose up -d</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>REPLACE/Users/you/Library/Logs/zapply-edge.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPLACE/Users/you/Library/Logs/zapply-edge.log</string>
+</dict>
+</plist>

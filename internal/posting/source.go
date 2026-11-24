@@ -82,3 +82,14 @@ func SeedFromEnv(ctx context.Context, st *store.Store, ring *secrets.Ring, baseU
 	}
 	return st.SeedScraperSettings(ctx, providers, sealed)
 }
+
+// EnqueueScrapeJob and ScrapeJobResult make the source the edge job queue.
+func (d *DBSource) EnqueueScrapeJob(ctx context.Context, url, host string, ttlSeconds int) (uuid.UUID, bool, error) {
+	return d.store.EnqueueScrapeJob(ctx, url, host, ttlSeconds)
+}
+
+func (d *DBSource) ScrapeJobResult(ctx context.Context, id uuid.UUID, cancel bool) (store.ScrapeOutcome, error) {
+	return d.store.ScrapeJobResult(ctx, id, cancel)
+}
+
+var _ EdgeQueue = (*DBSource)(nil)

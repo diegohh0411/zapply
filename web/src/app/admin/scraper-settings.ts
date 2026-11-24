@@ -18,8 +18,8 @@ interface Provider { kind: Kind; base_url: string; key_id: string }
 interface Rule { host: string; providers: number[] }
 
 const NO_KEY = 'none';
-const KIND_LABEL: Record<Kind, string> = { firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI' };
-const asKind = (value: string): Kind => (value === 'crawl4ai' ? 'crawl4ai' : 'firecrawl');
+const KIND_LABEL: Record<Kind, string> = { firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI', edge: 'Edge workers' };
+const asKind = (value: string): Kind => (value === 'crawl4ai' || value === 'edge' ? value : 'firecrawl');
 const single = (value: string | string[] | null): string => (Array.isArray(value) ? (value[0] ?? '') : (value ?? ''));
 
 // Scraping: posting pages are read by the providers below in order, and the
@@ -66,8 +66,15 @@ const single = (value: string | string[] | null): string => (Array.isArray(value
                     <z-select [attr.aria-label]="'Scraper for provider ' + (i + 1)" [ngModel]="p.kind" (ngModelChange)="selectKind(p, single($event))" [zDisabled]="busy()">
                       <z-select-item zValue="firecrawl">Firecrawl</z-select-item>
                       <z-select-item zValue="crawl4ai">Crawl4AI</z-select-item>
+                      <z-select-item zValue="edge">Edge workers</z-select-item>
                     </z-select>
                   </div>
+                  @if (p.kind === 'edge') {
+                    <p class="text-sm text-muted-foreground md:col-span-2">
+                      Pages are read by your edge workers, on home machines whose addresses sites do not block. They need no address or key. Manage them below; a
+                      worker opens only the sites listed there. If no worker is online for a site, the next provider is tried at once.
+                    </p>
+                  } @else {
                   <label class="field"
                     ><span>API address</span
                     ><input z-input [name]="'base-url-' + i" [(ngModel)]="p.base_url" (ngModelChange)="touch()" [placeholder]="p.kind === 'crawl4ai' ? 'http://crawl4ai:11235' : 'https://api.firecrawl.dev'" maxlength="2048" autocomplete="off" [required]="p.kind === 'crawl4ai'" />
@@ -89,6 +96,7 @@ const single = (value: string | string[] | null): string => (Array.isArray(value
                       Keys are stored encrypted with the other <a class="underline" routerLink="/admin/system-keys">system keys</a>; add a {{ kindLabel(p.kind) }} key there.
                     </span>
                   </div>
+                  }
                 </div>
               </li>
             } @empty {
@@ -98,6 +106,7 @@ const single = (value: string | string[] | null): string => (Array.isArray(value
           <div class="flex flex-wrap gap-2">
             <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('firecrawl')">Add Firecrawl provider</button>
             <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('crawl4ai')">Add Crawl4AI provider</button>
+            <button z-button zType="outline" [zDisabled]="busy() || providers.length >= maxProviders" (click)="addProvider('edge')">Add edge workers provider</button>
           </div>
         </section>
 
@@ -278,7 +287,8 @@ export class ScraperSettings {
     const kind = asKind(value);
     if (kind === p.kind) return;
     p.kind = kind;
-    // A key of the other kind would be refused on save.
+    // A key of the other kind would be refused on save, and edge workers take neither.
+    if (kind === 'edge') p.base_url = '';
     if (p.key_id && !this.keysFor(kind).some((k) => k.id === p.key_id)) p.key_id = '';
     this.touch();
   }
