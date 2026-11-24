@@ -25,16 +25,22 @@ func scoredLibrary() (Library, *match.Result) {
 	return lib, ranking
 }
 
-func TestScoredTrimKeepsStrongEvidenceFromLessRelevantRole(t *testing.T) {
+func TestScoredTrimWeighsRoleRelevanceOverOneStrongBullet(t *testing.T) {
 	lib, ranking := scoredLibrary()
 	b := Build(lib, ranking, Picks{}, "en", today)
-	cut := slices.Index(b.Trim, "recent") + 1
-	if cut == 0 || slices.Index(b.Trim, "strong") < cut {
-		t.Fatalf("strong individual evidence lost before generic role: %v", b.Trim)
+	// The weak role (.2) leaves before the strong one (.9), even though one of
+	// its bullets scored well: its own relevance counts twice.
+	if slices.Index(b.Trim, "older") >= slices.Index(b.Trim, "recent") {
+		t.Fatalf("weak role outlasted a relevant one on one bullet: %v", b.Trim)
 	}
+	// A strong bullet still outlasts weak bullets of the kept role.
+	if slices.Index(b.Trim, "strong") <= slices.Index(b.Trim, "weak") {
+		t.Fatalf("strong bullet trimmed before a weak one: %v", b.Trim)
+	}
+	cut := slices.Index(b.Trim, "older") + 1
 	remaining := section(Apply(b.Content, b.Trim[:cut]), "experience").Entries
-	if len(remaining) != 1 || remaining[0].ID != "older" || len(remaining[0].Highlights) != 2 {
-		t.Fatalf("strong bullet and containing role should survive together: %+v", remaining)
+	if len(remaining) != 1 || remaining[0].ID != "recent" {
+		t.Fatalf("relevant role should survive: %+v", remaining)
 	}
 	if got := ids(section(b.Content, "experience").Entries); !slices.Equal(got, []string{"recent", "older"}) {
 		t.Fatalf("scoring changed chronological display order: %v", got)
