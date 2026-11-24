@@ -183,12 +183,13 @@ func (w *Worker) readLinkedIn(ctx context.Context, id string) (Result, error) {
 		// fragment without the posting in it.
 		return Result{}, fmt.Errorf("%w: guest posting answered %d", errBlocked, guest.Status)
 	}
-	res := Result{Markdown: toMarkdown(guest.Body), RawHTML: truncate(guest.Body, maxHTML), StatusCode: 200, Metadata: metadata(guest.Body)}
-	if title := textOfClass(guest.Body, "top-card-layout__title"); title != "" {
-		if _, ok := res.Metadata["ogTitle"]; !ok {
-			res.Metadata["ogTitle"] = title
-		}
+	// The description alone: the rest of the fragment is sign-in modals,
+	// apply buttons and the like, which would end up in the job.
+	md := markdownOfClass(guest.Body, "show-more-less-html__markup")
+	if md == "" {
+		md = toMarkdown(guest.Body)
 	}
+	res := Result{Markdown: truncate(md, maxMarkdown), RawHTML: truncate(guest.Body, maxHTML), StatusCode: 200, Metadata: metadata(guest.Body)}
 	// The public page carries the JSON-LD the API reads fields from. It is a
 	// bonus: when it is refused the guest fragment stands alone.
 	if err := w.sleep(ctx, w.pause()/2); err != nil {
@@ -200,6 +201,11 @@ func (w *Worker) readLinkedIn(ctx context.Context, id string) (Result, error) {
 		for k, v := range metadata(view.Body) {
 			res.Metadata[k] = v
 		}
+	}
+	// The posting's own title, not the public page's og:title ("<title> at
+	// <company> — <place> | LinkedIn Jobs").
+	if title := textOfClass(guest.Body, "top-card-layout__title"); title != "" {
+		res.Metadata["ogTitle"] = title
 	}
 	return res, nil
 }
