@@ -1,0 +1,47 @@
+# An edge worker on your own machine (see "Edge workers" in the README):
+#
+#   cd deploy/edge
+#   cp .env.example .env        # then paste the worker token
+#   podman compose up -d
+#
+# The worker only makes outbound HTTPS requests: it publishes no port, and it
+# needs no access to the zapply database, NATS or anything on your network.
+name: zapply-edge
+services:
+  edge:
+    build:
+      context: ../..
+      dockerfile: deploy/edge/Dockerfile
+    image: localhost/zapply-edge:0.1.0
+    restart: unless-stopped
+    environment:
+      # The server's public address, and the token shown once when the worker
+      # was created (Administration, Edge workers).
+      ZAPPLY_URL: ${ZAPPLY_URL:?set ZAPPLY_URL in .env}
+      ZAPPLY_EDGE_TOKEN: ${ZAPPLY_EDGE_TOKEN:?set ZAPPLY_EDGE_TOKEN in .env}
+      # Pause between jobs, so a site never sees a burst from this address.
+      ZAPPLY_EDGE_MIN_DELAY: ${ZAPPLY_EDGE_MIN_DELAY:-2s}
+      ZAPPLY_EDGE_MAX_DELAY: ${ZAPPLY_EDGE_MAX_DELAY:-6s}
+      # Set to 1 only if Chromium refuses to start because the container forbids
+      # user namespaces; the container is then its only sandbox.
+      ZAPPLY_EDGE_NO_SANDBOX: ${ZAPPLY_EDGE_NO_SANDBOX:-0}
+    # Isolation: no extra privileges, a read-only root filesystem, throw-away
+    # scratch space for Chromium's profile, and limits on what a page can use.
+    read_only: true
+    cap_drop: [ALL]
+    # Chromium's own sandbox chroots its renderers; this is the one capability
+    # it needs, and the sandbox stays on.
+    cap_add: [SYS_CHROOT]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m,mode=1777
+      - /home/edge:rw,noexec,nosuid,size=128m,mode=1777
+    shm_size: 512m
+    mem_limit: 2g
+    pids_limit: 512
+    cpus: 2
+    # A job in hand is finished before the container stops.
+    stop_grace_period: 50s
+    logging:
+      driver: json-file
+      options: { max-size: 5m, max-file: "3" }

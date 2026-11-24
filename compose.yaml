@@ -26,3 +26,17 @@ services:
     environment:
       FIRECRAWL_CLOUD: ${FIRECRAWL_CLOUD:-off}
       FIRECRAWL_LOCAL_TOKEN: ${FIRECRAWL_TOKEN:?set FIRECRAWL_TOKEN in .env}
+  # Crawl4AI renders pages in a stealth Chromium. Not published to the host:
+  # add it in Administration, Scraping as a Crawl4AI provider at
+  # http://crawl4ai:11235 (see README, "Scraping posting links").
+  crawl4ai:
+    image: docker.io/unclecode/crawl4ai:0.9.5
+    # Chromium needs more shared memory than the container default.
+    shm_size: 1g
+    environment:
+      # Optional bearer token; add the same value as a Crawl4AI system key and
+      # pick it on the provider. Empty leaves the server open on this network.
+      CRAWL4AI_API_TOKEN: ${CRAWL4AI_TOKEN:-}
+      CRAWL4AI_NO_CLOUD_NOTICE: "1"
+    expose:
+      - "11235"

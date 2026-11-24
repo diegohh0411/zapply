@@ -3,8 +3,11 @@ module github.com/diegohh0411/zapply
 go 1.27.1
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/MicahParks/jwkset v0.11.3
 	github.com/MicahParks/keyfunc/v3 v3.8.2
+	github.com/chromedp/cdproto v0.160.1
+	github.com/chromedp/chromedp v0.24.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -33,6 +36,7 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/JohannesKaufmann/dom v0.3.1 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.8.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
@@ -45,6 +49,7 @@ require (
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/getkin/kin-openapi v0.142.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
