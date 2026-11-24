@@ -39,6 +39,7 @@ type Chrome struct {
 	cancel  context.CancelFunc
 	browser context.Context
 	profile string
+	proxy   *guardedProxy
 }
 
 // NewChrome returns a renderer. path is the Chrome or Chromium binary ("" finds
@@ -59,8 +60,13 @@ func (c *Chrome) start() (context.Context, error) {
 		return c.browser, nil
 	}
 	c.stopLocked()
+	proxy, err := startGuardedProxy(c.guard, c.log)
+	if err != nil {
+		return nil, fmt.Errorf("start guarded proxy: %w", err)
+	}
 	profile, err := os.MkdirTemp("", "zapply-edge-chrome-")
 	if err != nil {
+		proxy.Close()
 		return nil, err
 	}
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
@@ -71,8 +77,14 @@ func (c *Chrome) start() (context.Context, error) {
 		chromedp.Flag("lang", "en-US"),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-		// Connect directly: the page's own dial is what the guard reasons about.
-		chromedp.Flag("no-proxy-server", true),
+		// Every connection leaves through the guarded proxy, which checks the
+		// address actually dialled (DNS rebinding, WebSockets). <-loopback>
+		// stops Chrome from bypassing it for localhost.
+		chromedp.ProxyServer(proxy.URL()),
+		chromedp.Flag("proxy-bypass-list", "<-loopback>"),
+		// WebRTC's UDP would skip the proxy; only proxied traffic is allowed.
+		chromedp.Flag("force-webrtc-ip-handling-policy", "disable_non_proxied_udp"),
+		chromedp.Flag("webrtc-ip-handling-policy", "disable_non_proxied_udp"),
 		chromedp.WSURLReadTimeout(30*time.Second),
 	)
 	if c.path != "" {
@@ -89,9 +101,10 @@ func (c *Chrome) start() (context.Context, error) {
 		cancelBrowser()
 		cancelAlloc()
 		_ = os.RemoveAll(profile)
+		proxy.Close()
 		return nil, fmt.Errorf("start Chrome: %w", err)
 	}
-	c.browser, c.profile = browser, profile
+	c.browser, c.profile, c.proxy = browser, profile, proxy
 	c.cancel = func() { cancelBrowser(); cancelAlloc() }
 	return browser, nil
 }
@@ -103,7 +116,10 @@ func (c *Chrome) stopLocked() {
 	if c.profile != "" {
 		_ = os.RemoveAll(c.profile)
 	}
-	c.cancel, c.browser, c.profile = nil, nil, ""
+	if c.proxy != nil {
+		c.proxy.Close()
+	}
+	c.cancel, c.browser, c.profile, c.proxy = nil, nil, "", nil
 }
 
 // Close stops the browser.
@@ -115,7 +131,9 @@ func (c *Chrome) Close() {
 
 // Render loads rawURL in a new browser context and returns the page after its
 // scripts have had a moment to run. Every request the page makes, including
-// redirects and sub-resources, goes through the guard first.
+// redirects and sub-resources, is checked by the guard before it is sent, and
+// every connection is dialled through the guarded proxy, which checks the
+// address really connected to.
 func (c *Chrome) Render(ctx context.Context, rawURL string) (Rendered, error) {
 	browser, err := c.start()
 	if err != nil {

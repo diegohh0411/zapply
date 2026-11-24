@@ -130,8 +130,8 @@ func (g *Guard) CheckURL(ctx context.Context, raw string) error {
 // DialControl is a net.Dialer Control function that refuses the connection
 // itself when the address being dialled is not public. It checks what is really
 // connected to, so a name that changes its answer between the check and the
-// connection (DNS rebinding) is still refused. The headless browser does its
-// own dialling and is guarded by request interception instead.
+// connection (DNS rebinding) is still refused. The headless browser's
+// connections are dialled with it too, through the guarded proxy.
 func (g *Guard) DialControl(network, address string, _ syscall.RawConn) error {
 	if g.allowPrivate {
 		return nil
