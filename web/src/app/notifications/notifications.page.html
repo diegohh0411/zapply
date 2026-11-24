@@ -1,0 +1,168 @@
+<div class="inbox">
+  <header class="inbox-head">
+    <h1>Notifications</h1>
+    <div class="inbox-tools">
+      @if (view() !== 'archived') {
+        <button
+          z-button
+          zType="ghost"
+          zSize="sm"
+          [zDisabled]="busy() || notes.unread() === 0"
+          aria-label="Mark all read"
+          (click)="bulk('read')"
+        >
+          <ng-icon name="lucideCheckCheck" /><span class="tool-label">Mark all read</span>
+        </button>
+        <button
+          z-button
+          zType="ghost"
+          zSize="sm"
+          [zDisabled]="busy() || !hasRead()"
+          aria-label="Archive read"
+          (click)="bulk('archive')"
+        >
+          <ng-icon name="lucideArchive" /><span class="tool-label">Archive read</span>
+        </button>
+      }
+    </div>
+  </header>
+
+  <div class="views" role="tablist" aria-label="Notifications">
+    @for (v of views; track v.value) {
+      <button
+        type="button"
+        role="tab"
+        [attr.aria-selected]="view() === v.value"
+        (click)="show(v.value)"
+      >
+        {{ v.label }}
+        @if (v.value === 'unread' && notes.unread() > 0) {
+          <span class="views-count">{{ notes.unread() }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  @if (error()) {
+    <div role="alert" class="inbox-error">
+      <p>{{ error() }}</p>
+      <button z-button zType="ghost" zSize="icon-xs" aria-label="Dismiss" (click)="error.set('')">
+        <ng-icon name="lucideX" />
+      </button>
+    </div>
+  }
+
+  @for (g of groups(); track g.day) {
+    <h2 class="day">{{ g.day }}</h2>
+    <ul class="rows">
+      @for (n of g.items; track n.id) {
+        @if (n.mail; as m) {
+          <li
+            class="row"
+            [class.unread]="!n.read_at"
+            [attr.data-category]="m.category"
+            (click)="open(n, $event)"
+          >
+            <span class="dot" [attr.aria-label]="n.read_at ? null : 'Unread'"></span>
+            <span class="avatar" aria-hidden="true"><ng-icon name="lucideMail" /></span>
+            <div class="body">
+              <p class="line">
+                <strong>{{ sender(m.from).name }}</strong>
+                {{ verb(m) }}
+                <span class="tag">{{ label(m.category) }}</span>
+              </p>
+              <p class="subject">{{ m.subject || '(no subject)' }}</p>
+              @if (m.snippet) {
+                <p class="snippet">{{ m.snippet }}</p>
+              }
+              @if (m.job_id && jobTitles()[m.job_id]) {
+                <a
+                  class="about"
+                  [routerLink]="['/jobs']"
+                  [queryParams]="{ job: m.job_id }"
+                  (click)="read(n)"
+                >
+                  <ng-icon name="lucideBriefcase" aria-hidden="true" />{{ jobTitles()[m.job_id] }}
+                </a>
+              }
+              <app-mail-status-change [message]="m" (changed)="replaceMail(n, $event)" />
+            </div>
+            <time class="when" [attr.datetime]="m.received_at" [title]="m.received_at">{{
+              ago(m.received_at)
+            }}</time>
+            <div class="actions">
+              <a
+                z-button
+                zType="ghost"
+                zSize="icon-sm"
+                [href]="m.gmail_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in Gmail"
+                title="Open in Gmail"
+                (click)="read(n)"
+              >
+                <ng-icon name="lucideExternalLink" />
+              </a>
+              @if (!n.archived_at) {
+                <button
+                  z-button
+                  zType="ghost"
+                  zSize="icon-sm"
+                  [attr.aria-label]="n.read_at ? 'Mark unread' : 'Mark read'"
+                  [title]="n.read_at ? 'Mark unread' : 'Mark read'"
+                  (click)="toggleRead(n)"
+                >
+                  <ng-icon [name]="n.read_at ? 'lucideMailOpen' : 'lucideCheck'" />
+                </button>
+              }
+              <button
+                z-button
+                zType="ghost"
+                zSize="icon-sm"
+                [attr.aria-label]="n.archived_at ? 'Move to inbox' : 'Archive'"
+                [title]="n.archived_at ? 'Move to inbox' : 'Archive'"
+                (click)="archive(n)"
+              >
+                <ng-icon [name]="n.archived_at ? 'lucideArchiveRestore' : 'lucideArchive'" />
+              </button>
+            </div>
+          </li>
+        }
+      }
+    </ul>
+  } @empty {
+    @if (loaded()) {
+      <div class="empty">
+        <ng-icon [name]="view() === 'archived' ? 'lucideArchive' : 'lucideInbox'" />
+        @switch (view()) {
+          @case ('archived') {
+            <p class="empty-title">Nothing archived</p>
+            <p>Archive notifications you're done with to keep your inbox short.</p>
+          }
+          @case ('unread') {
+            <p class="empty-title">You're all caught up</p>
+            <p>New notifications show up here.</p>
+          }
+          @default {
+            <p class="empty-title">You're all caught up</p>
+            @if (!hasMailbox()) {
+              <p>
+                <a routerLink="/settings/connections">Connect Gmail</a> to hear about interviews,
+                assessments and offers here.
+              </p>
+            } @else {
+              <p>New notifications show up here.</p>
+            }
+          }
+        }
+      </div>
+    }
+  }
+
+  @if (more()) {
+    <div class="older">
+      <button z-button zType="ghost" [zLoading]="loading()" (click)="older()">Show older</button>
+    </div>
+  }
+</div>

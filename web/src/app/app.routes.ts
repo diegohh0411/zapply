@@ -47,14 +47,31 @@ export const routes: Routes = [
         loadComponent: () => import('./jobs/jobs.page').then((m) => m.JobsPage),
       },
       {
-        path: 'mail',
-        title: 'Mail · zapply',
-        loadComponent: () => import('./mail/mail.page').then((m) => m.MailPage),
+        path: 'notifications',
+        title: 'Notifications · zapply',
+        loadComponent: () =>
+          import('./notifications/notifications.page').then((m) => m.NotificationsPage),
       },
+      // Mail was split: its updates are notifications, its mailboxes are connections.
+      { path: 'mail', redirectTo: 'notifications' },
       {
-        path: 'usage',
-        title: 'Usage · zapply',
-        loadComponent: () => import('./usage/usage.page').then((m) => m.UsagePage),
+        path: 'settings',
+        loadComponent: () => import('./settings/settings.layout').then((m) => m.SettingsLayout),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'account' },
+          {
+            path: 'account',
+            title: 'Account settings · zapply',
+            loadComponent: () =>
+              import('./settings/account.page').then((m) => m.AccountSettingsPage),
+          },
+          {
+            path: 'connections',
+            title: 'Connections · zapply',
+            loadComponent: () =>
+              import('./settings/connections.page').then((m) => m.ConnectionsPage),
+          },
+        ],
       },
       { path: 'admin', pathMatch: 'full', redirectTo: 'admin/overview' },
       // Renamed: the keys page now owns the key list and the access check.

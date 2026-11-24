@@ -1,10 +1,9 @@
 <div class="mail-page">
   <header class="page-header">
     <div>
-      <h1>Mail</h1>
       <p>
-        Connect Gmail and zapply picks out the mail about your applications: confirmations,
-        assessments, interviews, rejections and offers.
+        Connect Gmail and zapply picks out the mail about your applications (confirmations,
+        assessments, interviews, rejections and offers) and sends it to Notifications.
       </p>
     </div>
     @if (configured()) {
@@ -57,9 +56,9 @@
 
   <section class="mailboxes" aria-labelledby="accounts-title">
     <div class="section-heading">
-      <h2 id="accounts-title">Mailboxes</h2>
+      <h2 id="accounts-title">Gmail</h2>
       @if (live().length > 1) {
-        <span>Each mailbox is read on its own and feeds the same list of updates.</span>
+        <span>Each mailbox is read on its own and feeds the same notifications.</span>
       }
     </div>
 
@@ -192,7 +191,8 @@
         <ng-icon name="lucideMail" class="size-6 text-muted-foreground" />
         <p class="font-medium">No mailbox connected</p>
         <p class="muted-text">
-          Connect a Gmail account and your application updates show up below as they arrive.
+          Connect a Gmail account and your application updates show up in Notifications as they
+          arrive.
         </p>
       </div>
     }
@@ -205,103 +205,22 @@
         on the spot: only its identifier is kept so it is never read twice. Mail that does is kept
         with its preview. Message bodies are never stored. Pause stops all reading and keeps the
         connection. Disconnect revokes zapply's access to the mailbox; the updates already found
-        stay here. Connecting an address that is already here reconnects it.
+        stay in Notifications. Connecting an address that is already here reconnects it.
       </p>
     </details>
   </section>
 
-  <section class="updates" aria-labelledby="inbox-title">
-    <div class="updates-bar">
-      <h2 id="inbox-title">Application updates</h2>
-      <div class="filter-tabs" role="group" aria-label="Filter by category">
-        <button type="button" [attr.aria-pressed]="category() === ''" (click)="filter('')">
-          All
-        </button>
-        @for (c of categories; track c.value) {
-          <button
-            type="button"
-            [attr.data-category]="c.value"
-            [attr.aria-pressed]="category() === c.value"
-            (click)="filter(c.value)"
-          >
-            <span class="category-dot" aria-hidden="true"></span>{{ c.label }}
-          </button>
-        }
-      </div>
+  <section class="agents" aria-labelledby="agents-title">
+    <div class="section-heading">
+      <h2 id="agents-title">Agents and MCP servers</h2>
     </div>
-
-    @for (g of groups(); track g.day) {
-      <h3 class="day-heading">{{ g.day }}</h3>
-      <ul class="message-list">
-        @for (m of g.items; track m.id) {
-          <li class="message" [attr.data-category]="m.category">
-            <div class="message-meta">
-              <span class="category-label">{{ label(m.category) }}</span>
-              <span class="sender" [title]="m.from">
-                {{ sender(m.from).name }}
-                @if (sender(m.from).email) {
-                  <span class="sender-email">{{ sender(m.from).email }}</span>
-                }
-              </span>
-              <time [attr.datetime]="m.received_at" [title]="m.received_at | date: 'medium'">{{
-                m.received_at | date: 'shortTime'
-              }}</time>
-            </div>
-            <p class="subject">{{ m.subject || '(no subject)' }}</p>
-            @if (m.snippet) {
-              <p class="snippet">{{ m.snippet }}</p>
-            }
-            @if (
-              (m.job_id && jobTitles()[m.job_id]) ||
-              (live().length > 1 && addresses()[m.account_id])
-            ) {
-              <p class="message-links">
-                @if (m.job_id && jobTitles()[m.job_id]) {
-                  <a [routerLink]="['/jobs']" [queryParams]="{ job: m.job_id }">
-                    <ng-icon name="lucideBriefcase" aria-hidden="true" />{{ jobTitles()[m.job_id] }}
-                  </a>
-                }
-                @if (live().length > 1 && addresses()[m.account_id]) {
-                  <span
-                    ><ng-icon name="lucideInbox" aria-hidden="true" />{{
-                      addresses()[m.account_id]
-                    }}</span
-                  >
-                }
-              </p>
-            }
-            <app-mail-status-change [message]="m" (changed)="replace($event)" />
-          </li>
-        }
-      </ul>
-    } @empty {
-      <p class="updates-empty">
-        @if (loadingMessages()) {
-          Loading…
-        } @else if (category()) {
-          No {{ categoryName().toLowerCase() }} updates yet.
-        } @else if (working()) {
-          Still reading your mail. Updates appear here as they are classified.
-        } @else if (loaded() && !live().length) {
-          Connect a Gmail account to see updates here.
-        } @else {
-          Nothing yet. Updates appear here as they arrive.
-        }
-      </p>
-    }
-    @if (more()) {
-      <div class="older">
-        <button
-          z-button
-          zType="outline"
-          [zDisabled]="loadingMessages()"
-          [zLoading]="loadingMessages()"
-          (click)="older()"
-        >
-          Show older updates
-        </button>
+    <div class="connection-card">
+      <div>
+        <h3><ng-icon name="lucideBot" class="mr-1.5 align-[-0.15em]" />Connect your own agents</h3>
+        <p>Link MCP servers so your agents can read your jobs and library, and act on them.</p>
       </div>
-    }
+      <span class="soon">Coming soon</span>
+    </div>
   </section>
 
   <z-dialog [(zVisible)]="rescanOpen" zWidth="min(440px, 95vw)">

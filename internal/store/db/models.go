@@ -1037,6 +1037,17 @@ type ModelRequest struct {
 	CreatedAt   time.Time
 }
 
+type Notification struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	Kind          string
+	MailMessageID *uuid.UUID
+	OccurredAt    time.Time
+	ReadAt        *time.Time
+	ArchivedAt    *time.Time
+	CreatedAt     time.Time
+}
+
 type Organization struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
