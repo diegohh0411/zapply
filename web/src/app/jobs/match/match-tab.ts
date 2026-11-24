@@ -6,10 +6,11 @@ import {
   inject,
   input,
   signal,
-  DestroyRef,
 } from '@angular/core';
+import { injectQuery } from '@tanstack/angular-query';
 import { ZardButtonComponent } from '@/shared/components/button';
-import { MatchStore } from './match.store';
+import { matchEstimateKey, matchRunKey, MatchStore } from './match.store';
+import { AuthService } from '../../core/auth.service';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideSearch, lucideRefreshCw } from '@ng-icons/lucide';
 import { ConfirmService } from '../../core/confirm.service';
@@ -28,8 +29,28 @@ import { ConfirmService } from '../../core/confirm.service';
 export class MatchTab {
   readonly jobId = input.required<string>();
   protected readonly store = inject(MatchStore);
-  protected readonly run = computed(() => this.store.runs().get(this.jobId()));
-  protected readonly estimate = computed(() => this.store.estimates().get(this.jobId()));
+  private readonly auth = inject(AuthService);
+  private readonly runQuery = injectQuery(() => {
+    const id = this.jobId();
+    return {
+      queryKey: matchRunKey(this.auth.identity(), id),
+      queryFn: () => this.store.fetchRun(id),
+      enabled: !!this.auth.identity(),
+    };
+  });
+  private readonly estimateQuery = injectQuery(() => {
+    const id = this.jobId();
+    return {
+      queryKey: matchEstimateKey(this.auth.identity(), id),
+      queryFn: () => this.store.fetchEstimate(id),
+      enabled: !!this.auth.identity(),
+      // Run starts remain available when estimates are unavailable.
+      retry: false,
+    };
+  });
+  protected readonly run = computed(() => this.runQuery.data() ?? undefined);
+  protected readonly estimate = computed(() => this.estimateQuery.data());
+  protected readonly loadError = computed(() => this.runQuery.error()?.message ?? '');
   protected readonly busy = signal(false);
   private readonly confirm = inject(ConfirmService);
   protected readonly error = signal('');
@@ -70,14 +91,11 @@ export class MatchTab {
       )[this.run()?.status ?? ''] ?? 'Match unavailable',
   );
   constructor() {
-    effect((onCleanup) => {
-      const id = this.jobId();
+    effect(() => {
+      this.jobId();
       this.busy.set(false);
       this.error.set('');
-      this.store.watch(id);
-      onCleanup(() => this.store.unwatch(id));
     });
-    inject(DestroyRef).onDestroy(() => this.store.unwatch(this.jobId()));
   }
   protected async rerun(): Promise<void> {
     const ok = await this.confirm.ask({

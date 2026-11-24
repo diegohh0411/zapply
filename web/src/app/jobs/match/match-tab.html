@@ -29,7 +29,7 @@
     >
       <ng-icon name="lucideRefreshCw" /> Re-run match
     </button>
-  } @else if (!store.errors().get(jobId())) {
+  } @else if (!loadError()) {
     <button
       z-button
       zSize="sm"
@@ -42,7 +42,7 @@
       <ng-icon name="lucideSearch" /> Check my match
     </button>
   }
-  @if (error() || store.errors().get(jobId()); as message) {
+  @if (error() || loadError(); as message) {
     <span role="alert" class="text-destructive">{{ message }}</span>
   }
 </div>

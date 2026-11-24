@@ -16,6 +16,7 @@ import {
   computed,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { injectQuery, QueryClient } from '@tanstack/angular-query';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
@@ -71,6 +72,7 @@ import {
   JobsStore,
   type PostingExtraction,
   type PostingRead,
+  jobActivitiesKey,
 } from './jobs.store';
 
 export type JobTab = 'details' | 'cv' | 'activity';
@@ -439,17 +441,26 @@ export class JobSheet {
   protected readonly saving = signal(false);
   protected readonly dirty = signal(false);
   protected readonly errors = signal<Record<string, string>>({});
-  protected readonly activities = signal<JobActivity[]>([]);
-  protected readonly activityError = signal('');
-  protected readonly activityLoading = signal(false);
   protected note = '';
   protected readonly editingNote = signal<string | null>(null);
   protected noteEdit = '';
   private etag = '';
   private generation = 0;
-  private activitiesRequest = 0;
   private readonly api = inject(Api);
-  protected readonly mail = signal<Schemas['MailMessage'][]>([]);
+  private readonly client = inject(QueryClient);
+  /** The open job's timeline, cached per job so reopening it shows at once. */
+  private readonly timeline = injectQuery(() => {
+    const id = this.job()?.id;
+    return {
+      queryKey: jobActivitiesKey(this.auth.identity(), id ?? ''),
+      queryFn: () => this.fetchTimeline(id!),
+      enabled: !!id && !!this.auth.identity(),
+    };
+  });
+  protected readonly activities = computed(() => this.timeline.data()?.activities ?? []);
+  protected readonly mail = computed(() => this.timeline.data()?.mail ?? []);
+  protected readonly activityLoading = computed(() => this.timeline.isFetching());
+  protected readonly activityError = computed(() => this.timeline.error()?.message ?? '');
   /** Activity and mail interleaved, newest first. */
   protected readonly timelineItems = computed(() =>
     [
@@ -489,14 +500,8 @@ export class JobSheet {
       identity = next;
       untracked(() => {
         this.generation++;
-        this.activitiesRequest++;
         this.job.set(null);
         this.form = emptyForm();
-        this.activities.set([]);
-        this.mail.set([]);
-        this.mail.set([]);
-        this.activityError.set('');
-        this.activityLoading.set(false);
         this.errors.set({});
         this.dirty.set(false);
         this.saving.set(false);
@@ -515,9 +520,6 @@ export class JobSheet {
       const t = this.target();
       untracked(() => void this.load(t));
     });
-    this.store.activityChanged.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((jobId) => {
-      if (jobId === this.job()?.id) void this.loadActivities(jobId);
-    });
     // Mail is part of the timeline: refresh when a message is classified or after a resync.
     const events = inject(EventsService);
     const destroyed = takeUntilDestroyed<unknown>(inject(DestroyRef));
@@ -528,7 +530,6 @@ export class JobSheet {
     events.changes.pipe(destroyed).subscribe((e) => {
       if ((e as { topic?: string }).topic === 'mail.message.classified') reloadMail();
     });
-    events.resync.pipe(destroyed).subscribe(reloadMail);
 
     // Another tab or device saved this job: refresh unless there are local edits.
     effect(() => {
@@ -542,7 +543,6 @@ export class JobSheet {
 
   private async load(t: SheetTarget | null, quiet = false): Promise<void> {
     const generation = ++this.generation;
-    this.activitiesRequest++;
     if (!quiet) {
       this.note = '';
       this.noteEdit = '';
@@ -553,9 +553,6 @@ export class JobSheet {
       this.editingNote.set(null);
       this.saving.set(false);
       this.job.set(null);
-      this.activities.set([]);
-      this.activityError.set('');
-      this.activityLoading.set(false);
       this.loading.set(false);
     }
     if (!t) return;
@@ -582,12 +579,14 @@ export class JobSheet {
       return;
     }
     this.isNew.set(false);
-    if (!quiet) this.loading.set(true);
+    // Show the cached copy at once and refresh it in the background.
+    const cached = quiet ? undefined : this.store.cached(t.id);
+    if (cached) this.applyJob(cached.job, cached.etag, false);
+    else if (!quiet) this.loading.set(true);
     try {
       const { job, etag } = await this.store.get(t.id);
       if (generation !== this.generation) return;
-      this.applyJob(job, etag, quiet);
-      await this.loadActivities(t.id);
+      this.applyJob(job, etag, quiet || !!cached);
     } catch (e) {
       if (generation !== this.generation) return;
       this.toast.error('Could not load the job', { description: (e as Error).message });
@@ -615,36 +614,31 @@ export class JobSheet {
     this.form = next;
   }
 
-  private async loadActivities(id: string): Promise<void> {
-    const generation = this.generation;
-    const seq = ++this.activitiesRequest;
-    this.activityLoading.set(true);
-    this.activityError.set('');
-    const current = () =>
-      generation === this.generation && seq === this.activitiesRequest && this.job()?.id === id;
-    try {
-      const [rows, mail] = await Promise.all([
-        this.store.activities(id),
-        this.api.client
-          .GET('/v1/mail/messages', { params: { query: { job_id: id, limit: 50 } } })
-          .then((r) => Api.ok(r).items)
-          // Mail is optional context: keep the timeline when the mailbox is unavailable.
-          .catch(() => [] as Schemas['MailMessage'][]),
-      ]);
-      if (current()) {
-        this.activities.set(rows);
-        this.mail.set(mail);
-      }
-    } catch (e) {
-      if (current())
-        this.activityError.set(e instanceof Error ? e.message : 'Could not load activity.');
-    } finally {
-      if (current()) this.activityLoading.set(false);
-    }
+  private async fetchTimeline(
+    id: string,
+  ): Promise<{ activities: JobActivity[]; mail: Schemas['MailMessage'][] }> {
+    const [activities, mail] = await Promise.all([
+      this.store.activities(id),
+      this.api.client
+        .GET('/v1/mail/messages', { params: { query: { job_id: id, limit: 50 } } })
+        .then((r) => Api.ok(r).items)
+        // Mail is optional context: keep the timeline when the mailbox is unavailable.
+        .catch(() => [] as Schemas['MailMessage'][]),
+    ]);
+    return { activities, mail };
+  }
+
+  private loadActivities(id: string): Promise<void> {
+    return this.client.invalidateQueries({ queryKey: jobActivitiesKey(this.auth.identity(), id) });
   }
 
   protected replaceMail(m: Schemas['MailMessage']): void {
-    this.mail.update((list) => list.map((x) => (x.id === m.id ? m : x)));
+    const id = this.job()?.id;
+    if (!id) return;
+    this.client.setQueryData<{ activities: JobActivity[]; mail: Schemas['MailMessage'][] }>(
+      jobActivitiesKey(this.auth.identity(), id),
+      (t) => t && { ...t, mail: t.mail.map((x) => (x.id === m.id ? m : x)) },
+    );
   }
 
   protected refreshActivity(): void {

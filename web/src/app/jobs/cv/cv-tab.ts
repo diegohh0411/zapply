@@ -12,6 +12,7 @@ import {
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { QueryClient } from '@tanstack/angular-query';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideDownload, lucideSparkles } from '@ng-icons/lucide';
@@ -37,6 +38,12 @@ import { RelevanceIndicator } from './relevance-indicator';
 import { TypstService, type Compiled, type CvTemplate } from './typst.service';
 import { RichText } from '@/shared/rich-text/rich-text.component';
 
+/** A job's CV preview and export history, cached so the tab shows them at once on return. */
+export const jobCvKey = (identity: string | null, jobId: string) =>
+  ['job-cv', identity, jobId] as const;
+export const jobCvExportsKey = (identity: string | null, jobId: string) =>
+  ['job-cv-exports', identity, jobId] as const;
+
 type Preview = Schemas['CvPreview'];
 type Export = Schemas['CvExport'];
 
@@ -53,7 +60,16 @@ interface Row {
 /** A job's CV: preview, fitting, picks and exports (part 7). */
 @Component({
   selector: 'app-cv-tab',
-  imports: [DatePipe, FormsModule, ZardButtonComponent, ...ZardSelectImports, NgIcon, RelevanceIndicator, MatchTab, RichText],
+  imports: [
+    DatePipe,
+    FormsModule,
+    ZardButtonComponent,
+    ...ZardSelectImports,
+    NgIcon,
+    RelevanceIndicator,
+    MatchTab,
+    RichText,
+  ],
   viewProviders: [provideIcons({ lucideChevronDown, lucideDownload, lucideSparkles })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cv-tab.html',
@@ -64,6 +80,7 @@ export class CvTab {
   readonly company = input('');
   private readonly api = inject(Api).client;
   private readonly auth = inject(AuthService);
+  private readonly client = inject(QueryClient);
   private readonly typst = inject(TypstService);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -246,15 +263,19 @@ export class CvTab {
       untracked(() => {
         ++this.generation;
         this.fitting.set(true);
-        this.preview.set(undefined);
+        const cached = identity
+          ? this.client.getQueryData<Preview>(jobCvKey(identity, id))
+          : undefined;
+        this.preview.set(cached);
         this.setPdf(undefined);
-        this.exports.set([]);
+        this.exports.set(
+          (identity && this.client.getQueryData<Export[]>(jobCvExportsKey(identity, id))) || [],
+        );
         this.busy.set(false);
         this.exporting.set(false);
         this.error.set('');
         this.notice.set('');
-        this.summaryText = '';
-        this.loadedSummaryText = '';
+        this.summaryText = this.loadedSummaryText = cached ? summaryOf(cached) : '';
         clearTimeout(this.summaryPoll);
         if (identity) {
           void this.load(id);
@@ -333,8 +354,8 @@ export class CvTab {
       const p = Api.ok(await this.api.GET('/v1/jobs/{id}/cv', { params: { path: { id } } }));
       if (!this.current(scope) || version !== this.loadVersion) return;
       this.preview.set(p);
-      const nextSummary =
-        p.draft.summary ?? String((p.content as unknown as CvContent).profile['summary'] ?? '');
+      this.client.setQueryData(jobCvKey(this.auth.identity(), id), p);
+      const nextSummary = summaryOf(p);
       if (this.summaryText === this.loadedSummaryText) this.summaryText = nextSummary;
       this.loadedSummaryText = nextSummary;
       clearTimeout(this.summaryPoll);
@@ -362,7 +383,10 @@ export class CvTab {
       const page = Api.ok(
         await this.api.GET('/v1/jobs/{id}/cv/exports', { params: { path: { id } } }),
       );
-      if (this.current(scope) && version === this.exportsVersion) this.exports.set(page.items);
+      if (this.current(scope) && version === this.exportsVersion) {
+        this.exports.set(page.items);
+        this.client.setQueryData(jobCvExportsKey(this.auth.identity(), id), page.items);
+      }
     } catch {
       /* The history is secondary; the preview reports errors. */
     }
@@ -510,6 +534,7 @@ export class CvTab {
       }
       ++this.loadVersion;
       this.preview.set(next);
+      this.client.setQueryData(jobCvKey(this.auth.identity(), id), next);
       const nextSummary =
         next.draft.summary ??
         String((next.content as unknown as CvContent).profile['summary'] ?? '');
@@ -639,4 +664,8 @@ export class CvTab {
     suggested: 'Relevant, but not auto-included',
     not_selected: 'Not selected for this job',
   };
+}
+
+function summaryOf(p: Schemas['CvPreview']): string {
+  return p.draft.summary ?? String((p.content as unknown as CvContent).profile['summary'] ?? '');
 }

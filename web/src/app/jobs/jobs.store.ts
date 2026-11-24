@@ -1,6 +1,6 @@
 import { computed, DestroyRef, effect, untracked, inject, Injectable, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject } from 'rxjs';
+import { injectQuery, QueryClient } from '@tanstack/angular-query';
 
 import { Api, etagOf, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
@@ -41,214 +41,206 @@ export const byPosition = (
           ? 1
           : 0;
 
+/** Query keys. Each carries the member's identity (see core/query.ts). */
+export const jobsKey = (identity: string | null, includeArchived?: boolean) =>
+  includeArchived === undefined
+    ? (['jobs', identity] as const)
+    : (['jobs', identity, { includeArchived }] as const);
+/** One job in full, with the ETag a save must send back. Reusable by any page. */
+export const jobKey = (identity: string | null, id: string) => ['job', identity, id] as const;
+export const jobActivitiesKey = (identity: string | null, id: string) =>
+  ['job-activities', identity, id] as const;
+export const jobStatusesKey = (identity: string | null) => ['job-statuses', identity] as const;
+export const jobViewsKey = (identity: string | null) => ['job-views', identity] as const;
+
+export interface CachedJob {
+  job: Job;
+  etag: string;
+}
+
 /**
- * The user's board: statuses, every job summary and saved views, loaded
- * once and kept current from /v1/events. Lists filter on the client: a
- * person tracks hundreds of jobs, not millions.
+ * The user's board: statuses, every job summary and saved views, held in the
+ * TanStack Query cache so the page shows them at once on return and refreshes
+ * in the background. Live events invalidate the keys they touch. Lists filter
+ * on the client: a person tracks hundreds of jobs, not millions.
  */
 @Injectable({ providedIn: 'root' })
 export class JobsStore {
   private readonly auth = inject(AuthService);
   private readonly api = inject(Api).client;
+  private readonly client = inject(QueryClient);
   private readonly events = inject(EventsService);
 
-  readonly statuses = signal<JobStatus[]>([]);
-  readonly views = signal<JobView[]>([]);
   readonly includeArchived = signal(false);
-  readonly loading = signal(true);
-  readonly error = signal<string | null>(null);
-  private readonly jobMap = signal(new Map<string, JobSummary>());
+  /** Nothing loads until a page asks for the board. */
+  private readonly requested = signal(false);
+  private readonly enabled = computed(() => this.requested() && !!this.auth.identity());
 
-  /** Fires with a job id when its timeline changes. */
-  readonly activityChanged = new Subject<string>();
-
-  readonly jobs = computed(() => [...this.jobMap().values()]);
-  readonly statusById = computed(() => new Map(this.statuses().map((s) => [s.id, s])));
-
-  private loaded = false;
-  private requested = false;
-  private identity: string | null | undefined;
-  private sessionGeneration = 0;
-  private jobsRequest = 0;
-  private statusesRequest = 0;
-  private viewsRequest = 0;
-  private revision = 0;
-  private readonly changed = new Map<string, number>();
-  private readonly versions = new Map<string, number>();
-  private readonly deleted = new Set<string>();
-
-  private syncSession(): void {
+  private readonly statusesQuery = injectQuery(() => ({
+    queryKey: jobStatusesKey(this.auth.identity()),
+    queryFn: async () => Api.ok(await this.api.GET('/v1/job-statuses')),
+    enabled: this.enabled(),
+  }));
+  private readonly viewsQuery = injectQuery(() => ({
+    queryKey: jobViewsKey(this.auth.identity()),
+    queryFn: async () => Api.ok(await this.api.GET('/v1/job-views')),
+    enabled: this.enabled(),
+  }));
+  private readonly jobsQuery = injectQuery(() => {
     const identity = this.auth.identity();
-    if (identity === this.identity) return;
-    this.identity = identity;
-    this.sessionGeneration++;
-    this.jobsRequest++;
-    this.statusesRequest++;
-    this.viewsRequest++;
-    this.loaded = false;
-    this.changed.clear();
-    this.versions.clear();
-    this.deleted.clear();
-    this.jobMap.set(new Map());
-    this.statuses.set([]);
-    this.views.set([]);
-    this.includeArchived.set(false);
-    this.error.set(null);
-    this.loading.set(false);
+    const includeArchived = this.includeArchived();
+    return {
+      queryKey: jobsKey(identity, includeArchived),
+      queryFn: () => this.fetchJobs(includeArchived),
+      enabled: this.enabled(),
+      // Keep the board up while the archived toggle loads, but never show
+      // another member's rows.
+      placeholderData: (prev: JobSummary[] | undefined, q?: { queryKey: readonly unknown[] }) =>
+        q?.queryKey[1] === identity ? prev : undefined,
+    };
+  });
+
+  readonly statuses = computed(() => this.statusesQuery.data() ?? []);
+  readonly views = computed(() => this.viewsQuery.data() ?? []);
+  readonly jobs = computed(() => this.jobsQuery.data() ?? []);
+  readonly statusById = computed(() => new Map(this.statuses().map((s) => [s.id, s])));
+  readonly loading = computed(
+    () =>
+      this.enabled() &&
+      (this.statusesQuery.isPending() || this.viewsQuery.isPending() || this.jobsQuery.isPending()),
+  );
+  /** Only when there is nothing cached to show; a failed background refresh keeps the board. */
+  readonly error = computed(() => {
+    for (const q of [this.statusesQuery, this.viewsQuery, this.jobsQuery] as const) {
+      const e = q.error();
+      if (e && q.data() === undefined) return e.message;
+    }
+    return null;
+  });
+
+  constructor() {
+    let identity = this.auth.identity();
+    effect(() => {
+      const next = this.auth.identity();
+      if (next !== identity) untracked(() => this.includeArchived.set(false));
+      identity = next;
+    });
+    this.events.changes.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((e) => {
+      const id = this.auth.identity();
+      const [kind] = e.topic.split('.');
+      if (kind === 'match_run' || ['evidence', 'skill', 'organization'].includes(kind)) {
+        void this.client.invalidateQueries({ queryKey: jobsKey(id) });
+      } else if (kind === 'job') {
+        if (e.topic === 'job.deleted') void this.forget(id, e.data.id);
+        else {
+          const cur = this.jobs().find((j) => j.id === e.data.id);
+          if (!cur || (e.data.version ?? 0) > cur.version) {
+            void this.client.invalidateQueries({ queryKey: jobsKey(id) });
+            void this.client.invalidateQueries({ queryKey: jobKey(id, e.data.id) });
+          }
+        }
+      } else if (kind === 'job_status')
+        void this.client.invalidateQueries({ queryKey: jobStatusesKey(id) });
+      else if (kind === 'job_view')
+        void this.client.invalidateQueries({ queryKey: jobViewsKey(id) });
+      else if (kind === 'job_activity' && e.data.job_id)
+        void this.client.invalidateQueries({ queryKey: jobActivitiesKey(id, e.data.job_id) });
+    });
+  }
+
+  /** Starts loading the board; cached data shows at once and refreshes in the background. */
+  ensureLoaded(): void {
+    this.requested.set(true);
+  }
+
+  setIncludeArchived(v: boolean): void {
+    this.includeArchived.set(v);
   }
 
   /** Reject old-account responses before any caller can apply them. */
   private async inSession<T>(request: () => Promise<T>): Promise<T> {
-    this.syncSession();
-    const generation = this.sessionGeneration;
+    const identity = this.auth.identity();
     const result = await request();
-    this.syncSession();
-    if (generation !== this.sessionGeneration)
-      throw new Error('Sign-in changed; request discarded');
+    if (identity !== this.auth.identity()) throw new Error('Sign-in changed; request discarded');
     return result;
   }
 
-  constructor() {
-    this.syncSession();
-    effect(() => {
-      this.auth.identity();
-      untracked(() => {
-        this.syncSession();
-        if (this.identity && this.requested && !this.loaded) void this.load();
-      });
-    });
-    const destroy = inject(DestroyRef);
-    this.events.resync.pipe(takeUntilDestroyed(destroy)).subscribe(() => {
-      if (this.loaded) void this.load();
-    });
-    this.events.changes.pipe(takeUntilDestroyed(destroy)).subscribe((e) => {
-      if (!this.loaded) return;
-      const [kind] = e.topic.split('.');
-      if (kind === 'match_run' || ['evidence', 'skill', 'organization'].includes(kind)) {
-        void this.loadJobs();
-      } else if (kind === 'job') {
-        if (e.topic === 'job.deleted') {
-          this.deleted.add(e.data.id);
-          this.remove(e.data.id);
-        } else {
-          const cur = this.jobMap().get(e.data.id);
-          if (!cur || (e.data.version ?? 0) > cur.version) void this.refreshJob(e.data.id);
-        }
-      } else if (kind === 'job_status') void this.loadStatuses();
-      else if (kind === 'job_view') void this.loadViews();
-      else if (kind === 'job_activity' && e.data.job_id) this.activityChanged.next(e.data.job_id);
-    });
-  }
-
-  /** Loads everything the first time; later calls reload. */
-  async ensureLoaded(): Promise<void> {
-    this.requested = true;
-    this.syncSession();
-    if (!this.loaded) await this.load();
-  }
-
-  async load(): Promise<void> {
-    this.syncSession();
-    const generation = this.sessionGeneration;
-    this.loaded = true;
-    this.loading.set(true);
-    this.error.set(null);
-    try {
-      await Promise.all([this.loadStatuses(), this.loadViews(), this.loadJobs()]);
-    } catch (e) {
-      if (generation === this.sessionGeneration) this.error.set((e as Error).message);
-    } finally {
-      if (generation === this.sessionGeneration) this.loading.set(false);
-    }
-  }
-
-  async setIncludeArchived(v: boolean): Promise<void> {
-    if (v === this.includeArchived()) return;
-    this.includeArchived.set(v);
-    await this.loadJobs();
-  }
-
-  private async loadStatuses(): Promise<void> {
-    const seq = ++this.statusesRequest;
-    const rows = Api.ok(await this.inSession(() => this.api.GET('/v1/job-statuses')));
-    if (seq === this.statusesRequest) this.statuses.set(rows);
-  }
-
-  private async loadViews(): Promise<void> {
-    const seq = ++this.viewsRequest;
-    const rows = Api.ok(await this.inSession(() => this.api.GET('/v1/job-views')));
-    if (seq === this.viewsRequest) this.views.set(rows);
-  }
-
-  private async loadJobs(): Promise<void> {
-    const seq = ++this.jobsRequest;
-    const revision = this.revision;
-    const includeArchived = this.includeArchived();
-    const map = new Map<string, JobSummary>();
+  private async fetchJobs(includeArchived: boolean): Promise<JobSummary[]> {
+    const rows: JobSummary[] = [];
     let cursor: string | undefined;
     do {
       const page = Api.ok(
-        await this.inSession(() =>
-          this.api.GET('/v1/jobs', {
-            params: {
-              query: { sort: 'position', limit: 200, cursor, include_archived: includeArchived },
-            },
-          }),
-        ),
+        await this.api.GET('/v1/jobs', {
+          params: {
+            query: { sort: 'position', limit: 200, cursor, include_archived: includeArchived },
+          },
+        }),
       );
-      for (const j of page.items) map.set(j.id, j);
+      rows.push(...page.items);
       cursor = page.next_cursor;
     } while (cursor);
-    if (seq !== this.jobsRequest) return;
-    // Preserve changes (including removals) received while paging the snapshot.
-    for (const [id, changedAt] of this.changed) {
-      if (
-        changedAt > revision ||
-        (map.has(id) && map.get(id)!.version < (this.versions.get(id) ?? 0))
-      ) {
-        const current = this.jobMap().get(id);
-        if (current && (includeArchived || !current.archived)) map.set(id, current);
-        else map.delete(id);
-      }
+    return rows;
+  }
+
+  /**
+   * Edits every cached job list of this member in place. In-flight list
+   * fetches are canceled first so an older snapshot can't land on top.
+   */
+  private async editLists(
+    identity: string | null,
+    edit: (rows: JobSummary[], includeArchived: boolean) => JobSummary[],
+  ): Promise<void> {
+    await this.client.cancelQueries({ queryKey: jobsKey(identity) });
+    for (const [key, rows] of this.client.getQueriesData<JobSummary[]>({
+      queryKey: jobsKey(identity),
+    })) {
+      const includeArchived = !!(key[2] as { includeArchived?: boolean } | undefined)
+        ?.includeArchived;
+      if (rows) this.client.setQueryData(key, edit(rows, includeArchived));
+      else void this.client.invalidateQueries({ queryKey: key, exact: true });
     }
-    for (const id of this.deleted) map.delete(id);
-    for (const j of map.values()) this.versions.set(j.id, j.version);
-    this.jobMap.set(map);
   }
 
-  private async refreshJob(id: string): Promise<void> {
-    const r = await this.inSession(() =>
-      this.api.GET('/v1/jobs/{id}', { params: { path: { id } } }),
-    );
-    if (r.response.status === 404) return this.remove(id);
-    if (r.data) this.upsert(r.data);
+  /** Puts a saved job in every cached list (unless a newer copy is there). */
+  private async upsert(identity: string | null, j: JobSummary | Job, etag?: string): Promise<void> {
+    const s = summary(j);
+    await this.editLists(identity, (rows, includeArchived) => {
+      const i = rows.findIndex((r) => r.id === s.id);
+      if (i >= 0 && rows[i].version > s.version) return rows;
+      const rest = rows.filter((r) => r.id !== s.id);
+      return s.archived && !includeArchived ? rest : [...rest, s];
+    });
+    const key = jobKey(identity, j.id);
+    if (etag && 'description' in j) this.client.setQueryData<CachedJob>(key, { job: j, etag });
+    else void this.client.invalidateQueries({ queryKey: key });
   }
 
-  upsert(j: JobSummary): void {
-    if (this.deleted.has(j.id) || (this.versions.get(j.id) ?? 0) > j.version) return;
-    this.versions.set(j.id, j.version);
-    this.changed.set(j.id, ++this.revision);
-    if (j.archived && !this.includeArchived()) return this.remove(j.id);
-    const m = new Map(this.jobMap());
-    m.set(j.id, summary(j));
-    this.jobMap.set(m);
-  }
-
-  private remove(id: string): void {
-    this.changed.set(id, ++this.revision);
-    if (!this.jobMap().has(id)) return;
-    const m = new Map(this.jobMap());
-    m.delete(id);
-    this.jobMap.set(m);
+  private async forget(identity: string | null, id: string): Promise<void> {
+    await this.editLists(identity, (rows) => rows.filter((r) => r.id !== id));
+    this.client.removeQueries({ queryKey: jobKey(identity, id) });
+    this.client.removeQueries({ queryKey: jobActivitiesKey(identity, id) });
   }
 
   // Jobs
 
-  async get(id: string): Promise<{ job: Job; etag: string }> {
-    const r = await this.inSession(() =>
-      this.api.GET('/v1/jobs/{id}', { params: { path: { id } } }),
+  /** The cached copy of a job, if any page loaded it. */
+  cached(id: string): CachedJob | undefined {
+    return this.client.getQueryData<CachedJob>(jobKey(this.auth.identity(), id));
+  }
+
+  /** Fetches a job fresh and caches it under its per-job key. */
+  async get(id: string): Promise<CachedJob> {
+    const identity = this.auth.identity();
+    return this.inSession(() =>
+      this.client.fetchQuery({
+        queryKey: jobKey(identity, id),
+        queryFn: async () => {
+          const r = await this.api.GET('/v1/jobs/{id}', { params: { path: { id } } });
+          return { job: Api.ok(r), etag: etagOf(r) };
+        },
+        staleTime: 0,
+      }),
     );
-    return { job: Api.ok(r), etag: etagOf(r) };
   }
 
   /**
@@ -271,12 +263,15 @@ export class JobsStore {
   }
 
   async create(input: JobInput): Promise<Job> {
-    const job = Api.ok(await this.inSession(() => this.api.POST('/v1/jobs', { body: input })));
-    this.upsert(job);
+    const identity = this.auth.identity();
+    const r = await this.inSession(() => this.api.POST('/v1/jobs', { body: input }));
+    const job = Api.ok(r);
+    await this.upsert(identity, job, etagOf(r));
     return job;
   }
 
-  async save(id: string, etag: string, input: JobInput): Promise<{ job: Job; etag: string }> {
+  async save(id: string, etag: string, input: JobInput): Promise<CachedJob> {
+    const identity = this.auth.identity();
     const r = await this.inSession(() =>
       this.api.PUT('/v1/jobs/{id}', {
         params: { path: { id }, header: { 'If-Match': etag } },
@@ -284,29 +279,20 @@ export class JobsStore {
       }),
     );
     const job = Api.ok(r);
-    this.upsert(job);
+    await this.upsert(identity, job, etagOf(r));
     return { job, etag: etagOf(r) };
   }
 
   /**
    * Drag and drop: shows the move at once, then applies the server's
-   * position (or reloads if it failed).
+   * position (or refetches if it failed).
    */
   async move(id: string, statusId: string, after?: string, before?: string): Promise<Job> {
-    this.syncSession();
-    const generation = this.sessionGeneration;
-    const cur = this.jobMap().get(id);
-    if (cur) {
-      const optimistic = {
-        ...cur,
-        status_id: statusId,
-        position: guessPosition(this.column(statusId, id), after, before),
-      };
-      const m = new Map(this.jobMap());
-      m.set(id, optimistic);
-      this.jobMap.set(m);
-      this.changed.set(id, ++this.revision);
-    }
+    const identity = this.auth.identity();
+    const position = guessPosition(this.column(statusId, id), after, before);
+    await this.editLists(identity, (rows) =>
+      rows.map((r) => (r.id === id ? { ...r, status_id: statusId, position } : r)),
+    );
     try {
       const job = Api.ok(
         await this.inSession(() =>
@@ -316,29 +302,30 @@ export class JobsStore {
           }),
         ),
       );
-      this.upsert(job);
+      await this.upsert(identity, job);
       return job;
     } catch (e) {
-      if (generation === this.sessionGeneration) await this.loadJobs();
+      void this.client.invalidateQueries({ queryKey: jobsKey(identity) });
       throw e;
     }
   }
 
   async setArchived(id: string, archived: boolean): Promise<Job> {
+    const identity = this.auth.identity();
     const path = archived ? '/v1/jobs/{id}/archive' : '/v1/jobs/{id}/unarchive';
     const job = Api.ok(
       await this.inSession(() => this.api.POST(path, { params: { path: { id } } })),
     );
-    this.upsert(job);
+    await this.upsert(identity, job);
     return job;
   }
 
   async delete(id: string): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() => this.api.DELETE('/v1/jobs/{id}', { params: { path: { id } } })),
     );
-    this.deleted.add(id);
-    this.remove(id);
+    await this.forget(identity, id);
   }
 
   /** A status's jobs in board order, optionally without one job. */
@@ -392,22 +379,29 @@ export class JobsStore {
 
   // Statuses
 
+  private refresh(...keys: (readonly unknown[])[]): Promise<unknown> {
+    return Promise.all(keys.map((queryKey) => this.client.invalidateQueries({ queryKey })));
+  }
+
   async createStatus(body: Schemas['JobStatusInput']): Promise<JobStatus> {
+    const identity = this.auth.identity();
     const created = Api.ok(await this.inSession(() => this.api.POST('/v1/job-statuses', { body })));
-    await this.loadStatuses();
+    await this.refresh(jobStatusesKey(identity));
     return created;
   }
 
   async updateStatus(id: string, body: Schemas['JobStatusInput']): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() =>
         this.api.PATCH('/v1/job-statuses/{id}', { params: { path: { id } }, body }),
       ),
     );
-    await this.loadStatuses();
+    await this.refresh(jobStatusesKey(identity));
   }
 
   async moveStatus(id: string, after?: string, before?: string): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() =>
         this.api.POST('/v1/job-statuses/{id}/move', {
@@ -416,10 +410,11 @@ export class JobsStore {
         }),
       ),
     );
-    await this.loadStatuses();
+    await this.refresh(jobStatusesKey(identity));
   }
 
   async deleteStatus(id: string, moveTo?: string): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() =>
         this.api.DELETE('/v1/job-statuses/{id}', {
@@ -427,33 +422,36 @@ export class JobsStore {
         }),
       ),
     );
-    await Promise.all([this.loadStatuses(), this.loadJobs()]);
+    await this.refresh(jobStatusesKey(identity), jobsKey(identity));
   }
 
   // Views
 
   async createView(body: JobViewInput): Promise<JobView> {
+    const identity = this.auth.identity();
     const v = Api.ok(await this.inSession(() => this.api.POST('/v1/job-views', { body })));
-    await this.loadViews();
+    await this.refresh(jobViewsKey(identity));
     return v;
   }
 
   async updateView(id: string, body: JobViewInput): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() =>
         this.api.PUT('/v1/job-views/{id}', { params: { path: { id } }, body }),
       ),
     );
-    await this.loadViews();
+    await this.refresh(jobViewsKey(identity));
   }
 
   async deleteView(id: string): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(
       await this.inSession(() =>
         this.api.DELETE('/v1/job-views/{id}', { params: { path: { id } } }),
       ),
     );
-    await this.loadViews();
+    await this.refresh(jobViewsKey(identity));
   }
 }
 
