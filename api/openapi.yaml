@@ -1617,6 +1617,69 @@ paths:
               schema: { $ref: "#/components/schemas/MailMessage" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      description: >
+        The member's notifications, newest first. Today every notification is
+        `mail`: a message classified as about an application, carried in `mail`.
+        `category` narrows mail notifications; `unread` keeps only unread ones.
+      parameters:
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/NotificationKind" }
+        - name: category
+          in: query
+          schema: { $ref: "#/components/schemas/MailCategory" }
+        - name: unread
+          in: query
+          schema: { type: boolean }
+        - name: before
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: A page of notifications.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/notifications/summary:
+    get:
+      operationId: getNotificationSummary
+      tags: [notifications]
+      description: How many notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events.
+      responses:
+        "200":
+          description: The summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSummary" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /v1/notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      description: Marks the named notifications read, or all of them when `all` is true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationRead" }
+      responses:
+        "200":
+          description: The summary after marking.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationSummary" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -2841,6 +2904,40 @@ components:
         items: { type: array, items: { $ref: '#/components/schemas/MatchRun' } }
         next_cursor: { type: string, format: uuid }
 
+    NotificationKind:
+      type: string
+      enum: [mail]
+    Notification:
+      type: object
+      required: [id, kind, occurred_at, read_at, mail]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/NotificationKind' }
+        occurred_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+        mail:
+          nullable: true
+          description: Set when `kind` is `mail`.
+          allOf: [{ $ref: '#/components/schemas/MailMessage' }]
+    NotificationPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+        next_cursor: { type: string, format: uuid }
+    NotificationSummary:
+      type: object
+      required: [unread]
+      properties:
+        unread: { type: integer }
+    NotificationRead:
+      type: object
+      properties:
+        ids:
+          type: array
+          maxItems: 500
+          items: { type: string, format: uuid }
+        all: { type: boolean }
     MailCategory:
       type: string
       enum: [received, assessment, interview, rejection, offer]

@@ -1,0 +1,60 @@
+/* Notifications: unread rows are tinted and carry a dot before the subject. */
+.message.unread {
+  background: color-mix(in oklch, var(--primary) 4%, transparent);
+}
+.message.unread .subject {
+  font-weight: 600;
+}
+.unread-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 999px;
+  background: var(--primary);
+  vertical-align: 0.1em;
+}
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.view-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+.view-tabs button {
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.view-tabs button:hover {
+  color: var(--foreground);
+}
+.view-tabs button[aria-pressed='true'] {
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 500;
+}
+.view-tabs button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.count-pill {
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}

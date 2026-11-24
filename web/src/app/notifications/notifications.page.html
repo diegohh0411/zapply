@@ -1,0 +1,169 @@
+<div class="mail-page">
+  <header class="page-header">
+    <div>
+      <h1>Notifications</h1>
+      <p>
+        Everything that needs your attention in one place. Today that is mail about your
+        applications: confirmations, assessments, interviews, rejections and offers.
+      </p>
+    </div>
+    <div class="header-actions">
+      @if (notes.unread() > 0) {
+        <button z-button zType="outline" [zDisabled]="busy()" (click)="readAll()">
+          <ng-icon name="lucideCheckCheck" /> Mark all read
+        </button>
+      }
+      <a z-button zType="ghost" routerLink="/settings/connections">
+        <ng-icon name="lucidePlug" /> Connections
+      </a>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div role="alert" class="banner banner-error">
+      <p>{{ error() }}</p>
+      <button
+        z-button
+        zType="ghost"
+        zSize="icon-xs"
+        type="button"
+        aria-label="Dismiss"
+        (click)="error.set('')"
+      >
+        <ng-icon name="lucideX" />
+      </button>
+    </div>
+  }
+
+  <section class="updates" aria-labelledby="inbox-title">
+    <div class="view-tabs" role="group" aria-label="Show">
+      <button type="button" [attr.aria-pressed]="!unreadOnly()" (click)="show(false)">All</button>
+      <button type="button" [attr.aria-pressed]="unreadOnly()" (click)="show(true)">
+        Unread
+        @if (notes.unread() > 0) {
+          <span class="count-pill">{{ notes.unread() }}</span>
+        }
+      </button>
+    </div>
+    <div class="updates-bar">
+      <h2 id="inbox-title">Application updates</h2>
+      <div class="filter-tabs" role="group" aria-label="Filter by category">
+        <button type="button" [attr.aria-pressed]="category() === ''" (click)="filter('')">
+          All
+        </button>
+        @for (c of categories; track c.value) {
+          <button
+            type="button"
+            [attr.data-category]="c.value"
+            [attr.aria-pressed]="category() === c.value"
+            (click)="filter(c.value)"
+          >
+            <span class="category-dot" aria-hidden="true"></span>{{ c.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @for (g of groups(); track g.day) {
+      <h3 class="day-heading">{{ g.day }}</h3>
+      <ul class="message-list">
+        @for (n of g.items; track n.id) {
+          @if (n.mail; as m) {
+            <li class="message" [class.unread]="!n.read_at" [attr.data-category]="m.category">
+              <div class="message-meta">
+                <span class="category-label">{{ label(m.category) }}</span>
+                <span class="sender" [title]="m.from">
+                  {{ sender(m.from).name }}
+                  @if (sender(m.from).email) {
+                    <span class="sender-email">{{ sender(m.from).email }}</span>
+                  }
+                </span>
+                <time [attr.datetime]="m.received_at" [title]="m.received_at | date: 'medium'">{{
+                  m.received_at | date: 'shortTime'
+                }}</time>
+              </div>
+              <p class="subject">
+                @if (!n.read_at) {
+                  <span class="unread-dot" aria-label="Unread"></span>
+                }
+                {{ m.subject || '(no subject)' }}
+              </p>
+              @if (m.snippet) {
+                <p class="snippet">{{ m.snippet }}</p>
+              }
+              @if (
+                (m.job_id && jobTitles()[m.job_id]) ||
+                (live().length > 1 && addresses()[m.account_id])
+              ) {
+                <p class="message-links">
+                  @if (m.job_id && jobTitles()[m.job_id]) {
+                    <a [routerLink]="['/jobs']" [queryParams]="{ job: m.job_id }" (click)="read(n)">
+                      <ng-icon name="lucideBriefcase" aria-hidden="true" />{{
+                        jobTitles()[m.job_id]
+                      }}
+                    </a>
+                  }
+                  @if (live().length > 1 && addresses()[m.account_id]) {
+                    <span
+                      ><ng-icon name="lucideInbox" aria-hidden="true" />{{
+                        addresses()[m.account_id]
+                      }}</span
+                    >
+                  }
+                </p>
+              }
+              <app-mail-status-change [message]="m" (changed)="replaceMail(n, $event)" />
+              <div class="message-actions">
+                <a
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  [href]="m.gmail_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  (click)="read(n)"
+                >
+                  <ng-icon name="lucideExternalLink" /> Open in Gmail
+                </a>
+                @if (!n.read_at) {
+                  <button z-button zType="ghost" zSize="sm" type="button" (click)="read(n)">
+                    <ng-icon name="lucideCheck" /> Mark read
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        }
+      </ul>
+    } @empty {
+      <p class="updates-empty">
+        @if (loading() && !loaded()) {
+          Loading…
+        } @else if (unreadOnly()) {
+          You're all caught up.
+        } @else if (category()) {
+          No {{ categoryName().toLowerCase() }} updates yet.
+        } @else if (loaded() && !live().length) {
+          Nothing here yet.
+          <a routerLink="/settings/connections" class="underline">Connect Gmail</a>
+          to get updates about your applications.
+        } @else {
+          Nothing yet. Updates appear here as they arrive.
+        }
+      </p>
+    }
+    @if (more()) {
+      <div class="older">
+        <button
+          z-button
+          zType="outline"
+          [zDisabled]="loading()"
+          [zLoading]="loading()"
+          (click)="older()"
+        >
+          Show older
+        </button>
+      </div>
+    }
+  </section>
+</div>

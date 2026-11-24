@@ -4,4461 +4,4651 @@
  */
 
 export interface paths {
-    "/v1/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/kinds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The fixed catalog of evidence kinds and the schema of each kind's `details`. */
-        get: operations["listKinds"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getProfile"];
-        put: operations["putProfile"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/organizations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listOrganizations"];
-        put?: never;
-        post: operations["createOrganization"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/organizations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get: operations["getOrganization"];
-        put?: never;
-        post?: never;
-        /** @description Fails with 409 while evidence references the organization. */
-        delete: operations["deleteOrganization"];
-        options?: never;
-        head?: never;
-        /** @description Replaces the organization's fields. Renaming updates linked evidence. */
-        patch: operations["updateOrganization"];
-        trace?: never;
-    };
-    "/v1/skills": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listSkills"];
-        put?: never;
-        post: operations["createSkill"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/skills/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["deleteSkill"];
-        options?: never;
-        head?: never;
-        /** @description Replaces the skill's fields. Renaming updates linked evidence. */
-        patch: operations["updateSkill"];
-        trace?: never;
-    };
-    "/v1/skills/{id}/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Moves every link to `into`, then deletes this skill. */
-        post: operations["mergeSkill"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/evidences": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listEvidences"];
-        put?: never;
-        post: operations["createEvidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/evidences/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get: operations["getEvidence"];
-        /**
-         * @description Replaces the whole document. Highlights sent with an `id` keep it;
-         *     omitted highlights are deleted. Re-parent with the move operation.
-         */
-        put: operations["putEvidence"];
-        post?: never;
-        delete: operations["deleteEvidence"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/evidences/{id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Places the evidence under `parent_id` (omit for top level), after
-         *     `after_id` or before `before_id` among its new siblings, or last.
-         *     Moving under a parent adopts the parent's category.
-         */
-        post: operations["moveEvidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/evidences/{id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["archiveEvidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/evidences/{id}/unarchive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["unarchiveEvidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/job-statuses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The board's columns in order. The defaults are created on first use. */
-        get: operations["listJobStatuses"];
-        put?: never;
-        /** @description Adds a status as the last column. */
-        post: operations["createJobStatus"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/job-statuses/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * @description Fails with 409 while jobs have this status, unless `move_to` names
-         *     another status to move them to first, or if it is the last status.
-         */
-        delete: operations["deleteJobStatus"];
-        options?: never;
-        head?: never;
-        /** @description Replaces the status's name, color and stage. Activity history keeps the old names. */
-        patch: operations["updateJobStatus"];
-        trace?: never;
-    };
-    "/v1/job-statuses/{id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Places the status after `after_id` or before `before_id`, or last. */
-        post: operations["moveJobStatus"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listJobs"];
-        put?: never;
-        /**
-         * @description Saves a job first in its status's column (default: the first status).
-         *     A posting URL already saved returns 409 with `existing_id`.
-         */
-        post: operations["createJob"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get: operations["getJob"];
-        /**
-         * @description Replaces the job. A new `status_id` moves it to the top of that
-         *     column; omit it to keep the status.
-         */
-        put: operations["putJob"];
-        post?: never;
-        delete: operations["deleteJob"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Drag and drop on the board: into `status_id` (omit to stay in the
-         *     column), after `after_id` or before `before_id`, or first.
-         */
-        post: operations["moveJob"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["archiveJob"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/unarchive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["unarchiveJob"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/activities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get: operations["listJobActivities"];
-        put?: never;
-        post: operations["createJobNote"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/activities/{activity_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-                activity_id: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Only notes can be deleted (409 otherwise). */
-        delete: operations["deleteJobNote"];
-        options?: never;
-        head?: never;
-        /** @description Only notes can be edited (409 otherwise). */
-        patch: operations["updateJobNote"];
-        trace?: never;
-    };
-    "/v1/postings/read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Reads a posting for the new job dialog: its page through the
-         *     configured scraper (SCRAPER_PROVIDER; docs/parts/04-jobs.md), and the
-         *     pasted `text`. Fields come from the page's schema.org JobPosting data;
-         *     absent fields were not found. When an extraction model is selected,
-         *     the posting's text is also sent to it and `extraction_id` names the
-         *     operation; GET /v1/postings/extractions/{id} returns what it read.
-         *     Nothing is saved. 503 when there is neither a scraper nor text to
-         *     extract from, 422 on `url` when the page could not be read and there
-         *     is no text.
-         */
-        post: operations["readPosting"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/postings/extractions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        /**
-         * @description What the extraction model read from a posting. `pending` until the
-         *     model answers; `failed` when it could not (fields are then absent).
-         */
-        get: operations["getPostingExtraction"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/job-views": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listJobViews"];
-        put?: never;
-        post: operations["createJobView"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/job-views/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["putJobView"];
-        post?: never;
-        delete: operations["deleteJobView"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description The user's change feed as Server-Sent Events (`text/event-stream`).
-         *     Served by a hand-written handler; the generated server skips the
-         *     `events` tag.
-         *
-         *     Each event has `id` (its seq), `event` (the topic, e.g.
-         *     `evidence.updated`) and `data` (an `EventData` JSON object). Refetch
-         *     the resource it names; events can repeat, so they are hints, not
-         *     state.
-         *
-         *     - `reset`: the Last-Event-ID is too old to replay. Refetch everything
-         *       after `ready`.
-         *     - `ready`: replay is done and the stream is live. Its `id` is the
-         *       position to resume from. Without a Last-Event-ID, fetch data only
-         *       after `ready`.
-         *
-         *     Comments (`: ping`) arrive every 20 s. The stream ends at token
-         *     expiry, when the server drains, when the client falls too far
-         *     behind, or when the server loses NATS. Reconnect with a fresh token
-         *     and `Last-Event-ID`. Browsers' `EventSource` can't send the bearer
-         *     header, so use a fetch-based SSE client.
-         */
-        get: operations["streamEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getUsage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/usage/entries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listUsageEntries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listPlans"];
-        put?: never;
-        post: operations["createPlan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/plans/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["updatePlan"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listMembers"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/members/{id}/membership": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** @description If-Match: 0 assigns a first plan; later changes require the current version. */
-        put: operations["putMembership"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/system-keys": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listSystemKeys"];
-        put?: never;
-        post: operations["createSystemKey"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/system-keys/{id}/activation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["activateSystemKey"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/model-attempts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listModelAttempts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/model-attempts/{id}/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["resolveModelAttempt"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/gateway-tests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["createGatewayTest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/gateway-tests/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getGatewayTest"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/text-model-endpoints": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listTextModelEndpoints"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/text-models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listTextModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/decision-models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listDecisionModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/extraction-models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listExtractionModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/model-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getModelSettings"];
-        put: operations["putModelSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/match-estimate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        get: operations["getMatchEstimate"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/match-runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        get: operations["listMatchRuns"];
-        put?: never;
-        post: operations["createMatchRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/match-runs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        get: operations["getMatchRun"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/match-runs/{id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["cancelMatchRun"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/match-overrides/{text_hash}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                text_hash: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["putMatchOverride"];
-        post?: never;
-        delete: operations["deleteMatchOverride"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cv-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Every CV template version, with the files a browser compiles it with. */
-        get: operations["listCvTemplates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/cv": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        /**
-         * @description The job's CV draft and its content before fitting, built from the
-         *     library, the latest completed match run and the draft's picks. The
-         *     draft is created on first read. The ETag is the draft's version.
-         */
-        get: operations["getCv"];
-        put: operations["putCv"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/cv/fit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * @description Reports the page fit the browser found for the preview whose fit_key
-         *     this is. The summary is written only from the content that fit keeps,
-         *     so until a fit for the current content is reported the summary waits.
-         *     A fit for content that has since changed is a conflict.
-         */
-        put: operations["putCvFit"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/jobs/{id}/cv/exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        /** @description The job's exports, newest first, without their content. */
-        get: operations["listCvExports"];
-        put?: never;
-        /**
-         * @description Stores an immutable snapshot of the CV the client fitted: the draft's
-         *     content, rebuilt on the server, without the dropped items. A stale
-         *     draft version fails with 412; a different content hash (the library
-         *     changed since the preview) with 409.
-         */
-        post: operations["createCvExport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cv-exports/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get: operations["getCvExport"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cv-exports/{id}/pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        /**
-         * @description Compiles the snapshot on the server, for clients without a browser.
-         *     Nothing is stored. 503 when the server lacks the template's Typst
-         *     version.
-         */
-        get: operations["getCvExportPdf"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/accounts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
-         *     when the server has no Google OAuth client, in which case connecting
-         *     answers 503.
-         */
-        get: operations["listMailAccounts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/accounts/google/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Begins the Gmail consent flow. Send the browser to `url`; Google returns
-         *     to the server's `/oauth/google/callback`, which redirects to the app, which
-         *     calls `completeGoogleConnect`.
-         */
-        post: operations["startGoogleConnect"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/accounts/google/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Finishes the consent flow with the `state` and `code` the server's
-         *     callback passed to the app. The state must belong to the caller, who is
-         *     the member that started it; 422 on `state` otherwise.
-         */
-        post: operations["completeGoogleConnect"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/accounts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account. */
-        delete: operations["disconnectMailAccount"];
-        options?: never;
-        head?: never;
-        /** @description Pause or resume reading an account. A paused account is not read and nothing is sent to the model. */
-        patch: operations["updateMailAccount"];
-        trace?: never;
-    };
-    "/v1/mail/accounts/{id}/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Checks the mailbox now and retries mail still waiting to be classified.
-         *     409 unless the account is active. A sync held back by Gmail's rate limit
-         *     still waits; `retry_at` says until when.
-         */
-        post: operations["syncMailAccount"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/accounts/{id}/rescan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description Re-reads the last `days` days of the inbox (at most 500 messages, newest
-         *     first), beyond the usual 30-day window. Mail already read is skipped, so
-         *     only mail never seen is sent to the model. 409 unless the account is active.
-         */
-        post: operations["rescanMailAccount"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Mail classified as relevant to a job application, newest first. */
-        get: operations["listMailMessages"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/mail/messages/{id}/status-change": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Acts on the job status a message proposed. `apply` moves the job to the proposed status and `dismiss` declines it; both need an outcome of `review`. `undo` moves an applied job back to its earlier status, and fails with 409 if the job's status was changed since. */
-        post: operations["resolveMailStatusChange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+  '/v1/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getMe'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/kinds': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description The fixed catalog of evidence kinds and the schema of each kind's `details`. */
+    get: operations['listKinds'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/profile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getProfile'];
+    put: operations['putProfile'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/organizations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listOrganizations'];
+    put?: never;
+    post: operations['createOrganization'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/organizations/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get: operations['getOrganization'];
+    put?: never;
+    post?: never;
+    /** @description Fails with 409 while evidence references the organization. */
+    delete: operations['deleteOrganization'];
+    options?: never;
+    head?: never;
+    /** @description Replaces the organization's fields. Renaming updates linked evidence. */
+    patch: operations['updateOrganization'];
+    trace?: never;
+  };
+  '/v1/skills': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listSkills'];
+    put?: never;
+    post: operations['createSkill'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/skills/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete: operations['deleteSkill'];
+    options?: never;
+    head?: never;
+    /** @description Replaces the skill's fields. Renaming updates linked evidence. */
+    patch: operations['updateSkill'];
+    trace?: never;
+  };
+  '/v1/skills/{id}/merge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Moves every link to `into`, then deletes this skill. */
+    post: operations['mergeSkill'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/evidences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listEvidences'];
+    put?: never;
+    post: operations['createEvidence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/evidences/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get: operations['getEvidence'];
+    /**
+     * @description Replaces the whole document. Highlights sent with an `id` keep it;
+     *     omitted highlights are deleted. Re-parent with the move operation.
+     */
+    put: operations['putEvidence'];
+    post?: never;
+    delete: operations['deleteEvidence'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/evidences/{id}/move': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Places the evidence under `parent_id` (omit for top level), after
+     *     `after_id` or before `before_id` among its new siblings, or last.
+     *     Moving under a parent adopts the parent's category.
+     */
+    post: operations['moveEvidence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/evidences/{id}/archive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['archiveEvidence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/evidences/{id}/unarchive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['unarchiveEvidence'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/job-statuses': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description The board's columns in order. The defaults are created on first use. */
+    get: operations['listJobStatuses'];
+    put?: never;
+    /** @description Adds a status as the last column. */
+    post: operations['createJobStatus'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/job-statuses/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * @description Fails with 409 while jobs have this status, unless `move_to` names
+     *     another status to move them to first, or if it is the last status.
+     */
+    delete: operations['deleteJobStatus'];
+    options?: never;
+    head?: never;
+    /** @description Replaces the status's name, color and stage. Activity history keeps the old names. */
+    patch: operations['updateJobStatus'];
+    trace?: never;
+  };
+  '/v1/job-statuses/{id}/move': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Places the status after `after_id` or before `before_id`, or last. */
+    post: operations['moveJobStatus'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listJobs'];
+    put?: never;
+    /**
+     * @description Saves a job first in its status's column (default: the first status).
+     *     A posting URL already saved returns 409 with `existing_id`.
+     */
+    post: operations['createJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get: operations['getJob'];
+    /**
+     * @description Replaces the job. A new `status_id` moves it to the top of that
+     *     column; omit it to keep the status.
+     */
+    put: operations['putJob'];
+    post?: never;
+    delete: operations['deleteJob'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/move': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Drag and drop on the board: into `status_id` (omit to stay in the
+     *     column), after `after_id` or before `before_id`, or first.
+     */
+    post: operations['moveJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/archive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['archiveJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/unarchive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['unarchiveJob'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/activities': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get: operations['listJobActivities'];
+    put?: never;
+    post: operations['createJobNote'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/activities/{activity_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+        activity_id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** @description Only notes can be deleted (409 otherwise). */
+    delete: operations['deleteJobNote'];
+    options?: never;
+    head?: never;
+    /** @description Only notes can be edited (409 otherwise). */
+    patch: operations['updateJobNote'];
+    trace?: never;
+  };
+  '/v1/postings/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Reads a posting for the new job dialog: its page through the
+     *     configured scraper (SCRAPER_PROVIDER; docs/parts/04-jobs.md), and the
+     *     pasted `text`. Fields come from the page's schema.org JobPosting data;
+     *     absent fields were not found. When an extraction model is selected,
+     *     the posting's text is also sent to it and `extraction_id` names the
+     *     operation; GET /v1/postings/extractions/{id} returns what it read.
+     *     Nothing is saved. 503 when there is neither a scraper nor text to
+     *     extract from, 422 on `url` when the page could not be read and there
+     *     is no text.
+     */
+    post: operations['readPosting'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/postings/extractions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * @description What the extraction model read from a posting. `pending` until the
+     *     model answers; `failed` when it could not (fields are then absent).
+     */
+    get: operations['getPostingExtraction'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/job-views': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listJobViews'];
+    put?: never;
+    post: operations['createJobView'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/job-views/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['putJobView'];
+    post?: never;
+    delete: operations['deleteJobView'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * @description The user's change feed as Server-Sent Events (`text/event-stream`).
+     *     Served by a hand-written handler; the generated server skips the
+     *     `events` tag.
+     *
+     *     Each event has `id` (its seq), `event` (the topic, e.g.
+     *     `evidence.updated`) and `data` (an `EventData` JSON object). Refetch
+     *     the resource it names; events can repeat, so they are hints, not
+     *     state.
+     *
+     *     - `reset`: the Last-Event-ID is too old to replay. Refetch everything
+     *       after `ready`.
+     *     - `ready`: replay is done and the stream is live. Its `id` is the
+     *       position to resume from. Without a Last-Event-ID, fetch data only
+     *       after `ready`.
+     *
+     *     Comments (`: ping`) arrive every 20 s. The stream ends at token
+     *     expiry, when the server drains, when the client falls too far
+     *     behind, or when the server loses NATS. Reconnect with a fresh token
+     *     and `Last-Event-ID`. Browsers' `EventSource` can't send the bearer
+     *     header, so use a fetch-based SSE client.
+     */
+    get: operations['streamEvents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/usage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/usage/entries': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listUsageEntries'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listPlans'];
+    put?: never;
+    post: operations['createPlan'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/plans/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['updatePlan'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/members': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listMembers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/members/{id}/membership': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** @description If-Match: 0 assigns a first plan; later changes require the current version. */
+    put: operations['putMembership'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/system-keys': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listSystemKeys'];
+    put?: never;
+    post: operations['createSystemKey'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/system-keys/{id}/activation': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['activateSystemKey'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/model-attempts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listModelAttempts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/model-attempts/{id}/resolve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['resolveModelAttempt'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/gateway-tests': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['createGatewayTest'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/gateway-tests/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getGatewayTest'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/text-model-endpoints': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listTextModelEndpoints'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/text-models': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listTextModels'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/decision-models': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listDecisionModels'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/extraction-models': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['listExtractionModels'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/admin/model-settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['getModelSettings'];
+    put: operations['putModelSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/match-estimate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get: operations['getMatchEstimate'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/match-runs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get: operations['listMatchRuns'];
+    put?: never;
+    post: operations['createMatchRun'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/match-runs/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get: operations['getMatchRun'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/match-runs/{id}/cancel': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['cancelMatchRun'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/match-overrides/{text_hash}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        text_hash: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put: operations['putMatchOverride'];
+    post?: never;
+    delete: operations['deleteMatchOverride'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/cv-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Every CV template version, with the files a browser compiles it with. */
+    get: operations['listCvTemplates'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/cv': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * @description The job's CV draft and its content before fitting, built from the
+     *     library, the latest completed match run and the draft's picks. The
+     *     draft is created on first read. The ETag is the draft's version.
+     */
+    get: operations['getCv'];
+    put: operations['putCv'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/cv/fit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * @description Reports the page fit the browser found for the preview whose fit_key
+     *     this is. The summary is written only from the content that fit keeps,
+     *     so until a fit for the current content is reported the summary waits.
+     *     A fit for content that has since changed is a conflict.
+     */
+    put: operations['putCvFit'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/jobs/{id}/cv/exports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /** @description The job's exports, newest first, without their content. */
+    get: operations['listCvExports'];
+    put?: never;
+    /**
+     * @description Stores an immutable snapshot of the CV the client fitted: the draft's
+     *     content, rebuilt on the server, without the dropped items. A stale
+     *     draft version fails with 412; a different content hash (the library
+     *     changed since the preview) with 409.
+     */
+    post: operations['createCvExport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/cv-exports/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get: operations['getCvExport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/cv-exports/{id}/pdf': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    /**
+     * @description Compiles the snapshot on the server, for clients without a browser.
+     *     Nothing is stored. 503 when the server lacks the template's Typst
+     *     version.
+     */
+    get: operations['getCvExportPdf'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/accounts': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * @description Connected mailboxes (docs/parts/10-mail-plan.md). `configured` is false
+     *     when the server has no Google OAuth client, in which case connecting
+     *     answers 503.
+     */
+    get: operations['listMailAccounts'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/accounts/google/start': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Begins the Gmail consent flow. Send the browser to `url`; Google returns
+     *     to the server's `/oauth/google/callback`, which redirects to the app, which
+     *     calls `completeGoogleConnect`.
+     */
+    post: operations['startGoogleConnect'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/accounts/google/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Finishes the consent flow with the `state` and `code` the server's
+     *     callback passed to the app. The state must belong to the caller, who is
+     *     the member that started it; 422 on `state` otherwise.
+     */
+    post: operations['completeGoogleConnect'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/accounts/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** @description Stops reading the mailbox and revokes the grant. Classified messages are kept until the member deletes their account. */
+    delete: operations['disconnectMailAccount'];
+    options?: never;
+    head?: never;
+    /** @description Pause or resume reading an account. A paused account is not read and nothing is sent to the model. */
+    patch: operations['updateMailAccount'];
+    trace?: never;
+  };
+  '/v1/mail/accounts/{id}/sync': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Checks the mailbox now and retries mail still waiting to be classified.
+     *     409 unless the account is active. A sync held back by Gmail's rate limit
+     *     still waits; `retry_at` says until when.
+     */
+    post: operations['syncMailAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/accounts/{id}/rescan': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * @description Re-reads the last `days` days of the inbox (at most 500 messages, newest
+     *     first), beyond the usual 30-day window. Mail already read is skipped, so
+     *     only mail never seen is sent to the model. 409 unless the account is active.
+     */
+    post: operations['rescanMailAccount'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Mail classified as relevant to a job application, newest first. */
+    get: operations['listMailMessages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/mail/messages/{id}/status-change': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Acts on the job status a message proposed. `apply` moves the job to the proposed status and `dismiss` declines it; both need an outcome of `review`. `undo` moves an applied job back to its earlier status, and fails with 409 if the job's status was changed since. */
+    post: operations['resolveMailStatusChange'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/notifications': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description The member's notifications, newest first. Today every notification is `mail`: a message classified as about an application, carried in `mail`. `category` narrows mail notifications; `unread` keeps only unread ones. */
+    get: operations['listNotifications'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/notifications/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description How many notifications are unread. Refetch on `notification.updated` and `mail.message.classified` events. */
+    get: operations['getNotificationSummary'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/v1/notifications/read': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Marks the named notifications read, or all of them when `all` is true. */
+    post: operations['markNotificationsRead'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        CvTemplate: {
-            name: string;
-            version: number;
-            /** @description The Typst version the template compiles with. */
-            typst: string;
-            locales: string[];
-            published: boolean;
-            assets: {
-                main: string;
-                strings: string;
-                fonts: string[];
-            };
-        };
-        CvPicks: {
-            /** @description Evidence or highlight IDs */
-            include: string[];
-            exclude: string[];
-        };
-        CvDraft: {
-            summary?: string | null;
-            /** Format: uuid */
-            job_id: string;
-            template: string;
-            /** @description Null follows the latest version. */
-            template_version: number | null;
-            locale: string;
-            page_budget: number;
-            picks: components["schemas"]["CvPicks"];
-            version: number;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        CvDraftInput: {
-            summary?: string | null;
-            template: string;
-            template_version?: number | null;
-            locale: string;
-            page_budget: number;
-            picks: components["schemas"]["CvPicks"];
-        };
-        CvFitInput: {
-            /** @description The fit_key of the preview the browser fitted. */
-            fit_key: string;
-            /** @description Optional item IDs the fit left out. */
-            dropped: string[];
-        };
-        CvPreview: {
-            /** @description Lines fitting reserves for the summary. A manual summary is fitted as written instead. */
-            summary_rows: number;
-            /** @description Includes waiting_for_fit until the browser reports a fit for the current content. */
-            summary_status?: string;
-            summary_suggestion?: string;
-            summary_reason?: string;
-            draft: components["schemas"]["CvDraft"];
-            template: components["schemas"]["CvTemplate"];
-            /** @description The template's content (templates/README.md). */
-            content: {
-                [key: string]: unknown;
-            };
-            content_hash: string;
-            /** @description Names this content for a fit; it leaves out the summary. */
-            fit_key: string;
-            /** @description The fit reported for fit_key, or null until the browser reports one. */
-            fit: {
-                dropped: string[];
-            } | null;
-            /** @description Optional item IDs */
-            trim: string[];
-            available: {
-                entries: {
-                    id: string;
-                    title: string;
-                    kind: string;
-                    section: string;
-                    /** @enum {string} */
-                    reason: "excluded" | "suggested" | "not_selected";
-                }[];
-                highlights: {
-                    id: string;
-                    evidence_id: string;
-                    text: string;
-                    excluded: boolean;
-                }[];
-            };
-            match: {
-                /** Format: uuid */
-                run_id: string;
-                stale: boolean;
-            } | null;
-        };
-        CvExportInput: {
-            draft_version: number;
-            content_hash: string;
-            dropped: string[];
-            pages: number;
-            client_sha256?: string;
-        };
-        CvExport: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            job_id: string;
-            /** Format: uuid */
-            match_run_id: string | null;
-            template: string;
-            template_version: number;
-            locale: string;
-            /** Format: date */
-            document_date: string;
-            page_budget: number;
-            pages: number;
-            overflow: boolean;
-            content_hash: string;
-            client_sha256?: string | null;
-            dropped: string[];
-            /** Format: date-time */
-            created_at: string;
-            content?: {
-                [key: string]: unknown;
-            };
-        };
-        CvExportPage: {
-            items: components["schemas"]["CvExport"][];
-        };
-        Problem: {
-            type?: string;
-            title: string;
-            status: number;
-            detail?: string;
-            request_id?: string;
-            /**
-             * Format: uuid
-             * @description On 409 for a duplicate job URL: the job already saved.
-             */
-            existing_id?: string;
-            code?: string;
-            errors?: components["schemas"]["FieldError"][];
-        };
-        FieldError: {
-            /** @description JSON path, e.g. highlights[0].text; empty for the whole request. */
-            field: string;
-            message: string;
-        };
-        Me: {
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            created_at: string;
-            /** @enum {string} */
-            platform_role: "member" | "owner";
-            membership: components["schemas"]["Membership"] | null;
-        };
-        /** @enum {string} */
-        Category: "education" | "paid" | "unpaid";
-        /** @enum {string} */
-        Form: "engagement" | "credential" | "output" | "recognition";
-        /**
-         * @description A date known to year, month or day precision.
-         * @example 2021-03
-         */
-        PartialDate: string;
-        Kind: {
-            kind: string;
-            form: components["schemas"]["Form"];
-            categories: components["schemas"]["Category"][];
-            /** @description Must be nested under an engagement. */
-            child_only: boolean;
-            /** @description JSON Schema for this kind's `details`. */
-            details_schema: {
-                [key: string]: unknown;
-            };
-        };
-        Link: {
-            label: string;
-            /** Format: uri */
-            url: string;
-        };
-        ProfileInput: {
-            /** @default true */
-            auto_match: boolean;
-            full_name?: string;
-            headline?: string;
-            email?: string;
-            phone?: string;
-            location?: string;
-            links?: components["schemas"]["Link"][];
-            summary?: string;
-        };
-        Profile: components["schemas"]["ProfileInput"] & {
-            version: number;
-            /** Format: date-time */
-            updated_at?: string;
-        };
-        /** @enum {string} */
-        OrganizationType: "company" | "education" | "nonprofit" | "government" | "client" | "other";
-        OrganizationInput: {
-            name: string;
-            type?: components["schemas"]["OrganizationType"];
-            website?: string;
-            location?: string;
-        };
-        Organization: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            type: components["schemas"]["OrganizationType"];
-            website: string;
-            location: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        /** @enum {string} */
-        SkillType: "hard" | "tool" | "soft" | "language";
-        SkillInput: {
-            name: string;
-            type?: components["schemas"]["SkillType"];
-            /** @description beginner, intermediate, advanced, expert; for languages A1–C2 or native. */
-            proficiency?: string;
-        };
-        Skill: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            type: components["schemas"]["SkillType"];
-            proficiency: string;
-        };
-        SkillMerge: {
-            /** Format: uuid */
-            into: string;
-        };
-        HighlightInput: {
-            /**
-             * Format: uuid
-             * @description Keep an existing highlight (update only).
-             */
-            id?: string;
-            text: string;
-            /** Format: double */
-            metric_value?: number;
-            metric_unit?: string;
-            /** @default true */
-            auto_include: boolean;
-            skills?: string[];
-        };
-        Highlight: {
-            /** Format: uuid */
-            id: string;
-            text: string;
-            /** Format: double */
-            metric_value?: number;
-            metric_unit: string;
-            auto_include: boolean;
-            skills: string[];
-        };
-        EvidenceUpdate: {
-            /** @description One of GET /v1/kinds. */
-            kind: string;
-            category?: components["schemas"]["Category"];
-            /** Format: uuid */
-            organization_id?: string;
-            title: string;
-            summary?: string;
-            location?: string;
-            url?: string;
-            start?: components["schemas"]["PartialDate"];
-            end?: components["schemas"]["PartialDate"];
-            /** @default false */
-            is_current: boolean;
-            details?: {
-                [key: string]: unknown;
-            };
-            /** @description Whether matching may pick this automatically. Default true (false for career_break). */
-            auto_include?: boolean;
-            skills?: string[];
-            highlights?: components["schemas"]["HighlightInput"][];
-        };
-        EvidenceCreate: components["schemas"]["EvidenceUpdate"] & {
-            /**
-             * Format: uuid
-             * @description Nest under an engagement. The category then defaults to the parent's.
-             */
-            parent_id?: string;
-        };
-        ChildSummary: {
-            /** Format: uuid */
-            id: string;
-            kind: string;
-            form: components["schemas"]["Form"];
-            title: string;
-            archived: boolean;
-        };
-        Evidence: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            parent_id?: string;
-            /** Format: uuid */
-            organization_id?: string;
-            category: components["schemas"]["Category"];
-            form: components["schemas"]["Form"];
-            kind: string;
-            title: string;
-            summary: string;
-            location: string;
-            url: string;
-            start?: components["schemas"]["PartialDate"];
-            end?: components["schemas"]["PartialDate"];
-            is_current: boolean;
-            details: {
-                [key: string]: unknown;
-            };
-            auto_include: boolean;
-            version: number;
-            archived: boolean;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-            skills: string[];
-            highlights: components["schemas"]["Highlight"][];
-            /** @description Only on single reads. */
-            children?: components["schemas"]["ChildSummary"][];
-        };
-        EvidencePage: {
-            items: components["schemas"]["Evidence"][];
-            next_cursor?: string;
-        };
-        EvidenceMove: {
-            /** Format: uuid */
-            parent_id?: string;
-            /** Format: uuid */
-            after_id?: string;
-            /** Format: uuid */
-            before_id?: string;
-        };
-        Reorder: {
-            /** Format: uuid */
-            after_id?: string;
-            /** Format: uuid */
-            before_id?: string;
-        };
-        /**
-         * @description What a status means: saved (not applied), active (in process), offer, closed (any outcome).
-         * @enum {string}
-         */
-        JobStage: "saved" | "active" | "offer" | "closed";
-        /** @enum {string} */
-        JobStatusColor: "gray" | "blue" | "yellow" | "orange" | "green" | "purple" | "pink" | "red" | "brown";
-        JobStatusInput: {
-            name: string;
-            color?: components["schemas"]["JobStatusColor"];
-            stage: components["schemas"]["JobStage"];
-        };
-        JobStatus: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            color: components["schemas"]["JobStatusColor"];
-            stage: components["schemas"]["JobStage"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        /** @enum {string} */
-        WorkMode: "onsite" | "remote" | "hybrid";
-        /** @enum {string} */
-        EmploymentType: "full_time" | "part_time" | "contract" | "temporary" | "internship" | "freelance";
-        /** @enum {string} */
-        SalaryPeriod: "year" | "month" | "hour";
-        /**
-         * @default -updated_at
-         * @enum {string}
-         */
-        JobSort: "-updated_at" | "-created_at" | "position";
-        PostingReadInput: {
-            /** @description The posting's http(s) URL. */
-            url: string;
-            /** @description Posting text the person pasted. It is read instead of the page's when extracting. */
-            text?: string;
-        };
-        PostingRead: {
-            /**
-             * Format: uuid
-             * @description The extraction model's operation, when one was started.
-             */
-            extraction_id?: string;
-            /** @description Why the page could not be read, when the pasted text was used instead. */
-            page_error?: string;
-            title?: string;
-            company?: string;
-            location?: string;
-            work_mode?: components["schemas"]["WorkMode"];
-            employment_type?: components["schemas"]["EmploymentType"];
-            /** Format: int64 */
-            salary_min?: number;
-            /** Format: int64 */
-            salary_max?: number;
-            salary_currency?: string;
-            salary_period?: components["schemas"]["SalaryPeriod"];
-            /** @description The page as markdown; empty when it had no text. */
-            description: string;
-        };
-        PostingExtraction: {
-            /** @enum {string} */
-            status: "pending" | "completed" | "failed";
-            /** @description Why it is waiting or failed, e.g. usage_limit. */
-            reason?: string;
-            title?: string;
-            company?: string;
-            location?: string;
-            work_mode?: components["schemas"]["WorkMode"];
-            employment_type?: components["schemas"]["EmploymentType"];
-            /** Format: int64 */
-            salary_min?: number;
-            /** Format: int64 */
-            salary_max?: number;
-            salary_currency?: string;
-            salary_period?: components["schemas"]["SalaryPeriod"];
-            /** @description The job description alone, as markdown, without the page around it (navigation, apply buttons, related jobs). */
-            description?: string;
-        };
-        JobInput: {
-            /** Format: uuid */
-            status_id?: string;
-            title: string;
-            company?: string;
-            /** @description The posting. Unique per user once normalized. */
-            url?: string;
-            location?: string;
-            work_mode?: components["schemas"]["WorkMode"];
-            employment_type?: components["schemas"]["EmploymentType"];
-            /** Format: int64 */
-            salary_min?: number;
-            /** Format: int64 */
-            salary_max?: number;
-            /** @description ISO 4217, required with a salary. */
-            salary_currency?: string;
-            salary_period?: components["schemas"]["SalaryPeriod"];
-            /** @description Where the posting was found, e.g. LinkedIn. */
-            source?: string;
-            /** @description The posting text, read by matching. */
-            description?: string;
-            notes?: string;
-            /**
-             * Format: date
-             * @description Set automatically the first time the job enters an active or offer stage.
-             */
-            applied_on?: string;
-        };
-        JobSummary: {
-            match?: components["schemas"]["MatchRunSummary"];
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            status_id: string;
-            title: string;
-            company: string;
-            url: string;
-            location: string;
-            work_mode?: components["schemas"]["WorkMode"];
-            employment_type?: components["schemas"]["EmploymentType"];
-            /** Format: int64 */
-            salary_min?: number;
-            /** Format: int64 */
-            salary_max?: number;
-            salary_currency: string;
-            salary_period?: components["schemas"]["SalaryPeriod"];
-            source: string;
-            /** Format: date */
-            applied_on?: string;
-            /** @description Sort key within the status column. */
-            position: string;
-            version: number;
-            archived: boolean;
-            /** Format: date-time */
-            status_changed_at: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        Job: components["schemas"]["JobSummary"] & {
-            description: string;
-            notes: string;
-        };
-        JobPage: {
-            items: components["schemas"]["JobSummary"][];
-            next_cursor?: string;
-        };
-        JobMove: {
-            /** Format: uuid */
-            status_id?: string;
-            /** Format: uuid */
-            after_id?: string;
-            /** Format: uuid */
-            before_id?: string;
-        };
-        /** @enum {string} */
-        JobActivityType: "created" | "status_changed" | "note";
-        JobActivity: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            job_id: string;
-            type: components["schemas"]["JobActivityType"];
-            /** @description Status name when it happened. */
-            from_status: string;
-            to_status: string;
-            body: string;
-            /** Format: date-time */
-            occurred_at: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        JobNoteInput: {
-            body: string;
-            /**
-             * Format: date-time
-             * @description When it happened; default now.
-             */
-            occurred_at?: string;
-        };
-        /** @enum {string} */
-        JobViewLayout: "board" | "table";
-        JobViewFilters: {
-            status_ids?: string[];
-            stages?: components["schemas"]["JobStage"][];
-            q?: string;
-            include_archived?: boolean;
-        };
-        JobViewInput: {
-            name: string;
-            layout?: components["schemas"]["JobViewLayout"];
-            filters?: components["schemas"]["JobViewFilters"];
-            sort?: components["schemas"]["JobSort"];
-        };
-        JobView: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            layout: components["schemas"]["JobViewLayout"];
-            filters: components["schemas"]["JobViewFilters"];
-            sort: components["schemas"]["JobSort"];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        /**
-         * @description The `data` of a change event: the resource it concerns. `version` is
-         *     set for versioned resources (profile, evidence, job); `job_id` for
-         *     job activity.
-         */
-        EventData: {
-            /** Format: uuid */
-            id: string;
-            version?: number;
-            /** Format: uuid */
-            job_id?: string;
-        };
-        /**
-         * @description The SSE `event` name of a change event.
-         * @enum {string}
-         */
-        EventTopic: "profile.updated" | "organization.created" | "organization.updated" | "organization.deleted" | "evidence.created" | "evidence.updated" | "evidence.moved" | "evidence.archived" | "evidence.unarchived" | "evidence.deleted" | "skill.created" | "skill.updated" | "skill.merged" | "skill.deleted" | "job_status.created" | "job_status.updated" | "job_status.moved" | "job_status.deleted" | "job.created" | "job.updated" | "job.moved" | "job.archived" | "job.unarchived" | "job.deleted" | "job_activity.created" | "job_activity.updated" | "job_activity.deleted" | "job_view.created" | "job_view.updated" | "job_view.deleted" | "membership.changed" | "usage.changed" | "model_operation.changed" | "match_run.changed" | "mail.account.updated" | "mail.message.classified";
-        Plan: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            cap_7d_usd: string;
-            cap_30d_usd: string;
-            version: number;
-        };
-        PlanInput: {
-            name: string;
-            cap_7d_usd: string;
-            cap_30d_usd: string;
-        };
-        Membership: {
-            /** Format: uuid */
-            user_id: string;
-            /** Format: uuid */
-            plan_id: string;
-            plan_name: string;
-            /** @enum {string} */
-            status: "active" | "suspended";
-            version: number;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        MembershipInput: {
-            /** Format: uuid */
-            plan_id: string;
-            /** @enum {string} */
-            status: "active" | "suspended";
-        };
-        Usage: {
-            membership: components["schemas"]["Membership"] | null;
-            /** Format: date-time */
-            server_time: string;
-            cap_7d_usd: string;
-            cap_30d_usd: string;
-            spent_7d_usd: string;
-            spent_30d_usd: string;
-            reserved_usd: string;
-            available_7d_usd: string;
-            available_30d_usd: string;
-            /** Format: date-time */
-            next_capacity_at: string | null;
-            blocked_reason: string;
-        };
-        Member: {
-            /** Format: uuid */
-            id: string;
-            email: string;
-            membership: components["schemas"]["Membership"] | null;
-            usage: components["schemas"]["Usage"];
-        };
-        /** @description One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list. */
-        UsageEntry: {
-            id: string;
-            amount_usd: string;
-            /** Format: date-time */
-            accounted_at: string;
-            /** @enum {string} */
-            app: "jobs" | "mail";
-            title?: string | null;
-            company?: string | null;
-            steps: ("match" | "summary" | "extraction" | "mail" | "other")[];
-        };
-        SystemKey: {
-            /** Format: uuid */
-            id: string;
-            label: string;
-            fingerprint: string;
-            active: boolean;
-            version: number;
-            /** Format: date-time */
-            created_at: string;
-        };
-        SystemKeyInput: {
-            label: string;
-            key: string;
-        };
-        KeyActivationInput: {
-            active: boolean;
-        };
-        AttemptSummary: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            user_id: string;
-            model: string;
-            state: string;
-            reserved_usd: string;
-            /** Format: date-time */
-            dispatched_at: string;
-            generation_id: string | null;
-            error_code: string;
-            version: number;
-        };
-        AttemptResolutionInput: {
-            amount_usd: string;
-            generation_id?: string | null;
-            reason: string;
-        };
-        ModelOperation: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            user_id: string;
-            /** @enum {string} */
-            status: "pending" | "blocked" | "running" | "completed" | "failed" | "needs_review" | "cancelled";
-            blocked_reason: string;
-            /** Format: date-time */
-            next_eligible_at: string | null;
-            result: string;
-            version: number;
-            /** Format: date-time */
-            created_at: string;
-        };
-        DecisionModel: {
-            id: string;
-            name: string;
-            context_length: number;
-            pricing: {
-                [key: string]: unknown;
-            };
-            compatibility_reason: string;
-            reasoning?: components["schemas"]["ReasoningOptions"];
-        };
-        ExtractionModel: {
-            id: string;
-            name: string;
-            context_length: number;
-            pricing: {
-                [key: string]: unknown;
-            };
-            /** @description Empty when the model can be selected. */
-            compatibility_reason: string;
-            /** @description Answers salaries as numbers; other models answer text that is parsed. */
-            typed: boolean;
-        };
-        /** @description Thinking control a model accepts. Absent when the model does not reason. */
-        ReasoningOptions: {
-            /** @description When true, reasoning cannot be turned off. */
-            mandatory: boolean;
-            /** @description Accepted efforts, highest first. Empty when the model exposes no effort choice. */
-            efforts: ("max" | "xhigh" | "high" | "medium" | "low" | "minimal" | "off")[];
-        };
-        /** @description Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value. */
-        SummaryRows: number;
-        ModelSettings: {
-            decision_model: string | null;
-            summary_model?: string | null;
-            summary_endpoint?: string | null;
-            summary_rows: components["schemas"]["SummaryRows"];
-            /**
-             * @description Thinking effort for summaries; null is automatic.
-             * @enum {string|null}
-             */
-            summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
-            /** @description Extraction model that reads posting fields; null when off. */
-            extraction_model?: string | null;
-            version: number;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        MatchRunSummary: {
-            /** Format: uuid */
-            run_id: string;
-            status: string;
-            score?: number | null;
-            stale: boolean;
-        };
-        MatchEstimate: {
-            available: boolean;
-            reason: string;
-            cost_usd?: string | null;
-            questions: number;
-            requests: number;
-            available_7d_usd?: string;
-            available_30d_usd?: string;
-        };
-        Requirement: {
-            text: string;
-            text_hash: string;
-            class: string;
-            original_class: string;
-            type: string;
-            line: number;
-            source_start?: number;
-            source_end?: number;
-            min_years: number;
-            degree?: string;
-            language?: string;
-        };
-        Coverage: components["schemas"]["Requirement"] & {
-            status: string;
-            strength: number;
-            provisional: boolean;
-            evidence_title?: string;
-            evidence_id?: string;
-            highlight_ids: string[];
-            answer?: {
-                score?: number;
-                confidence?: number;
-                probabilities?: {
-                    [key: string]: number;
-                };
-                legend?: {
-                    [key: string]: unknown;
-                };
-            };
-            check?: string;
-            review: boolean;
-            citations?: {
-                id: string;
-                text: string;
-            }[];
-        };
-        Selection: {
-            title?: string;
-            evidence_id: string;
-            relevance: number;
-            highlight_ids: string[];
-            /** @description Expected whole-posting relevance of each answered highlight, including library opt-outs. Absent on historical results. */
-            highlight_scores?: {
-                [key: string]: number;
-            };
-        };
-        EvidenceMatch: components["schemas"]["Selection"];
-        Insight: {
-            type: string;
-            text: string;
-            text_hash?: string;
-            evidence_id?: string;
-        };
-        MatchResult: {
-            /** @description Historical coverage score; null for whole-posting matching. */
-            score: number | null;
-            /** @description Historical requirement count; zero for whole-posting matching. */
-            must_met: number;
-            /** @description Historical requirement count; zero for whole-posting matching. */
-            must_total: number;
-            partial: boolean;
-            seniority: string;
-            relevant_years: number;
-            scoring_version: number;
-            /** @description Historical requirement analysis; empty for whole-posting matching. */
-            requirements: components["schemas"]["Coverage"][];
-            evidence: components["schemas"]["EvidenceMatch"][];
-            selection: components["schemas"]["Selection"][];
-            suggestions: components["schemas"]["Selection"][];
-            insights: components["schemas"]["Insight"][];
-            skills: {
-                skill_id: string;
-                name?: string;
-                relevance: number;
-            }[];
-        };
-        MatchRun: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            job_id: string;
-            status: string;
-            stage: string;
-            model: string | null;
-            pipeline?: number;
-            trigger: string;
-            blocked_reason: string;
-            /** Format: date-time */
-            next_eligible_at?: string | null;
-            version: number;
-            total: number;
-            answered: number;
-            cached: number;
-            unanswered: number;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            finished_at?: string | null;
-            score?: number | null;
-            must_met?: number;
-            must_total?: number;
-            stale: boolean;
-            truncated?: boolean;
-            obsolete_overrides?: string[];
-            changed: number;
-            added: number;
-            removed: number;
-            cost_usd: string;
-            selection?: components["schemas"]["Selection"][];
-            suggestions?: components["schemas"]["Selection"][];
-            skills?: {
-                skill_id: string;
-                name?: string;
-                relevance: number;
-            }[];
-            result?: components["schemas"]["MatchResult"];
-        };
-        MatchRunPage: {
-            items: components["schemas"]["MatchRun"][];
-            /** Format: uuid */
-            next_cursor?: string;
-        };
-        /** @enum {string} */
-        MailCategory: "received" | "assessment" | "interview" | "rejection" | "offer";
-        MailAccount: {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            provider: "google";
-            address: string;
-            /** @enum {string} */
-            status: "active" | "paused" | "needs_reconnect" | "disconnected";
-            /** Format: date-time */
-            last_synced_at?: string | null;
-            last_error: string;
-            /**
-             * Format: date-time
-             * @description When a sync held back by Gmail's rate limit resumes by itself.
-             */
-            retry_at: string | null;
-            /** @description Messages classified so far. */
-            mails_done: number;
-            /** @description Messages found so far, classified or not. Grows while a backlog is being read. */
-            mails_total: number;
-            /** @description Classified messages that concern an application. */
-            mails_relevant: number;
-            version: number;
-            /** Format: date-time */
-            created_at: string;
-        };
-        MailAccountList: {
-            configured: boolean;
-            items: components["schemas"]["MailAccount"][];
-        };
-        MailAccountUpdate: {
-            paused: boolean;
-        };
-        MailConnect: {
-            url: string;
-        };
-        MailConnectComplete: {
-            state: string;
-            code: string;
-        };
-        MailMessage: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            account_id: string;
-            category: components["schemas"]["MailCategory"];
-            /** Format: uuid */
-            job_id?: string | null;
-            from: string;
-            subject: string;
-            snippet: string;
-            /** Format: date-time */
-            received_at: string;
-            /** Format: date-time */
-            classified_at: string;
-            /** Format: uri */
-            gmail_url: string;
-            status_change?: components["schemas"]["MailStatusChange"] | null;
-        };
-        /** @description The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it. */
-        MailStatusChange: {
-            /** @enum {string} */
-            outcome: "no_change" | "review" | "applied" | "dismissed" | "undone";
-            /** Format: uuid */
-            proposed_status_id: string | null;
-            /** Format: uuid */
-            previous_status_id: string | null;
-            confidence: number | null;
-            auto: boolean;
-        };
-        MailStatusChangeAction: {
-            /** @enum {string} */
-            action: "apply" | "dismiss" | "undo";
-        };
-        MailMessagePage: {
-            items: components["schemas"]["MailMessage"][];
-            /** Format: uuid */
-            next_cursor?: string;
-        };
+  schemas: {
+    CvTemplate: {
+      name: string;
+      version: number;
+      /** @description The Typst version the template compiles with. */
+      typst: string;
+      locales: string[];
+      published: boolean;
+      assets: {
+        main: string;
+        strings: string;
+        fonts: string[];
+      };
     };
-    responses: {
-        /** @description An error. */
-        Problem: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["Problem"];
-            };
+    CvPicks: {
+      /** @description Evidence or highlight IDs */
+      include: string[];
+      exclude: string[];
+    };
+    CvDraft: {
+      summary?: string | null;
+      /** Format: uuid */
+      job_id: string;
+      template: string;
+      /** @description Null follows the latest version. */
+      template_version: number | null;
+      locale: string;
+      page_budget: number;
+      picks: components['schemas']['CvPicks'];
+      version: number;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    CvDraftInput: {
+      summary?: string | null;
+      template: string;
+      template_version?: number | null;
+      locale: string;
+      page_budget: number;
+      picks: components['schemas']['CvPicks'];
+    };
+    CvFitInput: {
+      /** @description The fit_key of the preview the browser fitted. */
+      fit_key: string;
+      /** @description Optional item IDs the fit left out. */
+      dropped: string[];
+    };
+    CvPreview: {
+      /** @description Lines fitting reserves for the summary. A manual summary is fitted as written instead. */
+      summary_rows: number;
+      /** @description Includes waiting_for_fit until the browser reports a fit for the current content. */
+      summary_status?: string;
+      summary_suggestion?: string;
+      summary_reason?: string;
+      draft: components['schemas']['CvDraft'];
+      template: components['schemas']['CvTemplate'];
+      /** @description The template's content (templates/README.md). */
+      content: {
+        [key: string]: unknown;
+      };
+      content_hash: string;
+      /** @description Names this content for a fit; it leaves out the summary. */
+      fit_key: string;
+      /** @description The fit reported for fit_key, or null until the browser reports one. */
+      fit: {
+        dropped: string[];
+      } | null;
+      /** @description Optional item IDs */
+      trim: string[];
+      available: {
+        entries: {
+          id: string;
+          title: string;
+          kind: string;
+          section: string;
+          /** @enum {string} */
+          reason: 'excluded' | 'suggested' | 'not_selected';
+        }[];
+        highlights: {
+          id: string;
+          evidence_id: string;
+          text: string;
+          excluded: boolean;
+        }[];
+      };
+      match: {
+        /** Format: uuid */
+        run_id: string;
+        stale: boolean;
+      } | null;
+    };
+    CvExportInput: {
+      draft_version: number;
+      content_hash: string;
+      dropped: string[];
+      pages: number;
+      client_sha256?: string;
+    };
+    CvExport: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      job_id: string;
+      /** Format: uuid */
+      match_run_id: string | null;
+      template: string;
+      template_version: number;
+      locale: string;
+      /** Format: date */
+      document_date: string;
+      page_budget: number;
+      pages: number;
+      overflow: boolean;
+      content_hash: string;
+      client_sha256?: string | null;
+      dropped: string[];
+      /** Format: date-time */
+      created_at: string;
+      content?: {
+        [key: string]: unknown;
+      };
+    };
+    CvExportPage: {
+      items: components['schemas']['CvExport'][];
+    };
+    Problem: {
+      type?: string;
+      title: string;
+      status: number;
+      detail?: string;
+      request_id?: string;
+      /**
+       * Format: uuid
+       * @description On 409 for a duplicate job URL: the job already saved.
+       */
+      existing_id?: string;
+      code?: string;
+      errors?: components['schemas']['FieldError'][];
+    };
+    FieldError: {
+      /** @description JSON path, e.g. highlights[0].text; empty for the whole request. */
+      field: string;
+      message: string;
+    };
+    Me: {
+      /** Format: uuid */
+      id: string;
+      /** Format: date-time */
+      created_at: string;
+      /** @enum {string} */
+      platform_role: 'member' | 'owner';
+      membership: components['schemas']['Membership'] | null;
+    };
+    /** @enum {string} */
+    Category: 'education' | 'paid' | 'unpaid';
+    /** @enum {string} */
+    Form: 'engagement' | 'credential' | 'output' | 'recognition';
+    /**
+     * @description A date known to year, month or day precision.
+     * @example 2021-03
+     */
+    PartialDate: string;
+    Kind: {
+      kind: string;
+      form: components['schemas']['Form'];
+      categories: components['schemas']['Category'][];
+      /** @description Must be nested under an engagement. */
+      child_only: boolean;
+      /** @description JSON Schema for this kind's `details`. */
+      details_schema: {
+        [key: string]: unknown;
+      };
+    };
+    Link: {
+      label: string;
+      /** Format: uri */
+      url: string;
+    };
+    ProfileInput: {
+      /** @default true */
+      auto_match: boolean;
+      full_name?: string;
+      headline?: string;
+      email?: string;
+      phone?: string;
+      location?: string;
+      links?: components['schemas']['Link'][];
+      summary?: string;
+    };
+    Profile: components['schemas']['ProfileInput'] & {
+      version: number;
+      /** Format: date-time */
+      updated_at?: string;
+    };
+    /** @enum {string} */
+    OrganizationType: 'company' | 'education' | 'nonprofit' | 'government' | 'client' | 'other';
+    OrganizationInput: {
+      name: string;
+      type?: components['schemas']['OrganizationType'];
+      website?: string;
+      location?: string;
+    };
+    Organization: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      type: components['schemas']['OrganizationType'];
+      website: string;
+      location: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /** @enum {string} */
+    SkillType: 'hard' | 'tool' | 'soft' | 'language';
+    SkillInput: {
+      name: string;
+      type?: components['schemas']['SkillType'];
+      /** @description beginner, intermediate, advanced, expert; for languages A1–C2 or native. */
+      proficiency?: string;
+    };
+    Skill: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      type: components['schemas']['SkillType'];
+      proficiency: string;
+    };
+    SkillMerge: {
+      /** Format: uuid */
+      into: string;
+    };
+    HighlightInput: {
+      /**
+       * Format: uuid
+       * @description Keep an existing highlight (update only).
+       */
+      id?: string;
+      text: string;
+      /** Format: double */
+      metric_value?: number;
+      metric_unit?: string;
+      /** @default true */
+      auto_include: boolean;
+      skills?: string[];
+    };
+    Highlight: {
+      /** Format: uuid */
+      id: string;
+      text: string;
+      /** Format: double */
+      metric_value?: number;
+      metric_unit: string;
+      auto_include: boolean;
+      skills: string[];
+    };
+    EvidenceUpdate: {
+      /** @description One of GET /v1/kinds. */
+      kind: string;
+      category?: components['schemas']['Category'];
+      /** Format: uuid */
+      organization_id?: string;
+      title: string;
+      summary?: string;
+      location?: string;
+      url?: string;
+      start?: components['schemas']['PartialDate'];
+      end?: components['schemas']['PartialDate'];
+      /** @default false */
+      is_current: boolean;
+      details?: {
+        [key: string]: unknown;
+      };
+      /** @description Whether matching may pick this automatically. Default true (false for career_break). */
+      auto_include?: boolean;
+      skills?: string[];
+      highlights?: components['schemas']['HighlightInput'][];
+    };
+    EvidenceCreate: components['schemas']['EvidenceUpdate'] & {
+      /**
+       * Format: uuid
+       * @description Nest under an engagement. The category then defaults to the parent's.
+       */
+      parent_id?: string;
+    };
+    ChildSummary: {
+      /** Format: uuid */
+      id: string;
+      kind: string;
+      form: components['schemas']['Form'];
+      title: string;
+      archived: boolean;
+    };
+    Evidence: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      parent_id?: string;
+      /** Format: uuid */
+      organization_id?: string;
+      category: components['schemas']['Category'];
+      form: components['schemas']['Form'];
+      kind: string;
+      title: string;
+      summary: string;
+      location: string;
+      url: string;
+      start?: components['schemas']['PartialDate'];
+      end?: components['schemas']['PartialDate'];
+      is_current: boolean;
+      details: {
+        [key: string]: unknown;
+      };
+      auto_include: boolean;
+      version: number;
+      archived: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+      skills: string[];
+      highlights: components['schemas']['Highlight'][];
+      /** @description Only on single reads. */
+      children?: components['schemas']['ChildSummary'][];
+    };
+    EvidencePage: {
+      items: components['schemas']['Evidence'][];
+      next_cursor?: string;
+    };
+    EvidenceMove: {
+      /** Format: uuid */
+      parent_id?: string;
+      /** Format: uuid */
+      after_id?: string;
+      /** Format: uuid */
+      before_id?: string;
+    };
+    Reorder: {
+      /** Format: uuid */
+      after_id?: string;
+      /** Format: uuid */
+      before_id?: string;
+    };
+    /**
+     * @description What a status means: saved (not applied), active (in process), offer, closed (any outcome).
+     * @enum {string}
+     */
+    JobStage: 'saved' | 'active' | 'offer' | 'closed';
+    /** @enum {string} */
+    JobStatusColor:
+      'gray' | 'blue' | 'yellow' | 'orange' | 'green' | 'purple' | 'pink' | 'red' | 'brown';
+    JobStatusInput: {
+      name: string;
+      color?: components['schemas']['JobStatusColor'];
+      stage: components['schemas']['JobStage'];
+    };
+    JobStatus: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      color: components['schemas']['JobStatusColor'];
+      stage: components['schemas']['JobStage'];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /** @enum {string} */
+    WorkMode: 'onsite' | 'remote' | 'hybrid';
+    /** @enum {string} */
+    EmploymentType:
+      'full_time' | 'part_time' | 'contract' | 'temporary' | 'internship' | 'freelance';
+    /** @enum {string} */
+    SalaryPeriod: 'year' | 'month' | 'hour';
+    /**
+     * @default -updated_at
+     * @enum {string}
+     */
+    JobSort: '-updated_at' | '-created_at' | 'position';
+    PostingReadInput: {
+      /** @description The posting's http(s) URL. */
+      url: string;
+      /** @description Posting text the person pasted. It is read instead of the page's when extracting. */
+      text?: string;
+    };
+    PostingRead: {
+      /**
+       * Format: uuid
+       * @description The extraction model's operation, when one was started.
+       */
+      extraction_id?: string;
+      /** @description Why the page could not be read, when the pasted text was used instead. */
+      page_error?: string;
+      title?: string;
+      company?: string;
+      location?: string;
+      work_mode?: components['schemas']['WorkMode'];
+      employment_type?: components['schemas']['EmploymentType'];
+      /** Format: int64 */
+      salary_min?: number;
+      /** Format: int64 */
+      salary_max?: number;
+      salary_currency?: string;
+      salary_period?: components['schemas']['SalaryPeriod'];
+      /** @description The page as markdown; empty when it had no text. */
+      description: string;
+    };
+    PostingExtraction: {
+      /** @enum {string} */
+      status: 'pending' | 'completed' | 'failed';
+      /** @description Why it is waiting or failed, e.g. usage_limit. */
+      reason?: string;
+      title?: string;
+      company?: string;
+      location?: string;
+      work_mode?: components['schemas']['WorkMode'];
+      employment_type?: components['schemas']['EmploymentType'];
+      /** Format: int64 */
+      salary_min?: number;
+      /** Format: int64 */
+      salary_max?: number;
+      salary_currency?: string;
+      salary_period?: components['schemas']['SalaryPeriod'];
+      /** @description The job description alone, as markdown, without the page around it (navigation, apply buttons, related jobs). */
+      description?: string;
+    };
+    JobInput: {
+      /** Format: uuid */
+      status_id?: string;
+      title: string;
+      company?: string;
+      /** @description The posting. Unique per user once normalized. */
+      url?: string;
+      location?: string;
+      work_mode?: components['schemas']['WorkMode'];
+      employment_type?: components['schemas']['EmploymentType'];
+      /** Format: int64 */
+      salary_min?: number;
+      /** Format: int64 */
+      salary_max?: number;
+      /** @description ISO 4217, required with a salary. */
+      salary_currency?: string;
+      salary_period?: components['schemas']['SalaryPeriod'];
+      /** @description Where the posting was found, e.g. LinkedIn. */
+      source?: string;
+      /** @description The posting text, read by matching. */
+      description?: string;
+      notes?: string;
+      /**
+       * Format: date
+       * @description Set automatically the first time the job enters an active or offer stage.
+       */
+      applied_on?: string;
+    };
+    JobSummary: {
+      match?: components['schemas']['MatchRunSummary'];
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      status_id: string;
+      title: string;
+      company: string;
+      url: string;
+      location: string;
+      work_mode?: components['schemas']['WorkMode'];
+      employment_type?: components['schemas']['EmploymentType'];
+      /** Format: int64 */
+      salary_min?: number;
+      /** Format: int64 */
+      salary_max?: number;
+      salary_currency: string;
+      salary_period?: components['schemas']['SalaryPeriod'];
+      source: string;
+      /** Format: date */
+      applied_on?: string;
+      /** @description Sort key within the status column. */
+      position: string;
+      version: number;
+      archived: boolean;
+      /** Format: date-time */
+      status_changed_at: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    Job: components['schemas']['JobSummary'] & {
+      description: string;
+      notes: string;
+    };
+    JobPage: {
+      items: components['schemas']['JobSummary'][];
+      next_cursor?: string;
+    };
+    JobMove: {
+      /** Format: uuid */
+      status_id?: string;
+      /** Format: uuid */
+      after_id?: string;
+      /** Format: uuid */
+      before_id?: string;
+    };
+    /** @enum {string} */
+    JobActivityType: 'created' | 'status_changed' | 'note';
+    JobActivity: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      job_id: string;
+      type: components['schemas']['JobActivityType'];
+      /** @description Status name when it happened. */
+      from_status: string;
+      to_status: string;
+      body: string;
+      /** Format: date-time */
+      occurred_at: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    JobNoteInput: {
+      body: string;
+      /**
+       * Format: date-time
+       * @description When it happened; default now.
+       */
+      occurred_at?: string;
+    };
+    /** @enum {string} */
+    JobViewLayout: 'board' | 'table';
+    JobViewFilters: {
+      status_ids?: string[];
+      stages?: components['schemas']['JobStage'][];
+      q?: string;
+      include_archived?: boolean;
+    };
+    JobViewInput: {
+      name: string;
+      layout?: components['schemas']['JobViewLayout'];
+      filters?: components['schemas']['JobViewFilters'];
+      sort?: components['schemas']['JobSort'];
+    };
+    JobView: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      layout: components['schemas']['JobViewLayout'];
+      filters: components['schemas']['JobViewFilters'];
+      sort: components['schemas']['JobSort'];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description The `data` of a change event: the resource it concerns. `version` is
+     *     set for versioned resources (profile, evidence, job); `job_id` for
+     *     job activity.
+     */
+    EventData: {
+      /** Format: uuid */
+      id: string;
+      version?: number;
+      /** Format: uuid */
+      job_id?: string;
+    };
+    /**
+     * @description The SSE `event` name of a change event.
+     * @enum {string}
+     */
+    EventTopic:
+      | 'profile.updated'
+      | 'organization.created'
+      | 'organization.updated'
+      | 'organization.deleted'
+      | 'evidence.created'
+      | 'evidence.updated'
+      | 'evidence.moved'
+      | 'evidence.archived'
+      | 'evidence.unarchived'
+      | 'evidence.deleted'
+      | 'skill.created'
+      | 'skill.updated'
+      | 'skill.merged'
+      | 'skill.deleted'
+      | 'job_status.created'
+      | 'job_status.updated'
+      | 'job_status.moved'
+      | 'job_status.deleted'
+      | 'job.created'
+      | 'job.updated'
+      | 'job.moved'
+      | 'job.archived'
+      | 'job.unarchived'
+      | 'job.deleted'
+      | 'job_activity.created'
+      | 'job_activity.updated'
+      | 'job_activity.deleted'
+      | 'job_view.created'
+      | 'job_view.updated'
+      | 'job_view.deleted'
+      | 'membership.changed'
+      | 'usage.changed'
+      | 'model_operation.changed'
+      | 'match_run.changed'
+      | 'mail.account.updated'
+      | 'mail.message.classified';
+    Plan: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      cap_7d_usd: string;
+      cap_30d_usd: string;
+      version: number;
+    };
+    PlanInput: {
+      name: string;
+      cap_7d_usd: string;
+      cap_30d_usd: string;
+    };
+    Membership: {
+      /** Format: uuid */
+      user_id: string;
+      /** Format: uuid */
+      plan_id: string;
+      plan_name: string;
+      /** @enum {string} */
+      status: 'active' | 'suspended';
+      version: number;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    MembershipInput: {
+      /** Format: uuid */
+      plan_id: string;
+      /** @enum {string} */
+      status: 'active' | 'suspended';
+    };
+    Usage: {
+      membership: components['schemas']['Membership'] | null;
+      /** Format: date-time */
+      server_time: string;
+      cap_7d_usd: string;
+      cap_30d_usd: string;
+      spent_7d_usd: string;
+      spent_30d_usd: string;
+      reserved_usd: string;
+      available_7d_usd: string;
+      available_30d_usd: string;
+      /** Format: date-time */
+      next_capacity_at: string | null;
+      blocked_reason: string;
+    };
+    Member: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      membership: components['schemas']['Membership'] | null;
+      usage: components['schemas']['Usage'];
+    };
+    /** @description One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list. */
+    UsageEntry: {
+      id: string;
+      amount_usd: string;
+      /** Format: date-time */
+      accounted_at: string;
+      /** @enum {string} */
+      app: 'jobs' | 'mail';
+      title?: string | null;
+      company?: string | null;
+      steps: ('match' | 'summary' | 'extraction' | 'mail' | 'other')[];
+    };
+    SystemKey: {
+      /** Format: uuid */
+      id: string;
+      label: string;
+      fingerprint: string;
+      active: boolean;
+      version: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    SystemKeyInput: {
+      label: string;
+      key: string;
+    };
+    KeyActivationInput: {
+      active: boolean;
+    };
+    AttemptSummary: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      user_id: string;
+      model: string;
+      state: string;
+      reserved_usd: string;
+      /** Format: date-time */
+      dispatched_at: string;
+      generation_id: string | null;
+      error_code: string;
+      version: number;
+    };
+    AttemptResolutionInput: {
+      amount_usd: string;
+      generation_id?: string | null;
+      reason: string;
+    };
+    ModelOperation: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      user_id: string;
+      /** @enum {string} */
+      status:
+        'pending' | 'blocked' | 'running' | 'completed' | 'failed' | 'needs_review' | 'cancelled';
+      blocked_reason: string;
+      /** Format: date-time */
+      next_eligible_at: string | null;
+      result: string;
+      version: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    DecisionModel: {
+      id: string;
+      name: string;
+      context_length: number;
+      pricing: {
+        [key: string]: unknown;
+      };
+      compatibility_reason: string;
+      reasoning?: components['schemas']['ReasoningOptions'];
+    };
+    ExtractionModel: {
+      id: string;
+      name: string;
+      context_length: number;
+      pricing: {
+        [key: string]: unknown;
+      };
+      /** @description Empty when the model can be selected. */
+      compatibility_reason: string;
+      /** @description Answers salaries as numbers; other models answer text that is parsed. */
+      typed: boolean;
+    };
+    /** @description Thinking control a model accepts. Absent when the model does not reason. */
+    ReasoningOptions: {
+      /** @description When true, reasoning cannot be turned off. */
+      mandatory: boolean;
+      /** @description Accepted efforts, highest first. Empty when the model exposes no effort choice. */
+      efforts: ('max' | 'xhigh' | 'high' | 'medium' | 'low' | 'minimal' | 'off')[];
+    };
+    /** @description Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value. */
+    SummaryRows: number;
+    ModelSettings: {
+      decision_model: string | null;
+      summary_model?: string | null;
+      summary_endpoint?: string | null;
+      summary_rows: components['schemas']['SummaryRows'];
+      /**
+       * @description Thinking effort for summaries; null is automatic.
+       * @enum {string|null}
+       */
+      summary_reasoning_effort?:
+        'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null;
+      /** @description Extraction model that reads posting fields; null when off. */
+      extraction_model?: string | null;
+      version: number;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    MatchRunSummary: {
+      /** Format: uuid */
+      run_id: string;
+      status: string;
+      score?: number | null;
+      stale: boolean;
+    };
+    MatchEstimate: {
+      available: boolean;
+      reason: string;
+      cost_usd?: string | null;
+      questions: number;
+      requests: number;
+      available_7d_usd?: string;
+      available_30d_usd?: string;
+    };
+    Requirement: {
+      text: string;
+      text_hash: string;
+      class: string;
+      original_class: string;
+      type: string;
+      line: number;
+      source_start?: number;
+      source_end?: number;
+      min_years: number;
+      degree?: string;
+      language?: string;
+    };
+    Coverage: components['schemas']['Requirement'] & {
+      status: string;
+      strength: number;
+      provisional: boolean;
+      evidence_title?: string;
+      evidence_id?: string;
+      highlight_ids: string[];
+      answer?: {
+        score?: number;
+        confidence?: number;
+        probabilities?: {
+          [key: string]: number;
         };
+        legend?: {
+          [key: string]: unknown;
+        };
+      };
+      check?: string;
+      review: boolean;
+      citations?: {
+        id: string;
+        text: string;
+      }[];
     };
-    parameters: {
-        ID: string;
-        /** @description The ETag from the last read. A stale value fails with 412. */
-        IfMatch: string;
-        /** @description Retrying with the same key and body returns the original result. */
-        IdempotencyKey: string;
+    Selection: {
+      title?: string;
+      evidence_id: string;
+      relevance: number;
+      highlight_ids: string[];
+      /** @description Expected whole-posting relevance of each answered highlight, including library opt-outs. Absent on historical results. */
+      highlight_scores?: {
+        [key: string]: number;
+      };
     };
-    requestBodies: never;
-    headers: {
-        /** @description The resource version, for If-Match. */
-        ETag: string;
+    EvidenceMatch: components['schemas']['Selection'];
+    Insight: {
+      type: string;
+      text: string;
+      text_hash?: string;
+      evidence_id?: string;
     };
-    pathItems: never;
+    MatchResult: {
+      /** @description Historical coverage score; null for whole-posting matching. */
+      score: number | null;
+      /** @description Historical requirement count; zero for whole-posting matching. */
+      must_met: number;
+      /** @description Historical requirement count; zero for whole-posting matching. */
+      must_total: number;
+      partial: boolean;
+      seniority: string;
+      relevant_years: number;
+      scoring_version: number;
+      /** @description Historical requirement analysis; empty for whole-posting matching. */
+      requirements: components['schemas']['Coverage'][];
+      evidence: components['schemas']['EvidenceMatch'][];
+      selection: components['schemas']['Selection'][];
+      suggestions: components['schemas']['Selection'][];
+      insights: components['schemas']['Insight'][];
+      skills: {
+        skill_id: string;
+        name?: string;
+        relevance: number;
+      }[];
+    };
+    MatchRun: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      job_id: string;
+      status: string;
+      stage: string;
+      model: string | null;
+      pipeline?: number;
+      trigger: string;
+      blocked_reason: string;
+      /** Format: date-time */
+      next_eligible_at?: string | null;
+      version: number;
+      total: number;
+      answered: number;
+      cached: number;
+      unanswered: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      finished_at?: string | null;
+      score?: number | null;
+      must_met?: number;
+      must_total?: number;
+      stale: boolean;
+      truncated?: boolean;
+      obsolete_overrides?: string[];
+      changed: number;
+      added: number;
+      removed: number;
+      cost_usd: string;
+      selection?: components['schemas']['Selection'][];
+      suggestions?: components['schemas']['Selection'][];
+      skills?: {
+        skill_id: string;
+        name?: string;
+        relevance: number;
+      }[];
+      result?: components['schemas']['MatchResult'];
+    };
+    MatchRunPage: {
+      items: components['schemas']['MatchRun'][];
+      /** Format: uuid */
+      next_cursor?: string;
+    };
+    /** @enum {string} */
+    NotificationKind: 'mail';
+    Notification: {
+      /** Format: uuid */
+      id: string;
+      kind: components['schemas']['NotificationKind'];
+      /** Format: date-time */
+      occurred_at: string;
+      /** Format: date-time */
+      read_at: string | null;
+      /** @description Set when `kind` is `mail`. */
+      mail: components['schemas']['MailMessage'] | null;
+    };
+    NotificationPage: {
+      items: components['schemas']['Notification'][];
+      /** Format: uuid */
+      next_cursor?: string;
+    };
+    NotificationSummary: {
+      unread: number;
+    };
+    NotificationRead: {
+      ids?: string[];
+      all?: boolean;
+    };
+    /** @enum {string} */
+    MailCategory: 'received' | 'assessment' | 'interview' | 'rejection' | 'offer';
+    MailAccount: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      provider: 'google';
+      address: string;
+      /** @enum {string} */
+      status: 'active' | 'paused' | 'needs_reconnect' | 'disconnected';
+      /** Format: date-time */
+      last_synced_at?: string | null;
+      last_error: string;
+      /**
+       * Format: date-time
+       * @description When a sync held back by Gmail's rate limit resumes by itself.
+       */
+      retry_at: string | null;
+      /** @description Messages classified so far. */
+      mails_done: number;
+      /** @description Messages found so far, classified or not. Grows while a backlog is being read. */
+      mails_total: number;
+      /** @description Classified messages that concern an application. */
+      mails_relevant: number;
+      version: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    MailAccountList: {
+      configured: boolean;
+      items: components['schemas']['MailAccount'][];
+    };
+    MailAccountUpdate: {
+      paused: boolean;
+    };
+    MailConnect: {
+      url: string;
+    };
+    MailConnectComplete: {
+      state: string;
+      code: string;
+    };
+    MailMessage: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      account_id: string;
+      category: components['schemas']['MailCategory'];
+      /** Format: uuid */
+      job_id?: string | null;
+      from: string;
+      subject: string;
+      snippet: string;
+      /** Format: date-time */
+      received_at: string;
+      /** Format: date-time */
+      classified_at: string;
+      /** Format: uri */
+      gmail_url: string;
+      status_change?: components['schemas']['MailStatusChange'] | null;
+    };
+    /** @description The job status a message proposed, once it was linked to a job. `no_change` leaves the job as it is; `review` waits for the member; `applied` moved the job (`auto` when no one had to confirm it); `dismissed` and `undone` are the member declining or reverting it. */
+    MailStatusChange: {
+      /** @enum {string} */
+      outcome: 'no_change' | 'review' | 'applied' | 'dismissed' | 'undone';
+      /** Format: uuid */
+      proposed_status_id: string | null;
+      /** Format: uuid */
+      previous_status_id: string | null;
+      confidence: number | null;
+      auto: boolean;
+    };
+    MailStatusChangeAction: {
+      /** @enum {string} */
+      action: 'apply' | 'dismiss' | 'undo';
+    };
+    MailMessagePage: {
+      items: components['schemas']['MailMessage'][];
+      /** Format: uuid */
+      next_cursor?: string;
+    };
+  };
+  responses: {
+    /** @description An error. */
+    Problem: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/problem+json': components['schemas']['Problem'];
+      };
+    };
+  };
+  parameters: {
+    ID: string;
+    /** @description The ETag from the last read. A stale value fails with 412. */
+    IfMatch: string;
+    /** @description Retrying with the same key and body returns the original result. */
+    IdempotencyKey: string;
+  };
+  requestBodies: never;
+  headers: {
+    /** @description The resource version, for If-Match. */
+    ETag: string;
+  };
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The authenticated user. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Me"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listKinds: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description All kinds, in display order. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Kind"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The profile. Version 0 means it was never saved. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Profile"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putProfile: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProfileInput"];
-            };
-        };
-        responses: {
-            /** @description The saved profile. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Profile"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listOrganizations: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description All organizations, by name. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Organization"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createOrganization: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OrganizationInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Organization"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getOrganization: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The organization. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Organization"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteOrganization: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateOrganization: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OrganizationInput"];
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Organization"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listSkills: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description All skills, by name. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Skill"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createSkill: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SkillInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Skill"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteSkill: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateSkill: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SkillInput"];
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Skill"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    mergeSkill: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SkillMerge"];
-            };
-        };
-        responses: {
-            /** @description The surviving skill. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Skill"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listEvidences: {
-        parameters: {
-            query?: {
-                category?: components["schemas"]["Category"];
-                form?: components["schemas"]["Form"];
-                kind?: string;
-                parent_id?: string;
-                top_level?: boolean;
-                include_archived?: boolean;
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A page of evidence documents, by category then position. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EvidencePage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createEvidence: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Retrying with the same key and body returns the original result. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EvidenceCreate"];
-            };
-        };
-        responses: {
-            /** @description Created (or replayed for a repeated Idempotency-Key). */
-            201: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The document, with summaries of its children. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putEvidence: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EvidenceUpdate"];
-            };
-        };
-        responses: {
-            /** @description The saved document. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteEvidence: {
-        parameters: {
-            query?: {
-                cascade?: boolean;
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    moveEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EvidenceMove"];
-            };
-        };
-        responses: {
-            /** @description The moved document. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    archiveEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Archived. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    unarchiveEvidence: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Restored. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listJobStatuses: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description All statuses, in board order. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobStatus"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createJobStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobStatusInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobStatus"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteJobStatus: {
-        parameters: {
-            query?: {
-                move_to?: string;
-            };
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateJobStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobStatusInput"];
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobStatus"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    moveJobStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Reorder"];
-            };
-        };
-        responses: {
-            /** @description Moved. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobStatus"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listJobs: {
-        parameters: {
-            query?: {
-                status_id?: string[];
-                stage?: components["schemas"]["JobStage"][];
-                /** @description Case-insensitive match on title or company. */
-                q?: string;
-                include_archived?: boolean;
-                sort?: components["schemas"]["JobSort"];
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A page of job summaries (without description and notes). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobPage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The job, with description and notes. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putJob: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobInput"];
-            };
-        };
-        responses: {
-            /** @description The saved job. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    moveJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobMove"];
-            };
-        };
-        responses: {
-            /** @description The moved job. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    archiveJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Archived. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    unarchiveJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Restored. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listJobActivities: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The job's timeline, newest first. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobActivity"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createJobNote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobNoteInput"];
-            };
-        };
-        responses: {
-            /** @description The note. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobActivity"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteJobNote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-                activity_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateJobNote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-                activity_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobNoteInput"];
-            };
-        };
-        responses: {
-            /** @description The note. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobActivity"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    readPosting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PostingReadInput"];
-            };
-        };
-        responses: {
-            /** @description What the page says. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PostingRead"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getPostingExtraction: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The extraction's state and fields. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PostingExtraction"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listJobViews: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Saved views, in order. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobView"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createJobView: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobViewInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobView"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putJobView: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobViewInput"];
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobView"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteJobView: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    streamEvents: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description The id of the last event received; replay starts after it. */
-                "Last-Event-ID"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description An open event stream. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Too many streams are open for this user. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Live events are temporarily unavailable; retry after `Retry-After` seconds. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getUsage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Usage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listUsageEntries: {
-        parameters: {
-            query?: {
-                before?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UsageEntry"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listPlans: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Plan"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            201: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Plan"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updatePlan: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Plan"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listMembers: {
-        parameters: {
-            query?: {
-                after?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Member"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putMembership: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MembershipInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Membership"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listSystemKeys: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemKey"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createSystemKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SystemKeyInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            201: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemKey"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    activateSystemKey: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["KeyActivationInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listModelAttempts: {
-        parameters: {
-            query?: {
-                before?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttemptSummary"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    resolveModelAttempt: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AttemptResolutionInput"];
-            };
-        };
-        responses: {
-            /** @description Success. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createGatewayTest: {
-        parameters: {
-            query?: never;
-            header: {
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelOperation"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getGatewayTest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelOperation"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listTextModelEndpoints: {
-        parameters: {
-            query: {
-                model: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Compatible provider endpoints for a text model (owner only). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Endpoint capacity tier; default for standard endpoints. */
-                        service_tier: string;
-                        tag: string;
-                        name: string;
-                    }[];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listTextModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Available OpenRouter text models (owner only). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DecisionModel"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listDecisionModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Decision model catalogue (owner only). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DecisionModel"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listExtractionModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Models served on OpenRouter's Extractions route (owner only). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExtractionModel"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getModelSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owner model settings. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelSettings"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putModelSettings: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    decision_model: string | null;
-                    summary_model?: string | null;
-                    summary_endpoint?: string | null;
-                    summary_rows?: components["schemas"]["SummaryRows"];
-                    /**
-                     * @description Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
-                     * @enum {string|null}
-                     */
-                    summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
-                    /** @description Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off. */
-                    extraction_model?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Updated settings. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelSettings"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getMatchEstimate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchEstimate"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listMatchRuns: {
-        parameters: {
-            query?: {
-                before?: string;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchRunPage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createMatchRun: {
-        parameters: {
-            query?: {
-                /** @description Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis. */
-                pipeline?: number;
-            };
-            header: {
-                "Idempotency-Key": string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchRun"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getMatchRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchRun"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    cancelMatchRun: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putMatchOverride: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                text_hash: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    class: "must" | "preferred" | "duty" | "trait" | "ignore";
-                };
-            };
-        };
-        responses: {
-            /** @description Success. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteMatchOverride: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                text_hash: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listCvTemplates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvTemplate"][];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getCv: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvPreview"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putCv: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description The ETag from the last read. A stale value fails with 412. */
-                "If-Match": components["parameters"]["IfMatch"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CvDraftInput"];
-            };
-        };
-        responses: {
-            /** @description The saved draft, rebuilt. */
-            200: {
-                headers: {
-                    ETag: components["headers"]["ETag"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvPreview"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    putCvFit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CvFitInput"];
-            };
-        };
-        responses: {
-            /** @description The preview, rebuilt with the reported fit. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvPreview"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listCvExports: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvExportPage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createCvExport: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Retrying with the same key and body returns the original result. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CvExportInput"];
-            };
-        };
-        responses: {
-            /** @description The snapshot, with its content. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvExport"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getCvExport: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The snapshot, with its content. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CvExport"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    getCvExportPdf: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The PDF. */
-            200: {
-                headers: {
-                    "Content-Disposition"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/pdf": string;
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listMailAccounts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The member's mail accounts. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailAccountList"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    startGoogleConnect: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Where to send the browser. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailConnect"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    completeGoogleConnect: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MailConnectComplete"];
-            };
-        };
-        responses: {
-            /** @description The connected account. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailAccount"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    disconnectMailAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Disconnected. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateMailAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MailAccountUpdate"];
-            };
-        };
-        responses: {
-            /** @description The updated account. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailAccount"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    syncMailAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The account, with its current progress. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailAccount"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    rescanMailAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    days: number;
-                };
-            };
-        };
-        responses: {
-            /** @description The account; progress updates as the mail is read. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailAccount"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listMailMessages: {
-        parameters: {
-            query?: {
-                category?: components["schemas"]["MailCategory"];
-                job_id?: string;
-                before?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A page of messages. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailMessagePage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    resolveMailStatusChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MailStatusChangeAction"];
-            };
-        };
-        responses: {
-            /** @description The updated message. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MailMessage"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
+  getMe: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The authenticated user. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Me'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listKinds: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description All kinds, in display order. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Kind'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getProfile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The profile. Version 0 means it was never saved. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Profile'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putProfile: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProfileInput'];
+      };
+    };
+    responses: {
+      /** @description The saved profile. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Profile'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listOrganizations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description All organizations, by name. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationInput'];
+      };
+    };
+    responses: {
+      /** @description Created. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The organization. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updateOrganization: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationInput'];
+      };
+    };
+    responses: {
+      /** @description Updated. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Organization'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listSkills: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description All skills, by name. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SkillInput'];
+      };
+    };
+    responses: {
+      /** @description Created. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updateSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SkillInput'];
+      };
+    };
+    responses: {
+      /** @description Updated. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  mergeSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SkillMerge'];
+      };
+    };
+    responses: {
+      /** @description The surviving skill. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listEvidences: {
+    parameters: {
+      query?: {
+        category?: components['schemas']['Category'];
+        form?: components['schemas']['Form'];
+        kind?: string;
+        parent_id?: string;
+        top_level?: boolean;
+        include_archived?: boolean;
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of evidence documents, by category then position. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EvidencePage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createEvidence: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Retrying with the same key and body returns the original result. */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EvidenceCreate'];
+      };
+    };
+    responses: {
+      /** @description Created (or replayed for a repeated Idempotency-Key). */
+      201: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The document, with summaries of its children. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putEvidence: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EvidenceUpdate'];
+      };
+    };
+    responses: {
+      /** @description The saved document. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteEvidence: {
+    parameters: {
+      query?: {
+        cascade?: boolean;
+      };
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  moveEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EvidenceMove'];
+      };
+    };
+    responses: {
+      /** @description The moved document. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  archiveEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Archived. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  unarchiveEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Evidence'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listJobStatuses: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description All statuses, in board order. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobStatus'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createJobStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobStatusInput'];
+      };
+    };
+    responses: {
+      /** @description Created. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobStatus'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteJobStatus: {
+    parameters: {
+      query?: {
+        move_to?: string;
+      };
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updateJobStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobStatusInput'];
+      };
+    };
+    responses: {
+      /** @description Updated. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobStatus'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  moveJobStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Reorder'];
+      };
+    };
+    responses: {
+      /** @description Moved. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobStatus'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listJobs: {
+    parameters: {
+      query?: {
+        status_id?: string[];
+        stage?: components['schemas']['JobStage'][];
+        /** @description Case-insensitive match on title or company. */
+        q?: string;
+        include_archived?: boolean;
+        sort?: components['schemas']['JobSort'];
+        cursor?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of job summaries (without description and notes). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobPage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobInput'];
+      };
+    };
+    responses: {
+      /** @description Created. */
+      201: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job, with description and notes. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putJob: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobInput'];
+      };
+    };
+    responses: {
+      /** @description The saved job. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  moveJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobMove'];
+      };
+    };
+    responses: {
+      /** @description The moved job. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  archiveJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Archived. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  unarchiveJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Job'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listJobActivities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The job's timeline, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobActivity'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createJobNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobNoteInput'];
+      };
+    };
+    responses: {
+      /** @description The note. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobActivity'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteJobNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+        activity_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updateJobNote: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+        activity_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobNoteInput'];
+      };
+    };
+    responses: {
+      /** @description The note. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobActivity'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  readPosting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PostingReadInput'];
+      };
+    };
+    responses: {
+      /** @description What the page says. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PostingRead'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getPostingExtraction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The extraction's state and fields. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PostingExtraction'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listJobViews: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Saved views, in order. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobView'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createJobView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobViewInput'];
+      };
+    };
+    responses: {
+      /** @description Created. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobView'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putJobView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['JobViewInput'];
+      };
+    };
+    responses: {
+      /** @description Updated. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['JobView'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteJobView: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  streamEvents: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description The id of the last event received; replay starts after it. */
+        'Last-Event-ID'?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description An open event stream. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/event-stream': string;
+        };
+      };
+      /** @description Too many streams are open for this user. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Live events are temporarily unavailable; retry after `Retry-After` seconds. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getUsage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Usage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listUsageEntries: {
+    parameters: {
+      query?: {
+        before?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UsageEntry'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listPlans: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Plan'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createPlan: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlanInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      201: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Plan'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updatePlan: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PlanInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Plan'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listMembers: {
+    parameters: {
+      query?: {
+        after?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Member'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putMembership: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MembershipInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Membership'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listSystemKeys: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SystemKey'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createSystemKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SystemKeyInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      201: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SystemKey'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  activateSystemKey: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['KeyActivationInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listModelAttempts: {
+    parameters: {
+      query?: {
+        before?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AttemptSummary'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  resolveModelAttempt: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AttemptResolutionInput'];
+      };
+    };
+    responses: {
+      /** @description Success. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createGatewayTest: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ModelOperation'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getGatewayTest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ModelOperation'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listTextModelEndpoints: {
+    parameters: {
+      query: {
+        model: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Compatible provider endpoints for a text model (owner only). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description Endpoint capacity tier; default for standard endpoints. */
+            service_tier: string;
+            tag: string;
+            name: string;
+          }[];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listTextModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Available OpenRouter text models (owner only). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DecisionModel'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listDecisionModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Decision model catalogue (owner only). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DecisionModel'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listExtractionModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Models served on OpenRouter's Extractions route (owner only). */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ExtractionModel'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getModelSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Owner model settings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ModelSettings'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putModelSettings: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          decision_model: string | null;
+          summary_model?: string | null;
+          summary_endpoint?: string | null;
+          summary_rows?: components['schemas']['SummaryRows'];
+          /**
+           * @description Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
+           * @enum {string|null}
+           */
+          summary_reasoning_effort?:
+            'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null;
+          /** @description Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off. */
+          extraction_model?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated settings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ModelSettings'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getMatchEstimate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MatchEstimate'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listMatchRuns: {
+    parameters: {
+      query?: {
+        before?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MatchRunPage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createMatchRun: {
+    parameters: {
+      query?: {
+        /** @description Matching pipeline. Defaults to 3 (whole-posting relevance). Versions 1 and 2 retain historical requirement analysis. */
+        pipeline?: number;
+      };
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MatchRun'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getMatchRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MatchRun'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  cancelMatchRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putMatchOverride: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        text_hash: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          class: 'must' | 'preferred' | 'duty' | 'trait' | 'ignore';
+        };
+      };
+    };
+    responses: {
+      /** @description Success. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  deleteMatchOverride: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+        text_hash: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listCvTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvTemplate'][];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getCv: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvPreview'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putCv: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The ETag from the last read. A stale value fails with 412. */
+        'If-Match': components['parameters']['IfMatch'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CvDraftInput'];
+      };
+    };
+    responses: {
+      /** @description The saved draft, rebuilt. */
+      200: {
+        headers: {
+          ETag: components['headers']['ETag'];
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvPreview'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  putCvFit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CvFitInput'];
+      };
+    };
+    responses: {
+      /** @description The preview, rebuilt with the reported fit. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvPreview'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listCvExports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Success. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvExportPage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  createCvExport: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Retrying with the same key and body returns the original result. */
+        'Idempotency-Key'?: components['parameters']['IdempotencyKey'];
+      };
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CvExportInput'];
+      };
+    };
+    responses: {
+      /** @description The snapshot, with its content. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvExport'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getCvExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The snapshot, with its content. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CvExport'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getCvExportPdf: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The PDF. */
+      200: {
+        headers: {
+          'Content-Disposition'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/pdf': string;
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listMailAccounts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The member's mail accounts. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailAccountList'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  startGoogleConnect: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Where to send the browser. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailConnect'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  completeGoogleConnect: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MailConnectComplete'];
+      };
+    };
+    responses: {
+      /** @description The connected account. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailAccount'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  disconnectMailAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Disconnected. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  updateMailAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MailAccountUpdate'];
+      };
+    };
+    responses: {
+      /** @description The updated account. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailAccount'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  syncMailAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The account, with its current progress. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailAccount'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  rescanMailAccount: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          days: number;
+        };
+      };
+    };
+    responses: {
+      /** @description The account; progress updates as the mail is read. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailAccount'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listMailMessages: {
+    parameters: {
+      query?: {
+        category?: components['schemas']['MailCategory'];
+        job_id?: string;
+        before?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of messages. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailMessagePage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  resolveMailStatusChange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components['parameters']['ID'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MailStatusChangeAction'];
+      };
+    };
+    responses: {
+      /** @description The updated message. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MailMessage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  listNotifications: {
+    parameters: {
+      query?: {
+        kind?: components['schemas']['NotificationKind'];
+        category?: components['schemas']['MailCategory'];
+        unread?: boolean;
+        before?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of notifications. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NotificationPage'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  getNotificationSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The summary. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NotificationSummary'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
+  markNotificationsRead: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NotificationRead'];
+      };
+    };
+    responses: {
+      /** @description The summary after marking. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NotificationSummary'];
+        };
+      };
+      default: components['responses']['Problem'];
+    };
+  };
 }
