@@ -1,14 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
-  effect,
   inject,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { NgIcon, provideIcons } from '@ng-icons/core';
+import { injectQuery, QueryClient } from '@tanstack/angular-query';
 import {
   lucideExternalLink,
   lucidePause,
@@ -24,6 +25,7 @@ import {
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardInputComponent } from '@/shared/components/input';
+import { pageState, ZardPageComponent } from '@/shared/components/page';
 import { ZardSelectImports } from '@/shared/components/select';
 import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
@@ -32,7 +34,10 @@ import { relativeTime } from '../mail/format';
 import { usageUsd } from '../usage/format';
 
 type Watch = Schemas['JobWatch'];
-type Allowance = Schemas['SearchAllowance'];
+type WatchList = Schemas['JobWatchList'];
+
+/** Keyed by member, so one member's cached list never shows for another. */
+const watchesKey = (identity: string | null) => ['job-watches', identity] as const;
 type Every = 1 | 2 | 6 | 24;
 
 const everyLabel: Record<Every, string> = { 1: 'Every hour', 2: 'Every 2 hours', 6: 'Every 6 hours', 24: 'Once a day' };
@@ -93,7 +98,14 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
  */
 @Component({
   selector: 'app-alerts-page',
-  imports: [FormsModule, NgIcon, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [
+    FormsModule,
+    NgIcon,
+    ZardButtonComponent,
+    ZardInputComponent,
+    ZardPageComponent,
+    ...ZardSelectImports,
+  ],
   providers: [
     provideIcons({
       lucideExternalLink,
@@ -110,29 +122,26 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="mx-auto max-w-[56rem] px-6 pb-16 pt-7">
-      <header class="flex flex-wrap items-start justify-between gap-4">
-        <div class="max-w-[38rem]">
-          <h1 class="text-xl font-semibold tracking-tight">Job alerts</h1>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Watch a company's careers board and hear about new openings within 30 minutes of them
-            going live, before they spread to LinkedIn and the applicant pool fills up.
-          </p>
-        </div>
+    <z-page
+      zTitle="Job alerts"
+      zDescription="Watch a company's careers board and hear about new openings within 30 minutes of them going live, before they spread to LinkedIn and the applicant pool fills up."
+      [zState]="page()"
+      zErrorMessage="Could not load your job alerts."
+      (retry)="list.refetch()"
+    >
         @if (!formOpen()) {
-          <div class="flex flex-wrap gap-2">
-            <button z-button zType="outline" [zDisabled]="!canSearch()" [title]="searchNote()" (click)="openForm('search')">
+          <div actions class="flex flex-wrap gap-2">
+            <button z-button zType="outline" [zDisabled]="list.isPending() || !canSearch()" [title]="searchNote()" (click)="openForm('search')">
               <ng-icon name="lucideSearch" />Search across companies
             </button>
-            <button z-button (click)="openForm('board')">
+            <button z-button [zDisabled]="list.isPending()" (click)="openForm('board')">
               <ng-icon name="lucidePlus" />Watch a company
             </button>
           </div>
         }
-      </header>
       @if (allowance(); as a) {
         @if (a.allowed > 0 || a.used > 0) {
-          <p class="mt-3 text-xs text-muted-foreground">
+          <p subtitle class="mt-3 text-xs text-muted-foreground">
             Search watchers: {{ a.used }} of {{ a.allowed }} on your plan.{{ a.available ? '' : " Job search isn't set up on this server yet." }}
           </p>
         }
@@ -379,8 +388,10 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
             </li>
           }
         </ul>
-      } @else if (loaded() && !formOpen()) {
+      }
+      @if (!formOpen()) {
         <div
+          empty
           class="mt-10 flex flex-col items-center gap-2 text-center text-sm text-muted-foreground"
         >
           <ng-icon name="lucideRadar" class="text-3xl" aria-hidden="true" />
@@ -392,22 +403,29 @@ const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
           </p>
         </div>
       }
-    </div>
+    </z-page>
   `,
 })
 export class AlertsPage {
   private readonly api = inject(Api);
   private readonly auth = inject(AuthService);
   private readonly confirm = inject(ConfirmService);
+  private readonly queries = inject(QueryClient);
 
-  protected readonly watches = signal<Watch[]>([]);
-  protected readonly allowance = signal<Allowance | null>(null);
+  /** Cached across visits: coming back shows the last list at once and refreshes behind it. */
+  protected readonly list = injectQuery(() => ({
+    queryKey: watchesKey(this.auth.identity()),
+    enabled: !!this.auth.identity(),
+    queryFn: async (): Promise<WatchList> => Api.ok(await this.api.client.GET('/v1/job-watches')),
+  }));
+  protected readonly watches = computed(() => this.list.data()?.items ?? []);
+  protected readonly allowance = computed(() => this.list.data()?.search ?? null);
+  protected readonly page = computed(() => pageState(this.list, (d: WatchList) => !d.items.length));
   protected readonly intervals: Every[] = [1, 2, 6, 24];
   protected readonly intervalLabel = (n: number): string => everyLabel[asEvery(n)];
   protected readonly every = (v: unknown): Every => asEvery(Array.isArray(v) ? v[0] : v);
   protected readonly blocked = (r: string): string => blockedLabel[r] ?? 'Not checked';
   protected readonly money = usageUsd;
-  protected readonly loaded = signal(false);
   protected readonly error = signal('');
   protected readonly formOpen = signal(false);
   protected readonly editing = signal<Watch | null>(null);
@@ -420,11 +438,6 @@ export class AlertsPage {
   protected readonly ago = (iso: string): string => relativeTime(iso, this.now());
 
   constructor() {
-    effect(() => {
-      this.auth.identity();
-      this.watches.set([]);
-      void this.load();
-    });
     const tick = setInterval(() => this.now.set(Date.now()), 60_000);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
   }
@@ -465,18 +478,8 @@ export class AlertsPage {
     return parts.join(' · ');
   }
 
-  async load(): Promise<void> {
-    const identity = this.auth.identity();
-    if (!identity) return;
-    try {
-      const list = Api.ok(await this.api.client.GET('/v1/job-watches'));
-      if (identity !== this.auth.identity()) return;
-      this.watches.set(list.items);
-      this.allowance.set(list.search);
-      this.loaded.set(true);
-    } catch (e) {
-      this.fail(e, 'Could not load your job alerts.');
-    }
+  private reload(): void {
+    void this.queries.invalidateQueries({ queryKey: watchesKey(this.auth.identity()) });
   }
 
   private fail(e: unknown, fallback: string): void {
@@ -512,8 +515,13 @@ export class AlertsPage {
   }
 
   private replace(w: Watch): void {
-    this.watches.update((list) =>
-      list.some((x) => x.id === w.id) ? list.map((x) => (x.id === w.id ? w : x)) : [w, ...list],
+    this.queries.setQueryData<WatchList>(watchesKey(this.auth.identity()), (d) =>
+      d && {
+        ...d,
+        items: d.items.some((x) => x.id === w.id)
+          ? d.items.map((x) => (x.id === w.id ? w : x))
+          : [w, ...d.items],
+      },
     );
   }
 
@@ -549,7 +557,7 @@ export class AlertsPage {
           );
       this.replace(w);
       this.closeForm();
-      if (!editing && d.kind === 'search') void this.load();
+      if (!editing && d.kind === 'search') this.reload();
     } catch (e) {
       if (e instanceof ApiError && e.fieldErrors.length)
         this.fieldError.set(Object.fromEntries(e.fieldErrors.map((f) => [f.field, f.message])));
@@ -587,7 +595,10 @@ export class AlertsPage {
       Api.ok(
         await this.api.client.DELETE('/v1/job-watches/{id}', { params: { path: { id: w.id } } }),
       );
-      this.watches.update((list) => list.filter((x) => x.id !== w.id));
+      this.queries.setQueryData<WatchList>(watchesKey(this.auth.identity()), (d) =>
+        d && { ...d, items: d.items.filter((x) => x.id !== w.id) },
+      );
+      if (w.kind === 'search') this.reload();
     } catch (e) {
       this.fail(e, 'Could not remove the alert.');
     }
