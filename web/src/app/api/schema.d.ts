@@ -833,6 +833,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/scraper-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getScraperSettings"];
+        put: operations["putScraperSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/edge-workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Edge workers with their last-24-hours job counts (owner only). */
+        get: operations["listEdgeWorkers"];
+        put?: never;
+        /** @description Registers an edge worker. The response carries its token, which is never shown again. */
+        post: operations["createEdgeWorker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/edge-workers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Changes the fields sent; the others keep their value. */
+        patch: operations["updateEdgeWorker"];
+        trace?: never;
+    };
+    "/v1/admin/edge-workers/{id}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Replaces the worker's token; the old one stops working at once. The new token is shown only in this response. */
+        post: operations["rotateEdgeWorkerToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/edge/jobs/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Edge workers only (the `edge` tag is served by a hand-written handler,
+         *     outside user authentication). Long-polls up to 25 seconds for a scrape
+         *     job the worker may take: the oldest queued job whose host is on its
+         *     allowed list, within its hourly and concurrent limits. 204 when there
+         *     is none; poll again.
+         */
+        post: operations["claimEdgeJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/edge/jobs/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Edge workers only. Posts what the worker read for a job it claimed.
+         *     The body is limited to 6 MiB. A result with an `error` or a
+         *     `status_code` of 400 or more marks the job failed: with a status code
+         *     the page is unreadable (blocked, gone), without one the worker itself
+         *     failed. 404 when the job is not claimed by this worker or has expired.
+         */
+        post: operations["postEdgeJobResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/{id}/match-estimate": {
         parameters: {
             query?: never;
@@ -1862,14 +1982,21 @@ export interface components {
             /** Format: uuid */
             id: string;
             label: string;
+            kind: components["schemas"]["SystemKeyKind"];
             fingerprint: string;
             active: boolean;
             version: number;
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Which provider the key belongs to. Only an OpenRouter key can be active.
+         * @enum {string}
+         */
+        SystemKeyKind: "openrouter" | "firecrawl" | "crawl4ai";
         SystemKeyInput: {
             label: string;
+            kind?: components["schemas"]["SystemKeyKind"];
             key: string;
         };
         KeyActivationInput: {
@@ -1955,6 +2082,102 @@ export interface components {
             version: number;
             /** Format: date-time */
             updated_at: string;
+        };
+        ScraperProvider: {
+            /**
+             * @description The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server.
+             * @enum {string}
+             */
+            kind: "firecrawl" | "crawl4ai" | "edge";
+            /** @description The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge. */
+            base_url?: string | null;
+            /**
+             * Format: uuid
+             * @description A system key of the provider's own kind, sent as a bearer token; null sends none.
+             */
+            key_id?: string | null;
+        };
+        ScraperRule: {
+            /** @description A bare lowercase hostname. The rule also covers its subdomains. */
+            host: string;
+            /** @description Positions in the provider list, in the order to try them. */
+            providers: number[];
+        };
+        ScraperSettingsInput: {
+            /** @description Tried in order until one reads the page. */
+            providers: components["schemas"]["ScraperProvider"][];
+            /** @description The first rule whose host matches the posting's host replaces the default order. */
+            rules: components["schemas"]["ScraperRule"][];
+        };
+        ScraperSettings: {
+            providers: components["schemas"]["ScraperProvider"][];
+            rules: components["schemas"]["ScraperRule"][];
+            /** @description False until an owner saves, or the environment is imported at first boot. */
+            saved: boolean;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EdgeWorkerInput: {
+            name: string;
+            /** @description Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none. */
+            allowed_hosts?: string[];
+            /** @description Jobs the worker may take per rolling hour. Default 20. */
+            max_per_hour?: number;
+            /** @description Jobs the worker may hold at once. Default 1. */
+            max_concurrent?: number;
+        };
+        EdgeWorkerPatch: {
+            name?: string;
+            enabled?: boolean;
+            allowed_hosts?: string[];
+            max_per_hour?: number;
+            max_concurrent?: number;
+        };
+        EdgeWorker: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            enabled: boolean;
+            allowed_hosts: string[];
+            max_per_hour: number;
+            max_concurrent: number;
+            /**
+             * Format: date-time
+             * @description When the worker last polled for work.
+             */
+            last_seen_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            version: number;
+            /** @description Jobs the worker took in the last 24 hours. */
+            jobs_24h: number;
+            done_24h: number;
+            /** @description Failed or timed-out jobs among them. */
+            failed_24h: number;
+        };
+        EdgeWorkerCreated: {
+            worker: components["schemas"]["EdgeWorker"];
+            /** @description The worker's bearer token (ZAPPLY_EDGE_TOKEN). Shown once; only its hash is stored. */
+            token: string;
+        };
+        EdgeJob: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+        };
+        EdgeJobResult: {
+            /** @description At most 1 MiB. */
+            markdown?: string;
+            /** @description At most 4 MiB. */
+            raw_html?: string;
+            /** @description At most 64 KiB serialized (og: and page metadata). */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description The site's HTTP status, when it answered. */
+            status_code?: number;
+            error?: string;
         };
         MatchRunSummary: {
             /** Format: uuid */
@@ -3864,6 +4087,240 @@ export interface operations {
                 };
             };
             default: components["responses"]["Problem"];
+        };
+    };
+    getScraperSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scraper providers and per-site rules (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScraperSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putScraperSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScraperSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Updated settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScraperSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listEdgeWorkers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All edge workers, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWorker"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createEdgeWorker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeWorkerInput"];
+            };
+        };
+        responses: {
+            /** @description The worker and its token. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWorkerCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateEdgeWorker: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeWorkerPatch"];
+            };
+        };
+        responses: {
+            /** @description The updated worker. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWorker"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    rotateEdgeWorkerToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The worker and its new token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeWorkerCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    claimEdgeJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A job. Read the page at `url` and post the result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeJob"];
+                };
+            };
+            /** @description No job within the wait. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The token is unknown */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    postEdgeJobResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeJobResult"];
+            };
+        };
+        responses: {
+            /** @description Recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed or oversized result. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The token is unknown */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The job is not claimed by this worker */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body or a field is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getMatchEstimate: {

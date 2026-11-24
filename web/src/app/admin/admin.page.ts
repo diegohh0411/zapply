@@ -1,5 +1,7 @@
 import { AdminOverview } from './admin-overview';
 import { ModelSettings, type ModelTab } from './model-settings';
+import { EdgeWorkers } from './edge-workers';
+import { ScraperSettings } from './scraper-settings';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -58,6 +60,11 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
     description:
       'Keys that power model calls, and a quick check that the platform can reach a model.',
   },
+  scraping: {
+    title: 'Scraping',
+    description:
+      'Which scraper providers read job postings, in what order, and which sites use a different order.',
+  },
   usage: {
     title: 'Unresolved usage',
     description:
@@ -67,7 +74,7 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
 
 @Component({
   selector: 'app-admin-page',
-  imports: [AdminOverview, ModelSettings,DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [AdminOverview, ModelSettings, ScraperSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -118,8 +125,10 @@ export class AdminPage {
   protected readonly resolving = signal<Attempt | null>(null);
   protected readonly money = usd;
   protected readonly message = blockMessage;
+  protected readonly keyKindLabel = (kind: Schemas['SystemKeyKind']): string => ({ openrouter: 'OpenRouter', firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI' })[kind];
+  protected readonly keyKind = (value: unknown): Schemas['SystemKeyKind'] => (value === 'firecrawl' || value === 'crawl4ai' ? value : 'openrouter');
   protected planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
-  protected keyForm = { label: '', key: '' };
+  protected keyForm: { label: string; key: string; kind: Schemas['SystemKeyKind'] } = { label: '', key: '', kind: 'openrouter' };
   protected resolution = { amount_usd: '', generation_id: '', reason: '' };
   protected assignments: Record<string, string> = {};
   private generation = 0;
@@ -165,7 +174,7 @@ export class AdminPage {
     clearInterval(this.poll);
     this.assignments = {};
     this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
-    this.keyForm = { label: '', key: '' };
+    this.keyForm = { label: '', key: '', kind: 'openrouter' };
   }
 
   async load(append = false): Promise<void> {
@@ -247,7 +256,7 @@ export class AdminPage {
         cap_7d_usd: 'Past 7 days allowance',
         cap_30d_usd: 'Past 30 days allowance',
         label: 'Key label',
-        key: 'OpenRouter key',
+        key: 'Provider key',
         amount_usd: 'Confirmed cost',
         reason: 'Reconciliation evidence',
         generation_id: 'Generation ID',

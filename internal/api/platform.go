@@ -104,7 +104,11 @@ func (s *server) ListSystemKeys(ctx context.Context, _ gen.ListSystemKeysRequest
 	return v, err
 }
 func (s *server) CreateSystemKey(ctx context.Context, req gen.CreateSystemKeyRequestObject) (gen.CreateSystemKeyResponseObject, error) {
-	id, err := s.members.AddKey(ctx, uid(ctx), req.Body.Label, deref(req.Body.Key))
+	kind := gen.SystemKeyKindOpenrouter
+	if req.Body.Kind != nil {
+		kind = *req.Body.Kind
+	}
+	id, err := s.members.AddKeyOfKind(ctx, uid(ctx), req.Body.Label, deref(req.Body.Key), string(kind))
 	if err != nil {
 		return nil, err
 	}

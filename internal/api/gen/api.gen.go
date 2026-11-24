@@ -697,6 +697,27 @@ func (e SalaryPeriod) Valid() bool {
 	}
 }
 
+// Defines values for ScraperProviderKind.
+const (
+	ScraperProviderKindCrawl4ai  ScraperProviderKind = "crawl4ai"
+	ScraperProviderKindEdge      ScraperProviderKind = "edge"
+	ScraperProviderKindFirecrawl ScraperProviderKind = "firecrawl"
+)
+
+// Valid indicates whether the value is a known member of the ScraperProviderKind enum.
+func (e ScraperProviderKind) Valid() bool {
+	switch e {
+	case ScraperProviderKindCrawl4ai:
+		return true
+	case ScraperProviderKindEdge:
+		return true
+	case ScraperProviderKindFirecrawl:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SkillType.
 const (
 	Hard     SkillType = "hard"
@@ -715,6 +736,27 @@ func (e SkillType) Valid() bool {
 	case Soft:
 		return true
 	case Tool:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemKeyKind.
+const (
+	SystemKeyKindCrawl4ai   SystemKeyKind = "crawl4ai"
+	SystemKeyKindFirecrawl  SystemKeyKind = "firecrawl"
+	SystemKeyKindOpenrouter SystemKeyKind = "openrouter"
+)
+
+// Valid indicates whether the value is a known member of the SystemKeyKind enum.
+func (e SystemKeyKind) Valid() bool {
+	switch e {
+	case SystemKeyKindCrawl4ai:
+		return true
+	case SystemKeyKindFirecrawl:
+		return true
+	case SystemKeyKindOpenrouter:
 		return true
 	default:
 		return false
@@ -1064,6 +1106,80 @@ type DecisionModel struct {
 
 	// Reasoning Thinking control a model accepts. Absent when the model does not reason.
 	Reasoning *ReasoningOptions `json:"reasoning,omitempty"`
+}
+
+// EdgeJob defines model for EdgeJob.
+type EdgeJob struct {
+	Id  openapi_types.UUID `json:"id"`
+	Url string             `json:"url"`
+}
+
+// EdgeJobResult defines model for EdgeJobResult.
+type EdgeJobResult struct {
+	Error *string `json:"error,omitempty"`
+
+	// Markdown At most 1 MiB.
+	Markdown *string `json:"markdown,omitempty"`
+
+	// Metadata At most 64 KiB serialized (og: and page metadata).
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
+
+	// RawHtml At most 4 MiB.
+	RawHtml *string `json:"raw_html,omitempty"`
+
+	// StatusCode The site's HTTP status, when it answered.
+	StatusCode *int `json:"status_code,omitempty"`
+}
+
+// EdgeWorker defines model for EdgeWorker.
+type EdgeWorker struct {
+	AllowedHosts []string  `json:"allowed_hosts"`
+	CreatedAt    time.Time `json:"created_at"`
+	Done24h      int       `json:"done_24h"`
+	Enabled      bool      `json:"enabled"`
+
+	// Failed24h Failed or timed-out jobs among them.
+	Failed24h int                `json:"failed_24h"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Jobs24h Jobs the worker took in the last 24 hours.
+	Jobs24h int `json:"jobs_24h"`
+
+	// LastSeenAt When the worker last polled for work.
+	LastSeenAt    *time.Time `json:"last_seen_at,omitempty"`
+	MaxConcurrent int        `json:"max_concurrent"`
+	MaxPerHour    int        `json:"max_per_hour"`
+	Name          string     `json:"name"`
+	Version       int        `json:"version"`
+}
+
+// EdgeWorkerCreated defines model for EdgeWorkerCreated.
+type EdgeWorkerCreated struct {
+	// Token The worker's bearer token (ZAPPLY_EDGE_TOKEN). Shown once; only its hash is stored.
+	Token  string     `json:"token"`
+	Worker EdgeWorker `json:"worker"`
+}
+
+// EdgeWorkerInput defines model for EdgeWorkerInput.
+type EdgeWorkerInput struct {
+	// AllowedHosts Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none.
+	AllowedHosts *[]string `json:"allowed_hosts,omitempty"`
+
+	// MaxConcurrent Jobs the worker may hold at once. Default 1.
+	MaxConcurrent *int `json:"max_concurrent,omitempty"`
+
+	// MaxPerHour Jobs the worker may take per rolling hour. Default 20.
+	MaxPerHour *int   `json:"max_per_hour,omitempty"`
+	Name       string `json:"name"`
+}
+
+// EdgeWorkerPatch defines model for EdgeWorkerPatch.
+type EdgeWorkerPatch struct {
+	AllowedHosts  *[]string `json:"allowed_hosts,omitempty"`
+	Enabled       *bool     `json:"enabled,omitempty"`
+	MaxConcurrent *int      `json:"max_concurrent,omitempty"`
+	MaxPerHour    *int      `json:"max_per_hour,omitempty"`
+	Name          *string   `json:"name,omitempty"`
 }
 
 // EmploymentType defines model for EmploymentType.
@@ -1892,6 +2008,50 @@ type Requirement struct {
 // SalaryPeriod defines model for SalaryPeriod.
 type SalaryPeriod string
 
+// ScraperProvider defines model for ScraperProvider.
+type ScraperProvider struct {
+	// BaseUrl The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge.
+	BaseUrl *string `json:"base_url,omitempty"`
+
+	// KeyId A system key of the provider's own kind, sent as a bearer token; null sends none.
+	KeyId *openapi_types.UUID `json:"key_id,omitempty"`
+
+	// Kind The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server.
+	Kind ScraperProviderKind `json:"kind"`
+}
+
+// ScraperProviderKind The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server.
+type ScraperProviderKind string
+
+// ScraperRule defines model for ScraperRule.
+type ScraperRule struct {
+	// Host A bare lowercase hostname. The rule also covers its subdomains.
+	Host string `json:"host"`
+
+	// Providers Positions in the provider list, in the order to try them.
+	Providers []int `json:"providers"`
+}
+
+// ScraperSettings defines model for ScraperSettings.
+type ScraperSettings struct {
+	Providers []ScraperProvider `json:"providers"`
+	Rules     []ScraperRule     `json:"rules"`
+
+	// Saved False until an owner saves, or the environment is imported at first boot.
+	Saved     bool      `json:"saved"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Version   int       `json:"version"`
+}
+
+// ScraperSettingsInput defines model for ScraperSettingsInput.
+type ScraperSettingsInput struct {
+	// Providers Tried in order until one reads the page.
+	Providers []ScraperProvider `json:"providers"`
+
+	// Rules The first rule whose host matches the posting's host replaces the default order.
+	Rules []ScraperRule `json:"rules"`
+}
+
 // Selection defines model for Selection.
 type Selection struct {
 	EvidenceId   string   `json:"evidence_id"`
@@ -1937,15 +2097,24 @@ type SystemKey struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	Fingerprint string             `json:"fingerprint"`
 	Id          openapi_types.UUID `json:"id"`
-	Label       string             `json:"label"`
-	Version     int                `json:"version"`
+
+	// Kind Which provider the key belongs to. Only an OpenRouter key can be active.
+	Kind    SystemKeyKind `json:"kind"`
+	Label   string        `json:"label"`
+	Version int           `json:"version"`
 }
 
 // SystemKeyInput defines model for SystemKeyInput.
 type SystemKeyInput struct {
-	Key   *string `json:"key,omitempty"`
-	Label string  `json:"label"`
+	Key *string `json:"key,omitempty"`
+
+	// Kind Which provider the key belongs to. Only an OpenRouter key can be active.
+	Kind  *SystemKeyKind `json:"kind,omitempty"`
+	Label string         `json:"label"`
 }
+
+// SystemKeyKind Which provider the key belongs to. Only an OpenRouter key can be active.
+type SystemKeyKind string
 
 // Usage defines model for Usage.
 type Usage struct {
@@ -1990,6 +2159,12 @@ type IdempotencyKey = string
 
 // IfMatch defines model for IfMatch.
 type IfMatch = string
+
+// UpdateEdgeWorkerParams defines parameters for UpdateEdgeWorker.
+type UpdateEdgeWorkerParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
 
 // CreateGatewayTestParams defines parameters for CreateGatewayTest.
 type CreateGatewayTestParams struct {
@@ -2047,6 +2222,12 @@ type PutModelSettingsJSONBodySummaryReasoningEffort string
 
 // UpdatePlanParams defines parameters for UpdatePlan.
 type UpdatePlanParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// PutScraperSettingsParams defines parameters for PutScraperSettings.
+type PutScraperSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
 	IfMatch IfMatch `json:"If-Match"`
 }
@@ -2173,6 +2354,12 @@ type ListUsageEntriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// CreateEdgeWorkerJSONRequestBody defines body for CreateEdgeWorker for application/json ContentType.
+type CreateEdgeWorkerJSONRequestBody = EdgeWorkerInput
+
+// UpdateEdgeWorkerJSONRequestBody defines body for UpdateEdgeWorker for application/json ContentType.
+type UpdateEdgeWorkerJSONRequestBody = EdgeWorkerPatch
+
 // PutMembershipJSONRequestBody defines body for PutMembership for application/json ContentType.
 type PutMembershipJSONRequestBody = MembershipInput
 
@@ -2187,6 +2374,9 @@ type CreatePlanJSONRequestBody = PlanInput
 
 // UpdatePlanJSONRequestBody defines body for UpdatePlan for application/json ContentType.
 type UpdatePlanJSONRequestBody = PlanInput
+
+// PutScraperSettingsJSONRequestBody defines body for PutScraperSettings for application/json ContentType.
+type PutScraperSettingsJSONRequestBody = ScraperSettingsInput
 
 // CreateSystemKeyJSONRequestBody defines body for CreateSystemKey for application/json ContentType.
 type CreateSystemKeyJSONRequestBody = SystemKeyInput
@@ -2284,6 +2474,18 @@ type ServerInterface interface {
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(w http.ResponseWriter, r *http.Request)
 
+	// (GET /v1/admin/edge-workers)
+	ListEdgeWorkers(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/admin/edge-workers)
+	CreateEdgeWorker(w http.ResponseWriter, r *http.Request)
+
+	// (PATCH /v1/admin/edge-workers/{id})
+	UpdateEdgeWorker(w http.ResponseWriter, r *http.Request, id ID, params UpdateEdgeWorkerParams)
+
+	// (POST /v1/admin/edge-workers/{id}/token)
+	RotateEdgeWorkerToken(w http.ResponseWriter, r *http.Request, id ID)
+
 	// (GET /v1/admin/extraction-models)
 	ListExtractionModels(w http.ResponseWriter, r *http.Request)
 
@@ -2319,6 +2521,12 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(w http.ResponseWriter, r *http.Request, id ID, params UpdatePlanParams)
+
+	// (GET /v1/admin/scraper-settings)
+	GetScraperSettings(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/scraper-settings)
+	PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams)
 
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(w http.ResponseWriter, r *http.Request)
@@ -2563,6 +2771,114 @@ func (siw *ServerInterfaceWrapper) ListDecisionModels(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDecisionModels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEdgeWorkers operation middleware
+func (siw *ServerInterfaceWrapper) ListEdgeWorkers(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEdgeWorkers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEdgeWorker operation middleware
+func (siw *ServerInterfaceWrapper) CreateEdgeWorker(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEdgeWorker(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateEdgeWorker operation middleware
+func (siw *ServerInterfaceWrapper) UpdateEdgeWorker(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateEdgeWorkerParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateEdgeWorker(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateEdgeWorkerToken operation middleware
+func (siw *ServerInterfaceWrapper) RotateEdgeWorkerToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateEdgeWorkerToken(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2989,6 +3305,65 @@ func (siw *ServerInterfaceWrapper) UpdatePlan(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePlan(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScraperSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetScraperSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScraperSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutScraperSettings operation middleware
+func (siw *ServerInterfaceWrapper) PutScraperSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutScraperSettingsParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutScraperSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5471,6 +5846,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/extraction-models", wrapper.ListExtractionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.GetScraperSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.PutScraperSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.ListEdgeWorkers)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.CreateEdgeWorker)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/admin/edge-workers/{id}", wrapper.UpdateEdgeWorker)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/edge-workers/{id}/token", wrapper.RotateEdgeWorkerToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-estimate", wrapper.GetMatchEstimate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.ListMatchRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/jobs/{id}/match-runs", wrapper.CreateMatchRun)
@@ -5528,6 +5909,163 @@ type ListDecisionModelsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListDecisionModelsdefaultApplicationProblemPlusJSONResponse) VisitListDecisionModelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEdgeWorkersRequestObject struct {
+}
+
+type ListEdgeWorkersResponseObject interface {
+	VisitListEdgeWorkersResponse(w http.ResponseWriter) error
+}
+
+type ListEdgeWorkers200JSONResponse []EdgeWorker
+
+func (response ListEdgeWorkers200JSONResponse) VisitListEdgeWorkersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEdgeWorkersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListEdgeWorkersdefaultApplicationProblemPlusJSONResponse) VisitListEdgeWorkersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEdgeWorkerRequestObject struct {
+	Body *CreateEdgeWorkerJSONRequestBody
+}
+
+type CreateEdgeWorkerResponseObject interface {
+	VisitCreateEdgeWorkerResponse(w http.ResponseWriter) error
+}
+
+type CreateEdgeWorker201JSONResponse EdgeWorkerCreated
+
+func (response CreateEdgeWorker201JSONResponse) VisitCreateEdgeWorkerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEdgeWorkerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateEdgeWorkerdefaultApplicationProblemPlusJSONResponse) VisitCreateEdgeWorkerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEdgeWorkerRequestObject struct {
+	Id     ID `json:"id"`
+	Params UpdateEdgeWorkerParams
+	Body   *UpdateEdgeWorkerJSONRequestBody
+}
+
+type UpdateEdgeWorkerResponseObject interface {
+	VisitUpdateEdgeWorkerResponse(w http.ResponseWriter) error
+}
+
+type UpdateEdgeWorker200JSONResponse EdgeWorker
+
+func (response UpdateEdgeWorker200JSONResponse) VisitUpdateEdgeWorkerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateEdgeWorkerdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateEdgeWorkerdefaultApplicationProblemPlusJSONResponse) VisitUpdateEdgeWorkerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RotateEdgeWorkerTokenRequestObject struct {
+	Id ID `json:"id"`
+}
+
+type RotateEdgeWorkerTokenResponseObject interface {
+	VisitRotateEdgeWorkerTokenResponse(w http.ResponseWriter) error
+}
+
+type RotateEdgeWorkerToken200JSONResponse EdgeWorkerCreated
+
+func (response RotateEdgeWorkerToken200JSONResponse) VisitRotateEdgeWorkerTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RotateEdgeWorkerTokendefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RotateEdgeWorkerTokendefaultApplicationProblemPlusJSONResponse) VisitRotateEdgeWorkerTokenResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6024,6 +6562,84 @@ type UpdatePlandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdatePlandefaultApplicationProblemPlusJSONResponse) VisitUpdatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScraperSettingsRequestObject struct {
+}
+
+type GetScraperSettingsResponseObject interface {
+	VisitGetScraperSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetScraperSettings200JSONResponse ScraperSettings
+
+func (response GetScraperSettings200JSONResponse) VisitGetScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutScraperSettingsRequestObject struct {
+	Params PutScraperSettingsParams
+	Body   *PutScraperSettingsJSONRequestBody
+}
+
+type PutScraperSettingsResponseObject interface {
+	VisitPutScraperSettingsResponse(w http.ResponseWriter) error
+}
+
+type PutScraperSettings200JSONResponse ScraperSettings
+
+func (response PutScraperSettings200JSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutScraperSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutScraperSettingsdefaultApplicationProblemPlusJSONResponse) VisitPutScraperSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9145,6 +9761,18 @@ type StrictServerInterface interface {
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(ctx context.Context, request ListDecisionModelsRequestObject) (ListDecisionModelsResponseObject, error)
 
+	// (GET /v1/admin/edge-workers)
+	ListEdgeWorkers(ctx context.Context, request ListEdgeWorkersRequestObject) (ListEdgeWorkersResponseObject, error)
+
+	// (POST /v1/admin/edge-workers)
+	CreateEdgeWorker(ctx context.Context, request CreateEdgeWorkerRequestObject) (CreateEdgeWorkerResponseObject, error)
+
+	// (PATCH /v1/admin/edge-workers/{id})
+	UpdateEdgeWorker(ctx context.Context, request UpdateEdgeWorkerRequestObject) (UpdateEdgeWorkerResponseObject, error)
+
+	// (POST /v1/admin/edge-workers/{id}/token)
+	RotateEdgeWorkerToken(ctx context.Context, request RotateEdgeWorkerTokenRequestObject) (RotateEdgeWorkerTokenResponseObject, error)
+
 	// (GET /v1/admin/extraction-models)
 	ListExtractionModels(ctx context.Context, request ListExtractionModelsRequestObject) (ListExtractionModelsResponseObject, error)
 
@@ -9180,6 +9808,12 @@ type StrictServerInterface interface {
 
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(ctx context.Context, request UpdatePlanRequestObject) (UpdatePlanResponseObject, error)
+
+	// (GET /v1/admin/scraper-settings)
+	GetScraperSettings(ctx context.Context, request GetScraperSettingsRequestObject) (GetScraperSettingsResponseObject, error)
+
+	// (PUT /v1/admin/scraper-settings)
+	PutScraperSettings(ctx context.Context, request PutScraperSettingsRequestObject) (PutScraperSettingsResponseObject, error)
 
 	// (GET /v1/admin/system-keys)
 	ListSystemKeys(ctx context.Context, request ListSystemKeysRequestObject) (ListSystemKeysResponseObject, error)
@@ -9466,6 +10100,121 @@ func (sh *strictHandler) ListDecisionModels(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListDecisionModelsResponseObject); ok {
 		if err := validResponse.VisitListDecisionModelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEdgeWorkers operation middleware
+func (sh *strictHandler) ListEdgeWorkers(w http.ResponseWriter, r *http.Request) {
+	var request ListEdgeWorkersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEdgeWorkers(ctx, request.(ListEdgeWorkersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEdgeWorkers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEdgeWorkersResponseObject); ok {
+		if err := validResponse.VisitListEdgeWorkersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEdgeWorker operation middleware
+func (sh *strictHandler) CreateEdgeWorker(w http.ResponseWriter, r *http.Request) {
+	var request CreateEdgeWorkerRequestObject
+
+	var body CreateEdgeWorkerJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEdgeWorker(ctx, request.(CreateEdgeWorkerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEdgeWorker")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEdgeWorkerResponseObject); ok {
+		if err := validResponse.VisitCreateEdgeWorkerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateEdgeWorker operation middleware
+func (sh *strictHandler) UpdateEdgeWorker(w http.ResponseWriter, r *http.Request, id ID, params UpdateEdgeWorkerParams) {
+	var request UpdateEdgeWorkerRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdateEdgeWorkerJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateEdgeWorker(ctx, request.(UpdateEdgeWorkerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateEdgeWorker")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateEdgeWorkerResponseObject); ok {
+		if err := validResponse.VisitUpdateEdgeWorkerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateEdgeWorkerToken operation middleware
+func (sh *strictHandler) RotateEdgeWorkerToken(w http.ResponseWriter, r *http.Request, id ID) {
+	var request RotateEdgeWorkerTokenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateEdgeWorkerToken(ctx, request.(RotateEdgeWorkerTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateEdgeWorkerToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateEdgeWorkerTokenResponseObject); ok {
+		if err := validResponse.VisitRotateEdgeWorkerTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9808,6 +10557,63 @@ func (sh *strictHandler) UpdatePlan(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdatePlanResponseObject); ok {
 		if err := validResponse.VisitUpdatePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScraperSettings operation middleware
+func (sh *strictHandler) GetScraperSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetScraperSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScraperSettings(ctx, request.(GetScraperSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScraperSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScraperSettingsResponseObject); ok {
+		if err := validResponse.VisitGetScraperSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutScraperSettings operation middleware
+func (sh *strictHandler) PutScraperSettings(w http.ResponseWriter, r *http.Request, params PutScraperSettingsParams) {
+	var request PutScraperSettingsRequestObject
+
+	request.Params = params
+
+	var body PutScraperSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutScraperSettings(ctx, request.(PutScraperSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutScraperSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutScraperSettingsResponseObject); ok {
+		if err := validResponse.VisitPutScraperSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

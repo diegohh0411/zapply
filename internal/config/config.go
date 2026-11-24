@@ -90,9 +90,13 @@ func (g Google) RedirectURL() string {
 // PushURL is the endpoint the Pub/Sub push subscription targets.
 func (g Google) PushURL() string { return strings.TrimRight(g.PublicURL, "/") + "/hooks/google/pubsub" }
 
-// Scraper reads posting links in the new job dialog. Provider names the
-// scrape API (SCRAPER_PROVIDER); "none" leaves the dialog reading only what
-// the link and pasted text say.
+// Scraper reads posting links in the new job dialog. Platform owners manage
+// the scrapers (an ordered fallback list and per-site rules) in the admin UI,
+// and the database holds them. These environment values are read only to
+// import a first configuration: when a deployment boots before any scraper
+// settings were saved, Provider ("none" imports nothing) and Firecrawl become
+// the first provider, and the Firecrawl key becomes a system key. Once
+// settings exist (imported or saved) the environment is ignored.
 type Scraper struct {
 	Provider  string
 	Firecrawl Firecrawl
@@ -106,7 +110,8 @@ const (
 
 // Firecrawl is a Firecrawl v2 API: Firecrawl's hosted API (the default URL),
 // a self-hosted server or Firecrawl Local (deploy/compose.yaml). Key is
-// FIRECRAWL_API_KEY, or Firecrawl Local's FIRECRAWL_TOKEN.
+// FIRECRAWL_API_KEY, or Firecrawl Local's FIRECRAWL_TOKEN. Imported once; see
+// Scraper.
 type Firecrawl struct {
 	URL string
 	Key string

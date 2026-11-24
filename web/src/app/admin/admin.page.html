@@ -4,7 +4,7 @@
       <h1 class="text-xl font-semibold tracking-tight">{{ heading().title }}</h1>
       <p class="text-sm text-muted-foreground">{{ heading().description }}</p>
     </div>
-    @if (section() !== 'overview' && section() !== 'models') {
+    @if (section() !== 'overview' && section() !== 'models' && section() !== 'scraping') {
       <button z-button zType="outline" [zDisabled]="loading() || busy()" (click)="load()">
         Refresh
       </button>
@@ -23,6 +23,12 @@
   @switch (section()) {
     @case ('overview') {
       <app-admin-overview />
+    }
+    @case ('scraping') {
+      <div class="space-y-12">
+        <app-scraper-settings />
+        <app-edge-workers />
+      </div>
     }
     @case ('plans') {
       <div class="flex flex-wrap items-start gap-6">
@@ -268,10 +274,11 @@
     @case ('keys') {
       <section aria-labelledby="keys-heading" class="space-y-4">
         <div class="space-y-1">
-          <h2 id="keys-heading" class="text-lg font-semibold">OpenRouter keys</h2>
+          <h2 id="keys-heading" class="text-lg font-semibold">Provider keys</h2>
           <p class="text-sm text-muted-foreground">
-            New keys are inactive until you activate them. Activating a key replaces the key used for
-            new model calls.
+            New OpenRouter keys are inactive until you activate them. Activating one replaces the key used
+            for new model calls. Firecrawl and Crawl4AI keys are chosen per provider on the
+            <a class="underline" routerLink="/admin/scraping">Scraping</a> page.
           </p>
         </div>
         <div class="overflow-x-auto rounded-lg border">
@@ -279,6 +286,7 @@
             <thead class="bg-muted">
               <tr>
                 <th class="p-3">Label</th>
+                <th class="p-3">Provider</th>
                 <th class="p-3">Fingerprint</th>
                 <th class="p-3">Status</th>
                 <th class="p-3">Actions</th>
@@ -288,17 +296,20 @@
               @for (k of keys(); track k.id) {
                 <tr class="border-t">
                   <td class="p-3 font-medium">{{ k.label }}</td>
+                  <td class="p-3">{{ keyKindLabel(k.kind) }}</td>
                   <td class="p-3 font-mono text-xs">{{ k.fingerprint }}</td>
-                  <td class="p-3">{{ k.active ? 'Active' : 'Inactive' }}</td>
+                  <td class="p-3">{{ k.kind !== 'openrouter' ? 'Chosen per provider' : k.active ? 'Active' : 'Inactive' }}</td>
                   <td class="p-3">
-                    <button z-button zType="outline" [zDisabled]="busy()" (click)="activate(k)">
-                      {{ k.active ? 'Deactivate' : 'Activate' }}
-                    </button>
+                    @if (k.kind === 'openrouter') {
+                      <button z-button zType="outline" [zDisabled]="busy()" (click)="activate(k)">
+                        {{ k.active ? 'Deactivate' : 'Activate' }}
+                      </button>
+                    }
                   </td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="4" class="p-6 text-center text-muted-foreground">
+                  <td colspan="5" class="p-6 text-center text-muted-foreground">
                     No system keys configured.
                   </td>
                 </tr>
@@ -315,16 +326,24 @@
             Stored encrypted. The key is cleared from this form after you save it.
           </p>
           <form
-            class="mt-4 grid items-end gap-4 md:grid-cols-3"
+            class="mt-4 grid items-end gap-4 md:grid-cols-4"
             autocomplete="off"
             (ngSubmit)="addKey()"
           >
+            <div class="field">
+              <span>Provider</span>
+              <z-select aria-label="Provider" name="kind" [ngModel]="keyForm.kind" (ngModelChange)="keyForm.kind = keyKind($event)">
+                <z-select-item zValue="openrouter">OpenRouter</z-select-item>
+                <z-select-item zValue="firecrawl">Firecrawl</z-select-item>
+                <z-select-item zValue="crawl4ai">Crawl4AI</z-select-item>
+              </z-select>
+            </div>
             <label class="field"
               ><span>Label</span
               ><input z-input name="label" [(ngModel)]="keyForm.label" maxlength="100" required
             /></label>
             <label class="field"
-              ><span>OpenRouter key</span
+              ><span>Key</span
               ><input
                 z-input
                 type="password"
