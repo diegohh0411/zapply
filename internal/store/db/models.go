@@ -880,6 +880,7 @@ type JobAlertKey struct {
 	UserID    uuid.UUID
 	Key       string
 	AlertID   uuid.UUID
+	FromAts   bool
 	CreatedAt time.Time
 }
 

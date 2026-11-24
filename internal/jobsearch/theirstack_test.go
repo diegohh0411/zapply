@@ -32,7 +32,7 @@ func TestTheirStackSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Credits != 2 || len(res.Postings) != 1 {
+	if res.Credits != 2 || len(res.Postings) != 1 || res.Returned != 2 || !res.Newest.Equal(since.Add(6*time.Minute)) {
 		t.Fatalf("result = %+v", res)
 	}
 	p := res.Postings[0]
@@ -54,21 +54,32 @@ func TestTheirStackSearch(t *testing.T) {
 }
 
 func TestTheirStackErrors(t *testing.T) {
+	// An answer says what it charged (nothing without the header).
 	for _, tc := range []struct {
 		status  int
-		charged bool
-	}{{401, false}, {402, false}, {422, false}, {429, false}, {500, true}} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tc.status) }))
+		header  string
+		credits int
+	}{{401, "", 0}, {402, "", 0}, {422, "", 0}, {429, "", 0}, {500, "", 0}, {502, "3", 3}, {200, "4", 4}} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if tc.header != "" {
+				w.Header().Set("X-Credits-Charged", tc.header)
+			}
+			w.WriteHeader(tc.status)
+			if tc.status == 200 {
+				_, _ = w.Write([]byte("not json"))
+			}
+		}))
 		_, err := (&TheirStack{BaseURL: srv.URL}).Search(context.Background(), "k", Query{Titles: []string{"x"}, Limit: 1})
 		srv.Close()
 		var e *Error
-		if !errors.As(err, &e) || e.Charged != tc.charged {
-			t.Errorf("%d: %v", tc.status, err)
+		if !errors.As(err, &e) || e.Unknown || e.Credits != tc.credits {
+			t.Errorf("%d: %+v", tc.status, err)
 		}
 	}
+	// No answer: the search may have run.
 	_, err := (&TheirStack{BaseURL: "http://127.0.0.1:1"}).Search(context.Background(), "k", Query{Titles: []string{"x"}, Limit: 1})
 	var e *Error
-	if !errors.As(err, &e) || !e.Charged {
+	if !errors.As(err, &e) || !e.Unknown {
 		t.Errorf("unreachable: %v", err)
 	}
 }

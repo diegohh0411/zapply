@@ -108,6 +108,17 @@ func TestWatchAndPoll(t *testing.T) {
 		t.Fatalf("bob got %d alerts, want 2", n)
 	}
 
+	// Two openings with the same title on one board both alert: the ATS says
+	// they are different postings.
+	fake.set("lever/acme", posting("old", "Backend Engineer", "Remote"), posting("new1", "Staff Engineer", "NYC"), posting("new2", "Designer", "NYC"),
+		posting("new4", "Staff Engineer", "NYC"))
+	if err := worker.Poll(ctx, "lever", "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if n := alertCount(t, notes, alice); n != 2 {
+		t.Fatalf("second Staff Engineer opening: alice has %d alerts, want 2", n)
+	}
+
 	// Paused watches stay quiet; the board's health is reported.
 	paused := true
 	if w, err = api.Update(ctx, alice, w.ID, alerts.Input{Paused: &paused}); err != nil || !w.Paused || w.LastCheckedAt == nil {
@@ -117,7 +128,7 @@ func TestWatchAndPoll(t *testing.T) {
 	if err := worker.Poll(ctx, "lever", "acme"); err != nil {
 		t.Fatal(err)
 	}
-	if n := alertCount(t, notes, alice); n != 1 {
+	if n := alertCount(t, notes, alice); n != 2 {
 		t.Fatalf("paused watch alerted: %d", n)
 	}
 

@@ -52,7 +52,7 @@ func (p ProviderConfig) CreditPrice() int64 {
 }
 
 // creditAmount is a credit price as the database accepts it.
-var creditAmount = regexp.MustCompile(`^[0-9]{1,6}(\.[0-9]{1,12})?$`)
+var creditAmount = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,12})?$`)
 
 // Rule replaces the default order for a host and its subdomains. Providers are
 // positions in Settings.Providers, in the order to try them.

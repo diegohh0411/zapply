@@ -13,8 +13,8 @@ SELECT r.id, r.pipeline, r.status, round(r.score::numeric, 1) AS score, r.must_m
   r.total AS questions, r.cached,
   (SELECT count(*) FROM match_run_operation m WHERE m.run_id = r.id) AS requests,
   (SELECT round(COALESCE(sum(u.amount), 0) / 1e12, 6) FROM match_run_operation m
-     JOIN platform.model_attempt t ON t.operation_id = m.operation_id
-     JOIN platform.model_usage u ON u.attempt_id = t.id WHERE m.run_id = r.id) AS cost_usd,
+     JOIN platform.model_charge t ON t.operation_id = m.operation_id
+     JOIN platform.ledger_entry u ON u.charge_id = t.charge_id WHERE m.run_id = r.id) AS cost_usd,
   r.finished_at - r.created_at AS duration
 FROM match_run r WHERE r.id IN (:'a', :'b') ORDER BY r.id = :'b';
 

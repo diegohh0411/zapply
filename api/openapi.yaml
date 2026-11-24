@@ -3025,7 +3025,7 @@ components:
         kind: { type: string, enum: [firecrawl, crawl4ai, edge], description: "The scraping API: Firecrawl (hosted or self-hosted), a self-hosted Crawl4AI server, or edge workers on residential machines that pull jobs from this server." }
         base_url: { type: string, nullable: true, description: "The API's http(s) address; null is Firecrawl's hosted API. Required for Crawl4AI, which has no hosted API. Must be null for edge." }
         key_id: { type: string, format: uuid, nullable: true, description: "A system key of the provider's own kind, sent as a bearer token; null sends none." }
-        credit_usd: { type: string, nullable: true, pattern: '^\d{1,6}(\.\d{1,12})?$', description: "What one provider credit costs. Members are charged for the credits their scrapes use (Firecrawl: 1 per page, 5 through its stealth proxy; other providers: 1). Null makes the provider free. Not allowed for edge workers." }
+        credit_usd: { type: string, nullable: true, pattern: '^\d{1,3}(\.\d{1,12})?$', description: "What one provider credit costs. Members are charged for the credits their scrapes use (Firecrawl: 1 per page, 5 through its stealth proxy; other providers: 1). Null makes the provider free. Not allowed for edge workers." }
     ScraperRule:
       type: object
       required: [host, providers]
@@ -3065,7 +3065,7 @@ components:
       required: [key_id, credit_usd, max_results]
       properties:
         key_id: { type: string, format: uuid, nullable: true }
-        credit_usd: { type: string, nullable: true, pattern: '^\d{1,6}(\.\d{1,12})?$' }
+        credit_usd: { type: string, nullable: true, pattern: '^\d{1,3}(\.\d{1,12})?$' }
         max_results: { type: integer, minimum: 1, maximum: 100 }
     ScraperSettings:
       type: object

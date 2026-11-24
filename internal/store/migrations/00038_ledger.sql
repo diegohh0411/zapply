@@ -12,6 +12,11 @@
 -- and model_usage becomes ledger_entry, keeping ids, history and grants.
 -- +goose Up
 -- +goose StatementBegin
+-- Old workers may still be settling calls: hold them off until the move
+-- commits, so no state change lands in model_attempt after it was copied.
+-- Give up quickly rather than queue every member's requests behind the lock.
+SET LOCAL lock_timeout = '5s';
+LOCK TABLE platform.model_attempt, platform.model_usage IN ACCESS EXCLUSIVE MODE;
 CREATE TABLE platform.charge (
  id uuid PRIMARY KEY,
  user_id uuid NOT NULL REFERENCES platform.budget_account(user_id),

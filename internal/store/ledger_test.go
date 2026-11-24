@@ -266,11 +266,26 @@ func TestScrapeChargesBillThePlan(t *testing.T) {
 	if week, _ := f.spent(t); week != usd("0.5") {
 		t.Fatalf("after expiry spent %d", week)
 	}
+	// The scrape finishing after all leaves the expired charge as it settled.
+	if err := f.db.Store.CloseScrapeCharge(ctx, f.member, stale, 1); err != nil {
+		t.Fatal(err)
+	}
+	var credits *int
+	if err := f.db.Admin(t).QueryRow(ctx, `SELECT credits FROM platform.scrape_charge WHERE charge_id=$1`, stale).Scan(&credits); err != nil || credits != nil {
+		t.Fatalf("late close rewrote evidence: credits=%v, %v", credits, err)
+	}
+	if week, _ := f.spent(t); week != usd("0.5") {
+		t.Fatalf("late close changed spend: %d", week)
+	}
 	var entries string
 	if err := f.db.Store.InTenant(ctx, f.member, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT platform.usage_entries(NULL,10)::text`).Scan(&entries)
 	}); err != nil || !strings.Contains(entries, `"scrape"`) {
 		t.Fatalf("entries = %s, %v", entries, err)
+	}
+	// The free scrape is on the ledger but not a $0 line in the activity list.
+	if strings.Contains(entries, `"amount_usd": "0.000000000000"`) {
+		t.Fatalf("free scrape listed: %s", entries)
 	}
 	// The worker does not scrape, so it cannot open scrape charges.
 	if err := ws.InTenant(ctx, f.member, func(tx pgx.Tx) error {
@@ -290,5 +305,43 @@ func TestCreditPriceInScraperSettings(t *testing.T) {
 		if _, err := f.save(f.owner, providers, `[]`, 2); pgCode(err) != "ZA422" {
 			t.Errorf("%s: %v", providers, err)
 		}
+	}
+}
+
+// A worker still settling a model call when the ledger migration starts holds
+// it off: the migration waits at most its lock timeout and fails without
+// copying anything, and succeeds once the worker is done.
+func TestLedgerMigrationWaitsForInFlightSettlement(t *testing.T) {
+	db := testdb.NewAtVersion(t, 37)
+	ctx := context.Background()
+	worker := db.Admin(t)
+	tx, err := worker.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What settle() takes first on model_attempt.
+	if _, err := tx.Exec(ctx, `SELECT FROM platform.model_attempt FOR UPDATE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `LOCK TABLE platform.model_usage IN ROW EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	err = store.MigrateTo(ctx, db.AdminURL, 38, discardLogger())
+	if err == nil || !strings.Contains(err.Error(), "lock timeout") {
+		t.Fatalf("migration with a settlement in flight: %v", err)
+	}
+	if waited := time.Since(start); waited > 30*time.Second {
+		t.Fatalf("waited %v", waited)
+	}
+	var charge *string
+	if err := db.Admin(t).QueryRow(ctx, `SELECT to_regclass('platform.charge')::text`).Scan(&charge); err != nil || charge != nil {
+		t.Fatalf("partial migration left %v (%v)", charge, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MigrateTo(ctx, db.AdminURL, 38, discardLogger()); err != nil {
+		t.Fatalf("migration after the settlement: %v", err)
 	}
 }

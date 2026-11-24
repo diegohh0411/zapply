@@ -51,17 +51,25 @@ type Posting struct {
 
 // Result is what a search returned and what it cost.
 type Result struct {
+	// Postings are those usable as alerts: with an id, a title and an https link.
 	Postings []Posting
+	// Returned counts every posting the provider returned (and charged for),
+	// usable or not.
+	Returned int
+	// Newest is the latest discovery time among everything returned, usable or
+	// not; zero when none.
+	Newest time.Time
 	// Credits is what the provider charged for the call.
 	Credits int
 }
 
-// Error is a search the provider refused or that failed. Charged tells
-// whether it may have cost credits: false when the provider answered without
-// running it.
+// Error is a search the provider refused or that failed. Unknown means its
+// cost cannot be known (no answer arrived, so the search may have run);
+// otherwise Credits is what the provider said it charged.
 type Error struct {
 	Reason  string
-	Charged bool
+	Unknown bool
+	Credits int
 }
 
 func (e *Error) Error() string { return "job search: " + e.Reason }
@@ -153,34 +161,40 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 	res, err := client.Do(req)
 	if err != nil {
 		// The search may have run and been charged.
-		return Result{}, &Error{Reason: "the job search provider did not answer", Charged: true}
+		return Result{}, &Error{Reason: "the job search provider did not answer", Unknown: true}
 	}
 	defer res.Body.Close()
+	// Once the provider answers, it says what it charged; no header is nothing.
+	charged := 0
+	if n, err := strconv.Atoi(res.Header.Get("X-Credits-Charged")); err == nil && n >= 0 {
+		charged = n
+	}
+	fail := func(reason string) (Result, error) { return Result{}, &Error{Reason: reason, Credits: charged} }
 	payload, err := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 	if err != nil {
-		return Result{}, &Error{Reason: "the job search provider's answer was cut off", Charged: true}
+		return fail("the job search provider's answer was cut off")
 	}
 	switch {
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
-		return Result{}, &Error{Reason: "the job search provider rejected its key"}
+		return fail("the job search provider rejected its key")
 	case res.StatusCode == http.StatusPaymentRequired:
-		return Result{}, &Error{Reason: "the job search provider is out of credits"}
+		return fail("the job search provider is out of credits")
 	case res.StatusCode == http.StatusTooManyRequests:
-		return Result{}, &Error{Reason: "the job search provider is rate limiting searches"}
+		return fail("the job search provider is rate limiting searches")
 	case res.StatusCode >= 400 && res.StatusCode < 500:
-		return Result{}, &Error{Reason: fmt.Sprintf("the job search provider refused the search (%d)", res.StatusCode)}
+		return fail(fmt.Sprintf("the job search provider refused the search (%d)", res.StatusCode))
 	case res.StatusCode >= 500:
-		return Result{}, &Error{Reason: fmt.Sprintf("the job search provider failed (%d)", res.StatusCode), Charged: true}
+		return fail(fmt.Sprintf("the job search provider failed (%d)", res.StatusCode))
 	}
 	var sr searchResponse
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.UseNumber()
 	if err := dec.Decode(&sr); err != nil {
-		return Result{}, &Error{Reason: "the job search provider's answer was unreadable", Charged: true}
+		return fail("the job search provider's answer was unreadable")
 	}
-	out := Result{Postings: make([]Posting, 0, len(sr.Data)), Credits: len(sr.Data)}
-	if n, err := strconv.Atoi(res.Header.Get("X-Credits-Charged")); err == nil && n >= 0 {
-		out.Credits = n
+	out := Result{Postings: make([]Posting, 0, len(sr.Data)), Returned: len(sr.Data), Credits: len(sr.Data)}
+	if res.Header.Get("X-Credits-Charged") != "" {
+		out.Credits = charged
 	}
 	for _, d := range sr.Data {
 		p := Posting{ID: d.ID.String(), Title: strings.TrimSpace(d.JobTitle), Company: strings.TrimSpace(d.Company), Remote: d.Remote}
@@ -197,10 +211,9 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 				break
 			}
 		}
-		if t, err := time.Parse(time.RFC3339, d.DiscoveredAt); err == nil {
-			p.DiscoveredAt = t
-		} else if t, err := time.Parse("2006-01-02T15:04:05", d.DiscoveredAt); err == nil {
-			p.DiscoveredAt = t.UTC()
+		p.DiscoveredAt = discoveredAt(d.DiscoveredAt)
+		if p.DiscoveredAt.After(out.Newest) {
+			out.Newest = p.DiscoveredAt
 		}
 		if t, err := time.Parse("2006-01-02", d.DatePosted); err == nil {
 			p.PostedAt = &t
@@ -211,6 +224,17 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 		out.Postings = append(out.Postings, p)
 	}
 	return out, nil
+}
+
+// discoveredAt reads TheirStack's discovery time, with or without a zone (UTC).
+func discoveredAt(s string) time.Time {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05.999999999", s); err == nil {
+		return t.UTC()
+	}
+	return time.Time{}
 }
 
 // ErrNotConfigured answers when the owner has not set up a search provider.

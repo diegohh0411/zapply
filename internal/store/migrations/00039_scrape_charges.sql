@@ -36,7 +36,7 @@ BEGIN
   IF p->>'kind'='crawl4ai' AND (p->>'base_url') IS NULL THEN RETURN false; END IF;
   IF p->>'kind'='edge' AND ((p->>'base_url') IS NOT NULL OR (p->>'key_id') IS NOT NULL OR (p->>'credit_usd') IS NOT NULL) THEN RETURN false; END IF;
   IF (p->>'key_id') IS NOT NULL AND (p->>'key_id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN RETURN false; END IF;
-  IF (p->>'credit_usd') IS NOT NULL AND ((p->>'credit_usd') !~ '^[0-9]{1,6}(\.[0-9]{1,12})?$') THEN RETURN false; END IF;
+  IF (p->>'credit_usd') IS NOT NULL AND ((p->>'credit_usd') !~ '^[0-9]{1,3}(\.[0-9]{1,12})?$') THEN RETURN false; END IF;
  END LOOP;
  FOR r IN SELECT * FROM jsonb_array_elements(p_rules) LOOP
   IF jsonb_typeof(r) IS DISTINCT FROM 'object' THEN RETURN false; END IF;
@@ -72,15 +72,19 @@ DECLARE u uuid:=public.app_user_id(); reason text; BEGIN
  RETURN reason;
 END $$;
 
--- Settles a scrape at the credits the provider used.
+-- Settles a scrape at the credits the provider used. A charge already
+-- settled (expire_charges got there first) keeps its amount and evidence.
 CREATE FUNCTION platform.close_scrape_charge(p_id uuid,p_credits integer) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,platform,pg_temp AS $$
-DECLARE u uuid:=public.app_user_id(); s platform.scrape_charge; BEGIN
+DECLARE u uuid:=public.app_user_id(); s platform.scrape_charge; open boolean; BEGIN
+ PERFORM 1 FROM platform.budget_account WHERE user_id=u FOR UPDATE;
  SELECT * INTO s FROM platform.scrape_charge WHERE charge_id=p_id AND user_id=u;
  IF NOT FOUND THEN RAISE EXCEPTION 'charge not found' USING ERRCODE='ZA404'; END IF;
  IF p_credits IS NULL OR p_credits<0 THEN RAISE EXCEPTION 'invalid credits' USING ERRCODE='ZA422'; END IF;
+ SELECT state='dispatching' INTO open FROM platform.charge WHERE id=p_id;
+ IF NOT open THEN RETURN; END IF;
  PERFORM platform.close_charge(p_id,u,p_credits::bigint*s.credit_price,'provider_response',jsonb_build_object('credits',p_credits));
- UPDATE platform.scrape_charge SET credits=p_credits WHERE charge_id=p_id AND credits IS NULL;
+ UPDATE platform.scrape_charge SET credits=p_credits WHERE charge_id=p_id;
 END $$;
 
 -- Activity lists scrapes as posting work not linked to a job.
@@ -106,6 +110,8 @@ WITH charges AS (
  LEFT JOIN public.match_run_operation mro ON mro.user_id=a.user_id AND mro.operation_id=a.operation_id
  LEFT JOIN public.match_run r ON r.user_id=mro.user_id AND r.id=mro.run_id
  WHERE u.user_id=public.app_user_id() AND c.kind IN ('model','scrape')
+  -- Free scrapes are on the ledger, not in the activity list.
+  AND NOT (c.kind='scrape' AND u.amount=0)
 ),
 groups AS (
  SELECT app, job_id, max(id) AS last_id, max(accounted_at) AS last_at, sum(amount)::bigint AS total,

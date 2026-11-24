@@ -179,7 +179,7 @@ func (s *Service) SaveSearchSettings(ctx context.Context, u uuid.UUID, key *uuid
 	return s.read(ctx, u, "SELECT platform.save_search_settings($1,$2,$3,$4)", key, price, maxResults, version)
 }
 
-var creditAmount = regexp.MustCompile(`^[0-9]{1,6}(?:\.[0-9]{1,12})?$`)
+var creditAmount = regexp.MustCompile(`^[0-9]{1,3}(?:\.[0-9]{1,12})?$`)
 
 func (s *Service) ActivateKey(ctx context.Context, u, id uuid.UUID, active bool, version int) error {
 	return s.exec(ctx, u, "SELECT platform.activate_key($1,$2,$3)", id, active, version)

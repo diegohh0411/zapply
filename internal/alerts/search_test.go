@@ -5,7 +5,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,7 +26,9 @@ import (
 	"github.com/diegohh0411/zapply/internal/testdb"
 )
 
-// fakeSearch answers every search with its postings and records the queries.
+// fakeSearch behaves like TheirStack: it returns, oldest first, up to the
+// limit of its postings discovered at or after the query's second, charging a
+// credit for each, usable or not. It records the queries.
 type fakeSearch struct {
 	mu       sync.Mutex
 	postings []jobsearch.Posting
@@ -41,7 +44,22 @@ func (f *fakeSearch) Search(_ context.Context, key string, q jobsearch.Query) (j
 	if f.err != nil {
 		return jobsearch.Result{}, f.err
 	}
-	return jobsearch.Result{Postings: f.postings, Credits: len(f.postings)}, nil
+	since := q.Since.Truncate(time.Second)
+	var res jobsearch.Result
+	for _, p := range f.postings {
+		if p.DiscoveredAt.Before(since) || res.Returned == q.Limit {
+			continue
+		}
+		res.Returned++
+		if p.DiscoveredAt.After(res.Newest) {
+			res.Newest = p.DiscoveredAt
+		}
+		if p.URL != "" {
+			res.Postings = append(res.Postings, p)
+		}
+	}
+	res.Credits = res.Returned
+	return res, nil
 }
 
 type searchFixture struct {
@@ -221,19 +239,22 @@ func TestSearchPollBillsAndAlertsOnce(t *testing.T) {
 	if n := alertCount(t, f.notes, f.member); n != 2 {
 		t.Fatalf("alerts = %d, want 2 (the LinkedIn copy is a duplicate)", n)
 	}
-	// The cursor moved past what was returned, and a repeat files nothing new.
+	// The cursor moved past everything returned: the next poll buys nothing again.
 	due = f.due(t)
-	if !due[0].CursorAt.Equal(discovered.Add(time.Second)) {
-		t.Fatalf("cursor = %v, want %v", due[0].CursorAt, discovered.Add(time.Second))
+	if !due[0].CursorAt.Equal(discovered.Add(2 * time.Second)) {
+		t.Fatalf("cursor = %v, want %v", due[0].CursorAt, discovered.Add(2*time.Second))
 	}
 	if err := f.worker.PollSearch(ctx, due[0]); err != nil {
 		t.Fatal(err)
+	}
+	if amount, n := f.spent(t); n != 2 || amount != 3*cent {
+		t.Fatalf("repeat poll spent %d in %d charges, want nothing more", amount, n)
 	}
 	if n := alertCount(t, f.notes, f.member); n != 2 {
 		t.Fatalf("repeat alerted: %d", n)
 	}
 	list, _, err := f.api.Watches(ctx, f.member)
-	if err != nil || list[0].Spent30dUSD != "0.060000000000" || list[0].LastCheckedAt == nil {
+	if err != nil || list[0].Spent30dUSD != "0.030000000000" || list[0].LastCheckedAt == nil {
 		t.Fatalf("watch = %+v, %v", list, err)
 	}
 	// The activity list shows the searches as one alerts line.
@@ -291,7 +312,7 @@ func TestSearchPollWaitsForThePlan(t *testing.T) {
 		t.Fatalf("error = %q", list[0].LastError)
 	}
 	// One that did not answer is charged its reservation.
-	f.search.err = errors.New("connection reset")
+	f.search.err = &jobsearch.Error{Reason: "the job search provider did not answer", Unknown: true}
 	if err := f.worker.PollSearch(ctx, f.due(t)[0]); err != nil {
 		t.Fatal(err)
 	}
@@ -325,6 +346,62 @@ func TestBoardAndSearchShareAlerts(t *testing.T) {
 	}
 	if n := alertCount(t, f.notes, f.member); n != 1 {
 		t.Fatalf("alerts = %d, want 1", n)
+	}
+}
+
+// A full page the client cannot use still moves the cursor, and a posting
+// job_alert would refuse is skipped rather than failing the poll.
+func TestSearchCursorPastUnusablePostings(t *testing.T) {
+	f := newSearchFixture(t)
+	ctx := context.Background()
+	f.join(t, "active")
+	if _, err := f.api.Create(ctx, f.member, search("engineer")); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().Add(time.Minute).UTC().Truncate(time.Second)
+	long := "https://example.com/" + strings.Repeat("a", 2100)
+	for i := range 10 { // a full page (max_results is 10) without a usable link
+		f.search.postings = append(f.search.postings, jobsearch.Posting{ID: fmt.Sprint(i), Title: "Engineer", DiscoveredAt: at})
+	}
+	f.search.postings = append(f.search.postings,
+		jobsearch.Posting{ID: "long", Title: "Engineer", Company: "Acme", URL: long, DiscoveredAt: at.Add(time.Second)},
+		jobsearch.Posting{ID: "ok", Title: "Engineer", Company: "Beta", URL: "https://beta.example/1", DiscoveredAt: at.Add(2 * time.Second)})
+	for range 4 {
+		if err := f.worker.PollSearch(ctx, f.due(t)[0]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The full page is bought twice (more might share its second), then the
+	// cursor steps past it; then the long and the good posting; then nothing.
+	cent, _ := modelapi.ParseUSD("0.01")
+	if amount, n := f.spent(t); amount != 22*cent || n != 4 {
+		t.Fatalf("spent %d in %d polls, want 22 credits in 4", amount, n)
+	}
+	if n := alertCount(t, f.notes, f.member); n != 1 {
+		t.Fatalf("alerts = %d, want the usable posting only", n)
+	}
+	if list, _, _ := f.api.Watches(ctx, f.member); list[0].LastError != "" {
+		t.Fatalf("last error = %q", list[0].LastError)
+	}
+}
+
+func TestNextCursor(t *testing.T) {
+	c := time.Date(2026, 1, 1, 10, 0, 0, 500, time.UTC)
+	newest := c.Add(5 * time.Second)
+	for _, tc := range []struct {
+		name   string
+		newest time.Time
+		full   bool
+		want   time.Time
+	}{
+		{"nothing", time.Time{}, false, c},
+		{"partial page", newest, false, newest.Truncate(time.Second).Add(time.Second)},
+		{"full page", newest, true, newest.Truncate(time.Second)},
+		{"full page stuck on one second", c, true, c.Truncate(time.Second).Add(time.Second)},
+	} {
+		if got := alerts.NextCursor(c, tc.newest, tc.full); !got.Equal(tc.want) {
+			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 

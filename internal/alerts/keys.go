@@ -30,6 +30,12 @@ type candidate struct {
 	ATSKey string
 }
 
+// fileable reports whether job_alert accepts the posting: an https link of at
+// most 2048 bytes and bounded text.
+func (c candidate) fileable() bool {
+	return strings.HasPrefix(c.URL, "https://") && len(c.URL) <= 2048 && c.PostingKey != "" && len(c.PostingKey) <= 300 && c.Title != ""
+}
+
 // fingerprintTTL is how long a company+title+city identity holds: past it, the
 // same role posted again is a new opening, not a duplicate.
 const fingerprintTTL = 60 * 24 * time.Hour
@@ -94,14 +100,25 @@ func (s *Service) file(ctx context.Context, u uuid.UUID, cs []candidate) (int64,
 	var added int64
 	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
 		added = 0
+		// One filer per member at a time, so two polls cannot both find a
+		// posting new and alert it twice.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('job_alert:'||$1::text,0))`, u); err != nil {
+			return err
+		}
 		for _, c := range cs {
+			if !c.fileable() {
+				continue
+			}
 			keys := c.keys()
+			fromATS := c.ATSKey != ""
 			normalized, _ := joburl.Normalize(c.URL)
+			// A fingerprint match is a duplicate unless both sightings are
+			// ATS postings: then they are two openings with the same title.
 			var seen bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM job_alert_key WHERE user_id=$1 AND key=ANY($2)
-  AND (left(key,3)<>'fp:' OR created_at>now()-$3::interval))
+  AND (left(key,3)<>'fp:' OR (created_at>now()-$3::interval AND NOT ($5 AND from_ats))))
  OR EXISTS(SELECT FROM job WHERE user_id=$1 AND normalized_url=$4 AND normalized_url<>'')`,
-				u, keys, fingerprintTTL.String(), normalized).Scan(&seen); err != nil {
+				u, keys, fingerprintTTL.String(), normalized, fromATS).Scan(&seen); err != nil {
 				return err
 			}
 			if seen {
@@ -118,8 +135,8 @@ func (s *Service) file(ctx context.Context, u uuid.UUID, cs []candidate) (int64,
 			if err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO job_alert_key(user_id,key,alert_id) SELECT $1,k,$2 FROM unnest($3::text[]) k
- ON CONFLICT(user_id,key) DO UPDATE SET alert_id=EXCLUDED.alert_id,created_at=now()`, u, id, keys); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO job_alert_key(user_id,key,alert_id,from_ats) SELECT $1,k,$2,$4 FROM unnest($3::text[]) k
+ ON CONFLICT(user_id,key) DO UPDATE SET alert_id=EXCLUDED.alert_id,from_ats=EXCLUDED.from_ats,created_at=now()`, u, id, keys, fromATS); err != nil {
 				return err
 			}
 			added++

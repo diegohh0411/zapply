@@ -14,6 +14,9 @@
 -- opening found by two watchers, or on a board and an aggregator, alerts once.
 -- +goose Up
 -- +goose StatementBegin
+-- Validating the new checks scans job_watch and job_alert under an exclusive
+-- lock: give up quickly rather than stall alerts behind a long transaction.
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE platform.plan ADD COLUMN max_search_watchers integer NOT NULL DEFAULT 0 CHECK(max_search_watchers BETWEEN 0 AND 100);
 ALTER TABLE platform.system_key DROP CONSTRAINT system_key_kind_check,
  ADD CONSTRAINT system_key_kind_check CHECK(kind IN ('openrouter','firecrawl','crawl4ai','theirstack'));
@@ -23,7 +26,8 @@ ALTER TABLE platform.system_key DROP CONSTRAINT system_key_kind_check,
 CREATE TABLE platform.search_settings (
  id boolean PRIMARY KEY DEFAULT true CHECK(id),
  key_id uuid REFERENCES platform.system_key(id),
- credit_price bigint CHECK(credit_price > 0), -- picodollars per credit
+ -- Picodollars per credit, under $1000 so a reservation cannot overflow.
+ credit_price bigint CHECK(credit_price > 0 AND credit_price < 1000000000000000), -- picodollars per credit
  max_results integer NOT NULL DEFAULT 25 CHECK(max_results BETWEEN 1 AND 100),
  version integer NOT NULL DEFAULT 1,
  updated_at timestamptz NOT NULL DEFAULT now()
@@ -77,6 +81,10 @@ CREATE TABLE job_alert_key (
  -- ats:<ats>:<board>:<posting>, url:<normalized URL> or fp:<company|title|city>.
  key text NOT NULL CHECK(length(key) BETWEEN 1 AND 2100),
  alert_id uuid NOT NULL,
+ -- The alert came from an ATS board. Two board postings are the same opening
+ -- only by their ATS key: a company+title+city match from another board
+ -- posting is a second opening, not a duplicate.
+ from_ats boolean NOT NULL DEFAULT false,
  created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(user_id,key),
  FOREIGN KEY(user_id,alert_id) REFERENCES job_alert(user_id,id) ON DELETE CASCADE
@@ -208,15 +216,20 @@ DECLARE u uuid:=public.app_user_id(); w platform.search_watch; reason text; BEGI
  RETURN reason;
 END $$;
 
--- Settles a poll at the credits the provider charged for the postings it returned.
+-- Settles a poll at the credits the provider charged for the postings it
+-- returned. A charge already settled (expire_charges got there first) keeps
+-- its amount and evidence.
 CREATE FUNCTION platform.close_search_charge(p_id uuid,p_credits integer,p_results integer) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,platform,pg_temp AS $$
-DECLARE u uuid:=public.app_user_id(); s platform.search_charge; BEGIN
+DECLARE u uuid:=public.app_user_id(); s platform.search_charge; open boolean; BEGIN
+ PERFORM 1 FROM platform.budget_account WHERE user_id=u FOR UPDATE;
  SELECT * INTO s FROM platform.search_charge WHERE charge_id=p_id AND user_id=u;
  IF NOT FOUND THEN RAISE EXCEPTION 'charge not found' USING ERRCODE='ZA404'; END IF;
  IF p_credits IS NULL OR p_credits<0 OR p_results IS NULL OR p_results<0 THEN RAISE EXCEPTION 'invalid credits' USING ERRCODE='ZA422'; END IF;
+ SELECT state='dispatching' INTO open FROM platform.charge WHERE id=p_id;
+ IF NOT open THEN RETURN; END IF;
  PERFORM platform.close_charge(p_id,u,p_credits::bigint*s.credit_price,'provider_response',jsonb_build_object('credits',p_credits,'results',p_results));
- UPDATE platform.search_charge SET credits=p_credits,results=p_results WHERE charge_id=p_id AND credits IS NULL;
+ UPDATE platform.search_charge SET credits=p_credits,results=p_results WHERE charge_id=p_id;
 END $$;
 
 -- Records one poll: p_blocked when it did not run, p_error when the provider
@@ -300,6 +313,8 @@ WITH charges AS (
  LEFT JOIN public.match_run_operation mro ON mro.user_id=a.user_id AND mro.operation_id=a.operation_id
  LEFT JOIN public.match_run r ON r.user_id=mro.user_id AND r.id=mro.run_id
  WHERE u.user_id=public.app_user_id()
+  -- Free scrapes are on the ledger, not in the activity list.
+  AND NOT (c.kind='scrape' AND u.amount=0)
 ),
 groups AS (
  SELECT app, job_id, watch_id, max(id) AS last_id, max(accounted_at) AS last_at, sum(amount)::bigint AS total,
@@ -397,6 +412,8 @@ WITH charges AS (
  LEFT JOIN public.match_run_operation mro ON mro.user_id=a.user_id AND mro.operation_id=a.operation_id
  LEFT JOIN public.match_run r ON r.user_id=mro.user_id AND r.id=mro.run_id
  WHERE u.user_id=public.app_user_id() AND c.kind IN ('model','scrape')
+  -- Free scrapes are on the ledger, not in the activity list.
+  AND NOT (c.kind='scrape' AND u.amount=0)
 ),
 groups AS (
  SELECT app, job_id, max(id) AS last_id, max(accounted_at) AS last_at, sum(amount)::bigint AS total,

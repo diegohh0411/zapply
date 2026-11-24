@@ -143,10 +143,11 @@ func (s *Service) PollSearch(ctx context.Context, a SearchPollArgs) error {
 	credits := res.Credits
 	var se *jobsearch.Error
 	if searchErr != nil {
-		// What a failed call cost is unknown unless the provider refused it.
+		// A failed call costs what the provider said it charged; one that got
+		// no answer may have run, and costs its reservation.
 		credits = cfg.maxResults
-		if errors.As(searchErr, &se) && !se.Charged {
-			credits = 0
+		if errors.As(searchErr, &se) && !se.Unknown {
+			credits = se.Credits
 		}
 	}
 	// Settle even when the job is being stopped: the provider may have charged.
@@ -165,24 +166,51 @@ func (s *Service) PollSearch(ctx context.Context, a SearchPollArgs) error {
 		return record(nil, &msg, nil)
 	}
 	cs := make([]candidate, 0, len(res.Postings))
-	cursor := a.CursorAt
 	for _, p := range res.Postings {
-		if p.DiscoveredAt.After(cursor) {
-			cursor = p.DiscoveredAt
+		c := candidate{WatchID: a.WatchID, PostingKey: clip("theirstack:"+p.ID, 300), Company: clip(p.Company, 200), Title: clip(p.Title, 500),
+			Location: clip(p.Location, 500), URL: p.URL, Remote: p.Remote, PublishedAt: p.PostedAt}
+		if c.fileable() {
+			cs = append(cs, c)
 		}
-		cs = append(cs, candidate{WatchID: a.WatchID, PostingKey: "theirstack:" + p.ID, Company: clip(p.Company, 200), Title: clip(p.Title, 500),
-			Location: clip(p.Location, 500), URL: p.URL, Remote: p.Remote, PublishedAt: p.PostedAt})
 	}
-	// A full page that did not move the cursor would buy itself again: step past it.
-	if len(res.Postings) >= cfg.maxResults && !cursor.After(a.CursorAt) {
-		cursor = a.CursorAt.Add(time.Second)
+	// The cursor moves before alerts are filed: a poll that cannot file must
+	// not buy the same postings again on the next one.
+	cursor := nextCursor(a.CursorAt, res.Newest, res.Returned >= cfg.maxResults)
+	if err := record(&cursor, nil, nil); err != nil {
+		return err
 	}
 	if len(cs) > 0 {
 		if _, err := s.file(ctx, a.UserID, cs); err != nil {
+			msg := "found new postings but couldn't file them"
+			_ = record(nil, &msg, nil)
 			return err
 		}
 	}
-	return record(&cursor, nil, nil)
+	return nil
+}
+
+// nextCursor is where the next poll starts. The provider filters discovery
+// times by whole seconds, inclusively. After a partial page everything up to
+// the newest second was returned, so the next poll starts one second later
+// and buys none of it again. After a full page more may share the newest
+// second, so the next poll starts at it, re-buying only that second, unless
+// the page did not move the cursor at all: then it steps one second on rather
+// than buy the same page forever.
+func nextCursor(cursor, newest time.Time, full bool) time.Time {
+	if newest.IsZero() {
+		return cursor
+	}
+	newest = newest.Truncate(time.Second)
+	switch {
+	case !full:
+		newest = newest.Add(time.Second)
+	case !newest.After(cursor.Truncate(time.Second)):
+		newest = cursor.Truncate(time.Second).Add(time.Second)
+	}
+	if newest.Before(cursor) {
+		return cursor
+	}
+	return newest
 }
 
 // clip cuts s to at most n characters.
