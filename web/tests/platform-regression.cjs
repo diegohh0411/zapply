@@ -6,6 +6,7 @@ const ts = require('typescript');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Subject } = require('rxjs');
+const { QueryClient } = require('@tanstack/query-core');
 const signal = (initial) => {
   let value = initial;
   const read = () => value;
@@ -50,9 +51,19 @@ function fixture(file) {
       },
     },
   };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Reads the cache entry for the options' current key, as injectQuery's signals do.
+  const angularQuery = {
+    QueryClient,
+    injectQuery: (options) => ({
+      data: () => client.getQueryData(options().queryKey),
+      isError: () => client.getQueryState(options().queryKey)?.status === 'error',
+    }),
+  };
   const core = {
     signal,
     input,
+    computed: (fn) => fn,
     Injectable: () => (x) => x,
     effect: (fn) => {
       effects.push(fn);
@@ -63,6 +74,7 @@ function fixture(file) {
       if (token === Api) return api;
       if (token === AuthService) return auth;
       if (token === EventsService) return events;
+      if (token === QueryClient) return client;
       if (token === DestroyRef) return { onDestroy: (fn) => cleanup.push(fn) };
       return {};
     },
@@ -88,9 +100,11 @@ function fixture(file) {
         ? { Api }
         : name.endsWith('/auth.service')
           ? { AuthService }
-          : name.endsWith('/events.service')
-            ? { EventsService }
-            : stub;
+          : name === '@tanstack/angular-query'
+            ? angularQuery
+            : name.endsWith('/events.service')
+              ? { EventsService }
+              : stub;
   vm.runInNewContext(code, {
     module,
     exports: module.exports,
@@ -120,15 +134,14 @@ test('owner permissions cannot return from an earlier signed-in identity', async
   const account = new f.types.AccountService();
   const old = account.refresh();
   f.auth.identity.set('bob');
-  f.effects[0]();
   assert.equal(account.me(), null);
+  const fresh = account.refresh();
   f.requests[1].resolve(ok({ id: 'bob', platform_role: 'member', membership: null }));
-  await Promise.resolve();
-  await Promise.resolve();
+  await fresh;
   f.requests[0].resolve(
     ok({ id: 'alice', platform_role: 'owner', membership: { plan_name: 'Private' } }),
   );
-  await old;
+  assert.equal(await old, null);
   assert.equal(account.me().id, 'bob');
   assert.equal(account.me().platform_role, 'member');
   assert.equal(account.me().membership, null);
@@ -158,13 +171,13 @@ test('a route check receives its owner result while another account refresh is p
   t.after(f.close);
   const account = new f.types.AccountService();
   const routeCheck = account.refresh();
-  f.effects[0]();
+  const focus = account.refresh();
+  // Both readers share the one in-flight request.
+  assert.equal(f.requests.length, 1);
   f.requests[0].resolve(ok({ id: 'alice', platform_role: 'owner', membership: null }));
   const result = await routeCheck;
   assert.equal(result.platform_role, 'owner');
-  f.requests[1].resolve(ok({ id: 'alice', platform_role: 'owner', membership: null }));
-  await Promise.resolve();
-  await Promise.resolve();
+  assert.equal((await focus).platform_role, 'owner');
   assert.equal(account.me().platform_role, 'owner');
 });
 
@@ -189,43 +202,57 @@ test('summary provider dropdown discards stale model responses and selects the s
   const settings = new f.types.ModelSettings();
   settings.selectSummaryModel('first/model');
   settings.selectSummaryModel('second/model');
-  f.requests[1].resolve(ok([{tag:'second/fp8',name:'Second provider'}]));
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(settings.summaryEndpoint,'second/fp8');
-  f.requests[0].resolve(ok([{tag:'first/fp8',name:'First provider'}]));
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(settings.summaryEndpoint,'second/fp8');
-  assert.equal(settings.endpoints()[0].tag,'second/fp8');
+  f.requests[1].resolve(ok([{ tag: 'second/fp8', name: 'Second provider' }]));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint, 'second/fp8');
+  f.requests[0].resolve(ok([{ tag: 'first/fp8', name: 'First provider' }]));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settings.summaryEndpoint, 'second/fp8');
+  assert.equal(settings.endpoints()[0].tag, 'second/fp8');
 });
 
 test('summary provider dropdown preserves saved choices and clears unavailable ones', async () => {
   const f = fixture('admin/model-settings.ts');
   const settings = new f.types.ModelSettings();
-  settings.summaryModel='test/model'; settings.summaryEndpoint='saved/fp8';
-  const loading=settings.loadEndpoints();
-  f.requests[0].resolve(ok([{tag:'saved/fp8',name:'Saved'},{tag:'other/fp8',name:'Other'}]));
+  settings.summaryModel = 'test/model';
+  settings.summaryEndpoint = 'saved/fp8';
+  const loading = settings.loadEndpoints();
+  f.requests[0].resolve(
+    ok([
+      { tag: 'saved/fp8', name: 'Saved' },
+      { tag: 'other/fp8', name: 'Other' },
+    ]),
+  );
   await loading;
-  assert.equal(settings.summaryEndpoint,'saved/fp8');
-  const refresh=settings.loadEndpoints();
-  f.requests[1].resolve(ok([])); await refresh;
-  assert.equal(settings.summaryEndpoint,'');
-  assert.equal(settings.endpointLoading(),false);
+  assert.equal(settings.summaryEndpoint, 'saved/fp8');
+  const refresh = settings.loadEndpoints();
+  f.requests[1].resolve(ok([]));
+  await refresh;
+  assert.equal(settings.summaryEndpoint, '');
+  assert.equal(settings.endpointLoading(), false);
 });
-
 
 test('summary rows load the saved value and save the owner selection', async (t) => {
   const f = fixture('admin/model-settings.ts');
   t.after(f.close);
   const settings = new f.types.ModelSettings();
   assert.equal(settings.summaryRows, 2);
-  assert.equal(settings.summaryRowChoices.join(), "1,2,3,4");
+  assert.equal(settings.summaryRowChoices.join(), '1,2,3,4');
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 1, decision_model: null, summary_model: null, summary_endpoint: null, summary_rows: 3}));
-  await new Promise(resolve => setImmediate(resolve));
+  f.requests[0].resolve(
+    ok({
+      version: 1,
+      decision_model: null,
+      summary_model: null,
+      summary_endpoint: null,
+      summary_rows: 3,
+    }),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
   f.requests[1].resolve(ok([]));
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   f.requests[2].resolve(ok([]));
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   f.requests[3].resolve(ok([]));
   await loading;
   assert.equal(settings.summaryRows, 3);
@@ -234,7 +261,7 @@ test('summary rows load the saved value and save the owner selection', async (t)
   assert.equal(f.requests[4].options.body.summary_rows, 1);
   assert.equal('summary_max_output_tokens' in f.requests[4].options.body, false);
   assert.equal(f.requests[4].options.params.header['If-Match'], '"1"');
-  f.requests[4].resolve(ok({version: 2, summary_rows: 1}));
+  f.requests[4].resolve(ok({ version: 2, summary_rows: 1 }));
   await saving;
   assert.equal(settings.settings().summary_rows, 1);
   assert.equal(settings.busy(), false);
@@ -246,14 +273,38 @@ test('thinking effort loads from the saved model and saves only efforts that mod
   const flush = () => new Promise((resolve) => setImmediate(resolve));
   const settings = new f.types.ModelSettings();
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 3, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
+  f.requests[0].resolve(
+    ok({
+      version: 3,
+      decision_model: null,
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 2,
+      summary_reasoning_effort: 'low',
+    }),
+  );
   await flush();
-  f.requests[1].resolve(ok([{tag: 'reason/fp8', name: 'Reason', service_tier: 'default'}]));
+  f.requests[1].resolve(ok([{ tag: 'reason/fp8', name: 'Reason', service_tier: 'default' }]));
   await flush();
-  f.requests[2].resolve(ok([
-    {id: 'reason/model', name: 'Reason', context_length: 1000, pricing: {prompt: '0.00000002', completion: '0.0000001'}, compatibility_reason: '', reasoning: {mandatory: false, efforts: ['high', 'low', 'off']}},
-    {id: 'plain/model', name: 'Plain', context_length: 1000, pricing: {}, compatibility_reason: ''},
-  ]));
+  f.requests[2].resolve(
+    ok([
+      {
+        id: 'reason/model',
+        name: 'Reason',
+        context_length: 1000,
+        pricing: { prompt: '0.00000002', completion: '0.0000001' },
+        compatibility_reason: '',
+        reasoning: { mandatory: false, efforts: ['high', 'low', 'off'] },
+      },
+      {
+        id: 'plain/model',
+        name: 'Plain',
+        context_length: 1000,
+        pricing: {},
+        compatibility_reason: '',
+      },
+    ]),
+  );
   await flush();
   f.requests[3].resolve(ok([]));
   await flush();
@@ -261,16 +312,34 @@ test('thinking effort loads from the saved model and saves only efforts that mod
   await loading;
   assert.equal(settings.summaryEffort, 'low');
   assert.equal(settings.effortUnavailable(), false);
-  assert.equal(JSON.stringify(settings.effortOptions().map((o) => o.value)), JSON.stringify(['', 'high', 'low', 'off']));
-  assert.equal(JSON.stringify(settings.textModels().map((m) => m.name)), JSON.stringify(['Plain', 'Reason']));
+  assert.equal(
+    JSON.stringify(settings.effortOptions().map((o) => o.value)),
+    JSON.stringify(['', 'high', 'low', 'off']),
+  );
+  assert.equal(
+    JSON.stringify(settings.textModels().map((m) => m.name)),
+    JSON.stringify(['Plain', 'Reason']),
+  );
   assert.equal(settings.perMillion('0.00000002'), '$0.02');
-  assert.match(settings.effortHint(), /Low can spend up to about 20% of each answer's tokens thinking/);
+  assert.match(
+    settings.effortHint(),
+    /Low can spend up to about 20% of each answer's tokens thinking/,
+  );
 
   settings.summaryEffort = 'off';
   const saving = settings.saveSummary();
   assert.equal(f.requests[5].options.body.summary_reasoning_effort, 'off');
   assert.equal(f.requests[5].options.params.header['If-Match'], '"3"');
-  f.requests[5].resolve(ok({version: 4, decision_model: null, summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'off'}));
+  f.requests[5].resolve(
+    ok({
+      version: 4,
+      decision_model: null,
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 2,
+      summary_reasoning_effort: 'off',
+    }),
+  );
   await saving;
   assert.equal(settings.summaryEffort, 'off');
   assert.equal(settings.settings().summary_reasoning_effort, 'off');
@@ -294,18 +363,51 @@ test('each model saves on its own and sends the other model saved settings', asy
   const flush = () => new Promise((resolve) => setImmediate(resolve));
   const settings = new f.types.ModelSettings();
   const loading = settings.load();
-  f.requests[0].resolve(ok({version: 5, decision_model: 'dec/a', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
+  f.requests[0].resolve(
+    ok({
+      version: 5,
+      decision_model: 'dec/a',
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 2,
+      summary_reasoning_effort: 'low',
+    }),
+  );
   await flush();
-  f.requests[1].resolve(ok([{tag: 'reason/fp8', name: 'Reason', service_tier: 'default'}]));
+  f.requests[1].resolve(ok([{ tag: 'reason/fp8', name: 'Reason', service_tier: 'default' }]));
   await flush();
-  f.requests[2].resolve(ok([{id: 'reason/model', name: 'Reason', context_length: 1000, pricing: {}, compatibility_reason: '', reasoning: {mandatory: false, efforts: ['high', 'low', 'off']}}]));
+  f.requests[2].resolve(
+    ok([
+      {
+        id: 'reason/model',
+        name: 'Reason',
+        context_length: 1000,
+        pricing: {},
+        compatibility_reason: '',
+        reasoning: { mandatory: false, efforts: ['high', 'low', 'off'] },
+      },
+    ]),
+  );
   await flush();
-  f.requests[3].resolve(ok([
-    {id: 'dec/a', name: 'A', context_length: 1000, pricing: {}, compatibility_reason: ''},
-    {id: 'dec/b', name: 'B', context_length: 1000, pricing: {}, compatibility_reason: ''},
-  ]));
+  f.requests[3].resolve(
+    ok([
+      { id: 'dec/a', name: 'A', context_length: 1000, pricing: {}, compatibility_reason: '' },
+      { id: 'dec/b', name: 'B', context_length: 1000, pricing: {}, compatibility_reason: '' },
+    ]),
+  );
   await flush();
-  f.requests[4].resolve(ok([{id: 'ext/a', name: 'Extractor', context_length: 1000, pricing: {}, compatibility_reason: '', typed: true}]));
+  f.requests[4].resolve(
+    ok([
+      {
+        id: 'ext/a',
+        name: 'Extractor',
+        context_length: 1000,
+        pricing: {},
+        compatibility_reason: '',
+        typed: true,
+      },
+    ]),
+  );
   await loading;
   assert.equal(settings.summaryDirty(), false);
   assert.equal(settings.decisionDirty(), false);
@@ -318,11 +420,24 @@ test('each model saves on its own and sends the other model saved settings', asy
   const deciding = settings.saveDecision();
   const decisionBody = f.requests[5].options.body;
   assert.equal(decisionBody.decision_model, 'dec/b');
-  assert.equal(decisionBody.summary_rows, 2, 'the summary draft must not leak into the decision save');
+  assert.equal(
+    decisionBody.summary_rows,
+    2,
+    'the summary draft must not leak into the decision save',
+  );
   assert.equal(decisionBody.summary_model, 'reason/model');
   assert.equal(decisionBody.summary_reasoning_effort, 'low');
   assert.equal(f.requests[5].options.params.header['If-Match'], '"5"');
-  f.requests[5].resolve(ok({version: 6, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 2, summary_reasoning_effort: 'low'}));
+  f.requests[5].resolve(
+    ok({
+      version: 6,
+      decision_model: 'dec/b',
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 2,
+      summary_reasoning_effort: 'low',
+    }),
+  );
   await deciding;
   assert.equal(settings.decisionDirty(), false);
   assert.equal(settings.summaryDirty(), true, 'the summary draft stays unsaved');
@@ -333,16 +448,39 @@ test('each model saves on its own and sends the other model saved settings', asy
   assert.equal(summaryBody.decision_model, 'dec/b', 'the saved decision model is kept');
   assert.equal(summaryBody.summary_rows, 4);
   assert.equal(f.requests[6].options.params.header['If-Match'], '"6"');
-  f.requests[6].resolve(ok({version: 7, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low'}));
+  f.requests[6].resolve(
+    ok({
+      version: 7,
+      decision_model: 'dec/b',
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 4,
+      summary_reasoning_effort: 'low',
+    }),
+  );
   await summarizing;
   assert.equal(settings.summaryDirty(), false);
 
-  assert.equal('extraction_model' in summaryBody, false, 'other saves keep the saved extraction model');
+  assert.equal(
+    'extraction_model' in summaryBody,
+    false,
+    'other saves keep the saved extraction model',
+  );
   settings.selectExtractionModel('ext/a');
   const extracting = settings.saveExtraction();
   assert.equal(f.requests[7].options.body.extraction_model, 'ext/a');
   assert.equal(f.requests[7].options.body.decision_model, 'dec/b');
-  f.requests[7].resolve(ok({version: 8, decision_model: 'dec/b', summary_model: 'reason/model', summary_endpoint: 'reason/fp8', summary_rows: 4, summary_reasoning_effort: 'low', extraction_model: 'ext/a'}));
+  f.requests[7].resolve(
+    ok({
+      version: 8,
+      decision_model: 'dec/b',
+      summary_model: 'reason/model',
+      summary_endpoint: 'reason/fp8',
+      summary_rows: 4,
+      summary_reasoning_effort: 'low',
+      extraction_model: 'ext/a',
+    }),
+  );
   await extracting;
   assert.equal(settings.extractionDirty(), false);
   assert.equal(settings.extractionLive(), 'Extractor');
