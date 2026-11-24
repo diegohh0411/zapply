@@ -21,6 +21,11 @@ class Api {
   }
 }
 const ok = (data) => ({ data, response: { ok: true } });
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((r) => (resolve = r));
+  return { promise, resolve };
+};
 function fixture(client) {
   const auth = { identity: signal('alice') };
   const events = { changes: new Subject(), resync: new Subject() };
@@ -113,4 +118,39 @@ test('SSE invalidates only the changed job, and library changes only this member
   events.changes.next({ topic: 'evidence.updated', data: {} });
   assert.equal(invalid(matchRunKey('alice', 'other')), true);
   assert.equal(invalid(matchRunKey('bob', 'job')), false);
+});
+
+test('a late action after an account switch only refreshes the member who acted', async () => {
+  const pending = deferred();
+  const { store, auth, cache, matchRunKey, invalid } = fixture({ POST: () => pending.promise });
+  cache.setQueryData(matchRunKey('alice', 'job'), { id: 'alice-run' });
+  cache.setQueryData(matchRunKey('bob', 'job'), { id: 'bob-run' });
+  const starting = store.start('job');
+  auth.identity.set('bob');
+  pending.resolve(ok(null));
+  await starting;
+  assert.equal(invalid(matchRunKey('alice', 'job')), true);
+  assert.equal(invalid(matchRunKey('bob', 'job')), false);
+  assert.equal(cache.getQueryData(matchRunKey('bob', 'job')).id, 'bob-run');
+});
+
+test('newer requests win when an earlier load finishes late', async () => {
+  const late = deferred();
+  let lists = 0;
+  const { store, cache, matchRunKey } = fixture({
+    GET: async (path) =>
+      path.includes('/jobs/')
+        ? ++lists === 1
+          ? late.promise
+          : ok({ items: [{ id: 'new' }] })
+        : ok({ id: path.includes('old') ? 'old' : 'new' }),
+  });
+  const key = matchRunKey('alice', 'job');
+  const older = cache
+    .fetchQuery({ queryKey: key, queryFn: () => store.fetchRun('job') })
+    .catch(() => {});
+  await cache.refetchQueries({ queryKey: key });
+  late.resolve(ok({ items: [{ id: 'old' }] }));
+  await older;
+  assert.equal(cache.getQueryData(key).id, 'new');
 });

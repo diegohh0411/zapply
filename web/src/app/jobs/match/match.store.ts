@@ -57,8 +57,8 @@ export class MatchStore {
     return Api.ok(await this.api.GET('/v1/jobs/{id}/match-estimate', { params: { path: { id } } }));
   }
 
-  private refresh(id: string, estimate = false): Promise<unknown> {
-    const identity = this.auth.identity();
+  /** `identity` is the member who acted, so a late answer never touches the next member's cache. */
+  private refresh(identity: string | null, id: string, estimate = false): Promise<unknown> {
     return Promise.all([
       this.client.invalidateQueries({ queryKey: matchRunKey(identity, id) }),
       estimate && this.client.invalidateQueries({ queryKey: matchEstimateKey(identity, id) }),
@@ -66,6 +66,7 @@ export class MatchStore {
   }
 
   async start(id: string): Promise<void> {
+    const identity = this.auth.identity();
     try {
       Api.ok(
         await this.api.POST('/v1/jobs/{id}/match-runs', {
@@ -80,15 +81,17 @@ export class MatchStore {
       ))
         throw e;
     }
-    await this.refresh(id, true);
+    await this.refresh(identity, id, true);
   }
 
   async cancel(id: string, run: string): Promise<void> {
+    const identity = this.auth.identity();
     Api.ok(await this.api.POST('/v1/match-runs/{id}/cancel', { params: { path: { id: run } } }));
-    await this.refresh(id);
+    await this.refresh(identity, id);
   }
 
   async correct(id: string, hash: string, value: string): Promise<void> {
+    const identity = this.auth.identity();
     const params = { path: { id, text_hash: hash } };
     if (value === 'reset')
       Api.ok(await this.api.DELETE('/v1/jobs/{id}/match-overrides/{text_hash}', { params }));
@@ -99,6 +102,6 @@ export class MatchStore {
           body: { class: value as 'must' | 'preferred' | 'duty' | 'trait' | 'ignore' },
         }),
       );
-    await this.refresh(id);
+    await this.refresh(identity, id);
   }
 }

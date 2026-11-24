@@ -74,6 +74,8 @@ export class JobsStore {
   readonly includeArchived = signal(false);
   /** Nothing loads until a page asks for the board. */
   private readonly requested = signal(false);
+  /** Jobs deleted this session, as `identity|id`; ids are never reused. */
+  private readonly deleted = new Set<string>();
   private readonly enabled = computed(() => this.requested() && !!this.auth.identity());
 
   private readonly statusesQuery = injectQuery(() => ({
@@ -129,13 +131,13 @@ export class JobsStore {
       const id = this.auth.identity();
       const [kind] = e.topic.split('.');
       if (kind === 'match_run' || ['evidence', 'skill', 'organization'].includes(kind)) {
-        void this.client.invalidateQueries({ queryKey: jobsKey(id) });
+        void this.refetchLists(id);
       } else if (kind === 'job') {
         if (e.topic === 'job.deleted') void this.forget(id, e.data.id);
         else {
           const cur = this.jobs().find((j) => j.id === e.data.id);
           if (!cur || (e.data.version ?? 0) > cur.version) {
-            void this.client.invalidateQueries({ queryKey: jobsKey(id) });
+            void this.refetchLists(id);
             void this.client.invalidateQueries({ queryKey: jobKey(id, e.data.id) });
           }
         }
@@ -146,6 +148,15 @@ export class JobsStore {
       else if (kind === 'job_activity' && e.data.job_id)
         void this.client.invalidateQueries({ queryKey: jobActivitiesKey(id, e.data.job_id) });
     });
+  }
+
+  /**
+   * Refetches the lists after a change. A first load still in flight is
+   * canceled too: invalidating alone would let it finish with the old rows.
+   */
+  private async refetchLists(identity: string | null): Promise<void> {
+    await this.client.cancelQueries({ queryKey: jobsKey(identity) });
+    await this.client.invalidateQueries({ queryKey: jobsKey(identity) });
   }
 
   /** Starts loading the board; cached data shows at once and refreshes in the background. */
@@ -203,6 +214,8 @@ export class JobsStore {
 
   /** Puts a saved job in every cached list (unless a newer copy is there). */
   private async upsert(identity: string | null, j: JobSummary | Job, etag?: string): Promise<void> {
+    // A response that lands after the job was deleted must not bring it back.
+    if (this.deleted.has(`${identity}|${j.id}`)) return;
     const s = summary(j);
     await this.editLists(identity, (rows, includeArchived) => {
       const i = rows.findIndex((r) => r.id === s.id);
@@ -216,6 +229,7 @@ export class JobsStore {
   }
 
   private async forget(identity: string | null, id: string): Promise<void> {
+    this.deleted.add(`${identity}|${id}`);
     await this.editLists(identity, (rows) => rows.filter((r) => r.id !== id));
     this.client.removeQueries({ queryKey: jobKey(identity, id) });
     this.client.removeQueries({ queryKey: jobActivitiesKey(identity, id) });

@@ -215,6 +215,61 @@ test('a move shows at once, a late list cannot undo it, and a deletion removes t
   await until(() => store.jobs().length === 0);
 });
 
+test('an event during paging wins over the late list it replaces', async () => {
+  const stale = deferred();
+  let lists = 0;
+  const store = setup({
+    GET: async (path) =>
+      path === '/v1/jobs' ? (++lists === 1 ? stale.promise : ok({ items: [job(3)] })) : ok([]),
+  });
+  store.ensureLoaded();
+  store.jobs();
+  await tick();
+  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 3 } });
+  await until(() => store.jobs()[0]?.version === 3);
+  stale.resolve(ok({ items: [job(1)] }));
+  await tick();
+  assert.equal(store.jobs()[0].version, 3);
+});
+
+test('older mutation responses cannot replace a newer copy of the job', async () => {
+  let items = [job(1)];
+  const responses = [];
+  const store = setup({
+    GET: async (path) => (path === '/v1/jobs' ? ok({ items }) : ok([])),
+    POST: async () => ok(responses.shift()),
+  });
+  await loaded(store);
+  items = [job(5)];
+  currentEvents.changes.next({ topic: 'job.updated', data: { id: 'j', version: 5 } });
+  await until(() => store.jobs()[0]?.version === 5);
+  responses.push({ ...job(4), status_id: 'active' });
+  await store.move('j', 'active');
+  assert.equal(store.jobs()[0].version, 5);
+  responses.push({ ...job(4), archived: true });
+  await store.setArchived('j', true);
+  assert.equal(store.jobs().length, 1, 'an older archive response leaves the newer job listed');
+  responses.push({ ...job(6), archived: true });
+  await store.setArchived('j', true);
+  assert.equal(store.jobs().length, 0, 'a newer archive removes it from the unarchived list');
+});
+
+test('a late mutation response cannot resurrect a deleted job', async () => {
+  const moved = deferred();
+  const store = setup({
+    GET: async (path) => (path === '/v1/jobs' ? ok({ items: [job(1)] }) : ok([])),
+    POST: async () => moved.promise,
+  });
+  await loaded(store);
+  const move = store.move('j', 'active');
+  await tick();
+  currentEvents.changes.next({ topic: 'job.deleted', data: { id: 'j' } });
+  await until(() => store.jobs().length === 0);
+  moved.resolve(ok({ ...job(10), status_id: 'active' }));
+  await move;
+  assert.equal(store.jobs().length, 0);
+});
+
 test('deletion during paging cannot be resurrected by a late list', async () => {
   const stale = deferred();
   let lists = 0;
