@@ -152,6 +152,8 @@ export class UsagePage {
     summary: 'wrote a CV summary',
     extraction: 'read a job posting',
     mail: 'sorted emails',
+    scrape: 'read posting pages',
+    search: 'searched for new roles',
     other: 'other AI work',
   };
   protected readonly money = usageUsd;
@@ -186,12 +188,13 @@ export class UsagePage {
   /** A job's name when its work is linked to one; otherwise a plain description of the work. */
   protected label(entry: Schemas['UsageEntry']): string {
     if (entry.title) return entry.title;
+    if (entry.app === 'alerts') return 'A removed search watcher';
     return entry.app === 'mail' ? 'Emails not linked to a job' : 'Other job work';
   }
 
   /** The application the work came from, and what it did, in plain words. */
   protected detail(entry: Schemas['UsageEntry']): string {
-    const app = entry.app === 'mail' ? 'Mail' : 'Jobs';
+    const app = entry.app === 'mail' ? 'Mail' : entry.app === 'alerts' ? 'Job alerts' : 'Jobs';
     const work = entry.steps.map((step) => this.stepLabels[step] ?? 'other AI work').join(', ');
     return `${app} · ${work}`;
   }

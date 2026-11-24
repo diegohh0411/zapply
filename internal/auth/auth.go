@@ -174,6 +174,12 @@ func UserID(ctx context.Context) uuid.UUID {
 	return id
 }
 
+// UserIDFrom returns the authenticated user, if a request's context names one.
+func UserIDFrom(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(userKey{}).(uuid.UUID)
+	return id, ok
+}
+
 // WithUser stores a user ID in ctx. Exposed for tests and internal callers.
 func WithUser(ctx context.Context, id uuid.UUID) context.Context {
 	return context.WithValue(ctx, userKey{}, id)

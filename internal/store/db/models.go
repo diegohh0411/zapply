@@ -876,6 +876,14 @@ type JobAlert struct {
 	FoundAt     time.Time
 }
 
+type JobAlertKey struct {
+	UserID    uuid.UUID
+	Key       string
+	AlertID   uuid.UUID
+	FromAts   bool
+	CreatedAt time.Time
+}
+
 type JobStatus struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
@@ -903,8 +911,8 @@ type JobView struct {
 type JobWatch struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
-	Ats        string
-	Board      string
+	Ats        *string
+	Board      *string
 	Company    string
 	Keywords   []string
 	Locations  []string
@@ -913,6 +921,9 @@ type JobWatch struct {
 	Version    int32
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	Kind       string
+	Country    *string
+	EveryHours *int32
 }
 
 type MailAccount struct {
@@ -1136,6 +1147,17 @@ type PlatformBudgetAccount struct {
 	UserID uuid.UUID
 }
 
+type PlatformCharge struct {
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	Kind         string
+	Reserved     int64
+	State        string
+	DispatchedAt time.Time
+	DeadlineAt   time.Time
+	Version      int32
+}
+
 type PlatformEdgeWorker struct {
 	ID            uuid.UUID
 	Name          string
@@ -1161,6 +1183,18 @@ type PlatformJobWatchIndex struct {
 	RemoteOnly bool
 	Paused     bool
 	CreatedAt  time.Time
+}
+
+type PlatformLedgerEntry struct {
+	ID          int64
+	ChargeID    uuid.UUID
+	UserID      uuid.UUID
+	Amount      int64
+	AccountedAt time.Time
+	Source      string
+	DedupKey    string
+	Detail      json.RawMessage
+	CreatedAt   time.Time
 }
 
 type PlatformMailAccountIndex struct {
@@ -1210,8 +1244,8 @@ type PlatformMembership struct {
 	UpdatedAt time.Time
 }
 
-type PlatformModelAttempt struct {
-	ID            uuid.UUID
+type PlatformModelCharge struct {
+	ChargeID      uuid.UUID
 	UserID        uuid.UUID
 	OperationID   uuid.UUID
 	AttemptNumber int32
@@ -1219,13 +1253,9 @@ type PlatformModelAttempt struct {
 	Model         string
 	KeyID         uuid.UUID
 	Quote         json.RawMessage
-	Reserved      int64
-	DispatchedAt  time.Time
-	DeadlineAt    time.Time
-	State         string
 	GenerationID  *string
 	ErrorCode     string
-	Version       int32
+	Kind          string
 }
 
 type PlatformModelQuote struct {
@@ -1246,18 +1276,6 @@ type PlatformModelSetting struct {
 	ExtractionModel        *string
 }
 
-type PlatformModelUsage struct {
-	ID          int64
-	AttemptID   uuid.UUID
-	UserID      uuid.UUID
-	Amount      int64
-	AccountedAt time.Time
-	Source      string
-	DedupKey    string
-	Usage       json.RawMessage
-	CreatedAt   time.Time
-}
-
 type PlatformOperationIndex struct {
 	OperationID    uuid.UUID
 	UserID         uuid.UUID
@@ -1271,17 +1289,28 @@ type PlatformOwner struct {
 }
 
 type PlatformPlan struct {
-	ID        uuid.UUID
-	Name      string
-	Cap7d     int64
-	Cap30d    int64
-	Version   int32
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                uuid.UUID
+	Name              string
+	Cap7d             int64
+	Cap30d            int64
+	Version           int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	MaxSearchWatchers int32
 }
 
 type PlatformProviderLock struct {
 	ID bool
+}
+
+type PlatformScrapeCharge struct {
+	ChargeID    uuid.UUID
+	Kind        string
+	UserID      uuid.UUID
+	Provider    string
+	Host        string
+	CreditPrice int64
+	Credits     *int32
 }
 
 type PlatformScrapeJob struct {
@@ -1308,6 +1337,46 @@ type PlatformScraperSetting struct {
 	SavedAt   *time.Time
 	Version   int32
 	UpdatedAt time.Time
+}
+
+type PlatformSearchCharge struct {
+	ChargeID    uuid.UUID
+	Kind        string
+	UserID      uuid.UUID
+	WatchID     uuid.UUID
+	Name        string
+	Provider    string
+	CreditPrice int64
+	Credits     *int32
+	Results     *int32
+}
+
+type PlatformSearchSetting struct {
+	ID          bool
+	KeyID       *uuid.UUID
+	CreditPrice *int64
+	MaxResults  int32
+	Version     int32
+	UpdatedAt   time.Time
+}
+
+type PlatformSearchWatch struct {
+	WatchID       uuid.UUID
+	UserID        uuid.UUID
+	Name          string
+	Keywords      []string
+	Locations     []string
+	Country       *string
+	RemoteOnly    bool
+	Paused        bool
+	EveryHours    int32
+	CreatedAt     time.Time
+	CursorAt      time.Time
+	NextPollAt    time.Time
+	LastOkAt      *time.Time
+	Failures      int32
+	LastError     string
+	BlockedReason string
 }
 
 type PlatformSystemKey struct {

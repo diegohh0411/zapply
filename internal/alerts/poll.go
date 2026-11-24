@@ -33,11 +33,20 @@ func (w *pollWorker) Work(ctx context.Context, j *river.Job[PollArgs]) error {
 
 func (s *Service) AddWorkers(w *river.Workers) {
 	river.AddWorker(w, &pollWorker{s: s})
+	river.AddWorker(w, &searchWorker{s: s})
 }
 
-// Recover runs every minute: it dispatches a poll for each board that is due.
-// Picking a board moves its next poll forward, so scans never double up.
+// Recover runs every minute: it dispatches a poll for each board and search
+// that is due, and settles scrape and search charges a dead process left
+// open. Picking a board or search moves its next poll forward, so scans never
+// double up.
 func (s *Service) Recover(ctx context.Context, client *river.Client[pgx.Tx]) error {
+	if _, err := s.store.Pool().Exec(ctx, `SELECT platform.expire_charges()`); err != nil {
+		return err
+	}
+	if err := s.recoverSearches(ctx, client); err != nil {
+		return err
+	}
 	var raw []byte
 	if err := s.store.Pool().QueryRow(ctx, `SELECT platform.ats_boards_due(500,$1::interval)`, PollInterval.String()).Scan(&raw); err != nil {
 		return err
@@ -90,6 +99,10 @@ func (s *Service) Poll(ctx context.Context, system, board string) error {
 		errText = &msg
 		postings = []byte("[]")
 	} else {
+		if read.Postings == nil {
+			// An empty board is an empty list, not JSON null.
+			read.Postings = []ats.Posting{}
+		}
 		if len(read.Postings) > maxPostings {
 			read.Postings = read.Postings[:maxPostings]
 		}
@@ -114,12 +127,13 @@ func (s *Service) Poll(ctx context.Context, system, board string) error {
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return err
 	}
-	byUser := map[uuid.UUID][]match{}
+	byUser := map[uuid.UUID][]candidate{}
 	for _, m := range result.Matches {
-		byUser[m.UserID] = append(byUser[m.UserID], m)
+		byUser[m.UserID] = append(byUser[m.UserID], candidate{WatchID: m.WatchID, PostingKey: m.Key, Company: m.Company, Title: m.Title,
+			Location: m.Location, URL: m.URL, Remote: m.Remote, PublishedAt: m.PublishedAt, ATSKey: system + ":" + board + ":" + m.Key})
 	}
-	for u, ms := range byUser {
-		if err := s.file(ctx, u, ms); err != nil {
+	for u, cs := range byUser {
+		if _, err := s.file(ctx, u, cs); err != nil {
 			return err
 		}
 	}
@@ -128,28 +142,4 @@ func (s *Service) Poll(ctx context.Context, system, board string) error {
 	}
 	_, err := s.store.Pool().Exec(ctx, `SELECT platform.ats_postings_delivered($1,$2,$3)`, system, board, result.Pending)
 	return err
-}
-
-// file inserts one member's alerts (the trigger files the notifications) and
-// tells their open pages.
-func (s *Service) file(ctx context.Context, u uuid.UUID, ms []match) error {
-	return s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		added := int64(0)
-		for _, m := range ms {
-			tag, err := tx.Exec(ctx, `INSERT INTO job_alert(id,user_id,watch_id,posting_key,company,title,location,url,remote,published_at)
- SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10 WHERE EXISTS(SELECT FROM job_watch WHERE user_id=$2 AND id=$3)
- ON CONFLICT(watch_id,posting_key) DO NOTHING`,
-				uuid.Must(uuid.NewV7()), u, m.WatchID, m.Key, m.Company, m.Title, m.Location, m.URL, m.Remote, m.PublishedAt)
-			if err != nil {
-				return err
-			}
-			added += tag.RowsAffected()
-		}
-		if added == 0 {
-			return nil
-		}
-		payload, _ := json.Marshal(map[string]any{"id": u})
-		_, err := tx.Exec(ctx, "INSERT INTO outbox(id,user_id,topic,payload) VALUES($1,$2,$3,$4)", uuid.Must(uuid.NewV7()), u, "notification.updated", json.RawMessage(payload))
-		return err
-	})
 }

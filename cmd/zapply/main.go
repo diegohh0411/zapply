@@ -36,6 +36,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
+	"github.com/diegohh0411/zapply/internal/jobsearch"
 	"github.com/diegohh0411/zapply/internal/logx"
 	"github.com/diegohh0411/zapply/internal/mail"
 	"github.com/diegohh0411/zapply/internal/mail/google"
@@ -240,7 +241,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 		return matcher.OnTerminal(ctx, tx, op)
 	}
-	watcher := alerts.New(st, nil)
+	watcher := alerts.New(st, nil).WithSearch(&jobsearch.TheirStack{}, keys)
 	runtime.AddWorkers = func(w *river.Workers) {
 		matcher.AddWorkers(w)
 		mailer.AddWorkers(w)

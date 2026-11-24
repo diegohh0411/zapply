@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	modelapi "github.com/diegohh0411/zapply/internal/model"
 )
 
 // Scraper provider kinds.
@@ -27,12 +29,30 @@ const (
 // ProviderConfig is one scraper in the chain. KeyID names the system key sent
 // to the API ("" sends none) and must be a key of the provider's own kind;
 // BaseURL is the API's address ("" is Firecrawl's hosted API; Crawl4AI has no
-// hosted API and needs one).
+// hosted API and needs one). CreditUSD is what one provider credit costs, as
+// a decimal USD string; "" makes the provider free. Members pay for the
+// credits their scrapes use.
 type ProviderConfig struct {
-	Kind    string `json:"kind"`
-	BaseURL string `json:"base_url,omitempty"`
-	KeyID   string `json:"key_id,omitempty"`
+	Kind      string `json:"kind"`
+	BaseURL   string `json:"base_url,omitempty"`
+	KeyID     string `json:"key_id,omitempty"`
+	CreditUSD string `json:"credit_usd,omitempty"`
 }
+
+// CreditPrice is CreditUSD in picodollars, 0 when the provider is free.
+func (p ProviderConfig) CreditPrice() int64 {
+	if p.CreditUSD == "" {
+		return 0
+	}
+	n, err := modelapi.ParseUSD(p.CreditUSD)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// creditAmount is a credit price as the database accepts it.
+var creditAmount = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,12})?$`)
 
 // Rule replaces the default order for a host and its subdomains. Providers are
 // positions in Settings.Providers, in the order to try them.
@@ -98,6 +118,12 @@ func (s Settings) Validate() error {
 		}
 		if p.Kind == KindEdge && (p.BaseURL != "" || p.KeyID != "") {
 			return &SettingsError{field + ".base_url", "edge workers need no address or key: they pull jobs from this server"}
+		}
+		if p.CreditUSD != "" && (p.Kind == KindEdge || !creditAmount.MatchString(p.CreditUSD)) {
+			if p.Kind == KindEdge {
+				return &SettingsError{field + ".credit_usd", "edge workers run on your machines and cannot be priced"}
+			}
+			return &SettingsError{field + ".credit_usd", "must be a USD amount such as 0.0053"}
 		}
 		if p.BaseURL != "" {
 			u, err := url.Parse(p.BaseURL)

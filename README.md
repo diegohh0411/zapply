@@ -228,6 +228,23 @@ save/activate an OpenRouter key. Configure `LLM_MODEL` and `LLM_ENDPOINT` on the
 worker and start `make worker`. The owner also needs a membership to run the
 fixed-prompt model diagnostic. Key inputs never return in API responses.
 
+All spending lands in one ledger: each billable provider call is a
+`platform.charge` that holds its most expensive outcome against the plan until it
+settles into append-only `platform.ledger_entry` rows. What the call was is kept
+as evidence by kind: `model_charge` (model calls), `scrape_charge` (posting pages
+read through a priced scraper; set a provider's **price per credit** under
+Scraping, or leave it empty for a free one) and `search_charge` (search
+watchers, below).
+
+**Search watchers** run a member's saved job search (titles, places, country,
+remote) across every company through TheirStack, at the interval they choose,
+and file new postings as job alerts. Add a TheirStack system key, then set it and
+its price per API credit under Scraping → Job search. Each plan sets how many
+search watchers its members may keep (none by default, and none without an
+active membership); each poll is paid from the member's allowances at the
+credits TheirStack charged, one per posting returned. A posting alerts once per
+member however many watches find it.
+
 Setup, accounting rules, conservative reservations, and recovery commands are in
 [`docs/parts/05-worker.md`](docs/parts/05-worker.md). Optional tracing uses standard
 `OTEL_EXPORTER_OTLP_*` configuration and exports only when an endpoint is set.

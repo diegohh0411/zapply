@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/diegohh0411/zapply/internal/logx"
 )
 
@@ -28,6 +30,7 @@ const settingsTTL = 10 * time.Second
 // one provider cannot read is tried on the next.
 type Chain struct {
 	src   SettingsSource
+	meter Meter
 	ttl   time.Duration
 	now   func() time.Time
 	build func(ctx context.Context, c ProviderConfig) (Scraper, error)
@@ -42,13 +45,16 @@ type Chain struct {
 // provider is a configured scraper, or why it could not be built.
 type provider struct {
 	kind    string
+	price   int64 // picodollars per credit
 	scraper Scraper
 	err     error
 }
 
-// NewChain returns a Chain over src.
+// NewChain returns a Chain over src. When src is also a Meter, each provider
+// call is billed to the member the context names.
 func NewChain(src SettingsSource) *Chain {
 	c := &Chain{src: src, ttl: settingsTTL, now: time.Now}
+	c.meter, _ = src.(Meter)
 	c.build = c.buildProvider
 	return c
 }
@@ -102,7 +108,7 @@ func (c *Chain) current(ctx context.Context) (Settings, []provider, error) {
 	}
 	built := make([]provider, len(s.Providers))
 	for i, cfg := range s.Providers {
-		built[i].kind = cfg.Kind
+		built[i].kind, built[i].price = cfg.Kind, cfg.CreditPrice()
 		built[i].scraper, built[i].err = c.build(ctx, cfg)
 	}
 	c.settings, c.scrapers, c.loaded, c.ready = s, built, c.now(), true
@@ -134,7 +140,7 @@ func (c *Chain) Scrape(ctx context.Context, rawURL string) (Page, error) {
 		var page Page
 		if p.err != nil {
 			last = p.err
-		} else if page, last = p.scraper.Scrape(ctx, rawURL); last == nil {
+		} else if page, last = c.scrape(ctx, p, rawURL, host); last == nil {
 			return page, nil
 		}
 		if ctx.Err() != nil {
@@ -142,7 +148,45 @@ func (c *Chain) Scrape(ctx context.Context, rawURL string) (Page, error) {
 		}
 		logx.From(ctx).WarnContext(ctx, "scraper failed", "provider", p.kind, "position", i, "host", host, "fallback", n+1 < len(order), "error", last)
 	}
+	var budget *BudgetError
+	if errors.As(last, &budget) {
+		return Page{}, budget.unreadable()
+	}
 	return Page{}, last
 }
+
+// chargeTimeout bounds a scrape's charge: past it, an open charge is settled
+// at its reservation (platform.expire_charges).
+const chargeTimeout = 10 * time.Minute
+
+// scrape calls one provider, billing the call when the chain has a meter and
+// the context names a member.
+func (c *Chain) scrape(ctx context.Context, p provider, rawURL, host string) (Page, error) {
+	if c.meter == nil {
+		return p.scraper.Scrape(ctx, rawURL)
+	}
+	id := uuid.Must(uuid.NewV7())
+	cost := p.price * int64(maxCredits(p.kind))
+	reason, err := c.meter.Open(ctx, id, p.kind, host, p.price, cost, c.now().Add(chargeTimeout))
+	if errors.Is(err, ErrNoMember) {
+		return p.scraper.Scrape(ctx, rawURL)
+	}
+	if err != nil {
+		return Page{}, fmt.Errorf("open scrape charge: %w", err)
+	}
+	if reason != "" {
+		return Page{}, &BudgetError{Reason: reason}
+	}
+	page, err := p.scraper.Scrape(ctx, rawURL)
+	// Settle even when the caller has gone: the provider may have charged.
+	if cerr := c.meter.Close(context.WithoutCancel(ctx), id, creditsUsed(p.kind, page, err)); cerr != nil {
+		logx.From(ctx).WarnContext(ctx, "scrape charge not settled", "charge", id, "error", cerr)
+	}
+	return page, err
+}
+
+// ErrNoMember answers Meter.Open when the context names no member: the scrape
+// is not billed.
+var ErrNoMember = errors.New("no member to bill")
 
 var _ Scraper = (*Chain)(nil)

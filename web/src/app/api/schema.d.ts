@@ -849,6 +849,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/search-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSearchSettings"];
+        /** @description Sets the TheirStack key and what one of its API credits costs. Search watchers are available once both are set; each poll is billed to the member at the credits TheirStack charged (one per posting returned). */
+        put: operations["putSearchSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/edge-workers": {
         parameters: {
             query?: never;
@@ -1414,10 +1431,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The job boards the member watches, newest first. The worker reads each board every 30 minutes and files a `job_alert` notification for every new posting that matches the watch's filters. */
+        /** @description The member's watches, newest first, and what their plan allows for search watchers. The worker reads each board every 30 minutes and runs each search at its interval, filing a `job_alert` notification for every new posting that matches; a posting alerts once however many watches find it. */
         get: operations["listJobWatches"];
         put?: never;
-        /** @description Starts watching the Greenhouse, Lever or Ashby board a careers link names. The board is read once to check it exists (422 on `url` otherwise); what is open now is not announced, only what opens later. Watching a board twice answers 409. */
+        /** @description Starts a watch. A board watch reads the Greenhouse, Lever or Ashby board a careers link names once to check it exists (422 on `url` otherwise); watching a board twice answers 409. A search watch needs title keywords and a free slot in the member's plan (422 on `kind` otherwise). Either way, what is open now is not announced, only what opens later. */
         post: operations["createJobWatch"];
         delete?: never;
         options?: never;
@@ -2025,12 +2042,15 @@ export interface components {
             name: string;
             cap_7d_usd: string;
             cap_30d_usd: string;
+            /** @description How many search watchers a member on this plan may keep. Zero disables them. */
+            max_search_watchers: number;
             version: number;
         };
         PlanInput: {
             name: string;
             cap_7d_usd: string;
             cap_30d_usd: string;
+            max_search_watchers?: number;
         };
         Membership: {
             /** Format: uuid */
@@ -2072,17 +2092,17 @@ export interface components {
             membership: components["schemas"]["Membership"] | null;
             usage: components["schemas"]["Usage"];
         };
-        /** @description One line of recent activity: the charges of one job (or of the email and posting work not linked to one), newest first. Its id is the newest charge's id, which pages the list. */
+        /** @description One line of recent activity: the charges of one job (or of the email and posting work not linked to one), or of one search watcher, newest first. Its id is the newest charge's id, which pages the list. */
         UsageEntry: {
             id: string;
             amount_usd: string;
             /** Format: date-time */
             accounted_at: string;
             /** @enum {string} */
-            app: "jobs" | "mail";
+            app: "jobs" | "mail" | "alerts";
             title?: string | null;
             company?: string | null;
-            steps: ("match" | "summary" | "extraction" | "mail" | "other")[];
+            steps: ("match" | "summary" | "extraction" | "mail" | "scrape" | "search" | "other")[];
         };
         SystemKey: {
             /** Format: uuid */
@@ -2099,7 +2119,7 @@ export interface components {
          * @description Which provider the key belongs to. Only an OpenRouter key can be active.
          * @enum {string}
          */
-        SystemKeyKind: "openrouter" | "firecrawl" | "crawl4ai";
+        SystemKeyKind: "openrouter" | "firecrawl" | "crawl4ai" | "theirstack";
         SystemKeyInput: {
             label: string;
             kind?: components["schemas"]["SystemKeyKind"];
@@ -2202,6 +2222,8 @@ export interface components {
              * @description A system key of the provider's own kind, sent as a bearer token; null sends none.
              */
             key_id?: string | null;
+            /** @description What one provider credit costs. Members are charged for the credits their scrapes use (Firecrawl: 1 per page, 5 through its stealth proxy; other providers: 1). Null makes the provider free. Not allowed for edge workers. */
+            credit_usd?: string | null;
         };
         ScraperRule: {
             /** @description A bare lowercase hostname. The rule also covers its subdomains. */
@@ -2214,6 +2236,28 @@ export interface components {
             providers: components["schemas"]["ScraperProvider"][];
             /** @description The first rule whose host matches the posting's host replaces the default order. */
             rules: components["schemas"]["ScraperRule"][];
+        };
+        SearchSettings: {
+            /** @enum {string} */
+            provider: "theirstack";
+            /**
+             * Format: uuid
+             * @description A TheirStack system key.
+             */
+            key_id: string | null;
+            /** @description What one TheirStack API credit costs. */
+            credit_usd: string | null;
+            /** @description The most postings one poll asks for. */
+            max_results: number;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SearchSettingsInput: {
+            /** Format: uuid */
+            key_id: string | null;
+            credit_usd: string | null;
+            max_results: number;
         };
         ScraperSettings: {
             providers: components["schemas"]["ScraperProvider"][];
@@ -2463,14 +2507,38 @@ export interface components {
         };
         /** @enum {string} */
         JobAts: "greenhouse" | "lever" | "ashby";
+        /**
+         * @description board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan.
+         * @enum {string}
+         */
+        JobWatchKind: "board" | "search";
         JobWatch: {
             /** Format: uuid */
             id: string;
-            ats: components["schemas"]["JobAts"];
-            /** @description The employer's board slug. */
-            board: string;
-            board_url: string;
+            kind: components["schemas"]["JobWatchKind"];
+            /** @description Null for a search. */
+            ats: components["schemas"]["JobAts"] | null;
+            /** @description The employer's board slug; null for a search. */
+            board: string | null;
+            board_url: string | null;
+            /** @description The company a board belongs to, or a search's name. */
             company: string;
+            /** @description A search's ISO country code, such as MX. */
+            country: string | null;
+            /**
+             * @description How often a search runs; null for a board, read every 30 minutes.
+             * @enum {integer|null}
+             */
+            every_hours: 1 | 2 | 6 | 24 | null;
+            /** @description Why a search was not run when due, or empty: plan (beyond the plan's search watchers), provider_unavailable, usage_limit, membership_required, membership_suspended or request_exceeds_plan. */
+            blocked_reason: string;
+            /**
+             * Format: date-time
+             * @description When a search runs next; null for a board or a paused search.
+             */
+            next_check_at: string | null;
+            /** @description What a search's polls cost in the last 30 days; 0 for a board. */
+            spent_30d_usd: string;
             /** @description A posting matches when its title contains any (empty matches all). */
             keywords: string[];
             /** @description A posting matches when its location contains any (empty matches all). */
@@ -2489,18 +2557,43 @@ export interface components {
         };
         JobWatchList: {
             items: components["schemas"]["JobWatch"][];
+            search: components["schemas"]["SearchAllowance"];
+        };
+        /** @description What the member's plan allows for search watchers, and what a poll can cost. */
+        SearchAllowance: {
+            /** @description Search watchers the member's plan allows; 0 without an active plan. */
+            allowed: number;
+            used: number;
+            /** @description False until the owner configures the job search provider. */
+            available: boolean;
+            /** @description What one provider credit costs; a poll costs one credit per posting it returns. */
+            credit_usd: string | null;
+            /** @description The most postings one poll returns */
+            max_results: number;
         };
         JobWatchInput: {
-            /** @description A careers link: job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one. */
-            url: string;
-            /** @description Defaults to the name the board publishes */
+            kind?: components["schemas"]["JobWatchKind"];
+            /** @description For a board (required): a careers link, job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one. */
+            url?: string;
+            /** @description A board's company, defaulting to the name the board publishes; a search's name, defaulting to its terms and places. */
             company?: string;
+            /** @description For a search: an ISO country code. */
+            country?: string;
+            /**
+             * @description For a search: how often it runs (default 2).
+             * @enum {integer}
+             */
+            every_hours?: 1 | 2 | 6 | 24;
             keywords?: string[];
             locations?: string[];
             remote_only?: boolean;
         };
         JobWatchPatch: {
             company?: string;
+            /** @description A search's country; an empty string removes it. */
+            country?: string;
+            /** @enum {integer} */
+            every_hours?: 1 | 2 | 6 | 24;
             keywords?: string[];
             locations?: string[];
             remote_only?: boolean;
@@ -4342,6 +4435,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScraperSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSearchSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job search provider behind search watchers (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSearchSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Updated settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchSettings"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -107,7 +107,7 @@ func setup(t *testing.T) *fixture {
 	}
 	s := membership.New(db.Store, ring)
 	plan := uuid.Must(uuid.NewV7())
-	if _, err := s.SavePlan(ctx, u, plan, "Member", "1", "2", 0); err != nil {
+	if _, err := s.SavePlan(ctx, u, plan, "Member", "1", "2", nil, 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveMembership(ctx, u, u, plan, "active", 0); err != nil {
@@ -206,7 +206,7 @@ func TestConcurrentReservationsAndReplay(t *testing.T) {
 		t.Fatalf("hold not released: %v", got)
 	}
 	// A plan change preserves the first charge and makes a second call eligible.
-	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "2", 1); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "2", nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.r.Process(ctx, second); err != nil {
@@ -225,7 +225,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := f.db.Admin(t)
-	if _, err := admin.Exec(ctx, "UPDATE platform.model_usage SET accounted_at=now()-interval '8 days'"); err != nil {
+	if _, err := admin.Exec(ctx, "UPDATE platform.ledger_entry SET accounted_at=now()-interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
 	second := f.operation(t)
@@ -233,7 +233,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Two charges count in the 30-day window, even though only one is in 7 days.
-	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "1.5", 1); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "1.5", nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	third := f.operation(t)
@@ -243,7 +243,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 	if op := f.state(t, third); op.BlockedReason != "usage_limit" {
 		t.Fatalf("monthly block: %+v", op)
 	}
-	if _, err := admin.Exec(ctx, "UPDATE platform.model_usage SET accounted_at=now()-interval '31 days'"); err != nil {
+	if _, err := admin.Exec(ctx, "UPDATE platform.ledger_entry SET accounted_at=now()-interval '31 days'"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.s.SaveMembership(ctx, f.u, f.u, f.plan, "suspended", 1); err != nil {
@@ -284,7 +284,7 @@ func TestUncertainOutcomeNeverResends(t *testing.T) {
 		t.Fatal("uncertain outcome was hidden")
 	}
 	// Neither elapsed windows nor expired worker leases release an uncertain hold.
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET dispatched_at=now()-interval '40 days',deadline_at=now()-interval '1 day'"); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.charge SET dispatched_at=now()-interval '40 days',deadline_at=now()-interval '1 day'"); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := f.s.Attempts(ctx, f.u, nil, 50)
@@ -369,7 +369,7 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 		t.Fatalf("plans: %s %v", raw, err)
 	}
 	p := plans[0]
-	if _, err := f.s.SavePlan(ctx, f.u, p.ID, p.Name, p.Week, p.Month, p.Version); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, p.ID, p.Name, p.Week, p.Month, nil, p.Version); err != nil {
 		t.Fatalf("plan money did not round trip: %v", err)
 	}
 	other, err := f.db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "member"})
@@ -398,7 +398,7 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, query := range []string{"SELECT * FROM platform.system_key", "SELECT * FROM platform.model_usage", "SELECT platform.settle(NULL,0,NULL,'{}','','provider_response')"} {
+	for _, query := range []string{"SELECT * FROM platform.system_key", "SELECT * FROM platform.ledger_entry", "SELECT platform.settle(NULL,0,NULL,'{}','','provider_response')"} {
 		if err := f.db.Store.InTenant(ctx, f.u, func(tx pgx.Tx) error { _, err := tx.Exec(ctx, query); return err }); err == nil {
 			t.Fatalf("API role executed %s", query)
 		}
@@ -463,7 +463,7 @@ func TestDurableDispatchCrashAndLateCorrection(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate process death after committing dispatch, before knowing if HTTP ran.
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET deadline_at=now()-interval '1 second' WHERE id=$1", attempt); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.charge SET deadline_at=now()-interval '1 second' WHERE id=$1", attempt); err != nil {
 		t.Fatal(err)
 	}
 	_ = f.r.Process(ctx, args)
@@ -487,7 +487,7 @@ func TestDurableDispatchCrashAndLateCorrection(t *testing.T) {
 	settle(corrected)
 	var entries int
 	var total int64
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*),sum(amount) FROM platform.model_usage WHERE attempt_id=$1", attempt).Scan(&entries, &total); err != nil {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*),sum(amount) FROM platform.ledger_entry WHERE charge_id=$1", attempt).Scan(&entries, &total); err != nil {
 		t.Fatal(err)
 	}
 	if entries != 2 || total != corrected {
@@ -622,7 +622,7 @@ func TestKeyFailureStopsRetrying(t *testing.T) {
 		t.Fatalf("status=%s reason=%s calls=%d", op.Status, op.BlockedReason, f.p.calls.Load())
 	}
 	var n int
-	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.model_attempt").Scan(&n); err != nil || n != 5 {
+	if err := f.db.Admin(t).QueryRow(ctx, "SELECT count(*) FROM platform.model_charge").Scan(&n); err != nil || n != 5 {
 		t.Fatalf("attempts=%d err=%v", n, err)
 	}
 }
@@ -654,7 +654,7 @@ func TestGenerationLookupRetriesAfterExtendedOutage(t *testing.T) {
 	if f.p.lookups.Load() != 1 {
 		t.Fatalf("lookups=%d", f.p.lookups.Load())
 	}
-	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.model_attempt SET deadline_at=now()-interval '8 days'"); err != nil {
+	if _, err := f.db.Admin(t).Exec(ctx, "UPDATE platform.charge SET deadline_at=now()-interval '8 days'"); err != nil {
 		t.Fatal(err)
 	}
 	f.p.lookupFails = false

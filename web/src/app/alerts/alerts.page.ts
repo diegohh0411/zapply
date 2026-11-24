@@ -16,6 +16,7 @@ import {
   lucidePlay,
   lucidePlus,
   lucideRadar,
+  lucideSearch,
   lucideTrash2,
   lucideTriangleAlert,
   lucideX,
@@ -23,12 +24,29 @@ import {
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardInputComponent } from '@/shared/components/input';
+import { ZardSelectImports } from '@/shared/components/select';
 import { Api, ApiError, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { ConfirmService } from '../core/confirm.service';
 import { relativeTime } from '../mail/format';
+import { usageUsd } from '../usage/format';
 
 type Watch = Schemas['JobWatch'];
+type Allowance = Schemas['SearchAllowance'];
+type Every = 1 | 2 | 6 | 24;
+
+const everyLabel: Record<Every, string> = { 1: 'Every hour', 2: 'Every 2 hours', 6: 'Every 6 hours', 24: 'Once a day' };
+const asEvery = (v: unknown): Every => (v === 1 || v === 6 || v === 24 || v === '1' || v === '6' || v === '24' ? (Number(v) as Every) : 2);
+
+/** Why a due search did not run, in the member's terms. */
+const blockedLabel: Record<string, string> = {
+  plan: "Not checked: your plan doesn't include this many search watchers",
+  provider_unavailable: "Not checked: job search isn't set up on this server",
+  usage_limit: "Not checked: your plan's usage limit is reached",
+  membership_required: 'Not checked: you need a plan',
+  membership_suspended: 'Not checked: your membership is suspended',
+  request_exceeds_plan: 'Not checked: a search costs more than your plan allows',
+};
 
 const atsLabel: Record<string, string> = {
   greenhouse: 'Greenhouse',
@@ -45,29 +63,37 @@ function splitTerms(s: string): string[] {
 }
 
 interface Draft {
+  kind: 'board' | 'search';
   url: string;
   company: string;
   keywords: string;
   locations: string;
+  country: string;
+  every: Every;
   remoteOnly: boolean;
 }
 
-const emptyDraft = (): Draft => ({
+const emptyDraft = (kind: Draft['kind'] = 'board'): Draft => ({
+  kind,
   url: '',
   company: '',
   keywords: '',
   locations: '',
+  country: '',
+  every: 2,
   remoteOnly: false,
 });
 
 /**
- * Job alerts: the employer boards the member watches. zapply reads each board
- * every 30 minutes and sends new postings that match to Notifications, so the
- * member can apply while the applicant pool is still small.
+ * Job alerts: the employer boards the member watches, and their saved searches
+ * across every company. zapply reads each board every 30 minutes and runs each
+ * search at its interval, sending new postings that match to Notifications, so
+ * the member can apply while the applicant pool is still small. Searches cost
+ * provider credits and are paid from the member's plan.
  */
 @Component({
   selector: 'app-alerts-page',
-  imports: [FormsModule, NgIcon, ZardButtonComponent, ZardInputComponent],
+  imports: [FormsModule, NgIcon, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   providers: [
     provideIcons({
       lucideExternalLink,
@@ -76,6 +102,7 @@ const emptyDraft = (): Draft => ({
       lucidePlay,
       lucidePlus,
       lucideRadar,
+      lucideSearch,
       lucideTrash2,
       lucideTriangleAlert,
       lucideX,
@@ -93,11 +120,23 @@ const emptyDraft = (): Draft => ({
           </p>
         </div>
         @if (!formOpen()) {
-          <button z-button (click)="openForm()">
-            <ng-icon name="lucidePlus" />Watch a company
-          </button>
+          <div class="flex flex-wrap gap-2">
+            <button z-button zType="outline" [zDisabled]="!canSearch()" [title]="searchNote()" (click)="openForm('search')">
+              <ng-icon name="lucideSearch" />Search across companies
+            </button>
+            <button z-button (click)="openForm('board')">
+              <ng-icon name="lucidePlus" />Watch a company
+            </button>
+          </div>
         }
       </header>
+      @if (allowance(); as a) {
+        @if (a.allowed > 0 || a.used > 0) {
+          <p class="mt-3 text-xs text-muted-foreground">
+            Search watchers: {{ a.used }} of {{ a.allowed }} on your plan.{{ a.available ? '' : " Job search isn't set up on this server yet." }}
+          </p>
+        }
+      }
 
       @if (error()) {
         <div
@@ -124,9 +163,15 @@ const emptyDraft = (): Draft => ({
           aria-labelledby="watch-form-title"
         >
           <h2 id="watch-form-title" class="text-sm font-semibold">
-            {{ editing() ? 'Edit ' + editing()!.company : 'Watch a company' }}
+            {{ editing() ? 'Edit ' + editing()!.company : draft.kind === 'search' ? 'Search across companies' : 'Watch a company' }}
           </h2>
-          @if (!editing()) {
+          @if (draft.kind === 'search' && !editing()) {
+            <p class="text-sm text-muted-foreground">
+              Finds new roles on LinkedIn, job boards and careers pages. Each search costs
+              {{ creditCost() }} per posting it finds, paid from your plan; a quiet search costs nothing.
+            </p>
+          }
+          @if (!editing() && draft.kind === 'board') {
             <label class="grid gap-1.5 text-sm">
               <span class="font-medium">Careers link</span>
               <input
@@ -148,13 +193,14 @@ const emptyDraft = (): Draft => ({
           }
           <label class="grid gap-1.5 text-sm">
             <span class="font-medium"
-              >Company name <span class="font-normal text-muted-foreground">(optional)</span></span
+              >{{ draft.kind === 'search' ? 'Name' : 'Company name' }}
+              <span class="font-normal text-muted-foreground">(optional)</span></span
             >
             <input
               z-input
               name="company"
               [(ngModel)]="draft.company"
-              placeholder="Taken from the board"
+              [placeholder]="draft.kind === 'search' ? 'Taken from what you search for' : 'Taken from the board'"
             />
             @if (fieldError()['company']; as m) {
               <span class="text-xs text-destructive">{{ m }}</span>
@@ -169,9 +215,11 @@ const emptyDraft = (): Draft => ({
                 [(ngModel)]="draft.keywords"
                 placeholder="engineer, backend"
               />
-              <span class="text-xs text-muted-foreground"
-                >Comma-separated. Empty alerts on every opening.</span
-              >
+              <span class="text-xs text-muted-foreground">{{
+                draft.kind === 'search'
+                  ? 'Comma-separated, at least one. A title matches when it has every word of one.'
+                  : 'Comma-separated. Empty alerts on every opening.'
+              }}</span>
               @if (fieldError()['keywords']; as m) {
                 <span class="text-xs text-destructive">{{ m }}</span>
               }
@@ -192,6 +240,39 @@ const emptyDraft = (): Draft => ({
               }
             </label>
           </div>
+          @if (draft.kind === 'search') {
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-1.5 text-sm">
+                <span class="font-medium"
+                  >Country <span class="font-normal text-muted-foreground">(optional)</span></span
+                >
+                <input
+                  z-input
+                  name="country"
+                  [(ngModel)]="draft.country"
+                  placeholder="MX"
+                  maxlength="2"
+                  autocapitalize="characters"
+                />
+                <span class="text-xs text-muted-foreground">A two-letter code, such as MX or US.</span>
+                @if (fieldError()['country']; as m) {
+                  <span class="text-xs text-destructive">{{ m }}</span>
+                }
+              </label>
+              <div class="grid gap-1.5 text-sm">
+                <span class="font-medium">How often</span>
+                <z-select aria-label="How often" name="every" [ngModel]="'' + draft.every" (ngModelChange)="draft.every = every($event)">
+                  @for (n of intervals; track n) {
+                    <z-select-item [zValue]="'' + n">{{ intervalLabel(n) }}</z-select-item>
+                  }
+                </z-select>
+                <span class="text-xs text-muted-foreground">{{ projection(draft.every) }}</span>
+              </div>
+            </div>
+            @if (fieldError()['kind']; as m) {
+              <p class="text-xs text-destructive">{{ m }}</p>
+            }
+          }
           <label class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -204,7 +285,7 @@ const emptyDraft = (): Draft => ({
           <div class="flex justify-end gap-2">
             <button z-button zType="ghost" type="button" (click)="closeForm()">Cancel</button>
             <button z-button type="submit" [zLoading]="saving()">
-              {{ editing() ? 'Save' : 'Start watching' }}
+              {{ editing() ? 'Save' : draft.kind === 'search' ? 'Start searching' : 'Start watching' }}
             </button>
           </div>
         </form>
@@ -218,7 +299,7 @@ const emptyDraft = (): Draft => ({
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium">{{ w.company }}</span>
                   <span class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{{
-                    ats(w.ats)
+                    w.kind === 'search' ? 'Search' : ats(w.ats ?? '')
                   }}</span>
                   @if (w.paused) {
                     <span class="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
@@ -227,30 +308,43 @@ const emptyDraft = (): Draft => ({
                   }
                 </div>
                 <p class="mt-1 text-sm text-muted-foreground">{{ filters(w) }}</p>
-                <p class="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  @if (w.last_error) {
+                <p class="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                  @if (w.paused) {
+                    Paused: not being checked
+                  } @else if (w.blocked_reason) {
+                    <ng-icon name="lucideTriangleAlert" class="text-amber-600" aria-hidden="true" />
+                    <span class="text-amber-700 dark:text-amber-400">{{ blocked(w.blocked_reason) }}</span>
+                  } @else if (w.last_error) {
                     <ng-icon name="lucideTriangleAlert" class="text-amber-600" aria-hidden="true" />
                     <span class="text-amber-700 dark:text-amber-400">{{ w.last_error }}</span>
                   } @else if (w.last_checked_at) {
                     Checked {{ ago(w.last_checked_at) }}
+                  } @else if (w.kind === 'search' && w.next_check_at) {
+                    First search {{ ago(w.next_check_at) }}
                   } @else {
                     First check within a minute
+                  }
+                  @if (w.kind === 'search') {
+                    <span aria-hidden="true">·</span>
+                    {{ intervalLabel(w.every_hours ?? 2) }} · {{ money(w.spent_30d_usd) }} in the last 30 days
                   }
                 </p>
               </div>
               <div class="flex items-center gap-0.5">
-                <a
-                  z-button
-                  zType="ghost"
-                  zSize="icon-sm"
-                  [href]="w.board_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Open careers page"
-                  title="Open careers page"
-                >
-                  <ng-icon name="lucideExternalLink" />
-                </a>
+                @if (w.board_url) {
+                  <a
+                    z-button
+                    zType="ghost"
+                    zSize="icon-sm"
+                    [href]="w.board_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open careers page"
+                    title="Open careers page"
+                  >
+                    <ng-icon name="lucideExternalLink" />
+                  </a>
+                }
                 <button
                   z-button
                   zType="ghost"
@@ -293,7 +387,8 @@ const emptyDraft = (): Draft => ({
           <p class="font-medium text-foreground">No companies watched yet</p>
           <p class="max-w-[28rem]">
             Paste a company's careers link and zapply will tell you when it posts a role that fits,
-            usually hours before it shows up elsewhere.
+            usually hours before it shows up elsewhere. Or, if your plan includes it, search for a
+            role across every company.
           </p>
         </div>
       }
@@ -306,6 +401,12 @@ export class AlertsPage {
   private readonly confirm = inject(ConfirmService);
 
   protected readonly watches = signal<Watch[]>([]);
+  protected readonly allowance = signal<Allowance | null>(null);
+  protected readonly intervals: Every[] = [1, 2, 6, 24];
+  protected readonly intervalLabel = (n: number): string => everyLabel[asEvery(n)];
+  protected readonly every = (v: unknown): Every => asEvery(Array.isArray(v) ? v[0] : v);
+  protected readonly blocked = (r: string): string => blockedLabel[r] ?? 'Not checked';
+  protected readonly money = usageUsd;
   protected readonly loaded = signal(false);
   protected readonly error = signal('');
   protected readonly formOpen = signal(false);
@@ -328,9 +429,38 @@ export class AlertsPage {
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
   }
 
+  /** Whether the member's plan has a free search watcher. */
+  protected canSearch(): boolean {
+    const a = this.allowance();
+    return !!a && a.available && a.used < a.allowed;
+  }
+
+  protected searchNote(): string {
+    const a = this.allowance();
+    if (!a || !a.available) return "Job search isn't set up on this server.";
+    if (a.allowed === 0) return "Your plan doesn't include search watchers.";
+    if (a.used >= a.allowed) return `Your plan allows ${a.allowed}; remove one to add another.`;
+    return 'Find new roles across every company, paid from your plan.';
+  }
+
+  /** What one posting found by a search costs. */
+  protected creditCost(): string {
+    const c = this.allowance()?.credit_usd;
+    return c ? this.money(c) : 'a credit';
+  }
+
+  /** The most a search can cost in 30 days at an interval: every poll returning a full page. */
+  protected projection(every: Every): string {
+    const a = this.allowance();
+    if (!a?.credit_usd) return '';
+    const most = (720 / every) * a.max_results * Number(a.credit_usd);
+    return `At most ${this.money(most.toFixed(2))} a month if every search fills up; usually far less.`;
+  }
+
   protected filters(w: Watch): string {
     const parts = [w.keywords.length ? `Titles with ${w.keywords.join(', ')}` : 'Every opening'];
     if (w.locations.length) parts.push(`in ${w.locations.join(', ')}`);
+    if (w.country) parts.push(w.country);
     if (w.remote_only) parts.push('remote only');
     return parts.join(' · ');
   }
@@ -342,6 +472,7 @@ export class AlertsPage {
       const list = Api.ok(await this.api.client.GET('/v1/job-watches'));
       if (identity !== this.auth.identity()) return;
       this.watches.set(list.items);
+      this.allowance.set(list.search);
       this.loaded.set(true);
     } catch (e) {
       this.fail(e, 'Could not load your job alerts.');
@@ -352,9 +483,9 @@ export class AlertsPage {
     this.error.set(e instanceof Error ? e.message : fallback);
   }
 
-  protected openForm(): void {
+  protected openForm(kind: Draft['kind'] = 'board'): void {
     this.editing.set(null);
-    this.draft = emptyDraft();
+    this.draft = emptyDraft(kind);
     this.fieldError.set({});
     this.formOpen.set(true);
   }
@@ -362,10 +493,13 @@ export class AlertsPage {
   protected edit(w: Watch): void {
     this.editing.set(w);
     this.draft = {
-      url: w.board_url,
+      kind: w.kind,
+      url: w.board_url ?? '',
       company: w.company,
       keywords: w.keywords.join(', '),
       locations: w.locations.join(', '),
+      country: w.country ?? '',
+      every: asEvery(w.every_hours),
       remoteOnly: w.remote_only,
     };
     this.fieldError.set({});
@@ -392,6 +526,7 @@ export class AlertsPage {
       keywords: splitTerms(d.keywords),
       locations: splitTerms(d.locations),
       remote_only: d.remoteOnly,
+      ...(d.kind === 'search' ? { country: d.country.trim().toUpperCase(), every_hours: d.every } : {}),
     };
     this.saving.set(true);
     this.fieldError.set({});
@@ -405,10 +540,16 @@ export class AlertsPage {
             }),
           )
         : Api.ok(
-            await this.api.client.POST('/v1/job-watches', { body: { ...body, url: d.url.trim() } }),
+            await this.api.client.POST('/v1/job-watches', {
+              body:
+                d.kind === 'search'
+                  ? { ...body, kind: 'search', country: body.country || undefined }
+                  : { ...body, url: d.url.trim() },
+            }),
           );
       this.replace(w);
       this.closeForm();
+      if (!editing && d.kind === 'search') void this.load();
     } catch (e) {
       if (e instanceof ApiError && e.fieldErrors.length)
         this.fieldError.set(Object.fromEntries(e.fieldErrors.map((f) => [f.field, f.message])));

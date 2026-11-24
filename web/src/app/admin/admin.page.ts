@@ -2,6 +2,7 @@ import { AdminOverview } from './admin-overview';
 import { ModelSettings, type ModelTab } from './model-settings';
 import { EdgeWorkers } from './edge-workers';
 import { ScraperSettings } from './scraper-settings';
+import { SearchSettings } from './search-settings';
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -74,7 +75,7 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
 
 @Component({
   selector: 'app-admin-page',
-  imports: [AdminOverview, ModelSettings, ScraperSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [AdminOverview, ModelSettings, ScraperSettings, SearchSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -125,9 +126,9 @@ export class AdminPage {
   protected readonly resolving = signal<Attempt | null>(null);
   protected readonly money = usd;
   protected readonly message = blockMessage;
-  protected readonly keyKindLabel = (kind: Schemas['SystemKeyKind']): string => ({ openrouter: 'OpenRouter', firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI' })[kind];
-  protected readonly keyKind = (value: unknown): Schemas['SystemKeyKind'] => (value === 'firecrawl' || value === 'crawl4ai' ? value : 'openrouter');
-  protected planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+  protected readonly keyKindLabel = (kind: Schemas['SystemKeyKind']): string => ({ openrouter: 'OpenRouter', firecrawl: 'Firecrawl', crawl4ai: 'Crawl4AI', theirstack: 'TheirStack' })[kind];
+  protected readonly keyKind = (value: unknown): Schemas['SystemKeyKind'] => (value === 'firecrawl' || value === 'crawl4ai' || value === 'theirstack' ? value : 'openrouter');
+  protected planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '', max_search_watchers: 0 };
   protected keyForm: { label: string; key: string; kind: Schemas['SystemKeyKind'] } = { label: '', key: '', kind: 'openrouter' };
   protected resolution = { amount_usd: '', generation_id: '', reason: '' };
   protected assignments: Record<string, string> = {};
@@ -173,7 +174,7 @@ export class AdminPage {
     this.testKey = null;
     clearInterval(this.poll);
     this.assignments = {};
-    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '', max_search_watchers: 0 };
     this.keyForm = { label: '', key: '', kind: 'openrouter' };
   }
 
@@ -255,6 +256,7 @@ export class AdminPage {
         name: 'Name',
         cap_7d_usd: 'Past 7 days allowance',
         cap_30d_usd: 'Past 30 days allowance',
+        max_search_watchers: 'Search watchers',
         label: 'Key label',
         key: 'Provider key',
         amount_usd: 'Confirmed cost',
@@ -275,17 +277,18 @@ export class AdminPage {
       name: p.name,
       cap_7d_usd: usd(p.cap_7d_usd).slice(1),
       cap_30d_usd: usd(p.cap_30d_usd).slice(1),
+      max_search_watchers: p.max_search_watchers,
     };
   }
   startCreate(): void {
     this.editingPlan.set(null);
-    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '', max_search_watchers: 0 };
     this.creating.set(true);
   }
   cancelPlan(): void {
     this.editingPlan.set(null);
     this.creating.set(false);
-    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '' };
+    this.planForm = { name: '', cap_7d_usd: '', cap_30d_usd: '', max_search_watchers: 0 };
   }
   // A member row is dirty when its selected plan differs from the saved one.
   isDirty(m: Member): boolean {
@@ -293,7 +296,7 @@ export class AdminPage {
   }
   async savePlan(): Promise<void> {
     const p = this.editingPlan(),
-      body = { ...this.planForm };
+      body = { ...this.planForm, max_search_watchers: Math.max(0, Math.min(100, Math.trunc(Number(this.planForm.max_search_watchers) || 0))) };
     await this.mutate(async () => {
       if (p)
         Api.ok(
