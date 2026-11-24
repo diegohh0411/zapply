@@ -2,17 +2,23 @@ import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   effect,
   inject,
-  signal,
 } from '@angular/core';
+import { injectInfiniteQuery, injectQuery, QueryClient } from '@tanstack/angular-query';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { Api, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { EventsService } from '../core/events.service';
 import { blockMessage, usagePercent, usageUsd } from './format';
+
+/** Keyed by member, so one member's cached usage never shows for another. */
+const usageKey = (identity: string | null) => ['usage', identity] as const;
+const entriesKey = (identity: string | null) => ['usage-entries', identity] as const;
+const PAGE = 50;
 
 @Component({
   selector: 'app-usage-page',
@@ -62,8 +68,8 @@ import { blockMessage, usagePercent, usageUsd } from './format';
           @if (u.next_capacity_at) {
             <p class="text-sm">
               Some of your usage frees up on
-              <strong>{{ u.next_capacity_at | date: 'medium' }}</strong>, so your limit grows back a
-              little. It does not reset all at once.
+              <strong>{{ u.next_capacity_at | date: 'medium' }}</strong
+              >, so your limit grows back a little. It does not reset all at once.
             </p>
           }
         </section>
@@ -108,7 +114,9 @@ import { blockMessage, usagePercent, usageUsd } from './format';
                       <p class="font-medium">
                         {{ label(entry) }}
                         @if (entry.company) {
-                          <span class="font-normal text-muted-foreground">at {{ entry.company }}</span>
+                          <span class="font-normal text-muted-foreground"
+                            >at {{ entry.company }}</span
+                          >
                         }
                       </p>
                       <p class="text-xs text-muted-foreground">{{ detail(entry) }}</p>
@@ -141,11 +149,40 @@ export class UsagePage {
   private readonly api = inject(Api);
   private readonly auth = inject(AuthService);
   private readonly events = inject(EventsService);
-  protected readonly usage = signal<Schemas['Usage'] | null>(null);
-  protected readonly entries = signal<Schemas['UsageEntry'][]>([]);
-  protected readonly loading = signal(false);
-  protected readonly error = signal('');
-  protected readonly hasMore = signal(false);
+  private readonly queries = inject(QueryClient);
+  /** Cached: coming back shows the last figures at once and refreshes behind them. */
+  private readonly usageQuery = injectQuery(() => ({
+    queryKey: usageKey(this.auth.identity()),
+    enabled: !!this.auth.identity(),
+    queryFn: async () => Api.ok(await this.api.client.GET('/v1/usage')),
+  }));
+  private readonly entriesQuery = injectInfiniteQuery(() => ({
+    queryKey: entriesKey(this.auth.identity()),
+    enabled: !!this.auth.identity(),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: Schemas['UsageEntry'][]) =>
+      last.length === PAGE ? last.at(-1)?.id : undefined,
+    queryFn: async ({ pageParam }) =>
+      Api.ok(
+        await this.api.client.GET('/v1/usage/entries', {
+          params: { query: { limit: PAGE, ...(pageParam && { before: pageParam }) } },
+        }),
+      ),
+  }));
+  protected readonly usage = computed(() => this.usageQuery.data() ?? null);
+  protected readonly entries = computed(() => this.entriesQuery.data()?.pages.flat() ?? []);
+  protected readonly loading = computed(
+    () => this.usageQuery.isFetching() || this.entriesQuery.isFetching(),
+  );
+  protected readonly hasMore = computed(() => !!this.entriesQuery.hasNextPage());
+  protected readonly error = computed(() => {
+    const e = this.usageQuery.error() ?? this.entriesQuery.error();
+    if (!e) return '';
+    if (e instanceof Error) return e.message;
+    return this.entriesQuery.isFetchNextPageError()
+      ? 'Could not load charges.'
+      : 'Could not load usage.';
+  });
   protected readonly windowDays = [7, 30];
   private readonly stepLabels: Record<string, string> = {
     match: 'matched your profile',
@@ -158,29 +195,25 @@ export class UsagePage {
   };
   protected readonly money = usageUsd;
   protected readonly message = blockMessage;
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private generation = 0;
 
   constructor() {
-    effect(() => {
-      this.auth.identity();
-      this.usage.set(null);
-      this.entries.set([]);
-      void this.load();
+    // Usage frees up gradually; refetch when the next slice becomes available.
+    effect((onCleanup) => {
+      const at = this.usage()?.next_capacity_at;
+      if (!at || document.hidden) return;
+      const delay = Math.max(1000, Math.min(Date.parse(at) - Date.now() + 1000, 2_147_483_647));
+      const timer = setTimeout(() => void this.load(), delay);
+      onCleanup(() => clearTimeout(timer));
     });
     const change = this.events.changes.subscribe((e) => {
       if (['usage.changed', 'membership.changed'].includes(e.topic)) void this.load();
     });
-    const resync = this.events.resync.subscribe(() => void this.load());
     const visible = () => {
       if (!document.hidden) void this.load();
     };
     document.addEventListener('visibilitychange', visible);
     inject(DestroyRef).onDestroy(() => {
-      this.generation++;
-      clearTimeout(this.timer);
       change.unsubscribe();
-      resync.unsubscribe();
       document.removeEventListener('visibilitychange', visible);
     });
   }
@@ -220,62 +253,17 @@ export class UsagePage {
     };
   }
 
+  /** Refetches the figures and the activity list; what is on screen updates in place. */
   async load(): Promise<void> {
-    const identity = this.auth.identity(),
-      generation = ++this.generation;
-    clearTimeout(this.timer);
+    const identity = this.auth.identity();
     if (!identity) return;
-    this.loading.set(true);
-    this.error.set('');
-    try {
-      const [usage, entries] = await Promise.all([
-        this.api.client.GET('/v1/usage'),
-        this.api.client.GET('/v1/usage/entries', { params: { query: { limit: 50 } } }),
-      ]);
-      if (identity !== this.auth.identity() || generation !== this.generation) return;
-      const u = Api.ok(usage),
-        list = Api.ok(entries);
-      this.usage.set(u);
-      this.entries.set(list);
-      this.hasMore.set(list.length === 50);
-      if (u.next_capacity_at && !document.hidden) {
-        const delay = Math.max(
-          1000,
-          Math.min(Date.parse(u.next_capacity_at) - Date.now() + 1000, 2_147_483_647),
-        );
-        this.timer = setTimeout(() => void this.load(), delay);
-      }
-    } catch (e) {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.error.set(e instanceof Error ? e.message : 'Could not load usage.');
-    } finally {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.loading.set(false);
-    }
+    await Promise.all([
+      this.queries.invalidateQueries({ queryKey: usageKey(identity) }),
+      this.queries.invalidateQueries({ queryKey: entriesKey(identity) }),
+    ]);
   }
 
-  async more(): Promise<void> {
-    const identity = this.auth.identity(),
-      generation = this.generation,
-      before = this.entries().at(-1)?.id;
-    if (!before) return;
-    this.loading.set(true);
-    try {
-      const list = Api.ok(
-        await this.api.client.GET('/v1/usage/entries', {
-          params: { query: { before, limit: 50 } },
-        }),
-      );
-      if (identity === this.auth.identity() && generation === this.generation) {
-        this.entries.update((rows) => [...rows, ...list]);
-        this.hasMore.set(list.length === 50);
-      }
-    } catch (e) {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.error.set(e instanceof Error ? e.message : 'Could not load charges.');
-    } finally {
-      if (identity === this.auth.identity() && generation === this.generation)
-        this.loading.set(false);
-    }
+  more(): void {
+    if (!this.entriesQuery.isFetchingNextPage()) void this.entriesQuery.fetchNextPage();
   }
 }
