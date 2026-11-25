@@ -9,6 +9,7 @@ package posting
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -92,8 +93,27 @@ func (r *Reader) Read(ctx context.Context, rawURL string) (Posting, error) {
 	if p.Title == "" {
 		p.Title = metaString(page.Metadata, "ogTitle")
 	}
-	p.Description = truncate(strings.TrimSpace(page.Markdown), maxDescription)
+	p.Description = truncate(cleanMarkdown(page.Markdown), maxDescription)
 	return p, nil
+}
+
+var (
+	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+	// mdImage is an image; on a job page it is a logo or an icon.
+	mdImage = regexp.MustCompile(`!\[[^\]]*\]\([^)]*\)`)
+	// emptyLink is a link with no text left, such as one that wrapped a logo.
+	emptyLink  = regexp.MustCompile(`\[\s*\]\([^)]*\)`)
+	blankLines = regexp.MustCompile(`\n[ \t]*(?:\n[ \t]*){2,}`)
+)
+
+// cleanMarkdown drops what a page's markdown carries that is never part of a
+// posting: HTML comments, images and the empty links they leave.
+func cleanMarkdown(s string) string {
+	s = htmlComment.ReplaceAllString(s, "")
+	s = mdImage.ReplaceAllString(s, "")
+	s = emptyLink.ReplaceAllString(s, "")
+	s = blankLines.ReplaceAllString(s, "\n\n")
+	return strings.TrimSpace(s)
 }
 
 func metaString(m map[string]any, key string) string {

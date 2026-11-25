@@ -146,3 +146,10 @@ func TestTruncate(t *testing.T) {
 		t.Errorf("truncate = %q, want no split character", got)
 	}
 }
+
+func TestCleanMarkdown(t *testing.T) {
+	in := "[](https://x.example/logo)\n\n[![Logo](https://x.example/l.png)](https://x.example)\n\n\n\nAbout the role\n\n<!--THE END-->\n\n- Item"
+	if got := cleanMarkdown(in); got != "About the role\n\n- Item" {
+		t.Errorf("cleanMarkdown = %q", got)
+	}
+}
