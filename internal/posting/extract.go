@@ -3,6 +3,7 @@ package posting
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,7 +32,7 @@ func ExtractionRequest(model, text string) extraction.Request {
 		return extraction.Field{Type: extraction.Text, Instructions: instructions}
 	}
 	return extraction.Request{Model: model, State: truncate(strings.TrimSpace(text), maxState), Fields: map[string]extraction.Field{
-		"title":           {Type: extraction.Text, Instructions: "The job title, as the posting writes it"},
+		"title":           {Type: extraction.Text, Instructions: "The job title, as the posting writes it, without the company name, location or the website's name"},
 		"company":         {Type: extraction.Text, Instructions: "The company hiring for this job"},
 		"location":        {Type: extraction.Text, Instructions: "Where the job is based: city, region and country"},
 		"work_mode":       {Type: extraction.Text, Instructions: "Whether the job is remote, hybrid or on-site"},
@@ -41,6 +42,11 @@ func ExtractionRequest(model, text string) extraction.Request {
 		"salary_currency": {Type: extraction.Text, Instructions: "The currency of the salary, such as USD, EUR or MXN"},
 		"salary_period":   {Type: extraction.Text, Instructions: "How often the salary is counted: per year, per month or per hour"},
 		"description":     {Type: extraction.Text, Instructions: descriptionInstructions},
+		"description_start": {Type: extraction.Text, Instructions: "The first sentence or heading of the job description itself, copied exactly from the text. " +
+			"The description starts after the page's header, title, navigation, sign-in or sign-up prompts and apply or save buttons"},
+		"description_end": {Type: extraction.Text, Instructions: "The last sentence or list item of the job description itself, copied exactly from the text. " +
+			"The description ends before show more or show less links, job criteria such as seniority level or industries, " +
+			"referral prompts, similar or related jobs, apply buttons and site footers"},
 	}}
 }
 
@@ -117,21 +123,106 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 	return p
 }
 
-// description keeps the model's cleaned description when it is plausibly the
-// posting's own text: long enough, and not longer than what it was read from.
+// description is the posting's own description, cleaned of the page around
+// it. First choice is the page's text between the sentences the model says
+// start and end the description: it is the page's exact wording, and models
+// copy a sentence far more reliably than thousands of words. Otherwise the
+// model's own copy of the description, when it is plausibly the posting's
+// text: long enough, and not longer than what it was read from.
 func description(answers map[string]extraction.Answer, state string) string {
-	a, ok := answers["description"]
+	pages := utf8.RuneCountInString(state)
+	plausible := func(s string) bool {
+		n := utf8.RuneCountInString(s)
+		return n >= minDescription && n <= pages && n <= maxDescription
+	}
+	first, _ := answerText(answers, "description_start")
+	last, _ := answerText(answers, "description_end")
+	if s := between(state, first, last); plausible(s) {
+		return s
+	}
+	s, _ := answerText(answers, "description")
+	if s = strings.TrimSpace(s); plausible(s) {
+		return s
+	}
+	return ""
+}
+
+// answerText is a text answer the model is confident enough in.
+func answerText(answers map[string]extraction.Answer, name string) (string, bool) {
+	a, ok := answers[name]
 	if !ok || a.Type != extraction.Text || (a.Confidence != nil && *a.Confidence < minConfidence) {
-		return ""
+		return "", false
 	}
 	var s string
-	_ = json.Unmarshal(a.Value, &s)
-	s = strings.TrimSpace(s)
-	n := utf8.RuneCountInString(s)
-	if n < minDescription || n > utf8.RuneCountInString(state) || n > maxDescription {
+	if json.Unmarshal(a.Value, &s) != nil {
+		return "", false
+	}
+	return s, true
+}
+
+// minAnchor is the fewest letters and digits a description_start or
+// description_end must have to be found unambiguously in the page.
+const minAnchor = 12
+
+// between returns the whole lines of page from the line holding first to the
+// line holding last (the first occurrence after first). Both are matched on
+// their letters and digits alone, so a model that drops markdown, links or
+// punctuation from a sentence still finds it. Empty when either is missing.
+func between(page, first, last string) string {
+	hay, starts, ends := fold(page)
+	a, _, _ := fold(first)
+	z, _, _ := fold(last)
+	if len(a) < minAnchor || len(z) < minAnchor {
 		return ""
 	}
-	return s
+	i := index(hay, a, 0)
+	if i < 0 {
+		return ""
+	}
+	j := index(hay, z, i)
+	if j < 0 {
+		return ""
+	}
+	from, to := starts[i], ends[j+len(z)-1]
+	from = strings.LastIndexByte(page[:from], '\n') + 1
+	if k := strings.IndexByte(page[to:], '\n'); k >= 0 {
+		to += k
+	} else {
+		to = len(page)
+	}
+	return strings.TrimSpace(page[from:to])
+}
+
+// fold keeps s's letters and digits, lowercased, with where each one starts
+// and ends in s. A markdown link's target is skipped: models quote a link's
+// text, not its URL.
+func fold(s string) (out []rune, starts, ends []int) {
+	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], "](") {
+			if k := strings.IndexByte(s[i:], ')'); k >= 0 {
+				i += k + 1
+				continue
+			}
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out = append(out, unicode.ToLower(r))
+			starts = append(starts, i)
+			ends = append(ends, i+size)
+		}
+		i += size
+	}
+	return out, starts, ends
+}
+
+// index finds needle in hay at or after from, or -1.
+func index(hay, needle []rune, from int) int {
+	for i := from; i+len(needle) <= len(hay); i++ {
+		if hay[i] == needle[0] && slices.Equal(hay[i:i+len(needle)], needle) {
+			return i
+		}
+	}
+	return -1
 }
 
 func limit(s string, n int) string {

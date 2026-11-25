@@ -134,3 +134,75 @@ func TestFromExtractionTextRange(t *testing.T) {
 		t.Errorf("zero salary kept: %+v", p)
 	}
 }
+
+// linkedInMarkdown is a LinkedIn guest posting as the scraper reads it.
+const linkedInMarkdown = `## [Software Quality Engineer](https://mx.linkedin.com/jobs/view/4493416980?trk=public_jobs_topcard-title)
+
+#### [Tenarai - LATAM](https://uy.linkedin.com/company/tenarai-latam) Mexico City, Mexico 2 hours ago Be among the first 25 applicants
+
+Apply Save
+
+## Join or sign in to save this job
+
+Email or phone
+
+Password
+
+[Forgot password?](https://www.linkedin.com/uas/request-password-reset) Sign in
+
+**About NCR Atleos** NCR Atleos is a global leader in ATM operations and software solutions, delivering innovative financial technology to retail and financial institution clients worldwide.
+
+**What You’ll Do**
+
+- **Test Design & Execution:** Design, develop, and execute comprehensive test plans and test cases for ATM software applications.
+
+- **Core Qualifications:**
+- Bachelor’s degree in Computer Science, Engineering, or equivalent practical experience.
+- Ability to pass all applicable background screening tests.
+
+Show more Show less
+
+- ### Seniority level
+  
+  Mid-Senior level
+
+Referrals increase your chances of interviewing at Tenarai - LATAM by 2x`
+
+func TestFromExtractionDescriptionBetweenAnchors(t *testing.T) {
+	r := ExtractionRequest("scaledown/extract", linkedInMarkdown)
+	p := FromExtraction(r, `{
+	 "description_start":{"type":"text","value":"NCR Atleos is a global leader in ATM operations and software solutions"},
+	 "description_end":{"type":"text","value":"Ability to pass all applicable background screening tests."},
+	 "description":{"type":"text","value":"`+strings.Repeat("whole page ", 30)+`"}}`)
+	if !strings.HasPrefix(p.Description, "**About NCR Atleos** NCR Atleos") {
+		t.Errorf("start: %q", p.Description)
+	}
+	if !strings.HasSuffix(p.Description, "- Ability to pass all applicable background screening tests.") {
+		t.Errorf("end: %q", p.Description)
+	}
+	for _, junk := range []string{"Sign in", "Show more", "Seniority", "Referrals"} {
+		if strings.Contains(p.Description, junk) {
+			t.Errorf("kept %q: %q", junk, p.Description)
+		}
+	}
+
+	// Anchors the page does not hold fall back to the model's copy.
+	p = FromExtraction(r, `{
+	 "description_start":{"type":"text","value":"A sentence that is nowhere in the page"},
+	 "description_end":{"type":"text","value":"Ability to pass all applicable background screening tests."},
+	 "description":{"type":"text","value":"`+strings.Repeat("cleaned text ", 30)+`"}}`)
+	if !strings.HasPrefix(p.Description, "cleaned text") {
+		t.Errorf("fallback: %q", p.Description)
+	}
+}
+
+func TestBetweenIgnoresMarkdownAndCase(t *testing.T) {
+	page := "Header\n\n## About **the** role\nWe build [ATMs](https://x.example) daily.\n\nApply now\nFooter"
+	got := between(page, "About the role", "we build ATMs daily")
+	if got != "## About **the** role\nWe build [ATMs](https://x.example) daily." {
+		t.Errorf("between = %q", got)
+	}
+	if between(page, "About", "ATMs") != "" {
+		t.Error("short anchors matched")
+	}
+}
