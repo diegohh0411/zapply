@@ -1,6 +1,6 @@
 // Package catalog keeps every posting the platform sees once, whatever found
 // it, and labels each with what it is: seniority, area, countries, languages
-// and the like (migration 00042, docs/parts/11-posting-catalog.md).
+// and the like (migration 00043, docs/parts/11-posting-catalog.md).
 //
 // The board and search polls add their postings (Add) after filing alerts,
 // so delivering alerts is unchanged. A posting is resolved to an existing
@@ -26,7 +26,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/worker"
 )
 
-// SystemMember is the catalog's member (migration 00042): its ledger pays for
+// SystemMember is the catalog's member (migration 00043): its ledger pays for
 // classification and its tenant holds the model operations.
 var SystemMember = uuid.MustParse("00000000-0000-7000-8000-0000000ca7a1")
 

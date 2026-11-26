@@ -14,7 +14,7 @@ sees, stored once, with labels a model reads off it.
 
 ## The catalog
 
-Migration 00042, package `internal/catalog`. All tables live in `platform`,
+Migration 00043, package `internal/catalog`. All tables live in `platform`,
 which no member can read.
 
 | Table | Holds |
