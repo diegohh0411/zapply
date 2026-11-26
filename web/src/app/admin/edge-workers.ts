@@ -99,7 +99,7 @@ export function parseHosts(text: string): string[] {
                     autocapitalize="off"
                     spellcheck="false"
                   ></textarea>
-                  <span class="text-xs font-normal text-muted-foreground">One host per line; each also covers its subdomains. Empty allows none.</span>
+                  <span class="text-xs font-normal text-muted-foreground">One host per line; each also covers its subdomains. * allows any host. Empty allows none.</span>
                 </label>
                 <div class="grid gap-4">
                   <label class="field"

@@ -3112,7 +3112,7 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
-        allowed_hosts: { type: array, maxItems: 50, items: { type: string }, description: "Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none." }
+        allowed_hosts: { type: array, maxItems: 50, items: { type: string }, description: "Bare lowercase hostnames the worker may open, each covering its subdomains. \"*\" alone allows any host. Empty (the default) allows none." }
         max_per_hour: { type: integer, minimum: 1, maximum: 600, description: "Jobs the worker may take per rolling hour. Default 20." }
         max_concurrent: { type: integer, minimum: 1, maximum: 10, description: "Jobs the worker may hold at once. Default 1." }
     EdgeWorkerPatch:

@@ -115,6 +115,16 @@ func TestEdgeClaimOrderAndHosts(t *testing.T) {
 	if j := f.claim(t, indeed); j != nil {
 		t.Errorf("nothing is left for indeed: %+v", j)
 	}
+
+	// "*" alone opens any host, so a wildcard worker takes a host nobody else may.
+	anyWorker := f.worker(t, []string{"*"}, 100, 1)
+	anyJob, ok := f.enqueue(t, "https://example.org/any")
+	if !ok {
+		t.Fatal("a wildcard worker should queue any host")
+	}
+	if j := f.claim(t, anyWorker); j == nil || j.ID != anyJob {
+		t.Fatalf("wildcard claim = %+v, want %s", j, anyJob)
+	}
 }
 
 func TestEdgeLimits(t *testing.T) {
