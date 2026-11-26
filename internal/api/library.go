@@ -39,6 +39,7 @@ type server struct {
 	notify         *notify.Service
 	alerts         *alerts.Service
 	postings       *posting.Reader
+	reads          *posting.Reads
 	pushVerifier   auth.Verifier
 }
 
