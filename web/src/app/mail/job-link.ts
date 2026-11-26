@@ -6,11 +6,15 @@ import {
   input,
   output,
   signal,
+  viewChild,
+  afterNextRender,
+  Injector,
 } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLink, lucidePencil } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
+import { ZardComboboxComponent, type ZardComboboxGroup } from '@/shared/components/combobox';
 import { Api, type Schemas } from '../core/api';
 import { JobsStore, STAGES } from '../jobs/jobs.store';
 
@@ -26,32 +30,25 @@ const NONE = 'none';
  */
 @Component({
   selector: 'app-mail-job-link',
-  imports: [NgIcon, ZardButtonComponent],
+  imports: [NgIcon, ZardButtonComponent, ZardComboboxComponent],
   providers: [provideIcons({ lucideLink, lucidePencil })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (editing()) {
       <div class="flex flex-wrap items-center gap-2" (click)="$event.stopPropagation()">
-        <label class="sr-only" [attr.for]="'mail-job-' + message().id"
-          >Job this email is about</label
-        >
-        <select
-          #pick
-          [id]="'mail-job-' + message().id"
-          class="h-8 max-w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs sm:max-w-80"
-          [disabled]="busy()"
-          (change)="save(pick.value)"
-          (keydown.escape)="editing.set(false)"
-        >
-          <option [value]="none" [selected]="!message().job_id">Not about any job</option>
-          @for (g of groups(); track g.label) {
-            <optgroup [label]="g.label">
-              @for (j of g.jobs; track j.id) {
-                <option [value]="j.id" [selected]="j.id === message().job_id">{{ j.label }}</option>
-              }
-            </optgroup>
-          }
-        </select>
+        <z-combobox
+          class="w-full sm:w-96"
+          ariaLabel="Job this email is about"
+          placeholder="Choose a job"
+          searchPlaceholder="Search by title or company"
+          emptyText="No job matches."
+          zAutoHighlight
+          [groups]="groups()"
+          [zValue]="message().job_id ?? none"
+          [zDisabled]="busy()"
+          [(zOpen)]="pickerOpen"
+          (zValueChange)="save($event)"
+        />
         <button z-button zType="ghost" zSize="sm" [zDisabled]="busy()" (click)="editing.set(false)">
           Cancel
         </button>
@@ -87,29 +84,48 @@ export class MailJobLink {
   protected readonly error = signal('');
 
   /** Jobs grouped by stage, open ones first, so the likely one is near the top. */
-  protected readonly groups = computed(() => {
+  /** Open jobs first by stage, then "not about a job", for the combobox. */
+  protected readonly groups = computed<ZardComboboxGroup[]>(() => {
     const byId = this.store.statusById();
     const current = this.message().job_id;
-    return STAGES.map((s) => ({
-      label: s.label,
-      jobs: this.store
-        .jobs()
-        .filter(
-          (j) => (!j.archived || j.id === current) && byId.get(j.status_id)?.stage === s.value,
-        )
-        .map((j) => ({ id: j.id, label: j.company ? `${j.title} at ${j.company}` : j.title }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    })).filter((g) => g.jobs.length > 0);
+    // In-process jobs first: mail is most often about an application under way.
+    const order = ['active', 'offer', 'saved', 'closed'];
+    const sorted = [...STAGES].sort((a, b) => order.indexOf(a.value) - order.indexOf(b.value));
+    const stages = sorted
+      .map((s) => ({
+        label: s.label,
+        options: this.store
+          .jobs()
+          .filter(
+            (j) => (!j.archived || j.id === current) && byId.get(j.status_id)?.stage === s.value,
+          )
+          .map((j) => ({ value: j.id, label: j.company ? `${j.title} at ${j.company}` : j.title }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      }))
+      .filter((g) => g.options.length > 0);
+    return [{ options: [{ value: NONE, label: 'Not about any job' }] }, ...stages];
   });
+  /** The panel opens with the editor; closing it without a pick cancels. */
+  protected readonly pickerOpen = signal(false);
+  private readonly picker = viewChild(ZardComboboxComponent);
+  private readonly injector = inject(Injector);
 
   protected start(e: Event): void {
     e.stopPropagation();
     this.store.ensureLoaded();
     this.error.set('');
     this.editing.set(true);
+    this.pickerOpen.set(true);
+    // Focus the search so typing filters at once.
+    afterNextRender(() => this.picker()?.focusInput(), { injector: this.injector });
   }
 
-  protected async save(value: string): Promise<void> {
+  protected async save(value: string | string[] | null): Promise<void> {
+    // Picking the current choice again clears the combobox: treat it as no change.
+    if (typeof value !== 'string') {
+      this.editing.set(false);
+      return;
+    }
     const job = value === NONE ? null : value;
     if (job === (this.message().job_id ?? null)) {
       this.editing.set(false);
