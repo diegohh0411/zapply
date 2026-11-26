@@ -163,3 +163,28 @@ func (s *server) validExtractionModel(ctx context.Context, model *string) error 
 	}
 	return &library.ValidationError{Fields: []library.FieldError{{Field: "extraction_model", Message: "select an available extraction model"}}}
 }
+
+// validPostingModels checks the models that label cataloged postings: a
+// decision model from the decision catalogue and an extraction model from the
+// extraction catalogue. Empty turns a stage off.
+func (s *server) validPostingModels(ctx context.Context, decision, extraction *string) error {
+	if decision != nil && *decision != "" {
+		models, e := s.catalogue(ctx, true)
+		if e != nil {
+			return e
+		}
+		found := false
+		for _, m := range models {
+			found = found || m.ID == *decision
+		}
+		if !found {
+			return &library.ValidationError{Fields: []library.FieldError{{Field: "posting_decision_model", Message: "select an available decision model"}}}
+		}
+	}
+	e := s.validExtractionModel(ctx, extraction)
+	var invalid *library.ValidationError
+	if errors.As(e, &invalid) {
+		return &library.ValidationError{Fields: []library.FieldError{{Field: "posting_extraction_model", Message: "select an available extraction model"}}}
+	}
+	return e
+}

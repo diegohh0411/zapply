@@ -2118,8 +2118,14 @@ type ModelSettings struct {
 
 	// ExtractionModel Extraction model that reads posting fields; null when off.
 	ExtractionModel *string `json:"extraction_model,omitempty"`
-	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
-	SummaryModel    *string `json:"summary_model,omitempty"`
+
+	// PostingDecisionModel Decision model that labels cataloged postings; null when off.
+	PostingDecisionModel *string `json:"posting_decision_model,omitempty"`
+
+	// PostingExtractionModel Extraction model that labels cataloged postings; null when off.
+	PostingExtractionModel *string `json:"posting_extraction_model,omitempty"`
+	SummaryEndpoint        *string `json:"summary_endpoint,omitempty"`
+	SummaryModel           *string `json:"summary_model,omitempty"`
 
 	// SummaryReasoningEffort Thinking effort for summaries; null is automatic.
 	SummaryReasoningEffort *ModelSettingsSummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`
@@ -2614,8 +2620,14 @@ type PutModelSettingsJSONBody struct {
 
 	// ExtractionModel Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off.
 	ExtractionModel *string `json:"extraction_model,omitempty"`
-	SummaryEndpoint *string `json:"summary_endpoint,omitempty"`
-	SummaryModel    *string `json:"summary_model,omitempty"`
+
+	// PostingDecisionModel Decision model that labels cataloged postings (seniority, area, employment type, remote, minimum years). Omitted keeps the saved model; an empty string turns that stage off.
+	PostingDecisionModel *string `json:"posting_decision_model,omitempty"`
+
+	// PostingExtractionModel Extraction model that labels cataloged postings (specialty, countries, languages). Omitted keeps the saved model; an empty string turns that stage off.
+	PostingExtractionModel *string `json:"posting_extraction_model,omitempty"`
+	SummaryEndpoint        *string `json:"summary_endpoint,omitempty"`
+	SummaryModel           *string `json:"summary_model,omitempty"`
 
 	// SummaryReasoningEffort Thinking effort for summaries; null is automatic. Must be one the summary model accepts.
 	SummaryReasoningEffort *PutModelSettingsJSONBodySummaryReasoningEffort `json:"summary_reasoning_effort,omitempty"`

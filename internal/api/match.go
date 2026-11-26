@@ -132,6 +132,9 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 	if e := s.validExtractionModel(ctx, req.Body.ExtractionModel); e != nil {
 		return nil, e
 	}
+	if e := s.validPostingModels(ctx, req.Body.PostingDecisionModel, req.Body.PostingExtractionModel); e != nil {
+		return nil, e
+	}
 	if (req.Body.SummaryModel == nil) != (req.Body.SummaryEndpoint == nil) {
 		return nil, &library.ValidationError{Fields: []library.FieldError{{Field: "summary_model", Message: "model and endpoint must both be configured"}}}
 	}
@@ -166,6 +169,14 @@ func (s *server) PutModelSettings(ctx context.Context, req gen.PutModelSettingsR
 				model = m
 			}
 			if _, err := tx.Exec(ctx, `SELECT platform.save_extraction_model($1)`, model); err != nil {
+				return err
+			}
+		}
+		if req.Body.PostingDecisionModel != nil || req.Body.PostingExtractionModel != nil {
+			if _, err := tx.Exec(ctx, `SELECT platform.save_posting_models(
+ CASE WHEN $1::text IS NULL THEN (SELECT decision FROM platform.posting_models()) ELSE NULLIF($1,'') END,
+ CASE WHEN $2::text IS NULL THEN (SELECT extraction FROM platform.posting_models()) ELSE NULLIF($2,'') END)`,
+				req.Body.PostingDecisionModel, req.Body.PostingExtractionModel); err != nil {
 				return err
 			}
 		}

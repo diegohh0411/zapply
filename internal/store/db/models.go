@@ -1132,6 +1132,7 @@ type PlatformAtsPosting struct {
 	FirstSeenAt time.Time
 	LastSeenAt  time.Time
 	Delivered   bool
+	Cataloged   bool
 }
 
 type PlatformAudit struct {
@@ -1274,6 +1275,8 @@ type PlatformModelSetting struct {
 	SummaryReasoningEffort *string
 	SummaryRows            int32
 	ExtractionModel        *string
+	PostingDecisionModel   *string
+	PostingExtractionModel *string
 }
 
 type PlatformOperationIndex struct {
@@ -1297,6 +1300,64 @@ type PlatformPlan struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	MaxSearchWatchers int32
+}
+
+type PlatformPosting struct {
+	ID            uuid.UUID
+	Source        string
+	Company       string
+	Title         string
+	Location      string
+	Url           string
+	Remote        bool
+	Country       *string
+	PublishedAt   *time.Time
+	Description   *string
+	SeniorityHint *string
+	FirstSeenAt   time.Time
+	LastSeenAt    time.Time
+}
+
+type PlatformPostingBackfill struct {
+	UserID    uuid.UUID
+	AfterID   *uuid.UUID
+	Done      bool
+	UpdatedAt time.Time
+}
+
+type PlatformPostingIdentity struct {
+	Key       string
+	PostingID uuid.UUID
+	FromAts   bool
+	SeenAt    time.Time
+}
+
+type PlatformPostingLabel struct {
+	PostingID       uuid.UUID
+	Version         int32
+	Seniority       *string
+	MinYears        *int32
+	Areas           []string
+	Specialty       *string
+	Countries       []string
+	Remote          *bool
+	EmploymentType  *string
+	Languages       []string
+	Confidence      json.RawMessage
+	DecisionModel   *string
+	DecidedAt       *time.Time
+	ExtractionModel *string
+	ExtractedAt     *time.Time
+	UpdatedAt       time.Time
+}
+
+type PlatformPostingStage struct {
+	PostingID   uuid.UUID
+	Stage       string
+	Attempts    int32
+	OperationID *uuid.UUID
+	Done        bool
+	Failed      bool
 }
 
 type PlatformProviderLock struct {

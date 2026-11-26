@@ -365,10 +365,13 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 		Month   string    `json:"cap_30d_usd"`
 		Version int       `json:"version"`
 	}
-	if err := json.Unmarshal(raw, &plans); err != nil || len(plans) != 1 {
+	if err := json.Unmarshal(raw, &plans); err != nil || len(plans) != 2 { // with the posting catalog's internal plan
 		t.Fatalf("plans: %s %v", raw, err)
 	}
 	p := plans[0]
+	if p.Name != "Member" {
+		p = plans[1]
+	}
 	if _, err := f.s.SavePlan(ctx, f.u, p.ID, p.Name, p.Week, p.Month, nil, p.Version); err != nil {
 		t.Fatalf("plan money did not round trip: %v", err)
 	}

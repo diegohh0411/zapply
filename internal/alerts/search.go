@@ -186,6 +186,9 @@ func (s *Service) PollSearch(ctx context.Context, a SearchPollArgs) error {
 			return err
 		}
 	}
+	// After filing, and whatever matched: the catalog keeps every posting a
+	// search paid for.
+	s.catalogSearch(ctx, res.Postings)
 	return nil
 }
 

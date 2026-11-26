@@ -144,10 +144,10 @@ func TestResolveUserConcurrentFirstSight(t *testing.T) {
 		}
 	}
 	var users int
-	if err := db.Admin(t).QueryRow(ctx, `SELECT count(*) FROM app_user`).Scan(&users); err != nil {
+	if err := db.Admin(t).QueryRow(ctx, `SELECT count(*) FROM app_user WHERE id<>'00000000-0000-7000-8000-0000000ca7a1'`).Scan(&users); err != nil {
 		t.Fatal(err)
 	}
-	if users != 1 {
+	if users != 1 { // besides the posting catalog's member (migration 00043)
 		t.Fatalf("app_user rows = %d, want 1", users)
 	}
 }
