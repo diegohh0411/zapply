@@ -1339,7 +1339,7 @@ type EdgeWorkerCreated struct {
 
 // EdgeWorkerInput defines model for EdgeWorkerInput.
 type EdgeWorkerInput struct {
-	// AllowedHosts Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none.
+	// AllowedHosts Bare lowercase hostnames the worker may open, each covering its subdomains. "*" alone allows any host. Empty (the default) allows none.
 	AllowedHosts *[]string `json:"allowed_hosts,omitempty"`
 
 	// MaxConcurrent Jobs the worker may hold at once. Default 1.

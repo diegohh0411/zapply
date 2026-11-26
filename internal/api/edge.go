@@ -42,6 +42,9 @@ const (
 	maxResultError    = 500
 )
 
+// anyHost in a worker's allowed_hosts lets it open any host; it must be listed alone.
+const anyHost = "*"
+
 // edgeWorkerLimits checks a worker's host list and limits; nil leaves a limit
 // unchanged (patch) and the caller applies the default for a new worker.
 func edgeWorkerLimits(hosts *[]string, perHour, concurrent *int) ([]string, error) {
@@ -51,11 +54,14 @@ func edgeWorkerLimits(hosts *[]string, perHour, concurrent *int) ([]string, erro
 		seen := map[string]bool{}
 		for i, h := range *hosts {
 			h = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
-			if !posting.ValidHostname(h) {
-				return nil, fieldError("allowed_hosts", "use bare lowercase hostnames such as linkedin.com, without a scheme, port or path")
+			if h != anyHost && !posting.ValidHostname(h) {
+				return nil, fieldError("allowed_hosts", "use bare lowercase hostnames such as linkedin.com, without a scheme, port or path, or * for any host")
 			}
 			if seen[h] {
 				continue
+			}
+			if h == anyHost && len(*hosts) > 1 {
+				return nil, fieldError("allowed_hosts", "* allows every host, so list it alone")
 			}
 			seen[h] = true
 			out = append(out, h)

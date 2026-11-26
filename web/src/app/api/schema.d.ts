@@ -2302,7 +2302,7 @@ export interface components {
         };
         EdgeWorkerInput: {
             name: string;
-            /** @description Bare lowercase hostnames the worker may open, each covering its subdomains. Empty (the default) allows none. */
+            /** @description Bare lowercase hostnames the worker may open, each covering its subdomains. "*" alone allows any host. Empty (the default) allows none. */
             allowed_hosts?: string[];
             /** @description Jobs the worker may take per rolling hour. Default 20. */
             max_per_hour?: number;
