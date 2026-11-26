@@ -144,7 +144,8 @@ Mac with Podman; Docker works the same):
 
 Safety limits. The worker runs other users' links on your home network, so:
 
-- The owner decides which hosts a worker may open (`allowed_hosts`), its jobs
+- The owner decides which hosts a worker may open (`allowed_hosts`, or `*` alone
+  for any host), its jobs
   per hour and its jobs at once. The database enforces them when a job is
   claimed, and only the worker that claimed a job can answer it.
 - The worker refuses anything but `http`/`https` on ports 80 and 443, and any
