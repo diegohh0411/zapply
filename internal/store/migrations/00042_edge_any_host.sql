@@ -1,15 +1,15 @@
 -- +goose Up
 -- +goose StatementBegin
--- The migration login can SET ROLE but does not inherit platform function ownership.
-SET LOCAL ROLE zapply_platform;
--- An edge worker may list "*" alone to open any host. The owner still decides
--- per worker; the worker keeps refusing non-public addresses and ports other
--- than 80 and 443, and the hourly and concurrent limits still apply.
 CREATE OR REPLACE FUNCTION platform.edge_hosts_valid(p_hosts text[]) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
  SELECT p_hosts IS NOT NULL AND cardinality(p_hosts)<=50 AND (NOT ('*'=ANY(p_hosts)) OR cardinality(p_hosts)=1) AND NOT EXISTS(
   SELECT FROM unnest(p_hosts) h WHERE h IS NULL OR h<>'*' AND (length(h)>253 OR h !~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$'))
 $$;
 
+-- The migration login can SET ROLE but does not inherit platform function ownership.
+SET LOCAL ROLE zapply_platform;
+-- An edge worker may list "*" alone to open any host. The owner still decides
+-- per worker; the worker keeps refusing non-public addresses and ports other
+-- than 80 and 443, and the hourly and concurrent limits still apply.
 CREATE OR REPLACE FUNCTION platform.enqueue_scrape_job(p_url text,p_host text,p_ttl_seconds int) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
 DECLARE id uuid; BEGIN
  IF p_host IS NULL OR p_host<>lower(p_host) OR p_host !~ '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' OR p_ttl_seconds NOT BETWEEN 5 AND 300 THEN
@@ -46,12 +46,12 @@ RESET ROLE;
 
 -- +goose Down
 -- +goose StatementBegin
-SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.edge_hosts_valid(p_hosts text[]) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
  SELECT p_hosts IS NOT NULL AND cardinality(p_hosts)<=50 AND NOT EXISTS(
   SELECT FROM unnest(p_hosts) h WHERE h IS NULL OR length(h)>253 OR h !~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$')
 $$;
 
+SET LOCAL ROLE zapply_platform;
 CREATE OR REPLACE FUNCTION platform.enqueue_scrape_job(p_url text,p_host text,p_ttl_seconds int) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
 DECLARE id uuid; BEGIN
  IF p_host IS NULL OR p_host<>lower(p_host) OR p_host !~ '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' OR p_ttl_seconds NOT BETWEEN 5 AND 300 THEN
