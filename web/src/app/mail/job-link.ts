@@ -15,8 +15,11 @@ import { lucideLink, lucidePencil } from '@ng-icons/lucide';
 
 import { ZardButtonComponent } from '@/shared/components/button';
 import { ZardComboboxComponent, type ZardComboboxGroup } from '@/shared/components/combobox';
+import { injectMutation, QueryClient } from '@tanstack/angular-query';
+
 import { Api, type Schemas } from '../core/api';
-import { JobsStore, STAGES } from '../jobs/jobs.store';
+import { AuthService } from '../core/auth.service';
+import { jobActivitiesKey, JobsStore, STAGES } from '../jobs/jobs.store';
 
 type Message = Schemas['MailMessage'];
 
@@ -80,8 +83,30 @@ export class MailJobLink {
   private readonly store = inject(JobsStore);
   protected readonly none = NONE;
   protected readonly editing = signal(false);
-  protected readonly busy = signal(false);
   protected readonly error = signal('');
+  private readonly auth = inject(AuthService);
+  private readonly queries = inject(QueryClient);
+  /**
+   * The message moves between two jobs' timelines: both cached timelines and
+   * every cached notification list are refetched.
+   */
+  private readonly relink = injectMutation(() => ({
+    mutationFn: async (job: string | null) =>
+      Api.ok(
+        await this.api.client.PUT('/v1/mail/messages/{id}/job', {
+          params: { path: { id: this.message().id } },
+          body: { job_id: job },
+        }),
+      ),
+    onSuccess: (m: Message, _job: string | null, ctx: { previous: string | null } | undefined) => {
+      const who = this.auth.identity();
+      for (const id of new Set([ctx?.previous, m.job_id].filter((x): x is string => !!x)))
+        void this.queries.invalidateQueries({ queryKey: jobActivitiesKey(who, id) });
+      void this.queries.invalidateQueries({ queryKey: ['notifications', who] });
+    },
+    onMutate: () => ({ previous: this.message().job_id ?? null }),
+  }));
+  protected readonly busy = computed(() => this.relink.isPending());
 
   /** Jobs grouped by stage, open ones first, so the likely one is near the top. */
   /** Open jobs first by stage, then "not about a job", for the combobox. */
@@ -131,21 +156,13 @@ export class MailJobLink {
       this.editing.set(false);
       return;
     }
-    this.busy.set(true);
     this.error.set('');
     try {
-      const m = Api.ok(
-        await this.api.client.PUT('/v1/mail/messages/{id}/job', {
-          params: { path: { id: this.message().id } },
-          body: { job_id: job },
-        }),
-      );
+      const m = await this.relink.mutateAsync(job);
       this.editing.set(false);
       this.changed.emit(m);
     } catch (e) {
       this.error.set(e instanceof Error ? e.message : 'Could not change the job.');
-    } finally {
-      this.busy.set(false);
     }
   }
 }
