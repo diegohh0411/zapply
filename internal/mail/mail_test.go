@@ -1115,3 +1115,46 @@ func TestRescanReadsFurtherBackOnce(t *testing.T) {
 		t.Fatalf("gets %d -> %d", gets, f.fake.count("get"))
 	}
 }
+
+// An older job still gets linked when many newer ones are tracked: the email's
+// company puts it among the choices. The member can then relink or unlink it,
+// and their choice drops the proposal made for the old job.
+func TestOlderJobIsLinkedAndMemberCanRelink(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	svc := jobs.NewService(f.db.Store)
+	var other jobs.Job
+	for i := 0; i < 45; i++ {
+		j, e := svc.CreateJob(ctx, f.u, jobs.JobInput{Title: "Role " + itoa(i), Company: "Filler " + itoa(i)})
+		if e != nil {
+			t.Fatal(e)
+		}
+		other = j
+	}
+	acct := f.connect(t)
+	f.fake.add("m1", "Recruiter <jobs@acme.test>", "Interview with Acme", "Can you talk Tuesday?")
+	f.fake.recent = []string{"m1"}
+	if e := f.ws.Sync(ctx, f.u, acct); e != nil {
+		t.Fatal(e)
+	}
+	ids := f.messageIDs(t)
+	f.classifyAll(t, ids)
+	if r := f.row(t, ids["m1"]); r.Job == nil || *r.Job != f.job.ID {
+		t.Fatalf("not linked to the older job: %+v", r)
+	}
+
+	m, e := f.api.Relink(ctx, f.u, ids["m1"], &other.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if m.JobID == nil || *m.JobID != other.ID || !m.JobManual || m.Status != nil {
+		t.Fatalf("relinked message %+v", m)
+	}
+	if m, e = f.api.Relink(ctx, f.u, ids["m1"], nil); e != nil || m.JobID != nil || !m.JobManual {
+		t.Fatalf("unlinked message %+v %v", m, e)
+	}
+	missing := uuid.New()
+	if _, e = f.api.Relink(ctx, f.u, ids["m1"], &missing); e == nil {
+		t.Fatal("linked to a job that does not exist")
+	}
+}

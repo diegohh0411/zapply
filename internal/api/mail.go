@@ -199,3 +199,8 @@ func (s *server) ResolveMailStatusChange(ctx context.Context, req gen.ResolveMai
 	m, err := s.mail.Resolve(ctx, uid(ctx), req.Id, string(req.Body.Action))
 	return mailValue[gen.ResolveMailStatusChange200JSONResponse](m, err)
 }
+
+func (s *server) RelinkMailMessage(ctx context.Context, req gen.RelinkMailMessageRequestObject) (gen.RelinkMailMessageResponseObject, error) {
+	m, err := s.mail.Relink(ctx, uid(ctx), req.Id, req.Body.JobId)
+	return mailValue[gen.RelinkMailMessage200JSONResponse](m, err)
+}

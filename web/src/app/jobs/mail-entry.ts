@@ -5,12 +5,13 @@ import { lucideChevronRight, lucideExternalLink } from '@ng-icons/lucide';
 
 import { type Schemas } from '../core/api';
 import { categoryLabel } from '../mail/format';
+import { MailJobLink } from '../mail/job-link';
 import { MailStatusChange } from '../mail/status-change';
 
 /** One message in a job's activity timeline, with an expandable preview. */
 @Component({
   selector: 'app-mail-entry',
-  imports: [DatePipe, MailStatusChange, NgIcon],
+  imports: [DatePipe, MailJobLink, MailStatusChange, NgIcon],
   providers: [provideIcons({ lucideChevronRight, lucideExternalLink })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -57,6 +58,7 @@ import { MailStatusChange } from '../mail/status-change';
         class="inline-flex items-center gap-2 rounded-md py-1 text-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
         >Read full message in Gmail <ng-icon name="lucideExternalLink"
       /></a>
+      <app-mail-job-link class="block" [message]="m" (changed)="changed.emit($event)" />
     </div>
     <app-mail-status-change
       class="mt-1 block empty:hidden"
