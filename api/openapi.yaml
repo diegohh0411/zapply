@@ -71,6 +71,72 @@ paths:
               schema: { $ref: "#/components/schemas/Profile" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/job-preferences:
+    get:
+      operationId: getJobPreferences
+      tags: [preferences]
+      description: >-
+        What the member is looking for. Derived from the Experience library
+        first; each field group says whether it follows the derivation
+        (`derived`) or the member set it (`member`). Reading derives again when
+        the library changed since.
+      responses:
+        "200":
+          description: The preferences.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPreferences" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putJobPreferences
+      tags: [preferences]
+      description: Sets the groups present as the member's. Absent groups are unchanged.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobPreferencesInput" }
+      responses:
+        "200":
+          description: The saved preferences.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPreferences" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v1/job-preferences/reset:
+    post:
+      operationId: resetJobPreferences
+      tags: [preferences]
+      description: Makes the given groups follow the derivation again.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fields]
+              properties:
+                fields:
+                  type: array
+                  items: { $ref: "#/components/schemas/JobPreferenceField" }
+      responses:
+        "200":
+          description: The preferences after the reset.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPreferences" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /v1/organizations:
     get:
       operationId: listOrganizations
@@ -2227,6 +2293,77 @@ components:
       properties:
         label: { type: string, maxLength: 100 }
         url: { type: string, format: uri }
+    JobPreferenceField:
+      type: string
+      enum: [seniority, areas, location, employment]
+    JobPreferenceSource:
+      type: string
+      enum: [derived, member]
+    SeniorityLevel:
+      type: string
+      enum: [intern, entry, mid, senior, staff, manager]
+    PostingEmploymentType:
+      type: string
+      enum: [full_time, contract, internship, part_time]
+    JobPreferenceSuggestion:
+      type: object
+      required: [work_years, enrolled, manager, countries, remote_ok, excluded_employment, areas]
+      properties:
+        work_years: { type: number, description: Work experience read from the library, in years. }
+        enrolled: { type: boolean, description: A degree is in progress. }
+        manager: { type: boolean, description: The latest paid work has a manager's title. }
+        seniority_min: { $ref: "#/components/schemas/SeniorityLevel" }
+        seniority_max: { $ref: "#/components/schemas/SeniorityLevel" }
+        areas: { type: array, items: { type: string } }
+        countries: { type: array, items: { type: string } }
+        remote_ok: { type: boolean }
+        excluded_employment: { type: array, items: { $ref: "#/components/schemas/PostingEmploymentType" } }
+    JobPreferences:
+      type: object
+      required: [areas, countries, remote_ok, excluded_employment, sources, suggested, deriving, version]
+      properties:
+        seniority_min: { $ref: "#/components/schemas/SeniorityLevel" }
+        seniority_max: { $ref: "#/components/schemas/SeniorityLevel" }
+        areas:
+          type: array
+          description: Areas from the posting catalog's list.
+          items: { type: string }
+        countries:
+          type: array
+          description: ISO 3166-1 alpha-2 codes.
+          items: { type: string }
+        remote_ok: { type: boolean }
+        excluded_employment: { type: array, items: { $ref: "#/components/schemas/PostingEmploymentType" } }
+        sources:
+          type: object
+          required: [seniority, areas, location, employment]
+          properties:
+            seniority: { $ref: "#/components/schemas/JobPreferenceSource" }
+            areas: { $ref: "#/components/schemas/JobPreferenceSource" }
+            location: { $ref: "#/components/schemas/JobPreferenceSource" }
+            employment: { $ref: "#/components/schemas/JobPreferenceSource" }
+        suggested: { $ref: "#/components/schemas/JobPreferenceSuggestion" }
+        derived_at: { type: string, format: date-time }
+        deriving: { type: boolean, description: The area suggestion is still being read. }
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    JobPreferencesInput:
+      type: object
+      properties:
+        seniority:
+          type: object
+          required: [min, max]
+          properties:
+            min: { $ref: "#/components/schemas/SeniorityLevel" }
+            max: { $ref: "#/components/schemas/SeniorityLevel" }
+        areas: { type: array, maxItems: 22, items: { type: string } }
+        location:
+          type: object
+          required: [countries, remote_ok]
+          properties:
+            countries: { type: array, maxItems: 50, items: { type: string } }
+            remote_ok: { type: boolean }
+        excluded_employment: { type: array, items: { $ref: "#/components/schemas/PostingEmploymentType" } }
     ProfileInput:
       type: object
       properties:

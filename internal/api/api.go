@@ -32,6 +32,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/notify"
 	"github.com/diegohh0411/zapply/internal/posting"
+	"github.com/diegohh0411/zapply/internal/preferences"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
 	"github.com/diegohh0411/zapply/internal/store"
@@ -88,6 +89,7 @@ func Handler(d Deps) http.Handler {
 	srv.notify = notify.New(d.Store)
 	srv.alerts = alerts.New(d.Store, d.ATS)
 	srv.matcher = match.New(d.Store, queue)
+	srv.prefs = preferences.New(d.Store, queue, d.Logger)
 	srv.jobs.Matcher = srv.matcher
 	srv.cv = render.NewService(d.Store, render.NewCompiler(d.TypstDir))
 	srv.decisionModels = openrouter.New("", "")

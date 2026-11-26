@@ -277,6 +277,48 @@ func (e JobAts) Valid() bool {
 	}
 }
 
+// Defines values for JobPreferenceField.
+const (
+	Areas      JobPreferenceField = "areas"
+	Employment JobPreferenceField = "employment"
+	Location   JobPreferenceField = "location"
+	Seniority  JobPreferenceField = "seniority"
+)
+
+// Valid indicates whether the value is a known member of the JobPreferenceField enum.
+func (e JobPreferenceField) Valid() bool {
+	switch e {
+	case Areas:
+		return true
+	case Employment:
+		return true
+	case Location:
+		return true
+	case Seniority:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobPreferenceSource.
+const (
+	JobPreferenceSourceDerived JobPreferenceSource = "derived"
+	JobPreferenceSourceMember  JobPreferenceSource = "member"
+)
+
+// Valid indicates whether the value is a known member of the JobPreferenceSource enum.
+func (e JobPreferenceSource) Valid() bool {
+	switch e {
+	case JobPreferenceSourceDerived:
+		return true
+	case JobPreferenceSourceMember:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for JobSort.
 const (
 	MinusCreatedAt JobSort = "-created_at"
@@ -751,6 +793,30 @@ func (e OrganizationType) Valid() bool {
 	}
 }
 
+// Defines values for PostingEmploymentType.
+const (
+	PostingEmploymentTypeContract   PostingEmploymentType = "contract"
+	PostingEmploymentTypeFullTime   PostingEmploymentType = "full_time"
+	PostingEmploymentTypeInternship PostingEmploymentType = "internship"
+	PostingEmploymentTypePartTime   PostingEmploymentType = "part_time"
+)
+
+// Valid indicates whether the value is a known member of the PostingEmploymentType enum.
+func (e PostingEmploymentType) Valid() bool {
+	switch e {
+	case PostingEmploymentTypeContract:
+		return true
+	case PostingEmploymentTypeFullTime:
+		return true
+	case PostingEmploymentTypeInternship:
+		return true
+	case PostingEmploymentTypePartTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostingExtractionStatus.
 const (
 	PostingExtractionStatusCompleted PostingExtractionStatus = "completed"
@@ -798,28 +864,28 @@ func (e PostingLabelEmploymentType) Valid() bool {
 
 // Defines values for PostingLabelSeniority.
 const (
-	Entry   PostingLabelSeniority = "entry"
-	Intern  PostingLabelSeniority = "intern"
-	Manager PostingLabelSeniority = "manager"
-	Mid     PostingLabelSeniority = "mid"
-	Senior  PostingLabelSeniority = "senior"
-	Staff   PostingLabelSeniority = "staff"
+	PostingLabelSeniorityEntry   PostingLabelSeniority = "entry"
+	PostingLabelSeniorityIntern  PostingLabelSeniority = "intern"
+	PostingLabelSeniorityManager PostingLabelSeniority = "manager"
+	PostingLabelSeniorityMid     PostingLabelSeniority = "mid"
+	PostingLabelSenioritySenior  PostingLabelSeniority = "senior"
+	PostingLabelSeniorityStaff   PostingLabelSeniority = "staff"
 )
 
 // Valid indicates whether the value is a known member of the PostingLabelSeniority enum.
 func (e PostingLabelSeniority) Valid() bool {
 	switch e {
-	case Entry:
+	case PostingLabelSeniorityEntry:
 		return true
-	case Intern:
+	case PostingLabelSeniorityIntern:
 		return true
-	case Manager:
+	case PostingLabelSeniorityManager:
 		return true
-	case Mid:
+	case PostingLabelSeniorityMid:
 		return true
-	case Senior:
+	case PostingLabelSenioritySenior:
 		return true
-	case Staff:
+	case PostingLabelSeniorityStaff:
 		return true
 	default:
 		return false
@@ -910,6 +976,36 @@ const (
 func (e SearchSettingsProvider) Valid() bool {
 	switch e {
 	case SearchSettingsProviderTheirstack:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SeniorityLevel.
+const (
+	SeniorityLevelEntry   SeniorityLevel = "entry"
+	SeniorityLevelIntern  SeniorityLevel = "intern"
+	SeniorityLevelManager SeniorityLevel = "manager"
+	SeniorityLevelMid     SeniorityLevel = "mid"
+	SeniorityLevelSenior  SeniorityLevel = "senior"
+	SeniorityLevelStaff   SeniorityLevel = "staff"
+)
+
+// Valid indicates whether the value is a known member of the SeniorityLevel enum.
+func (e SeniorityLevel) Valid() bool {
+	switch e {
+	case SeniorityLevelEntry:
+		return true
+	case SeniorityLevelIntern:
+		return true
+	case SeniorityLevelManager:
+		return true
+	case SeniorityLevelMid:
+		return true
+	case SeniorityLevelSenior:
+		return true
+	case SeniorityLevelStaff:
 		return true
 	default:
 		return false
@@ -1710,6 +1806,71 @@ type JobPage struct {
 	NextCursor *string      `json:"next_cursor,omitempty"`
 }
 
+// JobPreferenceField defines model for JobPreferenceField.
+type JobPreferenceField string
+
+// JobPreferenceSource defines model for JobPreferenceSource.
+type JobPreferenceSource string
+
+// JobPreferenceSuggestion defines model for JobPreferenceSuggestion.
+type JobPreferenceSuggestion struct {
+	Areas     []string `json:"areas"`
+	Countries []string `json:"countries"`
+
+	// Enrolled A degree is in progress.
+	Enrolled           bool                    `json:"enrolled"`
+	ExcludedEmployment []PostingEmploymentType `json:"excluded_employment"`
+
+	// Manager The latest paid work has a manager's title.
+	Manager      bool            `json:"manager"`
+	RemoteOk     bool            `json:"remote_ok"`
+	SeniorityMax *SeniorityLevel `json:"seniority_max,omitempty"`
+	SeniorityMin *SeniorityLevel `json:"seniority_min,omitempty"`
+
+	// WorkYears Work experience read from the library
+	WorkYears float32 `json:"work_years"`
+}
+
+// JobPreferences defines model for JobPreferences.
+type JobPreferences struct {
+	// Areas Areas from the posting catalog's list.
+	Areas []string `json:"areas"`
+
+	// Countries ISO 3166-1 alpha-2 codes.
+	Countries []string   `json:"countries"`
+	DerivedAt *time.Time `json:"derived_at,omitempty"`
+
+	// Deriving The area suggestion is still being read.
+	Deriving           bool                    `json:"deriving"`
+	ExcludedEmployment []PostingEmploymentType `json:"excluded_employment"`
+	RemoteOk           bool                    `json:"remote_ok"`
+	SeniorityMax       *SeniorityLevel         `json:"seniority_max,omitempty"`
+	SeniorityMin       *SeniorityLevel         `json:"seniority_min,omitempty"`
+	Sources            struct {
+		Areas      JobPreferenceSource `json:"areas"`
+		Employment JobPreferenceSource `json:"employment"`
+		Location   JobPreferenceSource `json:"location"`
+		Seniority  JobPreferenceSource `json:"seniority"`
+	} `json:"sources"`
+	Suggested JobPreferenceSuggestion `json:"suggested"`
+	UpdatedAt *time.Time              `json:"updated_at,omitempty"`
+	Version   int                     `json:"version"`
+}
+
+// JobPreferencesInput defines model for JobPreferencesInput.
+type JobPreferencesInput struct {
+	Areas              *[]string                `json:"areas,omitempty"`
+	ExcludedEmployment *[]PostingEmploymentType `json:"excluded_employment,omitempty"`
+	Location           *struct {
+		Countries []string `json:"countries"`
+		RemoteOk  bool     `json:"remote_ok"`
+	} `json:"location,omitempty"`
+	Seniority *struct {
+		Max SeniorityLevel `json:"max"`
+		Min SeniorityLevel `json:"min"`
+	} `json:"seniority,omitempty"`
+}
+
 // JobSort defines model for JobSort.
 type JobSort string
 
@@ -2336,6 +2497,9 @@ type PostingCatalogStage struct {
 	Waiting int `json:"waiting"`
 }
 
+// PostingEmploymentType defines model for PostingEmploymentType.
+type PostingEmploymentType string
+
 // PostingExtraction defines model for PostingExtraction.
 type PostingExtraction struct {
 	Company *string `json:"company,omitempty"`
@@ -2616,6 +2780,9 @@ type Selection struct {
 	Title           *string             `json:"title,omitempty"`
 }
 
+// SeniorityLevel defines model for SeniorityLevel.
+type SeniorityLevel string
+
 // Skill defines model for Skill.
 type Skill struct {
 	Id          openapi_types.UUID `json:"id"`
@@ -2843,6 +3010,23 @@ type PutEvidenceParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// PutJobPreferencesParams defines parameters for PutJobPreferences.
+type PutJobPreferencesParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
+// ResetJobPreferencesJSONBody defines parameters for ResetJobPreferences.
+type ResetJobPreferencesJSONBody struct {
+	Fields []JobPreferenceField `json:"fields"`
+}
+
+// ResetJobPreferencesParams defines parameters for ResetJobPreferences.
+type ResetJobPreferencesParams struct {
+	// IfMatch The ETag from the last read. A stale value fails with 412.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // DeleteJobStatusParams defines parameters for DeleteJobStatus.
 type DeleteJobStatusParams struct {
 	MoveTo *openapi_types.UUID `form:"move_to,omitempty" json:"move_to,omitempty"`
@@ -2977,6 +3161,12 @@ type PutEvidenceJSONRequestBody = EvidenceUpdate
 
 // MoveEvidenceJSONRequestBody defines body for MoveEvidence for application/json ContentType.
 type MoveEvidenceJSONRequestBody = EvidenceMove
+
+// PutJobPreferencesJSONRequestBody defines body for PutJobPreferences for application/json ContentType.
+type PutJobPreferencesJSONRequestBody = JobPreferencesInput
+
+// ResetJobPreferencesJSONRequestBody defines body for ResetJobPreferences for application/json ContentType.
+type ResetJobPreferencesJSONRequestBody ResetJobPreferencesJSONBody
 
 // CreateJobStatusJSONRequestBody defines body for CreateJobStatus for application/json ContentType.
 type CreateJobStatusJSONRequestBody = JobStatusInput
@@ -3187,6 +3377,15 @@ type ServerInterface interface {
 
 	// (POST /v1/evidences/{id}/unarchive)
 	UnarchiveEvidence(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/job-preferences)
+	GetJobPreferences(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/job-preferences)
+	PutJobPreferences(w http.ResponseWriter, r *http.Request, params PutJobPreferencesParams)
+
+	// (POST /v1/job-preferences/reset)
+	ResetJobPreferences(w http.ResponseWriter, r *http.Request, params ResetJobPreferencesParams)
 
 	// (GET /v1/job-statuses)
 	ListJobStatuses(w http.ResponseWriter, r *http.Request)
@@ -4669,6 +4868,110 @@ func (siw *ServerInterfaceWrapper) UnarchiveEvidence(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UnarchiveEvidence(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetJobPreferences operation middleware
+func (siw *ServerInterfaceWrapper) GetJobPreferences(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetJobPreferences(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutJobPreferences operation middleware
+func (siw *ServerInterfaceWrapper) PutJobPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutJobPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutJobPreferences(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetJobPreferences operation middleware
+func (siw *ServerInterfaceWrapper) ResetJobPreferences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResetJobPreferencesParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetJobPreferences(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6750,6 +7053,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/kinds", wrapper.ListKinds)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/profile", wrapper.GetProfile)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/profile", wrapper.PutProfile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/job-preferences", wrapper.GetJobPreferences)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/job-preferences", wrapper.PutJobPreferences)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/job-preferences/reset", wrapper.ResetJobPreferences)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/organizations", wrapper.ListOrganizations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/organizations", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/organizations/{id}", wrapper.DeleteOrganization)
@@ -8479,6 +8785,154 @@ type UnarchiveEvidencedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UnarchiveEvidencedefaultApplicationProblemPlusJSONResponse) VisitUnarchiveEvidenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJobPreferencesRequestObject struct {
+}
+
+type GetJobPreferencesResponseObject interface {
+	VisitGetJobPreferencesResponse(w http.ResponseWriter) error
+}
+
+type GetJobPreferences200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetJobPreferences200JSONResponse struct {
+	Body    JobPreferences
+	Headers GetJobPreferences200ResponseHeaders
+}
+
+func (response GetJobPreferences200JSONResponse) VisitGetJobPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJobPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetJobPreferencesdefaultApplicationProblemPlusJSONResponse) VisitGetJobPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutJobPreferencesRequestObject struct {
+	Params PutJobPreferencesParams
+	Body   *PutJobPreferencesJSONRequestBody
+}
+
+type PutJobPreferencesResponseObject interface {
+	VisitPutJobPreferencesResponse(w http.ResponseWriter) error
+}
+
+type PutJobPreferences200ResponseHeaders struct {
+	ETag *string
+}
+
+type PutJobPreferences200JSONResponse struct {
+	Body    JobPreferences
+	Headers PutJobPreferences200ResponseHeaders
+}
+
+func (response PutJobPreferences200JSONResponse) VisitPutJobPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutJobPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutJobPreferencesdefaultApplicationProblemPlusJSONResponse) VisitPutJobPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetJobPreferencesRequestObject struct {
+	Params ResetJobPreferencesParams
+	Body   *ResetJobPreferencesJSONRequestBody
+}
+
+type ResetJobPreferencesResponseObject interface {
+	VisitResetJobPreferencesResponse(w http.ResponseWriter) error
+}
+
+type ResetJobPreferences200ResponseHeaders struct {
+	ETag *string
+}
+
+type ResetJobPreferences200JSONResponse struct {
+	Body    JobPreferences
+	Headers ResetJobPreferences200ResponseHeaders
+}
+
+func (response ResetJobPreferences200JSONResponse) VisitResetJobPreferencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetJobPreferencesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResetJobPreferencesdefaultApplicationProblemPlusJSONResponse) VisitResetJobPreferencesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11353,6 +11807,15 @@ type StrictServerInterface interface {
 	// (POST /v1/evidences/{id}/unarchive)
 	UnarchiveEvidence(ctx context.Context, request UnarchiveEvidenceRequestObject) (UnarchiveEvidenceResponseObject, error)
 
+	// (GET /v1/job-preferences)
+	GetJobPreferences(ctx context.Context, request GetJobPreferencesRequestObject) (GetJobPreferencesResponseObject, error)
+
+	// (PUT /v1/job-preferences)
+	PutJobPreferences(ctx context.Context, request PutJobPreferencesRequestObject) (PutJobPreferencesResponseObject, error)
+
+	// (POST /v1/job-preferences/reset)
+	ResetJobPreferences(ctx context.Context, request ResetJobPreferencesRequestObject) (ResetJobPreferencesResponseObject, error)
+
 	// (GET /v1/job-statuses)
 	ListJobStatuses(ctx context.Context, request ListJobStatusesRequestObject) (ListJobStatusesResponseObject, error)
 
@@ -12684,6 +13147,96 @@ func (sh *strictHandler) UnarchiveEvidence(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UnarchiveEvidenceResponseObject); ok {
 		if err := validResponse.VisitUnarchiveEvidenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetJobPreferences operation middleware
+func (sh *strictHandler) GetJobPreferences(w http.ResponseWriter, r *http.Request) {
+	var request GetJobPreferencesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetJobPreferences(ctx, request.(GetJobPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetJobPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetJobPreferencesResponseObject); ok {
+		if err := validResponse.VisitGetJobPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutJobPreferences operation middleware
+func (sh *strictHandler) PutJobPreferences(w http.ResponseWriter, r *http.Request, params PutJobPreferencesParams) {
+	var request PutJobPreferencesRequestObject
+
+	request.Params = params
+
+	var body PutJobPreferencesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutJobPreferences(ctx, request.(PutJobPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutJobPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutJobPreferencesResponseObject); ok {
+		if err := validResponse.VisitPutJobPreferencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResetJobPreferences operation middleware
+func (sh *strictHandler) ResetJobPreferences(w http.ResponseWriter, r *http.Request, params ResetJobPreferencesParams) {
+	var request ResetJobPreferencesRequestObject
+
+	request.Params = params
+
+	var body ResetJobPreferencesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResetJobPreferences(ctx, request.(ResetJobPreferencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResetJobPreferences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResetJobPreferencesResponseObject); ok {
+		if err := validResponse.VisitResetJobPreferencesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -19,6 +19,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/notify"
 	"github.com/diegohh0411/zapply/internal/posting"
+	"github.com/diegohh0411/zapply/internal/preferences"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/worker"
 )
@@ -39,6 +40,7 @@ type server struct {
 	notify         *notify.Service
 	alerts         *alerts.Service
 	postings       *posting.Reader
+	prefs          *preferences.Service
 	pushVerifier   auth.Verifier
 }
 
