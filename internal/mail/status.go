@@ -211,3 +211,45 @@ func (s *Service) Resolve(ctx context.Context, u, id uuid.UUID, action string) (
 	})
 	return out, err
 }
+
+// Relink sets the job a message is about, or clears it with nil. The member's
+// choice is final: the status proposal made for the old job is dropped, and the
+// classifier will not change the link again. A move already applied to the old
+// job stays; undo it first if it was wrong.
+func (s *Service) Relink(ctx context.Context, u, id uuid.UUID, job *uuid.UUID) (Item, error) {
+	var out Item
+	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		var current *uuid.UUID
+		e := tx.QueryRow(ctx, `SELECT job_id FROM mail_message WHERE user_id=$1 AND id=$2 AND state='classified' AND category<>'other' FOR UPDATE`, u, id).Scan(&current)
+		if errors.Is(e, pgx.ErrNoRows) {
+			return library.ErrNotFound
+		}
+		if e != nil {
+			return e
+		}
+		if job != nil {
+			var ok bool
+			if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM job WHERE user_id=$1 AND id=$2)`, u, *job).Scan(&ok); e != nil {
+				return e
+			}
+			if !ok {
+				return &library.ValidationError{Fields: []library.FieldError{{Field: "job_id", Message: "no such job"}}}
+			}
+		}
+		same := (current == nil && job == nil) || (current != nil && job != nil && *current == *job)
+		if same {
+			_, e = tx.Exec(ctx, `UPDATE mail_message SET job_manual=true,updated_at=now() WHERE user_id=$1 AND id=$2`, u, id)
+		} else {
+			_, e = tx.Exec(ctx, `UPDATE mail_message SET job_id=$3,job_manual=true,status_outcome=NULL,suggested_status_id=NULL,previous_status_id=NULL,status_confidence=NULL,status_auto=false,updated_at=now() WHERE user_id=$1 AND id=$2`, u, id, job)
+		}
+		if e != nil {
+			return e
+		}
+		if e = emit(ctx, tx, u, "mail.message.classified", id); e != nil {
+			return e
+		}
+		out, e = s.item(ctx, tx, u, id)
+		return e
+	})
+	return out, err
+}
