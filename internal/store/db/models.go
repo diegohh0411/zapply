@@ -968,6 +968,7 @@ type MailMessage struct {
 	PreviousStatusID  *uuid.UUID
 	StatusConfidence  *float32
 	StatusAuto        bool
+	JobManual         bool
 }
 
 type MailOperation struct {
