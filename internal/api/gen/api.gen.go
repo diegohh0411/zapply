@@ -63,28 +63,28 @@ func (e CvPreviewAvailableEntriesReason) Valid() bool {
 
 // Defines values for EmploymentType.
 const (
-	Contract   EmploymentType = "contract"
-	Freelance  EmploymentType = "freelance"
-	FullTime   EmploymentType = "full_time"
-	Internship EmploymentType = "internship"
-	PartTime   EmploymentType = "part_time"
-	Temporary  EmploymentType = "temporary"
+	EmploymentTypeContract   EmploymentType = "contract"
+	EmploymentTypeFreelance  EmploymentType = "freelance"
+	EmploymentTypeFullTime   EmploymentType = "full_time"
+	EmploymentTypeInternship EmploymentType = "internship"
+	EmploymentTypePartTime   EmploymentType = "part_time"
+	EmploymentTypeTemporary  EmploymentType = "temporary"
 )
 
 // Valid indicates whether the value is a known member of the EmploymentType enum.
 func (e EmploymentType) Valid() bool {
 	switch e {
-	case Contract:
+	case EmploymentTypeContract:
 		return true
-	case Freelance:
+	case EmploymentTypeFreelance:
 		return true
-	case FullTime:
+	case EmploymentTypeFullTime:
 		return true
-	case Internship:
+	case EmploymentTypeInternship:
 		return true
-	case PartTime:
+	case EmploymentTypePartTime:
 		return true
-	case Temporary:
+	case EmploymentTypeTemporary:
 		return true
 	default:
 		return false
@@ -766,6 +766,60 @@ func (e PostingExtractionStatus) Valid() bool {
 	case PostingExtractionStatusFailed:
 		return true
 	case PostingExtractionStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostingLabelEmploymentType.
+const (
+	PostingLabelEmploymentTypeContract   PostingLabelEmploymentType = "contract"
+	PostingLabelEmploymentTypeFullTime   PostingLabelEmploymentType = "full_time"
+	PostingLabelEmploymentTypeInternship PostingLabelEmploymentType = "internship"
+	PostingLabelEmploymentTypePartTime   PostingLabelEmploymentType = "part_time"
+)
+
+// Valid indicates whether the value is a known member of the PostingLabelEmploymentType enum.
+func (e PostingLabelEmploymentType) Valid() bool {
+	switch e {
+	case PostingLabelEmploymentTypeContract:
+		return true
+	case PostingLabelEmploymentTypeFullTime:
+		return true
+	case PostingLabelEmploymentTypeInternship:
+		return true
+	case PostingLabelEmploymentTypePartTime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostingLabelSeniority.
+const (
+	Entry   PostingLabelSeniority = "entry"
+	Intern  PostingLabelSeniority = "intern"
+	Manager PostingLabelSeniority = "manager"
+	Mid     PostingLabelSeniority = "mid"
+	Senior  PostingLabelSeniority = "senior"
+	Staff   PostingLabelSeniority = "staff"
+)
+
+// Valid indicates whether the value is a known member of the PostingLabelSeniority enum.
+func (e PostingLabelSeniority) Valid() bool {
+	switch e {
+	case Entry:
+		return true
+	case Intern:
+		return true
+	case Manager:
+		return true
+	case Mid:
+		return true
+	case Senior:
+		return true
+	case Staff:
 		return true
 	default:
 		return false
@@ -2243,6 +2297,45 @@ type PlanInput struct {
 	Name              string `json:"name"`
 }
 
+// PostingCatalog defines model for PostingCatalog.
+type PostingCatalog struct {
+	// Failed Postings with a stage given up on.
+	Failed int `json:"failed"`
+
+	// Labeled Postings both stages answered.
+	Labeled  int `json:"labeled"`
+	Postings int `json:"postings"`
+
+	// Postings24h Postings first seen in the past 24 hours.
+	Postings24h int `json:"postings_24h"`
+
+	// Recent The newest labels first.
+	Recent []PostingLabel `json:"recent"`
+	Stages struct {
+		Decision   PostingCatalogStage `json:"decision"`
+		Extraction PostingCatalogStage `json:"extraction"`
+	} `json:"stages"`
+	Usage Usage `json:"usage"`
+
+	// Waiting Postings with a stage still to answer, running or not.
+	Waiting int `json:"waiting"`
+}
+
+// PostingCatalogStage defines model for PostingCatalogStage.
+type PostingCatalogStage struct {
+	// Done Postings this stage answered.
+	Done int `json:"done"`
+
+	// Failed Postings this stage gave up on after its retry.
+	Failed int `json:"failed"`
+
+	// Running Postings with an operation open for this stage.
+	Running int `json:"running"`
+
+	// Waiting Postings waiting for this stage; they wait indefinitely while the stage's model is off.
+	Waiting int `json:"waiting"`
+}
+
 // PostingExtraction defines model for PostingExtraction.
 type PostingExtraction struct {
 	Company *string `json:"company,omitempty"`
@@ -2265,6 +2358,39 @@ type PostingExtraction struct {
 
 // PostingExtractionStatus defines model for PostingExtraction.Status.
 type PostingExtractionStatus string
+
+// PostingLabel defines model for PostingLabel.
+type PostingLabel struct {
+	// Areas One or two areas, the primary first.
+	Areas   []string `json:"areas"`
+	Company string   `json:"company"`
+
+	// Confidence Per field, how sure the model was (0 to 1).
+	Confidence map[string]float32 `json:"confidence"`
+
+	// Countries ISO 3166-1 alpha-2 codes.
+	Countries       []string                    `json:"countries"`
+	DecisionModel   *string                     `json:"decision_model,omitempty"`
+	EmploymentType  *PostingLabelEmploymentType `json:"employment_type,omitempty"`
+	ExtractionModel *string                     `json:"extraction_model,omitempty"`
+	Id              openapi_types.UUID          `json:"id"`
+
+	// Languages ISO 639-1 codes.
+	Languages []string               `json:"languages"`
+	Location  string                 `json:"location"`
+	MinYears  *int                   `json:"min_years,omitempty"`
+	Remote    *bool                  `json:"remote,omitempty"`
+	Seniority *PostingLabelSeniority `json:"seniority,omitempty"`
+	Specialty *string                `json:"specialty,omitempty"`
+	Title     string                 `json:"title"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+// PostingLabelEmploymentType defines model for PostingLabel.EmploymentType.
+type PostingLabelEmploymentType string
+
+// PostingLabelSeniority defines model for PostingLabel.Seniority.
+type PostingLabelSeniority string
 
 // PostingRead defines model for PostingRead.
 type PostingRead struct {
@@ -2659,6 +2785,12 @@ type UpdatePlanParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// GetPostingCatalogParams defines parameters for GetPostingCatalog.
+type GetPostingCatalogParams struct {
+	// Limit How many of the newest labels to return.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // PutScraperSettingsParams defines parameters for PutScraperSettings.
 type PutScraperSettingsParams struct {
 	// IfMatch The ETag from the last read. A stale value fails with 412.
@@ -2989,6 +3121,9 @@ type ServerInterface interface {
 
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(w http.ResponseWriter, r *http.Request, id ID, params UpdatePlanParams)
+
+	// (GET /v1/admin/posting-catalog)
+	GetPostingCatalog(w http.ResponseWriter, r *http.Request, params GetPostingCatalogParams)
 
 	// (GET /v1/admin/scraper-settings)
 	GetScraperSettings(w http.ResponseWriter, r *http.Request)
@@ -3809,6 +3944,39 @@ func (siw *ServerInterfaceWrapper) UpdatePlan(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePlan(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPostingCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetPostingCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPostingCatalogParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPostingCatalog(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6643,6 +6811,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/extraction-models", wrapper.ListExtractionModels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.GetModelSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/model-settings", wrapper.PutModelSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/posting-catalog", wrapper.GetPostingCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.GetScraperSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/scraper-settings", wrapper.PutScraperSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.GetSearchSettings)
@@ -7371,6 +7540,45 @@ type UpdatePlandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdatePlandefaultApplicationProblemPlusJSONResponse) VisitUpdatePlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPostingCatalogRequestObject struct {
+	Params GetPostingCatalogParams
+}
+
+type GetPostingCatalogResponseObject interface {
+	VisitGetPostingCatalogResponse(w http.ResponseWriter) error
+}
+
+type GetPostingCatalog200JSONResponse PostingCatalog
+
+func (response GetPostingCatalog200JSONResponse) VisitGetPostingCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPostingCatalogdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPostingCatalogdefaultApplicationProblemPlusJSONResponse) VisitGetPostingCatalogResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11079,6 +11287,9 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/plans/{id})
 	UpdatePlan(ctx context.Context, request UpdatePlanRequestObject) (UpdatePlanResponseObject, error)
 
+	// (GET /v1/admin/posting-catalog)
+	GetPostingCatalog(ctx context.Context, request GetPostingCatalogRequestObject) (GetPostingCatalogResponseObject, error)
+
 	// (GET /v1/admin/scraper-settings)
 	GetScraperSettings(ctx context.Context, request GetScraperSettingsRequestObject) (GetScraperSettingsResponseObject, error)
 
@@ -11863,6 +12074,32 @@ func (sh *strictHandler) UpdatePlan(w http.ResponseWriter, r *http.Request, id I
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdatePlanResponseObject); ok {
 		if err := validResponse.VisitUpdatePlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPostingCatalog operation middleware
+func (sh *strictHandler) GetPostingCatalog(w http.ResponseWriter, r *http.Request, params GetPostingCatalogParams) {
+	var request GetPostingCatalogRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPostingCatalog(ctx, request.(GetPostingCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPostingCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPostingCatalogResponseObject); ok {
+		if err := validResponse.VisitGetPostingCatalogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

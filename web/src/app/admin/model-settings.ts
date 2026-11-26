@@ -12,7 +12,8 @@ type ExtractionModel = Schemas['ExtractionModel'];
 type Effort = Schemas['ReasoningOptions']['efforts'][number];
 type Settings = Schemas['ModelSettings'];
 // One tab shows one model's section; each keeps its own draft in this component.
-export type ModelTab = 'summaries' | 'matching' | 'extraction';
+// 'catalog' is PostingCatalog's tab, beside these.
+export type ModelTab = 'summaries' | 'matching' | 'extraction' | 'catalog';
 
 const EFFORT_LABELS: Record<Effort, string> = {
   max: 'Max',

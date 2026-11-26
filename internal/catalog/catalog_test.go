@@ -435,3 +435,98 @@ type boards struct{ postings []ats.Posting }
 func (b *boards) Fetch(context.Context, string, string) (ats.Board, error) {
 	return ats.Board{Company: "Acme Inc.", Postings: append([]ats.Posting(nil), b.postings...)}, nil
 }
+
+// The owner's status report counts each stage, reports the catalog member's
+// spend and shows the newest labels; members can't read it.
+func TestCatalogStatus(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	r, m := setupLedger(t, e)
+	owner, err := e.db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := func() map[string]any {
+		t.Helper()
+		var raw []byte
+		if err := e.db.Store.InTenant(ctx, owner, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT platform.posting_catalog(20)`).Scan(&raw)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	empty := status()
+	if empty["postings"] != 0.0 || len(empty["recent"].([]any)) != 0 {
+		t.Fatalf("empty catalog: %v", empty)
+	}
+	if empty["stages"].(map[string]any)["extraction"].(map[string]any)["waiting"] != 0.0 {
+		t.Fatalf("empty stages: %v", empty["stages"])
+	}
+	// One posting labeled by both stages.
+	e.add(t, catalog.Sighting{Source: catalog.SourceSearch, Company: "Acme", Title: "Solutions Engineer", Location: "CDMX", URL: "https://example.com/1"})
+	if _, err := e.catalog.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t, r)
+	// A second whose decision fails, with extraction off.
+	if err := e.db.Store.InTenant(ctx, owner, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT platform.save_posting_models('liquid/d1.2',NULL)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.broken.Store(true)
+	e.add(t, catalog.Sighting{Source: catalog.SourceSearch, Company: "Beta", Title: "Practicante de ventas", URL: "https://example.com/2"})
+	for i := 0; i < 2; i++ {
+		if _, err := e.catalog.Sweep(ctx); err != nil {
+			t.Fatal(err)
+		}
+		e.run(t, r)
+	}
+	v := status()
+	if v["postings"] != 2.0 || v["postings_24h"] != 2.0 || v["labeled"] != 1.0 || v["waiting"] != 1.0 || v["failed"] != 1.0 {
+		t.Errorf("counts: postings %v, 24h %v, labeled %v, waiting %v, failed %v", v["postings"], v["postings_24h"], v["labeled"], v["waiting"], v["failed"])
+	}
+	stages := v["stages"].(map[string]any)
+	want := map[string]map[string]float64{
+		"decision":   {"done": 1, "waiting": 0, "running": 0, "failed": 1},
+		"extraction": {"done": 1, "waiting": 1, "running": 0, "failed": 0},
+	}
+	for stage, counts := range want {
+		got := stages[stage].(map[string]any)
+		for k, n := range counts {
+			if got[k] != n {
+				t.Errorf("%s %s = %v, want %v", stage, k, got[k], n)
+			}
+		}
+	}
+	recent := v["recent"].([]any)
+	if len(recent) != 1 {
+		t.Fatalf("recent = %v", recent)
+	}
+	label := recent[0].(map[string]any)
+	if label["title"] != "Solutions Engineer" || label["company"] != "Acme" || label["seniority"] != "senior" || len(label["areas"].([]any)) != 2 ||
+		label["decision_model"] != "liquid/d1.2" || label["confidence"].(map[string]any)["seniority"] != 0.85 {
+		t.Errorf("label = %v", label)
+	}
+	usage := v["usage"].(map[string]any)
+	if usage["membership"].(map[string]any)["plan_name"] != "Internal: posting catalog" || usage["cap_7d_usd"] == nil || usage["cap_30d_usd"] == nil {
+		t.Errorf("usage = %v", usage)
+	}
+	// Members can't read it.
+	member, err := e.db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "member"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.Store.InTenant(ctx, member, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT platform.posting_catalog(20)`)
+		return err
+	}); err == nil {
+		t.Error("a member read the catalog's status")
+	}
+}

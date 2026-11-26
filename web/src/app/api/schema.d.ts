@@ -833,6 +833,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/posting-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPostingCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/scraper-settings": {
         parameters: {
             query?: never;
@@ -2248,6 +2264,62 @@ export interface components {
             version: number;
             /** Format: date-time */
             updated_at: string;
+        };
+        PostingCatalogStage: {
+            /** @description Postings this stage answered. */
+            done: number;
+            /** @description Postings waiting for this stage; they wait indefinitely while the stage's model is off. */
+            waiting: number;
+            /** @description Postings with an operation open for this stage. */
+            running: number;
+            /** @description Postings this stage gave up on after its retry. */
+            failed: number;
+        };
+        PostingLabel: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            company: string;
+            location: string;
+            /** @enum {string|null} */
+            seniority?: "intern" | "entry" | "mid" | "senior" | "staff" | "manager" | null;
+            min_years?: number | null;
+            /** @description One or two areas, the primary first. */
+            areas: string[];
+            specialty?: string | null;
+            /** @description ISO 3166-1 alpha-2 codes. */
+            countries: string[];
+            remote?: boolean | null;
+            /** @enum {string|null} */
+            employment_type?: "full_time" | "contract" | "internship" | "part_time" | null;
+            /** @description ISO 639-1 codes. */
+            languages: string[];
+            /** @description Per field, how sure the model was (0 to 1). */
+            confidence: {
+                [key: string]: number;
+            };
+            decision_model?: string | null;
+            extraction_model?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PostingCatalog: {
+            postings: number;
+            /** @description Postings first seen in the past 24 hours. */
+            postings_24h: number;
+            /** @description Postings both stages answered. */
+            labeled: number;
+            /** @description Postings with a stage still to answer, running or not. */
+            waiting: number;
+            /** @description Postings with a stage given up on. */
+            failed: number;
+            stages: {
+                decision: components["schemas"]["PostingCatalogStage"];
+                extraction: components["schemas"]["PostingCatalogStage"];
+            };
+            usage: components["schemas"]["Usage"];
+            /** @description The newest labels first. */
+            recent: components["schemas"]["PostingLabel"][];
         };
         ScraperProvider: {
             /**
@@ -4451,6 +4523,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPostingCatalog: {
+        parameters: {
+            query?: {
+                /** @description How many of the newest labels to return. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The posting catalog's counts, classification stages, spend and newest labels (owner only). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostingCatalog"];
                 };
             };
             default: components["responses"]["Problem"];
