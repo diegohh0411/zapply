@@ -29,6 +29,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 export class SettingsLayout {
   protected readonly tabs = [
     { path: '/settings/account', label: 'Account' },
+    { path: '/settings/job-preferences', label: 'Job preferences' },
     { path: '/settings/connections', label: 'Connections' },
   ];
 }

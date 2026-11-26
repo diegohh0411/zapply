@@ -53,6 +53,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/job-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What the member is looking for. Derived from the Experience library first; each field group says whether it follows the derivation (`derived`) or the member set it (`member`). Reading derives again when the library changed since. */
+        get: operations["getJobPreferences"];
+        /** @description Sets the groups present as the member's. Absent groups are unchanged. */
+        put: operations["putJobPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/job-preferences/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Makes the given groups follow the derivation again. */
+        post: operations["resetJobPreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations": {
         parameters: {
             query?: never;
@@ -1695,6 +1730,64 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        /** @enum {string} */
+        JobPreferenceField: "seniority" | "areas" | "location" | "employment";
+        /** @enum {string} */
+        JobPreferenceSource: "derived" | "member";
+        /** @enum {string} */
+        SeniorityLevel: "intern" | "entry" | "mid" | "senior" | "staff" | "manager";
+        /** @enum {string} */
+        PostingEmploymentType: "full_time" | "contract" | "internship" | "part_time";
+        JobPreferenceSuggestion: {
+            /** @description Work experience read from the library */
+            work_years: number;
+            /** @description A degree is in progress. */
+            enrolled: boolean;
+            /** @description The latest paid work has a manager's title. */
+            manager: boolean;
+            seniority_min?: components["schemas"]["SeniorityLevel"];
+            seniority_max?: components["schemas"]["SeniorityLevel"];
+            areas: string[];
+            countries: string[];
+            remote_ok: boolean;
+            excluded_employment: components["schemas"]["PostingEmploymentType"][];
+        };
+        JobPreferences: {
+            seniority_min?: components["schemas"]["SeniorityLevel"];
+            seniority_max?: components["schemas"]["SeniorityLevel"];
+            /** @description Areas from the posting catalog's list. */
+            areas: string[];
+            /** @description ISO 3166-1 alpha-2 codes. */
+            countries: string[];
+            remote_ok: boolean;
+            excluded_employment: components["schemas"]["PostingEmploymentType"][];
+            sources: {
+                seniority: components["schemas"]["JobPreferenceSource"];
+                areas: components["schemas"]["JobPreferenceSource"];
+                location: components["schemas"]["JobPreferenceSource"];
+                employment: components["schemas"]["JobPreferenceSource"];
+            };
+            suggested: components["schemas"]["JobPreferenceSuggestion"];
+            /** Format: date-time */
+            derived_at?: string;
+            /** @description The area suggestion is still being read. */
+            deriving: boolean;
+            version: number;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        JobPreferencesInput: {
+            seniority?: {
+                min: components["schemas"]["SeniorityLevel"];
+                max: components["schemas"]["SeniorityLevel"];
+            };
+            areas?: string[];
+            location?: {
+                countries: string[];
+                remote_ok: boolean;
+            };
+            excluded_employment?: components["schemas"]["PostingEmploymentType"][];
+        };
         ProfileInput: {
             /** @default true */
             auto_match: boolean;
@@ -2950,6 +3043,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getJobPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preferences. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPreferences"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putJobPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobPreferencesInput"];
+            };
+        };
+        responses: {
+            /** @description The saved preferences. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPreferences"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resetJobPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The ETag from the last read. A stale value fails with 412. */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fields: components["schemas"]["JobPreferenceField"][];
+                };
+            };
+        };
+        responses: {
+            /** @description The preferences after the reset. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPreferences"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -81,6 +81,12 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./settings/connections.page').then((m) => m.ConnectionsPage),
           },
+          {
+            path: 'job-preferences',
+            title: 'Job preferences · zapply',
+            loadComponent: () =>
+              import('./settings/job-preferences.page').then((m) => m.JobPreferencesPage),
+          },
         ],
       },
       { path: 'admin', pathMatch: 'full', redirectTo: 'admin/overview' },

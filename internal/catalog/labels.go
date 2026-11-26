@@ -44,6 +44,36 @@ type Labels struct {
 // for every option, so a posting that is two things splits its probability.
 const secondaryArea = 0.2
 
+// areaCriteria describes each area for a question that picks one. A member's
+// preferences ask it too, so both read the areas the same way.
+var areaCriteria = map[string]string{
+	"engineering_software": "Builds software: software, backend, frontend, full-stack, mobile, DevOps, SRE, platform, ML or data engineering, QA automation. A Solutions Engineer, Sales Engineer or Forward Deployed Engineer is engineering_software first and sales second.",
+	"engineering_other":    "Engineering outside software: mechanical, electrical, civil, chemical, industrial, manufacturing, hardware, aerospace, process or quality engineering (Ingeniero de procesos, Ingeniero de calidad).",
+	"it":                   "Runs and supports technology: IT support, help desk, systems or network administration, security operations, IT infrastructure, ERP administration (Soporte técnico, Sistemas).",
+	"data_analytics":       "Analyzes data: data analyst, BI, analytics, data scientist, statistician, reporting, insights.",
+	"product_design":       "Shapes products: product manager, product owner, UX, UI, product or graphic design for products, user research.",
+	"finance_accounting":   "Money: accounting, finance, FP&A, audit, tax, treasury, payroll, billing, banking, investment (Contador, Contabilidad, Finanzas, Auditor).",
+	"sales":                "Sells: account executive, business development, SDR, BDR, account manager, inside sales, partnerships with quotas (Ventas, Ejecutivo de ventas, Asesor comercial).",
+	"marketing_comms":      "Markets and communicates: marketing, growth, SEO, content, social media, brand, PR, communications (Mercadotecnia, Comunicación).",
+	"customer_support":     "Supports or retains customers: customer support, customer success, call center, client service (Atención a clientes, Servicio al cliente).",
+	"operations_supply":    "Runs operations: operations, logistics, supply chain, procurement, purchasing, warehouse, fleet, inventory, planning (Logística, Compras, Almacén).",
+	"hr":                   "People: HR, recruiting, talent acquisition, people operations, learning and development, compensation (Recursos Humanos, Reclutamiento).",
+	"legal_compliance":     "Law and rules: lawyer, paralegal, legal counsel, compliance, regulatory, privacy, risk (Abogado, Jurídico, Cumplimiento).",
+	"healthcare":           "Cares for health: doctors, nurses, pharmacists, therapists, dentists, medical technicians, clinical staff (Médico, Enfermera, Químico farmacéutico).",
+	"education":            "Teaches: teachers, professors, tutors, instructional designers, school staff (Maestro, Profesor, Docente).",
+	"research_science":     "Researches: scientists and researchers in labs or academia, R&D outside software, clinical research.",
+	"admin":                "Administrative and office support: assistants, executive assistants, receptionists, office managers, data entry (Asistente administrativo, Recepcionista).",
+	"consulting_pm":        "Consults or manages projects and programs across areas: consultants, project managers, program managers, PMO, business analysts, strategy.",
+	"skilled_trades":       "Hands-on trades and production: electricians, technicians, mechanics, welders, drivers, machine operators, construction, maintenance (Técnico, Operador, Chofer, Mantenimiento).",
+	"hospitality_retail":   "Serves in person: retail, stores, restaurants, hotels, tourism, cashiers, baristas, cooks (Cajero, Vendedor de piso, Mesero, Cocinero).",
+	"media_arts":           "Creates media and art: writers, editors, journalists, video, photography, illustration, animation, music, game art (Redactor, Editor).",
+	"ai_training":          "Trains or evaluates AI models as freelance or gig work: AI trainer, AI tutor, data annotator, RLHF writer or rater, expert contributor for platforms such as Mercor, Alignerr, Outlier, Scale AI, Remotasks or DataAnnotation.",
+	"other":                "None of the other areas fits.",
+}
+
+// AreaCriteria is the description of every area, keyed by area.
+func AreaCriteria() map[string]string { return areaCriteria }
+
 // The decision asks these, in this order: q1 is seniority, and so on.
 const (
 	qSeniority = iota
@@ -84,30 +114,7 @@ func decisionQuestions() []systemone.Question {
 				"manager": "Manages people, a team or a function: Manager, Gerente, Jefe, Jefa, Head of, Director, Directora, Coordinador of a team, Supervisor, VP, Vice President, Chief, C-level.",
 			})},
 		qArea: {Type: "choice", Instructions: ask("Which professional area is the role in `posting` mainly in? A role that spans two areas belongs to the one it is first, as the boundary cases in the options say."),
-			Criteria: systemone.Raw(map[string]string{
-				"engineering_software": "Builds software: software, backend, frontend, full-stack, mobile, DevOps, SRE, platform, ML or data engineering, QA automation. A Solutions Engineer, Sales Engineer or Forward Deployed Engineer is engineering_software first and sales second.",
-				"engineering_other":    "Engineering outside software: mechanical, electrical, civil, chemical, industrial, manufacturing, hardware, aerospace, process or quality engineering (Ingeniero de procesos, Ingeniero de calidad).",
-				"it":                   "Runs and supports technology: IT support, help desk, systems or network administration, security operations, IT infrastructure, ERP administration (Soporte técnico, Sistemas).",
-				"data_analytics":       "Analyzes data: data analyst, BI, analytics, data scientist, statistician, reporting, insights.",
-				"product_design":       "Shapes products: product manager, product owner, UX, UI, product or graphic design for products, user research.",
-				"finance_accounting":   "Money: accounting, finance, FP&A, audit, tax, treasury, payroll, billing, banking, investment (Contador, Contabilidad, Finanzas, Auditor).",
-				"sales":                "Sells: account executive, business development, SDR, BDR, account manager, inside sales, partnerships with quotas (Ventas, Ejecutivo de ventas, Asesor comercial).",
-				"marketing_comms":      "Markets and communicates: marketing, growth, SEO, content, social media, brand, PR, communications (Mercadotecnia, Comunicación).",
-				"customer_support":     "Supports or retains customers: customer support, customer success, call center, client service (Atención a clientes, Servicio al cliente).",
-				"operations_supply":    "Runs operations: operations, logistics, supply chain, procurement, purchasing, warehouse, fleet, inventory, planning (Logística, Compras, Almacén).",
-				"hr":                   "People: HR, recruiting, talent acquisition, people operations, learning and development, compensation (Recursos Humanos, Reclutamiento).",
-				"legal_compliance":     "Law and rules: lawyer, paralegal, legal counsel, compliance, regulatory, privacy, risk (Abogado, Jurídico, Cumplimiento).",
-				"healthcare":           "Cares for health: doctors, nurses, pharmacists, therapists, dentists, medical technicians, clinical staff (Médico, Enfermera, Químico farmacéutico).",
-				"education":            "Teaches: teachers, professors, tutors, instructional designers, school staff (Maestro, Profesor, Docente).",
-				"research_science":     "Researches: scientists and researchers in labs or academia, R&D outside software, clinical research.",
-				"admin":                "Administrative and office support: assistants, executive assistants, receptionists, office managers, data entry (Asistente administrativo, Recepcionista).",
-				"consulting_pm":        "Consults or manages projects and programs across areas: consultants, project managers, program managers, PMO, business analysts, strategy.",
-				"skilled_trades":       "Hands-on trades and production: electricians, technicians, mechanics, welders, drivers, machine operators, construction, maintenance (Técnico, Operador, Chofer, Mantenimiento).",
-				"hospitality_retail":   "Serves in person: retail, stores, restaurants, hotels, tourism, cashiers, baristas, cooks (Cajero, Vendedor de piso, Mesero, Cocinero).",
-				"media_arts":           "Creates media and art: writers, editors, journalists, video, photography, illustration, animation, music, game art (Redactor, Editor).",
-				"ai_training":          "Trains or evaluates AI models as freelance or gig work: AI trainer, AI tutor, data annotator, RLHF writer or rater, expert contributor for platforms such as Mercor, Alignerr, Outlier, Scale AI, Remotasks or DataAnnotation.",
-				"other":                "None of the other areas fits.",
-			})},
+			Criteria: systemone.Raw(areaCriteria)},
 		qEmployment: {Type: "choice", Instructions: ask("What kind of employment does `posting` offer?"),
 			Criteria: systemone.Raw(map[string]string{
 				"full_time":  "A full-time position, permanent or with no other arrangement stated (Tiempo completo, Indeterminado, Planta).",

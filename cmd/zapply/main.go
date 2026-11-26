@@ -44,6 +44,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/match"
 	"github.com/diegohh0411/zapply/internal/model/openrouter"
 	"github.com/diegohh0411/zapply/internal/posting"
+	"github.com/diegohh0411/zapply/internal/preferences"
 	"github.com/diegohh0411/zapply/internal/relay"
 	"github.com/diegohh0411/zapply/internal/render"
 	"github.com/diegohh0411/zapply/internal/secrets"
@@ -260,12 +261,16 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	mailer := mail.New(st, q, keys, provider, cfg.Google.PubSubTopic != "", cfg.Google.ReconcileInterval, log)
 	postings := catalog.New(st, q, log)
+	prefs := preferences.New(st, q, log)
 	reads := posting.NewReads(q)
 	runtime.OnTerminal = func(ctx context.Context, tx pgx.Tx, op worker.Operation) error {
 		if handled, err := postings.OnTerminal(ctx, tx, op); handled || err != nil {
 			return err
 		}
 		if handled, err := reads.OnTerminal(ctx, tx, op); handled || err != nil {
+			return err
+		}
+		if handled, err := prefs.OnTerminal(ctx, tx, op); handled || err != nil {
 			return err
 		}
 		if handled, err := mailer.OnTerminal(ctx, tx, op); handled || err != nil {
@@ -281,7 +286,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		postings.AddWorkers(w)
 	}
 	runtime.RecoverFeatures = func(ctx context.Context, c *river.Client[pgx.Tx]) error {
-		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c), watcher.Recover(ctx, c), postings.Recover(ctx, c))
+		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c), watcher.Recover(ctx, c), postings.Recover(ctx, c), prefs.Recover(ctx, c))
 	}
 	summaries := render.NewService(st, nil)
 	// Woken by dirty cv_summary rows, with a slow poll as fallback. The
