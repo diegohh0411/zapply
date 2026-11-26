@@ -884,6 +884,28 @@ type JobAlertKey struct {
 	CreatedAt time.Time
 }
 
+type JobPreference struct {
+	UserID             uuid.UUID
+	SeniorityMin       *string
+	SeniorityMax       *string
+	SenioritySource    string
+	Areas              []string
+	AreasSource        string
+	Countries          []string
+	RemoteOk           bool
+	LocationSource     string
+	ExcludedEmployment []string
+	EmploymentSource   string
+	Derived            json.RawMessage
+	DerivedAt          *time.Time
+	AreaInputHash      string
+	AreaOperation      *uuid.UUID
+	Stale              bool
+	ChangedAt          time.Time
+	Version            int32
+	UpdatedAt          time.Time
+}
+
 type JobStatus struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
