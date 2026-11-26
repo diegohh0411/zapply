@@ -1187,6 +1187,18 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ModelSettings' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/posting-catalog:
+    get:
+      operationId: getPostingCatalog
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 }, description: "How many of the newest labels to return." }
+      responses:
+        '200':
+          description: The posting catalog's counts, classification stages, spend and newest labels (owner only).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostingCatalog' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/scraper-settings:
     get:
       operationId: getScraperSettings
@@ -3036,6 +3048,51 @@ components:
         posting_extraction_model: { type: string, nullable: true, description: "Extraction model that labels cataloged postings; null when off." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
+    PostingCatalogStage:
+      type: object
+      required: [done, waiting, running, failed]
+      properties:
+        done: { type: integer, description: "Postings this stage answered." }
+        waiting: { type: integer, description: "Postings waiting for this stage; they wait indefinitely while the stage's model is off." }
+        running: { type: integer, description: "Postings with an operation open for this stage." }
+        failed: { type: integer, description: "Postings this stage gave up on after its retry." }
+    PostingLabel:
+      type: object
+      required: [id, title, company, location, areas, countries, languages, confidence, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        company: { type: string }
+        location: { type: string }
+        seniority: { type: string, nullable: true, enum: [intern, entry, mid, senior, staff, manager] }
+        min_years: { type: integer, nullable: true }
+        areas: { type: array, items: { type: string }, description: "One or two areas, the primary first." }
+        specialty: { type: string, nullable: true }
+        countries: { type: array, items: { type: string }, description: "ISO 3166-1 alpha-2 codes." }
+        remote: { type: boolean, nullable: true }
+        employment_type: { type: string, nullable: true, enum: [full_time, contract, internship, part_time] }
+        languages: { type: array, items: { type: string }, description: "ISO 639-1 codes." }
+        confidence: { type: object, additionalProperties: { type: number }, description: "Per field, how sure the model was (0 to 1)." }
+        decision_model: { type: string, nullable: true }
+        extraction_model: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
+    PostingCatalog:
+      type: object
+      required: [postings, postings_24h, labeled, waiting, failed, stages, usage, recent]
+      properties:
+        postings: { type: integer }
+        postings_24h: { type: integer, description: "Postings first seen in the past 24 hours." }
+        labeled: { type: integer, description: "Postings both stages answered." }
+        waiting: { type: integer, description: "Postings with a stage still to answer, running or not." }
+        failed: { type: integer, description: "Postings with a stage given up on." }
+        stages:
+          type: object
+          required: [decision, extraction]
+          properties:
+            decision: { $ref: '#/components/schemas/PostingCatalogStage' }
+            extraction: { $ref: '#/components/schemas/PostingCatalogStage' }
+        usage: { $ref: '#/components/schemas/Usage' }
+        recent: { type: array, items: { $ref: '#/components/schemas/PostingLabel' }, description: "The newest labels first." }
     ScraperProvider:
       type: object
       required: [kind]

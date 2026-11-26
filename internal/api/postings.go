@@ -188,3 +188,18 @@ func (s *server) validPostingModels(ctx context.Context, decision, extraction *s
 	}
 	return e
 }
+
+// GetPostingCatalog reports the posting catalog's state for the owner: its
+// counts, where each classification stage stands, the catalog member's spend
+// and the newest labels to spot-check.
+func (s *server) GetPostingCatalog(ctx context.Context, req gen.GetPostingCatalogRequestObject) (gen.GetPostingCatalogResponseObject, error) {
+	limit := 20
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	var raw json.RawMessage
+	e := s.deps.Store.InTenant(ctx, uid(ctx), func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT platform.posting_catalog($1)`, limit).Scan(&raw)
+	})
+	return decodePlatform[gen.GetPostingCatalog200JSONResponse](raw, membership.Translate(e))
+}

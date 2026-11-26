@@ -80,9 +80,15 @@ gets **two operations**. Each stage has its own owner-selected model:
 | extraction (`kind='extraction'`) | `posting_extraction_model` | `specialty` (text), `countries` (list → ISO 3166-1 alpha-2), `languages` (list → ISO 639-1) |
 
 Both settings are off by default, and a stage whose model isn't set waits.
-The owner sets them through `PUT /v1/admin/model-settings`
-(`posting_decision_model`, `posting_extraction_model`; empty turns a stage
-off).
+The owner sets them on Admin → Models → Posting catalog, which saves
+through `PUT /v1/admin/model-settings` (`posting_decision_model`,
+`posting_extraction_model`; empty turns a stage off).
+
+The same tab reads `GET /v1/admin/posting-catalog` (migration 00044,
+`platform.posting_catalog`, owner only): posting counts (total, past 24 hours,
+fully labeled, waiting, failed), each stage's done / waiting / running /
+failed, the catalog member's usage against its plan, and the newest labels
+(up to 50, default 20) with their confidence, to spot-check quality.
 
 **`areas`:** a decision answers one choice but gives a probability for every
 option, so the runner-up becomes the second area when it has ≥ 0.2 and

@@ -1,5 +1,6 @@
 import { AdminOverview } from './admin-overview';
 import { ModelSettings, type ModelTab } from './model-settings';
+import { PostingCatalog } from './posting-catalog';
 import { EdgeWorkers } from './edge-workers';
 import { ScraperSettings } from './scraper-settings';
 import { SearchSettings } from './search-settings';
@@ -35,6 +36,7 @@ const MODEL_TABS: { id: ModelTab; label: string }[] = [
   { id: 'summaries', label: 'Summaries' },
   { id: 'matching', label: 'Matching' },
   { id: 'extraction', label: 'Extraction' },
+  { id: 'catalog', label: 'Posting catalog' },
 ];
 
 const HEADINGS: Record<string, { title: string; description: string }> = {
@@ -75,7 +77,7 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
 
 @Component({
   selector: 'app-admin-page',
-  imports: [AdminOverview, ModelSettings, ScraperSettings, SearchSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
+  imports: [AdminOverview, ModelSettings, PostingCatalog, ScraperSettings, SearchSettings, EdgeWorkers, DatePipe, FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
 })
@@ -90,7 +92,7 @@ export class AdminPage {
   protected readonly modelTabs = MODEL_TABS;
   protected readonly tab = computed<ModelTab>(() => {
     const value = this.query()?.get('tab');
-    return value === 'matching' || value === 'extraction' ? value : 'summaries';
+    return value === 'matching' || value === 'extraction' || value === 'catalog' ? value : 'summaries';
   });
   protected readonly heading = computed(() => HEADINGS[this.section()] ?? HEADINGS['overview']!);
   protected readonly emailById = computed(

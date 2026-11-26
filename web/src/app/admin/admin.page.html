@@ -287,7 +287,11 @@
           >
         }
       </nav>
-      <app-model-settings [tab]="tab()" />
+      @if (tab() === 'catalog') {
+        <app-posting-catalog />
+      } @else {
+        <app-model-settings [tab]="tab()" />
+      }
     }
     @case ('keys') {
       <section aria-labelledby="keys-heading" class="space-y-4">
