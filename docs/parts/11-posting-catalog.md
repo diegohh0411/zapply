@@ -84,7 +84,7 @@ The owner sets them on Admin → Models → Posting catalog, which saves
 through `PUT /v1/admin/model-settings` (`posting_decision_model`,
 `posting_extraction_model`; empty turns a stage off).
 
-The same tab reads `GET /v1/admin/posting-catalog` (migration 00044,
+The same tab reads `GET /v1/admin/posting-catalog` (migration 00045,
 `platform.posting_catalog`, owner only): posting counts (total, past 24 hours,
 fully labeled, waiting, failed), each stage's done / waiting / running /
 failed, the catalog member's usage against its plan, and the newest labels
