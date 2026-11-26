@@ -262,8 +262,12 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	mailer := mail.New(st, q, keys, provider, cfg.Google.PubSubTopic != "", cfg.Google.ReconcileInterval, log)
 	postings := catalog.New(st, q, log)
 	prefs := preferences.New(st, q, log)
+	reads := posting.NewReads(q)
 	runtime.OnTerminal = func(ctx context.Context, tx pgx.Tx, op worker.Operation) error {
 		if handled, err := postings.OnTerminal(ctx, tx, op); handled || err != nil {
+			return err
+		}
+		if handled, err := reads.OnTerminal(ctx, tx, op); handled || err != nil {
 			return err
 		}
 		if handled, err := prefs.OnTerminal(ctx, tx, op); handled || err != nil {

@@ -198,11 +198,77 @@ func TestFromExtractionDescriptionBetweenAnchors(t *testing.T) {
 
 func TestBetweenIgnoresMarkdownAndCase(t *testing.T) {
 	page := "Header\n\n## About **the** role\nWe build [ATMs](https://x.example) daily.\n\nApply now\nFooter"
-	got := between(page, "About the role", "we build ATMs daily")
-	if got != "## About **the** role\nWe build [ATMs](https://x.example) daily." {
-		t.Errorf("between = %q", got)
+	got, problems := between(page, "About the role", "we build ATMs daily")
+	if got != "## About **the** role\nWe build [ATMs](https://x.example) daily." || problems != nil {
+		t.Errorf("between = %q, %v", got, problems)
 	}
-	if between(page, "About", "ATMs") != "" {
-		t.Error("short anchors matched")
+	if got, problems := between(page, "About", "ATMs"); got != "" || len(problems) != 2 {
+		t.Errorf("short anchors matched: %q, %v", got, problems)
+	}
+}
+
+// The markers must each be one sentence the page holds exactly once, in order.
+func TestBetweenNeedsUniqueOrderedMarkers(t *testing.T) {
+	page := "Intro\nWe build the platform for lenders across Latin America.\nWe build the platform for lenders across Latin America.\n" +
+		"Build models that run on device every day.\nAbout you: five years of Go experience.\nSite footer text."
+	cases := []struct {
+		name, first, last string
+		want              string // a problem containing this
+	}{
+		{"first repeated", "We build the platform for lenders across Latin America", "Five years of Go experience", "appears 2 times"},
+		{"last missing", "Build models that run on device every day", "Something the page never says at all", "is not in the page"},
+		{"first too short", "Intro", "Five years of Go experience", "has 5 letters or digits"},
+		{"last before first", "About you: five years of Go experience", "Build models that run on device every day", "comes before"},
+	}
+	for _, c := range cases {
+		got, problems := between(page, c.first, c.last)
+		if got != "" || len(problems) == 0 || !strings.Contains(strings.Join(problems, "\n"), c.want) {
+			t.Errorf("%s: between = %q, %v; want a problem containing %q", c.name, got, problems, c.want)
+		}
+	}
+	got, problems := between(page, "Build models that run on device every day", "five years of Go experience")
+	if problems != nil || got != "Build models that run on device every day.\nAbout you: five years of Go experience." {
+		t.Errorf("unique markers: %q, %v", got, problems)
+	}
+}
+
+func TestCheckReportsMarkersForRetry(t *testing.T) {
+	page := "Apply now\n\nBuild models that run on device every day.\nWe ship a fast API.\n\nApply now\n\nSimilar jobs: Build models that run on device every day."
+	r := ExtractionRequest("scaledown/extract", page)
+	answers := func(first, last string) string {
+		a, _ := json.Marshal(first)
+		z, _ := json.Marshal(last)
+		return `{"description_start":{"type":"text","value":` + string(a) + `},"description_end":{"type":"text","value":` + string(z) + `}}`
+	}
+	if p := Check(r, answers("Build models that run on device every day", "We ship a fast API.")); len(p) == 0 || !strings.Contains(p[0], "appears 2 times") {
+		t.Errorf("repeated marker not reported: %v", p)
+	}
+	if p := Check(r, answers("Apply now", "We ship a fast API.")); len(p) == 0 {
+		t.Errorf("short marker not reported: %v", p)
+	}
+	if p := Check(r, `{"description_start":{"type":"text","value":null},"description_end":{"type":"text","value":"x"}}`); p != nil {
+		t.Errorf("missing markers retried: %v", p)
+	}
+	if p := Check(r, `{"unrelated":{"type":"text","value":"x"}}`); p != nil {
+		t.Errorf("no markers retried: %v", p)
+	}
+	if p := Check(r, `not json`); p != nil {
+		t.Errorf("garbage retried: %v", p)
+	}
+}
+
+func TestExtractionRequestCarriesRejections(t *testing.T) {
+	plain := ExtractionRequest("scaledown/extract", "posting")
+	fed := ExtractionRequest("scaledown/extract", "posting", `description_end "AWS" has 3 letters or digits`)
+	for _, name := range []string{"description_start", "description_end"} {
+		if plain.Fields[name].Instructions == fed.Fields[name].Instructions {
+			t.Errorf("%s: rejection not carried", name)
+		}
+	}
+	if !strings.Contains(fed.Fields["description_end"].Instructions, `has 3 letters or digits`) {
+		t.Errorf("rejection text lost: %q", fed.Fields["description_end"].Instructions)
+	}
+	if plain.Fields["title"] != fed.Fields["title"] {
+		t.Error("rejection leaked into other fields")
 	}
 }

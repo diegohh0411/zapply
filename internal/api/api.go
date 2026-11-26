@@ -85,7 +85,7 @@ func Handler(d Deps) http.Handler {
 		d.Logger.Error("queue initialization failed", "err", queueErr)
 		queue = nil
 	}
-	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue, postings: d.Postings}
+	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue, postings: d.Postings, reads: posting.NewReads(queue)}
 	srv.notify = notify.New(d.Store)
 	srv.alerts = alerts.New(d.Store, d.ATS)
 	srv.matcher = match.New(d.Store, queue)

@@ -98,6 +98,6 @@ A trigger on `outbox` (topics `evidence.*`, `skill.*`, `organization.*`,
 
 ## Schema
 
-Migration 00046 adds `job_preference`, one row per member (tenant RLS for app
+Migration 00047 adds `job_preference`, one row per member (tenant RLS for app
 and worker). It also adds the `invalidate_job_preference` trigger and
 `platform.stale_job_preferences(limit)`.

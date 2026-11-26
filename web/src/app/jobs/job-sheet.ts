@@ -381,7 +381,7 @@ export class JobSheet {
     try {
       for (
         let wait = 500, waited = 0;
-        waited < 90_000;
+        waited < 180_000;
         waited += wait, wait = Math.min(wait * 1.5, 4000)
       ) {
         await new Promise((resolve) => setTimeout(resolve, wait));

@@ -1,6 +1,6 @@
 // Package preferences keeps what each member is looking for: a seniority
 // range, areas, countries with remote, and employment types to skip
-// (migration 00046, docs/parts/12-job-preferences.md).
+// (migration 00047, docs/parts/12-job-preferences.md).
 //
 // A starting profile is derived from the member's Experience library: plain
 // rules for seniority, location and employment (Derive), and one decision,
