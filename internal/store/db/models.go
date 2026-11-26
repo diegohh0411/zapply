@@ -1453,6 +1453,14 @@ type PlatformSystemKey struct {
 	Kind              string
 }
 
+type PostingRead struct {
+	UserID          uuid.UUID
+	OperationID     uuid.UUID
+	Attempt         int32
+	Problems        []string
+	NextOperationID *uuid.UUID
+}
+
 type Profile struct {
 	UserID    uuid.UUID
 	FullName  string

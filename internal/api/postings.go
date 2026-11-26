@@ -70,7 +70,7 @@ func (s *server) ReadPosting(ctx context.Context, req gen.ReadPostingRequestObje
 // startExtraction queues an extraction of state's job fields, or returns
 // uuid.Nil when no extraction model is selected.
 func (s *server) startExtraction(ctx context.Context, state string) (uuid.UUID, error) {
-	if s.queue == nil || s.deps.Store == nil {
+	if s.reads == nil || s.deps.Store == nil {
 		return uuid.Nil, nil
 	}
 	u := uid(ctx)
@@ -81,7 +81,7 @@ func (s *server) startExtraction(ctx context.Context, state string) (uuid.UUID, 
 			return err
 		}
 		var err error
-		id, err = s.queue.EnqueueExtraction(ctx, tx, u, "posting", posting.ExtractionRequest(*model, state))
+		id, err = s.reads.Start(ctx, tx, u, *model, state)
 		return err
 	})
 	if err != nil {
@@ -96,8 +96,13 @@ func (s *server) GetPostingExtraction(ctx context.Context, req gen.GetPostingExt
 	var status, reason, result string
 	var body []byte
 	err := s.deps.Store.InTenant(ctx, u, func(tx pgx.Tx) error {
+		// A read whose answer was retried reports the attempt that replaced it.
+		latest, err := posting.LatestAttempt(ctx, tx, u, req.Id)
+		if err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx, `SELECT o.status,COALESCE(o.blocked_reason,''),COALESCE(o.result,''),r.body FROM model_operation o
- JOIN model_request r ON r.operation_id=o.id AND r.user_id=o.user_id WHERE o.id=$1 AND o.user_id=$2 AND o.kind='extraction'`, req.Id, u).Scan(&status, &reason, &result, &body)
+ JOIN model_request r ON r.operation_id=o.id AND r.user_id=o.user_id WHERE o.id=$1 AND o.user_id=$2 AND o.kind='extraction'`, latest, u).Scan(&status, &reason, &result, &body)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, library.ErrNotFound

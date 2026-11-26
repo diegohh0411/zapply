@@ -2,6 +2,7 @@ package posting
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -22,8 +23,10 @@ const maxState = extraction.RequestBudget - 16<<10
 
 // ExtractionRequest asks model for the job fields a posting's text states.
 // Models without typed numbers are asked for salary as text, parsed here, so
-// the same fields work on every extraction model.
-func ExtractionRequest(model, text string) extraction.Request {
+// the same fields work on every extraction model. rejected are the problems
+// with the description sentences in an earlier answer (Check); the request
+// carries them back so the model can answer again.
+func ExtractionRequest(model, text string, rejected ...string) extraction.Request {
 	amount := func(which string) extraction.Field {
 		instructions := "The " + which + " base salary or pay the posting offers, as a number without currency"
 		if extraction.ProfileOf(model).Number {
@@ -31,7 +34,7 @@ func ExtractionRequest(model, text string) extraction.Request {
 		}
 		return extraction.Field{Type: extraction.Text, Instructions: instructions}
 	}
-	return extraction.Request{Model: model, State: truncate(strings.TrimSpace(text), maxState), Fields: map[string]extraction.Field{
+	fields := map[string]extraction.Field{
 		"title":           {Type: extraction.Text, Instructions: "The job title, as the posting writes it, without the company name, location or the website's name"},
 		"company":         {Type: extraction.Text, Instructions: "The company hiring for this job"},
 		"location":        {Type: extraction.Text, Instructions: "Where the job is based: city, region and country"},
@@ -43,12 +46,25 @@ func ExtractionRequest(model, text string) extraction.Request {
 		"salary_period":   {Type: extraction.Text, Instructions: "How often the salary is counted: per year, per month or per hour"},
 		"description":     {Type: extraction.Text, Instructions: descriptionInstructions},
 		"description_start": {Type: extraction.Text, Instructions: "The first sentence or heading of the job description itself, copied exactly from the text. " +
-			"The description starts after the page's header, title, navigation, sign-in or sign-up prompts and apply or save buttons"},
+			"The description starts after the page's header, title, navigation, sign-in or sign-up prompts and apply or save buttons. " + markerRule},
 		"description_end": {Type: extraction.Text, Instructions: "The last sentence or list item of the job description itself, copied exactly from the text. " +
 			"The description ends before show more or show less links, job criteria such as seniority level or industries, " +
-			"referral prompts, similar or related jobs, apply buttons and site footers"},
-	}}
+			"referral prompts, similar or related jobs, apply buttons and site footers. " + markerRule},
+	}
+	if len(rejected) > 0 {
+		note := " A previous answer was rejected: " + strings.Join(rejected, "; ") + "."
+		for _, name := range []string{"description_start", "description_end"} {
+			f := fields[name]
+			f.Instructions += note
+			fields[name] = f
+		}
+	}
+	return extraction.Request{Model: model, State: truncate(strings.TrimSpace(text), maxState), Fields: fields}
 }
+
+// markerRule is what the description's first and last sentence must be: one
+// the page holds exactly once, so the edges of the description are unambiguous.
+const markerRule = "Choose a sentence of at least a few words that appears only once in the text."
 
 // descriptionInstructions asks for the posting's own text, cleaned of the
 // page around it, not a summary: it is what matching reads.
@@ -124,27 +140,53 @@ func FromExtraction(r extraction.Request, raw string) Posting {
 }
 
 // description is the posting's own description, cleaned of the page around
-// it. First choice is the page's text between the sentences the model says
-// start and end the description: it is the page's exact wording, and models
-// copy a sentence far more reliably than thousands of words. Otherwise the
-// model's own copy of the description, when it is plausibly the posting's
-// text: long enough, and not longer than what it was read from.
+// it (see describe).
 func description(answers map[string]extraction.Answer, state string) string {
+	s, _ := describe(answers, state)
+	return s
+}
+
+// Check reports what is wrong with the first and last sentence a completed
+// extraction named for the description, worded for the model's next answer
+// (see ExtractionRequest). Empty when they hold, or when the model named
+// neither: there is nothing to correct then.
+func Check(r extraction.Request, raw string) []string {
+	_, problems := describe(extraction.Answers(r, raw), r.State)
+	return problems
+}
+
+// describe is the posting's own description, and the problems with the
+// sentences the model named for it. First choice is the page's text between
+// those sentences: it is the page's exact wording, and models copy a sentence
+// far more reliably than thousands of words. Otherwise the model's own copy of
+// the description, when it is plausibly the posting's text: long enough, and
+// not longer than what it was read from.
+func describe(answers map[string]extraction.Answer, state string) (string, []string) {
 	pages := utf8.RuneCountInString(state)
 	plausible := func(s string) bool {
 		n := utf8.RuneCountInString(s)
 		return n >= minDescription && n <= pages && n <= maxDescription
 	}
-	first, _ := answerText(answers, "description_start")
-	last, _ := answerText(answers, "description_end")
-	if s := between(state, first, last); plausible(s) {
-		return s
+	var problems []string
+	first, okFirst := answerText(answers, "description_start")
+	last, okLast := answerText(answers, "description_end")
+	if okFirst && okLast {
+		var s string
+		s, problems = between(state, first, last)
+		if len(problems) == 0 {
+			if plausible(s) {
+				return s, nil
+			}
+			if n := utf8.RuneCountInString(s); n < minDescription {
+				problems = append(problems, fmt.Sprintf("description_start and description_end enclose only %d characters of the page, too few for a job description; quote the posting's first and last sentences", n))
+			}
+		}
 	}
 	s, _ := answerText(answers, "description")
 	if s = strings.TrimSpace(s); plausible(s) {
-		return s
+		return s, problems
 	}
-	return ""
+	return "", problems
 }
 
 // answerText is a text answer the model is confident enough in.
@@ -161,27 +203,27 @@ func answerText(answers map[string]extraction.Answer, name string) (string, bool
 }
 
 // minAnchor is the fewest letters and digits a description_start or
-// description_end must have to be found unambiguously in the page.
+// description_end must have: shorter text is a word or a bullet, which repeats
+// in a page.
 const minAnchor = 12
 
 // between returns the whole lines of page from the line holding first to the
-// line holding last (the first occurrence after first). Both are matched on
-// their letters and digits alone, so a model that drops markdown, links or
-// punctuation from a sentence still finds it. Empty when either is missing.
-func between(page, first, last string) string {
+// line holding last. Both are matched on their letters and digits alone, so a
+// model that drops markdown, links or punctuation from a sentence still finds
+// it. Each must be long enough and appear exactly once in page, and last must
+// follow first. Otherwise between returns the problems instead.
+func between(page, first, last string) (string, []string) {
 	hay, starts, ends := fold(page)
 	a, _, _ := fold(first)
 	z, _, _ := fold(last)
-	if len(a) < minAnchor || len(z) < minAnchor {
-		return ""
+	var problems []string
+	i := markerAt("description_start", first, a, hay, &problems)
+	j := markerAt("description_end", last, z, hay, &problems)
+	if len(problems) > 0 {
+		return "", problems
 	}
-	i := index(hay, a, 0)
-	if i < 0 {
-		return ""
-	}
-	j := index(hay, z, i)
-	if j < 0 {
-		return ""
+	if j < i {
+		return "", []string{"description_end comes before description_start in the page; they must be the first and last sentence of the description, in that order"}
 	}
 	from, to := starts[i], ends[j+len(z)-1]
 	from = strings.LastIndexByte(page[:from], '\n') + 1
@@ -190,7 +232,36 @@ func between(page, first, last string) string {
 	} else {
 		to = len(page)
 	}
-	return strings.TrimSpace(page[from:to])
+	return strings.TrimSpace(page[from:to]), nil
+}
+
+// markerAt is where a marker holds in hay: its text folded to marker. It must
+// be long enough to be a sentence and appear exactly once. Otherwise markerAt
+// adds the problem to problems and returns -1.
+func markerAt(field, text string, marker, hay []rune, problems *[]string) int {
+	if len(marker) < minAnchor {
+		*problems = append(*problems, fmt.Sprintf("%s %s has %d letters or digits; quote a whole sentence of at least %d", field, quoted(text), len(marker), minAnchor))
+		return -1
+	}
+	at := occurrences(hay, marker)
+	switch len(at) {
+	case 1:
+		return at[0]
+	case 0:
+		*problems = append(*problems, fmt.Sprintf("%s %s is not in the page; copy a sentence exactly as the page writes it", field, quoted(text)))
+	default:
+		*problems = append(*problems, fmt.Sprintf("%s %s appears %d times in the page; quote a sentence that appears only once", field, quoted(text), len(at)))
+	}
+	return -1
+}
+
+// quoted shows a marker in a problem: its words, cut to 80 characters.
+func quoted(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 80 {
+		s = string(r[:80]) + "…"
+	}
+	return strconv.Quote(s)
 }
 
 // fold keeps s's letters and digits, lowercased, with where each one starts
@@ -215,14 +286,15 @@ func fold(s string) (out []rune, starts, ends []int) {
 	return out, starts, ends
 }
 
-// index finds needle in hay at or after from, or -1.
-func index(hay, needle []rune, from int) int {
-	for i := from; i+len(needle) <= len(hay); i++ {
+// occurrences lists where needle starts in hay, overlapping matches included.
+func occurrences(hay, needle []rune) []int {
+	var at []int
+	for i := 0; i+len(needle) <= len(hay); i++ {
 		if hay[i] == needle[0] && slices.Equal(hay[i:i+len(needle)], needle) {
-			return i
+			at = append(at, i)
 		}
 	}
-	return -1
+	return at
 }
 
 func limit(s string, n int) string {
