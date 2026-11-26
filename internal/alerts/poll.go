@@ -137,9 +137,12 @@ func (s *Service) Poll(ctx context.Context, system, board string) error {
 			return err
 		}
 	}
-	if len(result.Pending) == 0 {
-		return nil
+	if len(result.Pending) > 0 {
+		if _, err := s.store.Pool().Exec(ctx, `SELECT platform.ats_postings_delivered($1,$2,$3)`, system, board, result.Pending); err != nil {
+			return err
+		}
 	}
-	_, err := s.store.Pool().Exec(ctx, `SELECT platform.ats_postings_delivered($1,$2,$3)`, system, board, result.Pending)
-	return err
+	// Only once alerts are delivered: cataloging must not hold them up.
+	s.catalogBoard(ctx, system, board, read.Company)
+	return nil
 }

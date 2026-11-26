@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/diegohh0411/zapply/internal/ats"
+	"github.com/diegohh0411/zapply/internal/catalog"
 	"github.com/diegohh0411/zapply/internal/library"
 	"github.com/diegohh0411/zapply/internal/store"
 	"github.com/google/uuid"
@@ -42,10 +43,11 @@ type Fetcher interface {
 }
 
 type Service struct {
-	store  *store.Store
-	ats    Fetcher
-	search Searcher
-	keys   KeyOpener
+	store   *store.Store
+	ats     Fetcher
+	search  Searcher
+	keys    KeyOpener
+	catalog *catalog.Catalog
 }
 
 func New(st *store.Store, f Fetcher) *Service {

@@ -2222,6 +2222,10 @@ export interface components {
             summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
             /** @description Extraction model that reads posting fields; null when off. */
             extraction_model?: string | null;
+            /** @description Decision model that labels cataloged postings; null when off. */
+            posting_decision_model?: string | null;
+            /** @description Extraction model that labels cataloged postings; null when off. */
+            posting_extraction_model?: string | null;
             version: number;
             /** Format: date-time */
             updated_at: string;
@@ -4407,6 +4411,10 @@ export interface operations {
                     summary_reasoning_effort?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
                     /** @description Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off. */
                     extraction_model?: string;
+                    /** @description Decision model that labels cataloged postings (seniority, area, employment type, remote, minimum years). Omitted keeps the saved model; an empty string turns that stage off. */
+                    posting_decision_model?: string;
+                    /** @description Extraction model that labels cataloged postings (specialty, countries, languages). Omitted keeps the saved model; an empty string turns that stage off. */
+                    posting_extraction_model?: string;
                 };
             };
         };

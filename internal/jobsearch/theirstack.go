@@ -47,6 +47,12 @@ type Posting struct {
 	Remote       bool
 	PostedAt     *time.Time
 	DiscoveredAt time.Time
+	// CountryCode is the posting's ISO 3166-1 alpha-2 country, when known.
+	CountryCode string
+	// Seniority is TheirStack's guess (junior, mid_level, senior, staff,
+	// c_level), a hint rather than a label.
+	Seniority   string
+	Description string
 }
 
 // Result is what a search returned and what it cost.
@@ -119,6 +125,9 @@ type searchResponse struct {
 		Location      string `json:"location"`
 		ShortLocation string `json:"short_location"`
 		Remote        bool   `json:"remote"`
+		CountryCode   string `json:"country_code"`
+		Seniority     string `json:"seniority"`
+		Description   string `json:"description"`
 	} `json:"data"`
 }
 
@@ -197,7 +206,11 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 		out.Credits = charged
 	}
 	for _, d := range sr.Data {
-		p := Posting{ID: d.ID.String(), Title: strings.TrimSpace(d.JobTitle), Company: strings.TrimSpace(d.Company), Remote: d.Remote}
+		p := Posting{ID: d.ID.String(), Title: strings.TrimSpace(d.JobTitle), Company: strings.TrimSpace(d.Company), Remote: d.Remote,
+			Seniority: strings.TrimSpace(d.Seniority), Description: strings.TrimSpace(d.Description)}
+		if c := strings.ToUpper(strings.TrimSpace(d.CountryCode)); len(c) == 2 {
+			p.CountryCode = c
+		}
 		if p.Company == "" && d.CompanyObject != nil {
 			p.Company = strings.TrimSpace(d.CompanyObject.Name)
 		}

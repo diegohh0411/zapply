@@ -33,6 +33,7 @@ import (
 
 	"github.com/diegohh0411/zapply/internal/api"
 	"github.com/diegohh0411/zapply/internal/auth"
+	"github.com/diegohh0411/zapply/internal/catalog"
 	"github.com/diegohh0411/zapply/internal/config"
 	"github.com/diegohh0411/zapply/internal/events"
 	"github.com/diegohh0411/zapply/internal/httpx"
@@ -52,7 +53,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/worker"
 )
 
-const usage = "usage: zapply <api|worker|relay|all|migrate|owner|secrets|devtoken> [flags]"
+const usage = "usage: zapply <api|worker|relay|all|migrate|owner|secrets|devtoken|catalog-backfill> [flags]"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -108,6 +109,8 @@ func main() {
 		err = runMigrate(ctx, cfg, log)
 	case "devtoken":
 		err = runDevToken(cfg, os.Args[2:])
+	case "catalog-backfill":
+		err = runCatalogBackfill(ctx, cfg, log)
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -188,6 +191,27 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }
 
+// runCatalogBackfill adds the postings members were already alerted about to
+// the posting catalog. It is safe to run again or to stop: each member's
+// progress is saved with every batch.
+func runCatalogBackfill(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	if err := cfg.ValidateWorker(); err != nil {
+		return err
+	}
+	st, err := store.Open(ctx, cfg.Worker.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	q, err := worker.NewQueue(st)
+	if err != nil {
+		return err
+	}
+	res, err := catalog.New(st, q, log).Backfill(ctx, 200)
+	log.Info("catalog backfill", "members", res.Members, "alerts", res.Alerts, "new_postings", res.Postings)
+	return err
+}
+
 func runOwner(ctx context.Context, cfg config.Config, args []string) error {
 	if len(args) < 1 || (args[0] != "grant" && args[0] != "revoke") {
 		return errors.New("usage: zapply owner <grant|revoke> --user-id <existing UUID>")
@@ -235,20 +259,25 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		provider = google.New(google.Config{ClientID: cfg.Google.ClientID, ClientSecret: cfg.Google.ClientSecret, RedirectURL: cfg.Google.RedirectURL(), Topic: cfg.Google.PubSubTopic})
 	}
 	mailer := mail.New(st, q, keys, provider, cfg.Google.PubSubTopic != "", cfg.Google.ReconcileInterval, log)
+	postings := catalog.New(st, q, log)
 	runtime.OnTerminal = func(ctx context.Context, tx pgx.Tx, op worker.Operation) error {
+		if handled, err := postings.OnTerminal(ctx, tx, op); handled || err != nil {
+			return err
+		}
 		if handled, err := mailer.OnTerminal(ctx, tx, op); handled || err != nil {
 			return err
 		}
 		return matcher.OnTerminal(ctx, tx, op)
 	}
-	watcher := alerts.New(st, nil).WithSearch(&jobsearch.TheirStack{}, keys)
+	watcher := alerts.New(st, nil).WithSearch(&jobsearch.TheirStack{}, keys).WithCatalog(postings)
 	runtime.AddWorkers = func(w *river.Workers) {
 		matcher.AddWorkers(w)
 		mailer.AddWorkers(w)
 		watcher.AddWorkers(w)
+		postings.AddWorkers(w)
 	}
 	runtime.RecoverFeatures = func(ctx context.Context, c *river.Client[pgx.Tx]) error {
-		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c), watcher.Recover(ctx, c))
+		return errors.Join(matcher.Recover(ctx, c), mailer.Recover(ctx, c), watcher.Recover(ctx, c), postings.Recover(ctx, c))
 	}
 	summaries := render.NewService(st, nil)
 	// Woken by dirty cv_summary rows, with a slow poll as fallback. The

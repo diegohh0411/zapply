@@ -1178,6 +1178,8 @@ paths:
                 summary_rows: { $ref: '#/components/schemas/SummaryRows' }
                 summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic. Must be one the summary model accepts." }
                 extraction_model: { type: string, description: "Reads posting fields the page does not publish. Omitted keeps the saved model; an empty string turns extraction off." }
+                posting_decision_model: { type: string, description: "Decision model that labels cataloged postings (seniority, area, employment type, remote, minimum years). Omitted keeps the saved model; an empty string turns that stage off." }
+                posting_extraction_model: { type: string, description: "Extraction model that labels cataloged postings (specialty, countries, languages). Omitted keeps the saved model; an empty string turns that stage off." }
       responses:
         '200':
           description: Updated settings.
@@ -3030,6 +3032,8 @@ components:
         summary_rows: { $ref: '#/components/schemas/SummaryRows' }
         summary_reasoning_effort: { type: string, nullable: true, enum: [off, minimal, low, medium, high, xhigh, max], description: "Thinking effort for summaries; null is automatic." }
         extraction_model: { type: string, nullable: true, description: "Extraction model that reads posting fields; null when off." }
+        posting_decision_model: { type: string, nullable: true, description: "Decision model that labels cataloged postings; null when off." }
+        posting_extraction_model: { type: string, nullable: true, description: "Extraction model that labels cataloged postings; null when off." }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     ScraperProvider:

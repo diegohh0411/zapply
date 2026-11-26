@@ -4,16 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/diegohh0411/zapply/internal/catalog"
+	"github.com/diegohh0411/zapply/internal/joburl"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/text/unicode/norm"
-
-	"github.com/diegohh0411/zapply/internal/joburl"
 )
 
 // candidate is a posting that matched one of a member's watches.
@@ -38,7 +35,7 @@ func (c candidate) fileable() bool {
 
 // fingerprintTTL is how long a company+title+city identity holds: past it, the
 // same role posted again is a new opening, not a duplicate.
-const fingerprintTTL = 60 * 24 * time.Hour
+const fingerprintTTL = catalog.FingerprintTTL
 
 // keys are the identities of a posting that make two sightings the same
 // opening: its ATS posting, its canonical URL, and its company, title and city.
@@ -56,40 +53,17 @@ func (c candidate) keys() []string {
 	return out
 }
 
-// companySuffix drops legal forms, so "Acme, Inc." and "ACME" are one company.
-var companySuffix = regexp.MustCompile(`\b(inc|llc|ltd|limited|corp|corporation|co|gmbh|sa|sas|s a|sa de cv|s de rl de cv|sapi de cv|bv|plc|ag)\b\.?$`)
-
 // fingerprint is "company|title|city", folded to lowercase ASCII letters and
-// digits; "" without a company or title.
+// digits; "" without a company or title. The folding is the catalog's, so a
+// member's identities and the platform's agree.
 func fingerprint(company, title, location string) string {
-	c := companySuffix.ReplaceAllString(fold(company), "")
-	c = strings.TrimSpace(c)
-	t := fold(title)
+	c := catalog.Company(company)
+	t := catalog.Fold(title)
 	if c == "" || t == "" {
 		return ""
 	}
 	city, _, _ := strings.Cut(location, ",")
-	return c + "|" + t + "|" + fold(city)
-}
-
-// fold lowercases s, strips accents and punctuation, and collapses spaces.
-func fold(s string) string {
-	var b strings.Builder
-	space := false
-	for _, r := range norm.NFD.String(strings.ToLower(s)) {
-		switch {
-		case unicode.Is(unicode.Mn, r):
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			if space && b.Len() > 0 {
-				b.WriteByte(' ')
-			}
-			space = false
-			b.WriteRune(r)
-		default:
-			space = true
-		}
-	}
-	return b.String()
+	return c + "|" + t + "|" + catalog.Fold(city)
 }
 
 // file inserts one member's alerts (the trigger files the notifications) and
