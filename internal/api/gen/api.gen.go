@@ -1977,6 +1977,11 @@ type MailConnectComplete struct {
 	State string `json:"state"`
 }
 
+// MailJobLink defines model for MailJobLink.
+type MailJobLink struct {
+	JobId *openapi_types.UUID `json:"job_id"`
+}
+
 // MailMessage defines model for MailMessage.
 type MailMessage struct {
 	AccountId    openapi_types.UUID  `json:"account_id"`
@@ -1986,10 +1991,13 @@ type MailMessage struct {
 	GmailUrl     string              `json:"gmail_url"`
 	Id           openapi_types.UUID  `json:"id"`
 	JobId        *openapi_types.UUID `json:"job_id,omitempty"`
-	ReceivedAt   time.Time           `json:"received_at"`
-	Snippet      string              `json:"snippet"`
-	StatusChange *MailStatusChange   `json:"status_change,omitempty"`
-	Subject      string              `json:"subject"`
+
+	// JobManual True when the member chose the job (or chose none).
+	JobManual    bool              `json:"job_manual"`
+	ReceivedAt   time.Time         `json:"received_at"`
+	Snippet      string            `json:"snippet"`
+	StatusChange *MailStatusChange `json:"status_change,omitempty"`
+	Subject      string            `json:"subject"`
 }
 
 // MailMessagePage defines model for MailMessagePage.
@@ -3027,6 +3035,9 @@ type UpdateMailAccountJSONRequestBody = MailAccountUpdate
 // RescanMailAccountJSONRequestBody defines body for RescanMailAccount for application/json ContentType.
 type RescanMailAccountJSONRequestBody RescanMailAccountJSONBody
 
+// RelinkMailMessageJSONRequestBody defines body for RelinkMailMessage for application/json ContentType.
+type RelinkMailMessageJSONRequestBody = MailJobLink
+
 // ResolveMailStatusChangeJSONRequestBody defines body for ResolveMailStatusChange for application/json ContentType.
 type ResolveMailStatusChangeJSONRequestBody = MailStatusChangeAction
 
@@ -3308,6 +3319,9 @@ type ServerInterface interface {
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(w http.ResponseWriter, r *http.Request, params ListMailMessagesParams)
+
+	// (PUT /v1/mail/messages/{id}/job)
+	RelinkMailMessage(w http.ResponseWriter, r *http.Request, id ID)
 
 	// (POST /v1/mail/messages/{id}/status-change)
 	ResolveMailStatusChange(w http.ResponseWriter, r *http.Request, id ID)
@@ -6009,6 +6023,32 @@ func (siw *ServerInterfaceWrapper) ListMailMessages(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// RelinkMailMessage operation middleware
+func (siw *ServerInterfaceWrapper) RelinkMailMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RelinkMailMessage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResolveMailStatusChange operation middleware
 func (siw *ServerInterfaceWrapper) ResolveMailStatusChange(w http.ResponseWriter, r *http.Request) {
 
@@ -6805,6 +6845,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/accounts/{id}/rescan", wrapper.RescanMailAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/mail/messages", wrapper.ListMailMessages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/mail/messages/{id}/status-change", wrapper.ResolveMailStatusChange)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/mail/messages/{id}/job", wrapper.RelinkMailMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notifications", wrapper.ListNotifications)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/notifications/summary", wrapper.GetNotificationSummary)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/notifications/read", wrapper.MarkNotificationsRead)
@@ -10215,6 +10256,46 @@ func (response ListMailMessagesdefaultApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type RelinkMailMessageRequestObject struct {
+	Id   ID `json:"id"`
+	Body *RelinkMailMessageJSONRequestBody
+}
+
+type RelinkMailMessageResponseObject interface {
+	VisitRelinkMailMessageResponse(w http.ResponseWriter) error
+}
+
+type RelinkMailMessage200JSONResponse MailMessage
+
+func (response RelinkMailMessage200JSONResponse) VisitRelinkMailMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RelinkMailMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RelinkMailMessagedefaultApplicationProblemPlusJSONResponse) VisitRelinkMailMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ResolveMailStatusChangeRequestObject struct {
 	Id   ID `json:"id"`
 	Body *ResolveMailStatusChangeJSONRequestBody
@@ -11403,6 +11484,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/mail/messages)
 	ListMailMessages(ctx context.Context, request ListMailMessagesRequestObject) (ListMailMessagesResponseObject, error)
+
+	// (PUT /v1/mail/messages/{id}/job)
+	RelinkMailMessage(ctx context.Context, request RelinkMailMessageRequestObject) (RelinkMailMessageResponseObject, error)
 
 	// (POST /v1/mail/messages/{id}/status-change)
 	ResolveMailStatusChange(ctx context.Context, request ResolveMailStatusChangeRequestObject) (ResolveMailStatusChangeResponseObject, error)
@@ -13865,6 +13949,39 @@ func (sh *strictHandler) ListMailMessages(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListMailMessagesResponseObject); ok {
 		if err := validResponse.VisitListMailMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RelinkMailMessage operation middleware
+func (sh *strictHandler) RelinkMailMessage(w http.ResponseWriter, r *http.Request, id ID) {
+	var request RelinkMailMessageRequestObject
+
+	request.Id = id
+
+	var body RelinkMailMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RelinkMailMessage(ctx, request.(RelinkMailMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RelinkMailMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RelinkMailMessageResponseObject); ok {
+		if err := validResponse.VisitRelinkMailMessageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

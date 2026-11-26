@@ -637,7 +637,12 @@ export class JobSheet {
     if (!id) return;
     this.client.setQueryData<{ activities: JobActivity[]; mail: Schemas['MailMessage'][] }>(
       jobActivitiesKey(this.auth.identity(), id),
-      (t) => t && { ...t, mail: t.mail.map((x) => (x.id === m.id ? m : x)) },
+      // A message relinked to another job (or none) leaves this timeline.
+      (t) =>
+        t && {
+          ...t,
+          mail: t.mail.flatMap((x) => (x.id !== m.id ? [x] : m.job_id === id ? [m] : [])),
+        },
     );
   }
 

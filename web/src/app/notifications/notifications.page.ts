@@ -38,6 +38,7 @@ import { AuthService } from '../core/auth.service';
 import { EventsService } from '../core/events.service';
 import { NotificationsService } from '../core/notifications.service';
 import { categoryLabel, dayLabel, parseSender, relativeTime } from '../mail/format';
+import { MailJobLink } from '../mail/job-link';
 import { MailStatusChange } from '../mail/status-change';
 
 type Notification = Schemas['Notification'];
@@ -70,7 +71,7 @@ const mailVerb: Record<string, string> = {
  */
 @Component({
   selector: 'app-notifications-page',
-  imports: [MailStatusChange, NgIcon, RouterLink, ZardButtonComponent],
+  imports: [MailJobLink, MailStatusChange, NgIcon, RouterLink, ZardButtonComponent],
   providers: [
     provideIcons({
       lucideArchive,
@@ -240,6 +241,7 @@ export class NotificationsPage {
   }
 
   protected replaceMail(n: Notification, m: Message): void {
+    void this.loadJobTitles([{ ...n, mail: m }]);
     this.edit((list) => list.map((x) => (x.id === n.id ? { ...x, mail: m } : x)));
   }
 

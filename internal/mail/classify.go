@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/diegohh0411/zapply/internal/decide"
 	"github.com/diegohh0411/zapply/internal/model/systemone"
@@ -132,7 +135,7 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 		case m.Category == nil:
 			stage, qs = "category", []systemone.Question{categoryQuestion()}
 		case *m.Category != "other" && !jobDone && attempts["job"] < jobAttempts:
-			open, e := s.openJobs(ctx, tx, u)
+			open, e := s.candidateJobs(ctx, tx, u, m)
 			if e != nil {
 				return e
 			}
@@ -175,27 +178,133 @@ func (s *Service) Classify(ctx context.Context, u, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) openJobs(ctx context.Context, tx pgx.Tx, u uuid.UUID) ([]jobOption, error) {
-	rows, e := tx.Query(ctx, `SELECT j.id,j.title,j.company,st.name FROM job j JOIN job_status st ON st.user_id=j.user_id AND st.id=j.status_id
- WHERE j.user_id=$1 AND j.archived_at IS NULL AND st.stage IN ('saved','active','offer') ORDER BY j.updated_at DESC,j.id LIMIT $2`, u, maxJobOptions)
+// candidateJobs picks the jobs the job-link question offers. A member tracks
+// more open jobs than one question can list, so the ones the email points at
+// come first: jobs an earlier message in the same thread, or from the same
+// sender, was linked to (a member's own correction counts most), then jobs
+// whose company the sender, subject or preview names, then the most recently
+// touched. Without this, an older job never made the cut however plainly the
+// email named it.
+func (s *Service) candidateJobs(ctx context.Context, tx pgx.Tx, u uuid.UUID, m pendingMessage) ([]jobOption, error) {
+	var thread string
+	if e := tx.QueryRow(ctx, `SELECT thread_id FROM mail_message WHERE user_id=$1 AND id=$2`, u, m.ID).Scan(&thread); e != nil {
+		return nil, e
+	}
+	sender, domain := senderParts(m.From)
+	rows, e := tx.Query(ctx, `SELECT j.id,j.title,j.company,st.name,st.stage::text,
+ COALESCE((SELECT max(CASE WHEN mm.job_manual THEN 2 ELSE 1 END) FROM mail_message mm WHERE mm.user_id=j.user_id AND mm.job_id=j.id AND mm.id<>$2
+   AND (($3<>'' AND mm.thread_id=$3) OR ($4<>'' AND lower(mm.from_address) LIKE '%'||$4||'%'))),0)
+ FROM job j JOIN job_status st ON st.user_id=j.user_id AND st.id=j.status_id
+ WHERE j.user_id=$1 AND j.archived_at IS NULL AND st.stage IN ('saved','active','offer') ORDER BY j.updated_at DESC,j.id LIMIT 1000`, u, m.ID, thread, sender)
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
-	var out []jobOption
+	type scored struct {
+		jobOption
+		score int
+		order int
+	}
+	text := normalize(m.From + " " + m.Subject + " " + m.Snippet)
+	var all []scored
 	for rows.Next() {
-		var o jobOption
-		var title, company string
-		if e = rows.Scan(&o.ID, &title, &company, &o.Status); e != nil {
+		var o scored
+		var title, company, stage string
+		var linked int
+		if e = rows.Scan(&o.ID, &title, &company, &o.Status, &stage, &linked); e != nil {
 			return nil, e
 		}
 		o.Label = title
 		if company != "" {
 			o.Label += " at " + company
 		}
-		out = append(out, o)
+		o.order = len(all)
+		o.score = 100*linked + companyScore(company, text, domain)
+		if o.score > 0 && stage == "active" {
+			o.score++ // mail about a known company most likely concerns an application in progress
+		}
+		all = append(all, o)
 	}
-	return out, rows.Err()
+	if e = rows.Err(); e != nil {
+		return nil, e
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].score > all[j].score })
+	out := make([]jobOption, 0, min(len(all), maxJobOptions))
+	for _, o := range all[:min(len(all), maxJobOptions)] {
+		out = append(out, o.jobOption)
+	}
+	return out, nil
+}
+
+// senderParts returns the lowercase address in a From header and its
+// organisation's domain label ("canonical" for jobs@mail.canonical.com).
+// Mail from public providers and applicant-tracking systems names no company.
+func senderParts(from string) (address, org string) {
+	from = strings.ToLower(strings.TrimSpace(from))
+	if i, j := strings.LastIndex(from, "<"), strings.LastIndex(from, ">"); i >= 0 && j > i {
+		from = from[i+1 : j]
+	}
+	at := strings.LastIndex(from, "@")
+	if at < 0 {
+		return "", ""
+	}
+	address = from
+	labels := strings.Split(from[at+1:], ".")
+	if len(labels) < 2 {
+		return address, ""
+	}
+	org = labels[len(labels)-2]
+	// co.uk, com.mx and the like: the organisation is one label further left.
+	if len(labels) >= 3 && len(org) <= 3 {
+		org = labels[len(labels)-3]
+	}
+	if genericSenders[org] {
+		org = ""
+	}
+	return address, org
+}
+
+var genericSenders = map[string]bool{
+	"gmail": true, "googlemail": true, "outlook": true, "hotmail": true, "yahoo": true, "icloud": true, "proton": true, "protonmail": true,
+	"greenhouse": true, "greenhouse-mail": true, "lever": true, "hire": true, "workday": true, "myworkday": true, "myworkdayjobs": true,
+	"smartrecruiters": true, "ashbyhq": true, "icims": true, "taleo": true, "successfactors": true, "jobvite": true, "bamboohr": true,
+	"recruitee": true, "teamtailor": true, "workable": true, "linkedin": true, "indeed": true, "glassdoor": true, "calendly": true,
+	"gem": true, "goodtime": true, "hackerrank": true, "codility": true, "codesignal": true, "hirevue": true, "notifications": true,
+}
+
+// companyScore says how plainly an email names a job's company: its whole name
+// in the text, or the sender's domain matching it.
+func companyScore(company, text, domain string) int {
+	c := normalize(company)
+	if c == "" {
+		return 0
+	}
+	score := 0
+	if strings.Contains(" "+text+" ", " "+c+" ") {
+		score += 10
+	}
+	if domain != "" {
+		squashed := strings.ReplaceAll(c, " ", "")
+		if squashed == domain || (len(domain) >= 4 && strings.HasPrefix(squashed, domain)) || (len(squashed) >= 4 && strings.HasPrefix(domain, squashed)) {
+			score += 20
+		}
+	}
+	return score
+}
+
+// normalize lowercases s and reduces it to words separated by single spaces,
+// dropping a company's legal suffix so "Canonical Ltd." matches "Canonical".
+func normalize(s string) string {
+	f := strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	for len(f) > 1 {
+		switch f[len(f)-1] {
+		case "inc", "llc", "ltd", "limited", "gmbh", "sa", "de", "cv", "corp", "co", "plc", "bv", "ag", "srl":
+			f = f[:len(f)-1]
+			continue
+		}
+		break
+	}
+	return strings.Join(f, " ")
 }
 
 func categoryQuestion() systemone.Question {
@@ -217,7 +326,7 @@ func jobQuestion(jobs []jobOption) systemone.Question {
 		criteria[j.ID.String()] = j.Label
 	}
 	return systemone.Question{Type: "choice", Instructions: systemone.Raw(map[string]any{
-		"question": "Which of the candidate's tracked jobs in `jobs` is `email` about? Choose none unless the sender, subject or preview clearly names the company or role.",
+		"question": "Which of the candidate's tracked jobs in `jobs` is `email` about? Match on the company first: the sender's address or domain, the subject or the preview naming it. Recruiters often call a role by its team, project or a shortened title rather than the posting's exact title, so when only one listed job is at that company, choose it even if the role is worded differently. When several are at that company, choose the one whose role the email describes best. Choose none only when no listed company is named or implied.",
 	}), Criteria: systemone.Raw(criteria)}
 }
 
@@ -355,7 +464,7 @@ func (s *Service) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 		}
 		// The job may have been deleted since the question was asked.
 		var tag pgconn.CommandTag
-		tag, e = tx.Exec(ctx, `UPDATE mail_message SET job_id=$3,updated_at=now() WHERE user_id=$1 AND id=$2 AND EXISTS(SELECT FROM job WHERE user_id=$1 AND id=$3)`, op.UserID, msg, job)
+		tag, e = tx.Exec(ctx, `UPDATE mail_message SET job_id=$3,updated_at=now() WHERE user_id=$1 AND id=$2 AND NOT job_manual AND EXISTS(SELECT FROM job WHERE user_id=$1 AND id=$3)`, op.UserID, msg, job)
 		// An unusable status answer still keeps the link.
 		if e == nil && tag.RowsAffected() == 1 {
 			if to, perr := uuid.Parse(pick(1).Choice); perr == nil {

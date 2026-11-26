@@ -1809,6 +1809,31 @@ paths:
               schema: { $ref: "#/components/schemas/MailMessage" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /v1/mail/messages/{id}/job:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      operationId: relinkMailMessage
+      tags: [mail]
+      description: >
+        Sets the job a message is about, or unlinks it with a null `job_id`.
+        The member's choice is final: the classifier never changes it, and it
+        steers later mail from the same sender or thread toward that job. A
+        status proposal made for the previous job is dropped; a move already
+        applied to that job stays.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailJobLink" }
+      responses:
+        "200":
+          description: The updated message.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MailMessage" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /v1/notifications:
     get:
       operationId: listNotifications
@@ -3554,12 +3579,13 @@ components:
         code: { type: string, minLength: 1, maxLength: 2048 }
     MailMessage:
       type: object
-      required: [id, account_id, category, from, subject, snippet, received_at, classified_at, gmail_url]
+      required: [id, account_id, category, job_manual, from, subject, snippet, received_at, classified_at, gmail_url]
       properties:
         id: { type: string, format: uuid }
         account_id: { type: string, format: uuid }
         category: { $ref: '#/components/schemas/MailCategory' }
         job_id: { type: string, format: uuid, nullable: true }
+        job_manual: { type: boolean, description: True when the member chose the job (or chose none). }
         from: { type: string }
         subject: { type: string }
         snippet: { type: string }
@@ -3583,6 +3609,11 @@ components:
         previous_status_id: { type: string, format: uuid, nullable: true }
         confidence: { type: number, nullable: true }
         auto: { type: boolean }
+    MailJobLink:
+      type: object
+      required: [job_id]
+      properties:
+        job_id: { type: string, format: uuid, nullable: true }
     MailStatusChangeAction:
       type: object
       required: [action]

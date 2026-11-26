@@ -1389,6 +1389,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail/messages/{id}/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the job a message is about, or unlinks it with a null `job_id`. The member's choice is final: the classifier never changes it, and it steers later mail from the same sender or thread toward that job. A status proposal made for the previous job is dropped; a move already applied to that job stays. */
+        put: operations["relinkMailMessage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications": {
         parameters: {
             query?: never;
@@ -2778,6 +2797,8 @@ export interface components {
             category: components["schemas"]["MailCategory"];
             /** Format: uuid */
             job_id?: string | null;
+            /** @description True when the member chose the job (or chose none). */
+            job_manual: boolean;
             from: string;
             subject: string;
             snippet: string;
@@ -2799,6 +2820,10 @@ export interface components {
             previous_status_id: string | null;
             confidence: number | null;
             auto: boolean;
+        };
+        MailJobLink: {
+            /** Format: uuid */
+            job_id: string | null;
         };
         MailStatusChangeAction: {
             /** @enum {string} */
@@ -5411,6 +5436,33 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MailStatusChangeAction"];
+            };
+        };
+        responses: {
+            /** @description The updated message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    relinkMailMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailJobLink"];
             };
         };
         responses: {

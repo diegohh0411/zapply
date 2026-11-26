@@ -75,16 +75,19 @@
               @if (m.snippet) {
                 <p class="snippet">{{ m.snippet }}</p>
               }
-              @if (m.job_id && jobTitles()[m.job_id]) {
-                <a
-                  class="about"
-                  [routerLink]="['/jobs']"
-                  [queryParams]="{ job: m.job_id }"
-                  (click)="read(n)"
-                >
-                  <ng-icon name="lucideBriefcase" aria-hidden="true" />{{ jobTitles()[m.job_id] }}
-                </a>
-              }
+              <div class="about-row">
+                @if (m.job_id && jobTitles()[m.job_id]) {
+                  <a
+                    class="about"
+                    [routerLink]="['/jobs']"
+                    [queryParams]="{ job: m.job_id }"
+                    (click)="read(n)"
+                  >
+                    <ng-icon name="lucideBriefcase" aria-hidden="true" />{{ jobTitles()[m.job_id] }}
+                  </a>
+                }
+                <app-mail-job-link [message]="m" (changed)="replaceMail(n, $event)" />
+              </div>
               <app-mail-status-change [message]="m" (changed)="replaceMail(n, $event)" />
             </div>
             <time class="when" [attr.datetime]="m.received_at" [title]="m.received_at">{{

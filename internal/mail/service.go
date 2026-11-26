@@ -78,10 +78,12 @@ type Account struct {
 }
 
 type Item struct {
-	ID           uuid.UUID     `json:"id"`
-	AccountID    uuid.UUID     `json:"account_id"`
-	Category     string        `json:"category"`
-	JobID        *uuid.UUID    `json:"job_id"`
+	ID        uuid.UUID  `json:"id"`
+	AccountID uuid.UUID  `json:"account_id"`
+	Category  string     `json:"category"`
+	JobID     *uuid.UUID `json:"job_id"`
+	// JobManual is true when the member chose the job (or chose none).
+	JobManual    bool          `json:"job_manual"`
 	From         string        `json:"from"`
 	Subject      string        `json:"subject"`
 	Snippet      string        `json:"snippet"`
@@ -101,7 +103,7 @@ type StatusChange struct {
 	Auto       bool       `json:"auto"`
 }
 
-const itemColumns = `id,account_id,category,job_id,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at,
+const itemColumns = `id,account_id,category,job_id,job_manual,COALESCE(from_address,''),COALESCE(subject,''),COALESCE(snippet,''),received_at,classified_at,
  (SELECT address FROM mail_account WHERE id=account_id),COALESCE(NULLIF(thread_id,''),provider_message_id),
  status_outcome,suggested_status_id,previous_status_id,status_confidence,status_auto`
 
@@ -110,7 +112,7 @@ func scanItem(row pgx.Row) (Item, error) {
 	var address, thread string
 	var outcome *string
 	var c StatusChange
-	if e := row.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt, &address, &thread,
+	if e := row.Scan(&m.ID, &m.AccountID, &m.Category, &m.JobID, &m.JobManual, &m.From, &m.Subject, &m.Snippet, &m.ReceivedAt, &m.ClassifiedAt, &address, &thread,
 		&outcome, &c.ProposedID, &c.PreviousID, &c.Confidence, &c.Auto); e != nil {
 		return m, e
 	}
