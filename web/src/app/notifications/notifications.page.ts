@@ -67,7 +67,7 @@ const mailVerb: Record<string, string> = {
 /**
  * The notification inbox. Rows read "who did what" with the thing it is about
  * underneath, like Notion's and Linear's inboxes. Each kind renders its own row:
- * mail about an application, or a new opening on a watched job board.
+ * mail about an application, or a new opening that fits their job preferences.
  */
 @Component({
   selector: 'app-notifications-page',

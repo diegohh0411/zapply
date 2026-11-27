@@ -21,15 +21,16 @@ import (
 // TheirStackURL is TheirStack's API.
 const TheirStackURL = "https://api.theirstack.com"
 
-// Query is a saved search.
+// Query is one search.
 type Query struct {
-	// Titles match a posting whose title contains every word of any of them.
+	// Titles match a posting whose title contains every word of any of them;
+	// empty matches any title.
 	Titles []string
 	// Locations match a posting whose location contains any of them; empty
 	// matches anywhere.
 	Locations []string
-	// Country is an ISO country code, or "".
-	Country    string
+	// Countries are ISO country codes; empty matches anywhere.
+	Countries  []string
 	RemoteOnly bool
 	// Since asks only for postings the provider discovered at or after it.
 	Since time.Time
@@ -92,7 +93,7 @@ type TheirStack struct {
 const maxAgeDays = 30
 
 type searchRequest struct {
-	JobTitleOr           []string  `json:"job_title_or"`
+	JobTitleOr           []string  `json:"job_title_or,omitempty"`
 	PostedAtMaxAgeDays   int       `json:"posted_at_max_age_days"`
 	DiscoveredAtGte      string    `json:"discovered_at_gte"`
 	JobCountryCodeOr     []string  `json:"job_country_code_or,omitempty"`
@@ -140,8 +141,8 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 		OrderBy:            []orderBy{{Field: "discovered_at", Desc: false}},
 		Limit:              q.Limit,
 	}
-	if q.Country != "" {
-		body.JobCountryCodeOr = []string{strings.ToUpper(q.Country)}
+	for _, c := range q.Countries {
+		body.JobCountryCodeOr = append(body.JobCountryCodeOr, strings.ToUpper(c))
 	}
 	for _, l := range q.Locations {
 		body.JobLocationPatternOr = append(body.JobLocationPatternOr, "(?i)"+regexp.QuoteMeta(l))

@@ -3,7 +3,6 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideBell,
-  lucideRadar,
   lucideBuilding2,
   lucideCpu,
   lucideCreditCard,
@@ -49,7 +48,6 @@ interface NavItem {
       lucideSparkles,
       lucideLogOut,
       lucideBell,
-      lucideRadar,
       lucideSettings,
       lucideLayoutDashboard,
       lucideCreditCard,
@@ -198,7 +196,6 @@ export class Shell {
           icon: 'lucideBell',
           badge: this.notifications.unread(),
         },
-        { path: '/alerts', label: 'Job alerts', icon: 'lucideRadar' },
       ],
     },
     {

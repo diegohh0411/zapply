@@ -1,6 +1,7 @@
 # Part 11: Posting catalog and classifier
 
-Status: built. This is step 1 of the job-alerts redesign: it collects and
+Status: built. This is step 1 of the job-alerts redesign. Part 13 replaced the
+watch-based ingest below with platform suppliers. Step 1 collects and
 labels postings. Nothing members see changes: alerts are still matched by
 title keywords and delivered exactly as before.
 

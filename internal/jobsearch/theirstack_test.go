@@ -28,7 +28,7 @@ func TestTheirStackSearch(t *testing.T) {
 	}))
 	defer srv.Close()
 	ts := &TheirStack{BaseURL: srv.URL}
-	res, err := ts.Search(context.Background(), "k", Query{Titles: []string{"backend engineer"}, Locations: []string{"Monterrey (NL)"}, Country: "mx", RemoteOnly: true, Since: since, Limit: 25})
+	res, err := ts.Search(context.Background(), "k", Query{Titles: []string{"backend engineer"}, Locations: []string{"Monterrey (NL)"}, Countries: []string{"mx"}, RemoteOnly: true, Since: since, Limit: 25})
 	if err != nil {
 		t.Fatal(err)
 	}

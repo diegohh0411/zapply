@@ -15,8 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/diegohh0411/zapply/internal/alerts"
-	"github.com/diegohh0411/zapply/internal/ats"
 	"github.com/diegohh0411/zapply/internal/auth"
 	"github.com/diegohh0411/zapply/internal/catalog"
 	"github.com/diegohh0411/zapply/internal/membership"
@@ -374,70 +372,6 @@ func TestClassification(t *testing.T) {
 	}
 }
 
-func TestBackfillIsIdempotent(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	fake := &boards{postings: []ats.Posting{{Key: "old", Title: "Engineer", Location: "Remote", URL: "https://jobs.lever.co/acme/old"}}}
-	api := alerts.New(e.db.Store, fake)
-	poller := alerts.New(e.worker, fake) // no catalog: these alerts predate it
-	for _, sub := range []string{"alice", "bob"} {
-		u, err := e.db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: sub})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := api.Create(ctx, u, alerts.Input{URL: "https://jobs.lever.co/acme"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := poller.Poll(ctx, "lever", "acme"); err != nil { // baseline
-		t.Fatal(err)
-	}
-	for i := 0; i < 3; i++ {
-		fake.postings = append(fake.postings, ats.Posting{Key: string(rune('a' + i)), Title: "Role " + string(rune('A'+i)), Location: "Austin, TX",
-			URL: "https://jobs.lever.co/acme/" + string(rune('a'+i))})
-	}
-	if err := poller.Poll(ctx, "lever", "acme"); err != nil {
-		t.Fatal(err)
-	}
-	if n := e.count(t, `SELECT count(*) FROM platform.posting`); n != 0 {
-		t.Fatalf("%d postings before the backfill", n)
-	}
-	// Batches of two: each member takes two batches, and both members' alerts
-	// of the same posting resolve to one posting.
-	res, err := e.catalog.Backfill(ctx, 2)
-	if err != nil || res.Members != 2 || res.Alerts != 6 || res.Postings != 3 {
-		t.Fatalf("backfill = %+v, %v", res, err)
-	}
-	if n := e.count(t, `SELECT count(*) FROM platform.posting_identity WHERE key LIKE 'ats:lever:acme:%'`); n != 3 {
-		t.Errorf("%d ATS identities", n)
-	}
-	again, err := e.catalog.Backfill(ctx, 2)
-	if err != nil || again.Alerts != 0 || again.Postings != 0 {
-		t.Fatalf("second backfill = %+v, %v", again, err)
-	}
-	// A run stopped part way resumes from its cursor.
-	admin, err := pgx.Connect(ctx, e.db.AdminURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Close(ctx)
-	if _, err := admin.Exec(ctx, `UPDATE platform.posting_backfill SET done=false`); err != nil {
-		t.Fatal(err)
-	}
-	resumed, err := e.catalog.Backfill(ctx, 2)
-	if err != nil || resumed.Alerts != 0 || e.count(t, `SELECT count(*) FROM platform.posting`) != 3 {
-		t.Fatalf("resumed backfill = %+v, %v", resumed, err)
-	}
-}
-
-type boards struct{ postings []ats.Posting }
-
-func (b *boards) Fetch(context.Context, string, string) (ats.Board, error) {
-	return ats.Board{Company: "Acme Inc.", Postings: append([]ats.Posting(nil), b.postings...)}, nil
-}
-
-// The owner's status report counts each stage, reports the catalog member's
-// spend and shows the newest labels; members can't read it.
 func TestCatalogStatus(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

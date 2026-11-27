@@ -41,9 +41,8 @@ const CUSTOM = 'custom';
 export const perCredit = (p: Plan): string => trimUSD((p.usd / p.credits).toFixed(12));
 const planLabel = (p: Plan): string => `${p.credits.toLocaleString('en-US')} credits · $${p.usd.toLocaleString('en-US')}/month`;
 
-// Search watchers: members' saved job searches run through TheirStack, which
-// charges one API credit per posting returned. Members pay for their polls
-// from their plan, at the credit price set here.
+// Job search: TheirStack supplies the postings job alerts are made of. It
+// charges one API credit per posting returned; the platform pays.
 @Component({
   selector: 'app-search-settings',
   imports: [FormsModule, RouterLink, ZardButtonComponent, ZardInputComponent, ...ZardSelectImports],
@@ -53,9 +52,9 @@ const planLabel = (p: Plan): string => `${p.credits.toLocaleString('en-US')} cre
       <header class="space-y-1">
         <h2 id="search-heading" class="text-lg font-semibold">Job search</h2>
         <p class="max-w-2xl text-sm text-muted-foreground">
-          Search watchers look for roles across every company, including those that post only on LinkedIn, through TheirStack. It charges one API credit
-          per posting a search returns; each member pays for their searches from their plan, at the price below. Plans set how many search watchers a
-          member can keep.
+          TheirStack supplies the postings behind job alerts, across every company, including those that post only on LinkedIn. Every 30 minutes it
+          is asked for new postings in the countries members accept and for remote ones; each run returns at most the postings below, at one API
+          credit each, paid by the platform.
         </p>
       </header>
       @if (balance(); as b) {
@@ -170,10 +169,10 @@ export class SearchSettings {
     return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  /** Fewer credits left than one watcher's hourly searches could use in a day. */
+  /** Fewer credits left than both suppliers could use in a day (two runs an hour each). */
   protected low(b: Balance): boolean {
     const max = this.settings()?.max_results ?? 25;
-    return b.credits != null && b.credits < max * 24;
+    return b.credits != null && b.credits < max * 2 * 48;
   }
 
   private async loadBalance(current: () => boolean): Promise<void> {
@@ -186,7 +185,7 @@ export class SearchSettings {
   }
 
   protected status(s: Settings): string {
-    return s.key_id && s.credit_usd ? 'Search watchers are available to plans that include them.' : 'Search watchers are off until a key and a price are set.';
+    return s.key_id ? 'Job alerts are supplied through TheirStack.' : 'Job alerts get no new postings until a key is set.';
   }
 
   async load(): Promise<void> {

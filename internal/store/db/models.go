@@ -865,8 +865,7 @@ type JobActivity struct {
 type JobAlert struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID
-	WatchID     uuid.UUID
-	PostingKey  string
+	PostingID   uuid.UUID
 	Company     string
 	Title       string
 	Location    string
@@ -874,14 +873,6 @@ type JobAlert struct {
 	Remote      bool
 	PublishedAt *time.Time
 	FoundAt     time.Time
-}
-
-type JobAlertKey struct {
-	UserID    uuid.UUID
-	Key       string
-	AlertID   uuid.UUID
-	FromAts   bool
-	CreatedAt time.Time
 }
 
 type JobPreference struct {
@@ -928,24 +919,6 @@ type JobView struct {
 	Position  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
-}
-
-type JobWatch struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	Ats        *string
-	Board      *string
-	Company    string
-	Keywords   []string
-	Locations  []string
-	RemoteOnly bool
-	Paused     bool
-	Version    int32
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Kind       string
-	Country    *string
-	EveryHours *int32
 }
 
 type MailAccount struct {
@@ -1134,30 +1107,6 @@ type Outbox struct {
 	PublishedAt *time.Time
 }
 
-type PlatformAtsBoard struct {
-	Ats        string
-	Board      string
-	NextPollAt time.Time
-	LastOkAt   *time.Time
-	Failures   int32
-	LastError  string
-}
-
-type PlatformAtsPosting struct {
-	Ats         string
-	Board       string
-	PostingKey  string
-	Title       string
-	Location    string
-	Url         string
-	Remote      bool
-	PublishedAt *time.Time
-	FirstSeenAt time.Time
-	LastSeenAt  time.Time
-	Delivered   bool
-	Cataloged   bool
-}
-
 type PlatformAudit struct {
 	ID        int64
 	ActorID   *uuid.UUID
@@ -1194,19 +1143,6 @@ type PlatformEdgeWorker struct {
 	Version       int32
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
-}
-
-type PlatformJobWatchIndex struct {
-	WatchID    uuid.UUID
-	UserID     uuid.UUID
-	Ats        string
-	Board      string
-	Company    string
-	Keywords   []string
-	Locations  []string
-	RemoteOnly bool
-	Paused     bool
-	CreatedAt  time.Time
 }
 
 type PlatformLedgerEntry struct {
@@ -1339,13 +1275,7 @@ type PlatformPosting struct {
 	SeniorityHint *string
 	FirstSeenAt   time.Time
 	LastSeenAt    time.Time
-}
-
-type PlatformPostingBackfill struct {
-	UserID    uuid.UUID
-	AfterID   *uuid.UUID
-	Done      bool
-	UpdatedAt time.Time
+	RoutedAt      *time.Time
 }
 
 type PlatformPostingIdentity struct {
@@ -1444,23 +1374,14 @@ type PlatformSearchSetting struct {
 	UpdatedAt   time.Time
 }
 
-type PlatformSearchWatch struct {
-	WatchID       uuid.UUID
-	UserID        uuid.UUID
-	Name          string
-	Keywords      []string
-	Locations     []string
-	Country       *string
-	RemoteOnly    bool
-	Paused        bool
-	EveryHours    int32
-	CreatedAt     time.Time
-	CursorAt      time.Time
-	NextPollAt    time.Time
-	LastOkAt      *time.Time
-	Failures      int32
-	LastError     string
-	BlockedReason string
+type PlatformSupplier struct {
+	Name         string
+	CursorAt     time.Time
+	NextRunAt    time.Time
+	LastOkAt     *time.Time
+	Failures     int32
+	LastError    string
+	CreditsTotal int64
 }
 
 type PlatformSystemKey struct {

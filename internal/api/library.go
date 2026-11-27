@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"github.com/diegohh0411/zapply/internal/alerts"
 	"strconv"
 	"strings"
 
@@ -38,7 +37,6 @@ type server struct {
 	decisionModels *openrouter.Client
 	mail           *mail.Service
 	notify         *notify.Service
-	alerts         *alerts.Service
 	postings       *posting.Reader
 	prefs          *preferences.Service
 	reads          *posting.Reads

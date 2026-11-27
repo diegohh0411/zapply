@@ -1511,44 +1511,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/job-watches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The member's watches, newest first, and what their plan allows for search watchers. The worker reads each board every 30 minutes and runs each search at its interval, filing a `job_alert` notification for every new posting that matches; a posting alerts once however many watches find it. */
-        get: operations["listJobWatches"];
-        put?: never;
-        /** @description Starts a watch. A board watch reads the Greenhouse, Lever or Ashby board a careers link names once to check it exists (422 on `url` otherwise); watching a board twice answers 409. A search watch needs title keywords and a free slot in the member's plan (422 on `kind` otherwise). Either way, what is open now is not announced, only what opens later. */
-        post: operations["createJobWatch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/job-watches/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Stops watching the board, removing its alerts. */
-        delete: operations["deleteJobWatch"];
-        options?: never;
-        head?: never;
-        /** @description Changes the name, filters or pause of a watch; omitted fields stay. */
-        patch: operations["updateJobWatch"];
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2705,119 +2667,28 @@ export interface components {
             /** @description Set when `kind` is `job_alert`. */
             job_alert: components["schemas"]["JobAlert"] | null;
         };
-        /** @description A new posting on a watched board that matched its filters. */
+        /** @description A new posting that fits the member's job preferences. */
         JobAlert: {
             /** Format: uuid */
             id: string;
-            /** Format: uuid */
-            watch_id: string;
+            /**
+             * Format: uuid
+             * @description The posting in the platform's catalog.
+             */
+            posting_id: string;
             company: string;
             title: string;
             location: string;
-            /** @description The posting on the employer's board. */
+            /** @description The posting's link. */
             url: string;
             remote: boolean;
             /**
              * Format: date-time
-             * @description When the ATS says it was published.
+             * @description When the source says it was published.
              */
             published_at: string | null;
             /** Format: date-time */
             found_at: string;
-        };
-        /** @enum {string} */
-        JobAts: "greenhouse" | "lever" | "ashby";
-        /**
-         * @description board watches one employer's ATS board; search runs a saved query across every company through the job search provider, billed to the member's plan.
-         * @enum {string}
-         */
-        JobWatchKind: "board" | "search";
-        JobWatch: {
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["JobWatchKind"];
-            /** @description Null for a search. */
-            ats: components["schemas"]["JobAts"] | null;
-            /** @description The employer's board slug; null for a search. */
-            board: string | null;
-            board_url: string | null;
-            /** @description The company a board belongs to, or a search's name. */
-            company: string;
-            /** @description A search's ISO country code, such as MX. */
-            country: string | null;
-            /**
-             * @description How often a search runs; null for a board, read every 30 minutes.
-             * @enum {integer|null}
-             */
-            every_hours: 1 | 2 | 6 | 24 | null;
-            /** @description Why a search was not run when due, or empty: plan (beyond the plan's search watchers), provider_unavailable, usage_limit, membership_required, membership_suspended or request_exceeds_plan. */
-            blocked_reason: string;
-            /**
-             * Format: date-time
-             * @description When a search runs next; null for a board or a paused search.
-             */
-            next_check_at: string | null;
-            /** @description What a search's polls cost in the last 30 days; 0 for a board. */
-            spent_30d_usd: string;
-            /** @description A posting matches when its title contains any (empty matches all). */
-            keywords: string[];
-            /** @description A posting matches when its location contains any (empty matches all). */
-            locations: string[];
-            remote_only: boolean;
-            paused: boolean;
-            /**
-             * Format: date-time
-             * @description The board's last successful read.
-             */
-            last_checked_at: string | null;
-            /** @description Why the last read failed */
-            last_error: string;
-            /** Format: date-time */
-            created_at: string;
-        };
-        JobWatchList: {
-            items: components["schemas"]["JobWatch"][];
-            search: components["schemas"]["SearchAllowance"];
-        };
-        /** @description What the member's plan allows for search watchers, and what a poll can cost. */
-        SearchAllowance: {
-            /** @description Search watchers the member's plan allows; 0 without an active plan. */
-            allowed: number;
-            used: number;
-            /** @description False until the owner configures the job search provider. */
-            available: boolean;
-            /** @description What one provider credit costs; a poll costs one credit per posting it returns. */
-            credit_usd: string | null;
-            /** @description The most postings one poll returns */
-            max_results: number;
-        };
-        JobWatchInput: {
-            kind?: components["schemas"]["JobWatchKind"];
-            /** @description For a board (required): a careers link, job-boards.greenhouse.io/<board>, jobs.lever.co/<board> or jobs.ashbyhq.com/<board>, or a posting on one. */
-            url?: string;
-            /** @description A board's company, defaulting to the name the board publishes; a search's name, defaulting to its terms and places. */
-            company?: string;
-            /** @description For a search: an ISO country code. */
-            country?: string;
-            /**
-             * @description For a search: how often it runs (default 2).
-             * @enum {integer}
-             */
-            every_hours?: 1 | 2 | 6 | 24;
-            keywords?: string[];
-            locations?: string[];
-            remote_only?: boolean;
-        };
-        JobWatchPatch: {
-            company?: string;
-            /** @description A search's country; an empty string removes it. */
-            country?: string;
-            /** @enum {integer} */
-            every_hours?: 1 | 2 | 6 | 24;
-            keywords?: string[];
-            locations?: string[];
-            remote_only?: boolean;
-            paused?: boolean;
         };
         NotificationPage: {
             items: components["schemas"]["Notification"][];
@@ -4785,7 +4656,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The job search provider behind search watchers (owner only). */
+            /** @description The job search provider that supplies postings for job alerts (owner only). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5745,100 +5616,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationSummary"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    listJobWatches: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The watches. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobWatchList"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    createJobWatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobWatchInput"];
-            };
-        };
-        responses: {
-            /** @description Created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobWatch"];
-                };
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    deleteJobWatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            default: components["responses"]["Problem"];
-        };
-    };
-    updateJobWatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["ID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JobWatchPatch"];
-            };
-        };
-        responses: {
-            /** @description The updated watch. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobWatch"];
                 };
             };
             default: components["responses"]["Problem"];

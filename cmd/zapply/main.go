@@ -54,7 +54,7 @@ import (
 	"github.com/diegohh0411/zapply/internal/worker"
 )
 
-const usage = "usage: zapply <api|worker|relay|all|migrate|owner|secrets|devtoken|catalog-backfill> [flags]"
+const usage = "usage: zapply <api|worker|relay|all|migrate|owner|secrets|devtoken> [flags]"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -110,8 +110,6 @@ func main() {
 		err = runMigrate(ctx, cfg, log)
 	case "devtoken":
 		err = runDevToken(cfg, os.Args[2:])
-	case "catalog-backfill":
-		err = runCatalogBackfill(ctx, cfg, log)
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -192,27 +190,6 @@ func runAPI(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	return srv.Run(ctx, func(addr net.Addr) { log.Info("listening", "addr", addr.String()) })
 }
 
-// runCatalogBackfill adds the postings members were already alerted about to
-// the posting catalog. It is safe to run again or to stop: each member's
-// progress is saved with every batch.
-func runCatalogBackfill(ctx context.Context, cfg config.Config, log *slog.Logger) error {
-	if err := cfg.ValidateWorker(); err != nil {
-		return err
-	}
-	st, err := store.Open(ctx, cfg.Worker.DatabaseURL)
-	if err != nil {
-		return err
-	}
-	defer st.Close()
-	q, err := worker.NewQueue(st)
-	if err != nil {
-		return err
-	}
-	res, err := catalog.New(st, q, log).Backfill(ctx, 200)
-	log.Info("catalog backfill", "members", res.Members, "alerts", res.Alerts, "new_postings", res.Postings)
-	return err
-}
-
 func runOwner(ctx context.Context, cfg config.Config, args []string) error {
 	if len(args) < 1 || (args[0] != "grant" && args[0] != "revoke") {
 		return errors.New("usage: zapply owner <grant|revoke> --user-id <existing UUID>")
@@ -278,7 +255,8 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 		return matcher.OnTerminal(ctx, tx, op)
 	}
-	watcher := alerts.New(st, nil).WithSearch(&jobsearch.TheirStack{}, keys).WithCatalog(postings)
+	watcher := alerts.New(st, q, postings, log).WithSearch(&jobsearch.TheirStack{}, keys)
+	postings.Labeled = watcher.Wake
 	runtime.AddWorkers = func(w *river.Workers) {
 		matcher.AddWorkers(w)
 		mailer.AddWorkers(w)

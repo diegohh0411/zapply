@@ -66,7 +66,7 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
   scraping: {
     title: 'Scraping & search',
     description:
-      'Which providers read job postings and in what order, the edge workers they can use, and the job search behind search watchers.',
+      'Which providers read job postings and in what order, the edge workers they can use, and the job search that supplies job alerts.',
   },
   usage: {
     title: 'Unresolved usage',
