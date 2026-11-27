@@ -2,6 +2,7 @@ import { AdminOverview } from './admin-overview';
 import { ModelSettings, type ModelTab } from './model-settings';
 import { PostingCatalog } from './posting-catalog';
 import { EdgeWorkers } from './edge-workers';
+import { JobSources } from './job-sources';
 import { ScraperSettings } from './scraper-settings';
 import { SearchSettings } from './search-settings';
 import { DatePipe } from '@angular/common';
@@ -68,6 +69,11 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
     description:
       'Which providers read job postings and in what order, the edge workers they can use, and the job search that supplies job alerts.',
   },
+  'job-sources': {
+    title: 'Job sources',
+    description:
+      'Where job alerts come from: TheirStack searches and the Greenhouse, Lever and Ashby boards the platform reads, how often each runs, and which boards to read.',
+  },
   usage: {
     title: 'Unresolved usage',
     description:
@@ -84,6 +90,7 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
     ScraperSettings,
     SearchSettings,
     EdgeWorkers,
+    JobSources,
     DatePipe,
     FormsModule,
     RouterLink,

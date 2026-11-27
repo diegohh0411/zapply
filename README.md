@@ -237,7 +237,7 @@ read through a priced scraper; set a provider's **price per credit** under
 Scraping, or leave it empty for a free one) and `search_charge` (the search
 watchers that job alerts used to have; history only).
 
-**Job alerts** come from the platform, not from member watches. Every 30 minutes
+**Job alerts** come from the platform, not from member watches. On a schedule,
 TheirStack is asked for new postings in the countries members accept and for
 remote ones. The postings are labeled in the posting catalog, and each becomes
 an alert for every active member whose job preferences it fits. To set it up,
@@ -245,6 +245,11 @@ add a TheirStack system key, then choose it and how many postings a run may
 return under Scraping → Job search. The platform pays TheirStack directly; no
 member's allowance is charged. Design:
 [`docs/parts/13-alerts-by-preferences.md`](docs/parts/13-alerts-by-preferences.md).
+
+The platform also reads public Greenhouse, Lever and Ashby boards for free. Add
+boards, or approve ones found in TheirStack postings, under Admin → Job sources,
+where each supplier's interval is set too. Design:
+[`docs/parts/14-ats-board-supplier.md`](docs/parts/14-ats-board-supplier.md).
 
 Setup, accounting rules, conservative reservations, and recovery commands are in
 [`docs/parts/05-worker.md`](docs/parts/05-worker.md). Optional tracing uses standard

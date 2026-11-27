@@ -8,7 +8,7 @@ once, labels them (part 11), and alerts every member whose job preferences
 ## Flow
 
 1. **Supply** (`alerts.Supply`, River job `posting_supply`). Each supplier runs
-   every 30 minutes (`alerts.SupplyInterval`). The recovery tick moves a
+   on its own interval (`platform.supplier.interval_minutes`, 30 minutes by default; set in Admin → Job sources). The recovery tick moves a
    supplier's next run in the same transaction that queues its job. A run reads
    one page, then queues what it found as one `posting_ingest` job, in the
    transaction that moves the supplier on. A run is attempted once: a retry
@@ -116,6 +116,7 @@ The migration doesn't reverse.
 - The board poller and `internal/ats`.
 - `zapply catalog-backfill`.
 
-## Not done yet
+## ATS boards
 
-- There's no ATS board supplier.
+A third supplier reads public Greenhouse, Lever and Ashby boards for free.
+See part 14.

@@ -1337,6 +1337,104 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SearchBalance' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/job-sources:
+    get:
+      operationId: getJobSources
+      tags: [platform]
+      description: The suppliers that find postings for job alerts, with their intervals and health, and board counts (owner only).
+      responses:
+        '200':
+          description: Suppliers and board counts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobSources' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/job-sources/interval:
+    put:
+      operationId: putSupplierInterval
+      tags: [platform]
+      description: Sets how often a supplier runs. A shorter interval takes effect now; for `ats:boards` it applies to every active board.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierIntervalInput' }
+      responses:
+        '200':
+          description: The job sources after the change.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobSources' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/ats-boards:
+    get:
+      operationId: listAtsBoards
+      tags: [platform]
+      parameters:
+        - { name: status, in: query, required: true, schema: { type: string, enum: [pending, active, disabled] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: One page of boards in that status (owner only). Pending boards come most-sighted first, the rest by company.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AtsBoardPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: addAtsBoards
+      tags: [platform]
+      description: >
+        Seeds boards from pasted Greenhouse, Lever or Ashby links, one per line
+        (or separated by spaces or commas). Each becomes active, including one
+        that was pending or disabled; its first read only records what is open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtsBoardsInput' }
+      responses:
+        '200':
+          description: What was added, and the links that name no board.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AtsBoardsAdded' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/ats-boards/{ats}/{board}/status:
+    put:
+      operationId: putAtsBoardStatus
+      tags: [platform]
+      description: Approves (active) or rejects or disables (disabled) a board. Active boards are capped at 2,000.
+      parameters:
+        - { name: ats, in: path, required: true, schema: { type: string, enum: [greenhouse, lever, ashby] } }
+        - { name: board, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AtsBoardStatusInput' }
+      responses:
+        '200':
+          description: The board.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AtsBoard' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/ats-boards/{ats}/{board}/poll:
+    post:
+      operationId: pollAtsBoard
+      tags: [platform]
+      description: Reads an active board on the next worker tick.
+      parameters:
+        - { name: ats, in: path, required: true, schema: { type: string, enum: [greenhouse, lever, ashby] } }
+        - { name: board, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: The board, due now.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AtsBoard' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/edge-workers:
     get:
       operationId: listEdgeWorkers
@@ -3236,6 +3334,84 @@ components:
       properties:
         key_id: { type: string, format: uuid, nullable: true }
         max_results: { type: integer, minimum: 1, maximum: 100 }
+    JobSources:
+      type: object
+      required: [suppliers, boards]
+      properties:
+        suppliers:
+          type: array
+          items: { $ref: '#/components/schemas/Supplier' }
+        boards: { $ref: '#/components/schemas/AtsBoardCounts' }
+    Supplier:
+      type: object
+      required: [name, interval_minutes, last_ok_at, failures, last_error, credits_total]
+      properties:
+        name: { type: string, description: "theirstack:countries, theirstack:remote or ats:boards." }
+        interval_minutes: { $ref: '#/components/schemas/SupplierInterval' }
+        last_ok_at: { type: string, format: date-time, nullable: true, description: "For ats:boards, the newest good board read." }
+        failures: { type: integer, description: "Failed runs in a row; for ats:boards, active boards whose last read failed." }
+        last_error: { type: string }
+        credits_total: { type: integer, format: int64, description: TheirStack credits spent; always 0 for boards. }
+    SupplierInterval:
+      type: integer
+      enum: [5, 10, 15, 30, 60, 360, 1440]
+    SupplierIntervalInput:
+      type: object
+      required: [name, interval_minutes]
+      properties:
+        name: { type: string, maxLength: 100 }
+        interval_minutes: { $ref: '#/components/schemas/SupplierInterval' }
+    AtsBoardCounts:
+      type: object
+      required: [pending, active, disabled, limit]
+      properties:
+        pending: { type: integer }
+        active: { type: integer }
+        disabled: { type: integer }
+        limit: { type: integer, description: The most boards that can be active. }
+    AtsBoard:
+      type: object
+      required: [ats, board, company, source, status, sightings, open_count, failures, last_error, next_poll_at, last_polled_at, last_ok_at, last_new_at, created_at]
+      properties:
+        ats: { type: string, enum: [greenhouse, lever, ashby] }
+        board: { type: string }
+        company: { type: string }
+        source: { type: string, enum: [seed, discovered] }
+        status: { type: string, enum: [pending, active, disabled] }
+        sightings: { type: integer, description: Search postings that linked to this board. }
+        open_count: { type: integer, description: Postings open at the last good read. }
+        failures: { type: integer }
+        last_error: { type: string, description: "Why the last read failed, or why the board is disabled (rejected, not found for a week, no new postings in 60 days)." }
+        next_poll_at: { type: string, format: date-time }
+        last_polled_at: { type: string, format: date-time, nullable: true }
+        last_ok_at: { type: string, format: date-time, nullable: true }
+        last_new_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+    AtsBoardPage:
+      type: object
+      required: [boards, total]
+      properties:
+        boards:
+          type: array
+          items: { $ref: '#/components/schemas/AtsBoard' }
+        total: { type: integer }
+    AtsBoardsInput:
+      type: object
+      required: [links]
+      properties:
+        links: { type: string, maxLength: 100000 }
+    AtsBoardsAdded:
+      type: object
+      required: [added, activated, invalid]
+      properties:
+        added: { type: integer }
+        activated: { type: integer, description: Boards that were pending or disabled and are active now. }
+        invalid: { type: array, items: { type: string }, description: Links that name no Greenhouse, Lever or Ashby board. }
+    AtsBoardStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, disabled] }
     ScraperSettings:
       type: object
       required: [providers, rules, saved, version, updated_at]

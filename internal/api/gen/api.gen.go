@@ -19,6 +19,84 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AtsBoardAts.
+const (
+	AtsBoardAtsAshby      AtsBoardAts = "ashby"
+	AtsBoardAtsGreenhouse AtsBoardAts = "greenhouse"
+	AtsBoardAtsLever      AtsBoardAts = "lever"
+)
+
+// Valid indicates whether the value is a known member of the AtsBoardAts enum.
+func (e AtsBoardAts) Valid() bool {
+	switch e {
+	case AtsBoardAtsAshby:
+		return true
+	case AtsBoardAtsGreenhouse:
+		return true
+	case AtsBoardAtsLever:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AtsBoardSource.
+const (
+	Discovered AtsBoardSource = "discovered"
+	Seed       AtsBoardSource = "seed"
+)
+
+// Valid indicates whether the value is a known member of the AtsBoardSource enum.
+func (e AtsBoardSource) Valid() bool {
+	switch e {
+	case Discovered:
+		return true
+	case Seed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AtsBoardStatus.
+const (
+	AtsBoardStatusActive   AtsBoardStatus = "active"
+	AtsBoardStatusDisabled AtsBoardStatus = "disabled"
+	AtsBoardStatusPending  AtsBoardStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the AtsBoardStatus enum.
+func (e AtsBoardStatus) Valid() bool {
+	switch e {
+	case AtsBoardStatusActive:
+		return true
+	case AtsBoardStatusDisabled:
+		return true
+	case AtsBoardStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AtsBoardStatusInputStatus.
+const (
+	AtsBoardStatusInputStatusActive   AtsBoardStatusInputStatus = "active"
+	AtsBoardStatusInputStatusDisabled AtsBoardStatusInputStatus = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the AtsBoardStatusInputStatus enum.
+func (e AtsBoardStatusInputStatus) Valid() bool {
+	switch e {
+	case AtsBoardStatusInputStatusActive:
+		return true
+	case AtsBoardStatusInputStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Category.
 const (
 	CategoryEducation Category = "education"
@@ -925,6 +1003,39 @@ func (e SkillType) Valid() bool {
 	}
 }
 
+// Defines values for SupplierInterval.
+const (
+	N10   SupplierInterval = 10
+	N1440 SupplierInterval = 1440
+	N15   SupplierInterval = 15
+	N30   SupplierInterval = 30
+	N360  SupplierInterval = 360
+	N5    SupplierInterval = 5
+	N60   SupplierInterval = 60
+)
+
+// Valid indicates whether the value is a known member of the SupplierInterval enum.
+func (e SupplierInterval) Valid() bool {
+	switch e {
+	case N10:
+		return true
+	case N1440:
+		return true
+	case N15:
+		return true
+	case N30:
+		return true
+	case N360:
+		return true
+	case N5:
+		return true
+	case N60:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SystemKeyKind.
 const (
 	SystemKeyKindCrawl4ai   SystemKeyKind = "crawl4ai"
@@ -1024,6 +1135,69 @@ func (e WorkMode) Valid() bool {
 	}
 }
 
+// Defines values for ListAtsBoardsParamsStatus.
+const (
+	ListAtsBoardsParamsStatusActive   ListAtsBoardsParamsStatus = "active"
+	ListAtsBoardsParamsStatusDisabled ListAtsBoardsParamsStatus = "disabled"
+	ListAtsBoardsParamsStatusPending  ListAtsBoardsParamsStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ListAtsBoardsParamsStatus enum.
+func (e ListAtsBoardsParamsStatus) Valid() bool {
+	switch e {
+	case ListAtsBoardsParamsStatusActive:
+		return true
+	case ListAtsBoardsParamsStatusDisabled:
+		return true
+	case ListAtsBoardsParamsStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PollAtsBoardParamsAts.
+const (
+	PollAtsBoardParamsAtsAshby      PollAtsBoardParamsAts = "ashby"
+	PollAtsBoardParamsAtsGreenhouse PollAtsBoardParamsAts = "greenhouse"
+	PollAtsBoardParamsAtsLever      PollAtsBoardParamsAts = "lever"
+)
+
+// Valid indicates whether the value is a known member of the PollAtsBoardParamsAts enum.
+func (e PollAtsBoardParamsAts) Valid() bool {
+	switch e {
+	case PollAtsBoardParamsAtsAshby:
+		return true
+	case PollAtsBoardParamsAtsGreenhouse:
+		return true
+	case PollAtsBoardParamsAtsLever:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PutAtsBoardStatusParamsAts.
+const (
+	PutAtsBoardStatusParamsAtsAshby      PutAtsBoardStatusParamsAts = "ashby"
+	PutAtsBoardStatusParamsAtsGreenhouse PutAtsBoardStatusParamsAts = "greenhouse"
+	PutAtsBoardStatusParamsAtsLever      PutAtsBoardStatusParamsAts = "lever"
+)
+
+// Valid indicates whether the value is a known member of the PutAtsBoardStatusParamsAts enum.
+func (e PutAtsBoardStatusParamsAts) Valid() bool {
+	switch e {
+	case PutAtsBoardStatusParamsAtsAshby:
+		return true
+	case PutAtsBoardStatusParamsAtsGreenhouse:
+		return true
+	case PutAtsBoardStatusParamsAtsLever:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PutModelSettingsJSONBodySummaryReasoningEffort.
 const (
 	PutModelSettingsJSONBodySummaryReasoningEffortHigh    PutModelSettingsJSONBodySummaryReasoningEffort = "high"
@@ -1103,6 +1277,78 @@ func (e ListNotificationsParamsView) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AtsBoard defines model for AtsBoard.
+type AtsBoard struct {
+	Ats       AtsBoardAts `json:"ats"`
+	Board     string      `json:"board"`
+	Company   string      `json:"company"`
+	CreatedAt time.Time   `json:"created_at"`
+	Failures  int         `json:"failures"`
+
+	// LastError Why the last read failed, or why the board is disabled (rejected, not found for a week, no new postings in 60 days).
+	LastError    string     `json:"last_error"`
+	LastNewAt    *time.Time `json:"last_new_at"`
+	LastOkAt     *time.Time `json:"last_ok_at"`
+	LastPolledAt *time.Time `json:"last_polled_at"`
+	NextPollAt   time.Time  `json:"next_poll_at"`
+
+	// OpenCount Postings open at the last good read.
+	OpenCount int `json:"open_count"`
+
+	// Sightings Search postings that linked to this board.
+	Sightings int            `json:"sightings"`
+	Source    AtsBoardSource `json:"source"`
+	Status    AtsBoardStatus `json:"status"`
+}
+
+// AtsBoardAts defines model for AtsBoard.Ats.
+type AtsBoardAts string
+
+// AtsBoardSource defines model for AtsBoard.Source.
+type AtsBoardSource string
+
+// AtsBoardStatus defines model for AtsBoard.Status.
+type AtsBoardStatus string
+
+// AtsBoardCounts defines model for AtsBoardCounts.
+type AtsBoardCounts struct {
+	Active   int `json:"active"`
+	Disabled int `json:"disabled"`
+
+	// Limit The most boards that can be active.
+	Limit   int `json:"limit"`
+	Pending int `json:"pending"`
+}
+
+// AtsBoardPage defines model for AtsBoardPage.
+type AtsBoardPage struct {
+	Boards []AtsBoard `json:"boards"`
+	Total  int        `json:"total"`
+}
+
+// AtsBoardStatusInput defines model for AtsBoardStatusInput.
+type AtsBoardStatusInput struct {
+	Status AtsBoardStatusInputStatus `json:"status"`
+}
+
+// AtsBoardStatusInputStatus defines model for AtsBoardStatusInput.Status.
+type AtsBoardStatusInputStatus string
+
+// AtsBoardsAdded defines model for AtsBoardsAdded.
+type AtsBoardsAdded struct {
+	// Activated Boards that were pending or disabled and are active now.
+	Activated int `json:"activated"`
+	Added     int `json:"added"`
+
+	// Invalid Links that name no Greenhouse
+	Invalid []string `json:"invalid"`
+}
+
+// AtsBoardsInput defines model for AtsBoardsInput.
+type AtsBoardsInput struct {
+	Links string `json:"links"`
 }
 
 // AttemptResolutionInput defines model for AttemptResolutionInput.
@@ -1761,6 +2007,12 @@ type JobPreferencesInput struct {
 
 // JobSort defines model for JobSort.
 type JobSort string
+
+// JobSources defines model for JobSources.
+type JobSources struct {
+	Boards    AtsBoardCounts `json:"boards"`
+	Suppliers []Supplier     `json:"suppliers"`
+}
 
 // JobStage What a status means: saved (not applied), active (in process), offer, closed (any outcome).
 type JobStage string
@@ -2574,6 +2826,32 @@ type SkillType string
 // SummaryRows Lines a generated summary fills on the CV page. Fitting reserves this many lines, and the model is asked to revise a summary that wraps to more or fewer. Omitted updates preserve the saved value.
 type SummaryRows = int
 
+// Supplier defines model for Supplier.
+type Supplier struct {
+	// CreditsTotal TheirStack credits spent; always 0 for boards.
+	CreditsTotal int64 `json:"credits_total"`
+
+	// Failures Failed runs in a row; for ats:boards, active boards whose last read failed.
+	Failures        int              `json:"failures"`
+	IntervalMinutes SupplierInterval `json:"interval_minutes"`
+	LastError       string           `json:"last_error"`
+
+	// LastOkAt For ats:boards, the newest good board read.
+	LastOkAt *time.Time `json:"last_ok_at"`
+
+	// Name theirstack:countries, theirstack:remote or ats:boards.
+	Name string `json:"name"`
+}
+
+// SupplierInterval defines model for SupplierInterval.
+type SupplierInterval int
+
+// SupplierIntervalInput defines model for SupplierIntervalInput.
+type SupplierIntervalInput struct {
+	IntervalMinutes SupplierInterval `json:"interval_minutes"`
+	Name            string           `json:"name"`
+}
+
 // SystemKey defines model for SystemKey.
 type SystemKey struct {
 	Active      bool               `json:"active"`
@@ -2642,6 +2920,22 @@ type IdempotencyKey = string
 
 // IfMatch defines model for IfMatch.
 type IfMatch = string
+
+// ListAtsBoardsParams defines parameters for ListAtsBoards.
+type ListAtsBoardsParams struct {
+	Status ListAtsBoardsParamsStatus `form:"status" json:"status"`
+	Limit  *int                      `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int                      `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAtsBoardsParamsStatus defines parameters for ListAtsBoards.
+type ListAtsBoardsParamsStatus string
+
+// PollAtsBoardParamsAts defines parameters for PollAtsBoard.
+type PollAtsBoardParamsAts string
+
+// PutAtsBoardStatusParamsAts defines parameters for PutAtsBoardStatus.
+type PutAtsBoardStatusParamsAts string
 
 // UpdateEdgeWorkerParams defines parameters for UpdateEdgeWorker.
 type UpdateEdgeWorkerParams struct {
@@ -2883,11 +3177,20 @@ type ListUsageEntriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// AddAtsBoardsJSONRequestBody defines body for AddAtsBoards for application/json ContentType.
+type AddAtsBoardsJSONRequestBody = AtsBoardsInput
+
+// PutAtsBoardStatusJSONRequestBody defines body for PutAtsBoardStatus for application/json ContentType.
+type PutAtsBoardStatusJSONRequestBody = AtsBoardStatusInput
+
 // CreateEdgeWorkerJSONRequestBody defines body for CreateEdgeWorker for application/json ContentType.
 type CreateEdgeWorkerJSONRequestBody = EdgeWorkerInput
 
 // UpdateEdgeWorkerJSONRequestBody defines body for UpdateEdgeWorker for application/json ContentType.
 type UpdateEdgeWorkerJSONRequestBody = EdgeWorkerPatch
+
+// PutSupplierIntervalJSONRequestBody defines body for PutSupplierInterval for application/json ContentType.
+type PutSupplierIntervalJSONRequestBody = SupplierIntervalInput
 
 // PutMembershipJSONRequestBody defines body for PutMembership for application/json ContentType.
 type PutMembershipJSONRequestBody = MembershipInput
@@ -3018,6 +3321,18 @@ type MergeSkillJSONRequestBody = SkillMerge
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /v1/admin/ats-boards)
+	ListAtsBoards(w http.ResponseWriter, r *http.Request, params ListAtsBoardsParams)
+
+	// (POST /v1/admin/ats-boards)
+	AddAtsBoards(w http.ResponseWriter, r *http.Request)
+
+	// (POST /v1/admin/ats-boards/{ats}/{board}/poll)
+	PollAtsBoard(w http.ResponseWriter, r *http.Request, ats PollAtsBoardParamsAts, board string)
+
+	// (PUT /v1/admin/ats-boards/{ats}/{board}/status)
+	PutAtsBoardStatus(w http.ResponseWriter, r *http.Request, ats PutAtsBoardStatusParamsAts, board string)
+
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(w http.ResponseWriter, r *http.Request)
 
@@ -3041,6 +3356,12 @@ type ServerInterface interface {
 
 	// (GET /v1/admin/gateway-tests/{id})
 	GetGatewayTest(w http.ResponseWriter, r *http.Request, id ID)
+
+	// (GET /v1/admin/job-sources)
+	GetJobSources(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /v1/admin/job-sources/interval)
+	PutSupplierInterval(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/admin/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams)
@@ -3349,6 +3670,149 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// ListAtsBoards operation middleware
+func (siw *ServerInterfaceWrapper) ListAtsBoards(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAtsBoardsParams
+
+	// ------------- Required query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAtsBoards(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddAtsBoards operation middleware
+func (siw *ServerInterfaceWrapper) AddAtsBoards(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAtsBoards(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PollAtsBoard operation middleware
+func (siw *ServerInterfaceWrapper) PollAtsBoard(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ats" -------------
+	var ats PollAtsBoardParamsAts
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ats", r.PathValue("ats"), &ats, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ats", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "board" -------------
+	var board string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "board", r.PathValue("board"), &board, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "board", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PollAtsBoard(w, r, ats, board)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutAtsBoardStatus operation middleware
+func (siw *ServerInterfaceWrapper) PutAtsBoardStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ats" -------------
+	var ats PutAtsBoardStatusParamsAts
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ats", r.PathValue("ats"), &ats, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ats", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "board" -------------
+	var board string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "board", r.PathValue("board"), &board, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "board", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutAtsBoardStatus(w, r, ats, board)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListDecisionModels operation middleware
 func (siw *ServerInterfaceWrapper) ListDecisionModels(w http.ResponseWriter, r *http.Request) {
 
@@ -3547,6 +4011,34 @@ func (siw *ServerInterfaceWrapper) GetGatewayTest(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetGatewayTest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetJobSources operation middleware
+func (siw *ServerInterfaceWrapper) GetJobSources(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetJobSources(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutSupplierInterval operation middleware
+func (siw *ServerInterfaceWrapper) PutSupplierInterval(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutSupplierInterval(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6788,6 +7280,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.GetSearchSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/search-settings", wrapper.PutSearchSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-balance", wrapper.GetSearchBalance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/job-sources", wrapper.GetJobSources)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/job-sources/interval", wrapper.PutSupplierInterval)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/ats-boards", wrapper.ListAtsBoards)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/ats-boards", wrapper.AddAtsBoards)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/ats-boards/{ats}/{board}/status", wrapper.PutAtsBoardStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/ats-boards/{ats}/{board}/poll", wrapper.PollAtsBoard)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.ListEdgeWorkers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/edge-workers", wrapper.CreateEdgeWorker)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/admin/edge-workers/{id}", wrapper.UpdateEdgeWorker)
@@ -6826,6 +7324,165 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ListAtsBoardsRequestObject struct {
+	Params ListAtsBoardsParams
+}
+
+type ListAtsBoardsResponseObject interface {
+	VisitListAtsBoardsResponse(w http.ResponseWriter) error
+}
+
+type ListAtsBoards200JSONResponse AtsBoardPage
+
+func (response ListAtsBoards200JSONResponse) VisitListAtsBoardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAtsBoardsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAtsBoardsdefaultApplicationProblemPlusJSONResponse) VisitListAtsBoardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddAtsBoardsRequestObject struct {
+	Body *AddAtsBoardsJSONRequestBody
+}
+
+type AddAtsBoardsResponseObject interface {
+	VisitAddAtsBoardsResponse(w http.ResponseWriter) error
+}
+
+type AddAtsBoards200JSONResponse AtsBoardsAdded
+
+func (response AddAtsBoards200JSONResponse) VisitAddAtsBoardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddAtsBoardsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AddAtsBoardsdefaultApplicationProblemPlusJSONResponse) VisitAddAtsBoardsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollAtsBoardRequestObject struct {
+	Ats   PollAtsBoardParamsAts `json:"ats"`
+	Board string                `json:"board"`
+}
+
+type PollAtsBoardResponseObject interface {
+	VisitPollAtsBoardResponse(w http.ResponseWriter) error
+}
+
+type PollAtsBoard200JSONResponse AtsBoard
+
+func (response PollAtsBoard200JSONResponse) VisitPollAtsBoardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollAtsBoarddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PollAtsBoarddefaultApplicationProblemPlusJSONResponse) VisitPollAtsBoardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAtsBoardStatusRequestObject struct {
+	Ats   PutAtsBoardStatusParamsAts `json:"ats"`
+	Board string                     `json:"board"`
+	Body  *PutAtsBoardStatusJSONRequestBody
+}
+
+type PutAtsBoardStatusResponseObject interface {
+	VisitPutAtsBoardStatusResponse(w http.ResponseWriter) error
+}
+
+type PutAtsBoardStatus200JSONResponse AtsBoard
+
+func (response PutAtsBoardStatus200JSONResponse) VisitPutAtsBoardStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAtsBoardStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutAtsBoardStatusdefaultApplicationProblemPlusJSONResponse) VisitPutAtsBoardStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListDecisionModelsRequestObject struct {
 }
@@ -7127,6 +7784,83 @@ type GetGatewayTestdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetGatewayTestdefaultApplicationProblemPlusJSONResponse) VisitGetGatewayTestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJobSourcesRequestObject struct {
+}
+
+type GetJobSourcesResponseObject interface {
+	VisitGetJobSourcesResponse(w http.ResponseWriter) error
+}
+
+type GetJobSources200JSONResponse JobSources
+
+func (response GetJobSources200JSONResponse) VisitGetJobSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJobSourcesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetJobSourcesdefaultApplicationProblemPlusJSONResponse) VisitGetJobSourcesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutSupplierIntervalRequestObject struct {
+	Body *PutSupplierIntervalJSONRequestBody
+}
+
+type PutSupplierIntervalResponseObject interface {
+	VisitPutSupplierIntervalResponse(w http.ResponseWriter) error
+}
+
+type PutSupplierInterval200JSONResponse JobSources
+
+func (response PutSupplierInterval200JSONResponse) VisitPutSupplierIntervalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutSupplierIntervaldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PutSupplierIntervaldefaultApplicationProblemPlusJSONResponse) VisitPutSupplierIntervalResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11201,6 +11935,18 @@ func (response ListUsageEntriesdefaultApplicationProblemPlusJSONResponse) VisitL
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /v1/admin/ats-boards)
+	ListAtsBoards(ctx context.Context, request ListAtsBoardsRequestObject) (ListAtsBoardsResponseObject, error)
+
+	// (POST /v1/admin/ats-boards)
+	AddAtsBoards(ctx context.Context, request AddAtsBoardsRequestObject) (AddAtsBoardsResponseObject, error)
+
+	// (POST /v1/admin/ats-boards/{ats}/{board}/poll)
+	PollAtsBoard(ctx context.Context, request PollAtsBoardRequestObject) (PollAtsBoardResponseObject, error)
+
+	// (PUT /v1/admin/ats-boards/{ats}/{board}/status)
+	PutAtsBoardStatus(ctx context.Context, request PutAtsBoardStatusRequestObject) (PutAtsBoardStatusResponseObject, error)
+
 	// (GET /v1/admin/decision-models)
 	ListDecisionModels(ctx context.Context, request ListDecisionModelsRequestObject) (ListDecisionModelsResponseObject, error)
 
@@ -11224,6 +11970,12 @@ type StrictServerInterface interface {
 
 	// (GET /v1/admin/gateway-tests/{id})
 	GetGatewayTest(ctx context.Context, request GetGatewayTestRequestObject) (GetGatewayTestResponseObject, error)
+
+	// (GET /v1/admin/job-sources)
+	GetJobSources(ctx context.Context, request GetJobSourcesRequestObject) (GetJobSourcesResponseObject, error)
+
+	// (PUT /v1/admin/job-sources/interval)
+	PutSupplierInterval(ctx context.Context, request PutSupplierIntervalRequestObject) (PutSupplierIntervalResponseObject, error)
 
 	// (GET /v1/admin/members)
 	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
@@ -11562,6 +12314,124 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// ListAtsBoards operation middleware
+func (sh *strictHandler) ListAtsBoards(w http.ResponseWriter, r *http.Request, params ListAtsBoardsParams) {
+	var request ListAtsBoardsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAtsBoards(ctx, request.(ListAtsBoardsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAtsBoards")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAtsBoardsResponseObject); ok {
+		if err := validResponse.VisitListAtsBoardsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddAtsBoards operation middleware
+func (sh *strictHandler) AddAtsBoards(w http.ResponseWriter, r *http.Request) {
+	var request AddAtsBoardsRequestObject
+
+	var body AddAtsBoardsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddAtsBoards(ctx, request.(AddAtsBoardsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddAtsBoards")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddAtsBoardsResponseObject); ok {
+		if err := validResponse.VisitAddAtsBoardsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PollAtsBoard operation middleware
+func (sh *strictHandler) PollAtsBoard(w http.ResponseWriter, r *http.Request, ats PollAtsBoardParamsAts, board string) {
+	var request PollAtsBoardRequestObject
+
+	request.Ats = ats
+	request.Board = board
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PollAtsBoard(ctx, request.(PollAtsBoardRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PollAtsBoard")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PollAtsBoardResponseObject); ok {
+		if err := validResponse.VisitPollAtsBoardResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutAtsBoardStatus operation middleware
+func (sh *strictHandler) PutAtsBoardStatus(w http.ResponseWriter, r *http.Request, ats PutAtsBoardStatusParamsAts, board string) {
+	var request PutAtsBoardStatusRequestObject
+
+	request.Ats = ats
+	request.Board = board
+
+	var body PutAtsBoardStatusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutAtsBoardStatus(ctx, request.(PutAtsBoardStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutAtsBoardStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutAtsBoardStatusResponseObject); ok {
+		if err := validResponse.VisitPutAtsBoardStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListDecisionModels operation middleware
 func (sh *strictHandler) ListDecisionModels(w http.ResponseWriter, r *http.Request) {
 	var request ListDecisionModelsRequestObject
@@ -11770,6 +12640,61 @@ func (sh *strictHandler) GetGatewayTest(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetGatewayTestResponseObject); ok {
 		if err := validResponse.VisitGetGatewayTestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetJobSources operation middleware
+func (sh *strictHandler) GetJobSources(w http.ResponseWriter, r *http.Request) {
+	var request GetJobSourcesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetJobSources(ctx, request.(GetJobSourcesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetJobSources")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetJobSourcesResponseObject); ok {
+		if err := validResponse.VisitGetJobSourcesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutSupplierInterval operation middleware
+func (sh *strictHandler) PutSupplierInterval(w http.ResponseWriter, r *http.Request) {
+	var request PutSupplierIntervalRequestObject
+
+	var body PutSupplierIntervalJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutSupplierInterval(ctx, request.(PutSupplierIntervalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutSupplierInterval")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutSupplierIntervalResponseObject); ok {
+		if err := validResponse.VisitPutSupplierIntervalResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
