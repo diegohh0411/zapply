@@ -27,7 +27,10 @@ type Service struct {
 	catalog *catalog.Catalog
 	search  Searcher
 	keys    KeyOpener
-	log     *slog.Logger
+	// boards reads ATS boards; boardSlots bound concurrent reads per ATS.
+	boards     BoardFetcher
+	boardSlots map[string]chan struct{}
+	log        *slog.Logger
 }
 
 // New returns the alert pipeline. Without a queue nothing is queued: tests
@@ -40,12 +43,16 @@ func (s *Service) AddWorkers(w *river.Workers) {
 	river.AddWorker(w, &supplyWorker{s: s})
 	river.AddWorker(w, &ingestWorker{s: s})
 	river.AddWorker(w, &routeWorker{s: s})
+	river.AddWorker(w, &pollWorker{s: s})
 }
 
-// Recover runs every minute: it starts every supplier that is due and routes
+// Recover runs every minute: it starts every supplier and board that is due, and routes
 // whatever a missed wake, or the end of a hold, left waiting.
 func (s *Service) Recover(ctx context.Context, client *river.Client[pgx.Tx]) error {
 	if err := s.recoverSuppliers(ctx, client); err != nil {
+		return err
+	}
+	if err := s.recoverBoards(ctx, client); err != nil {
 		return err
 	}
 	_, err := s.Route(ctx)

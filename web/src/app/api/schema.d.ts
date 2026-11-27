@@ -934,6 +934,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/job-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The suppliers that find postings for job alerts, with their intervals and health, and board counts (owner only). */
+        get: operations["getJobSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/job-sources/interval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets how often a supplier runs. A shorter interval takes effect now; for `ats:boards` it applies to every active board. */
+        put: operations["putSupplierInterval"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ats-boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAtsBoards"];
+        put?: never;
+        /** @description Seeds boards from pasted Greenhouse, Lever or Ashby links, one per line (or separated by spaces or commas). Each becomes active, including one that was pending or disabled; its first read only records what is open. */
+        post: operations["addAtsBoards"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ats-boards/{ats}/{board}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Approves (active) or rejects or disables (disabled) a board. Active boards are capped at 2,000. */
+        put: operations["putAtsBoardStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ats-boards/{ats}/{board}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reads an active board on the next worker tick. */
+        post: operations["pollAtsBoard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/edge-workers": {
         parameters: {
             query?: never;
@@ -2434,6 +2519,86 @@ export interface components {
             /** Format: uuid */
             key_id: string | null;
             max_results: number;
+        };
+        JobSources: {
+            suppliers: components["schemas"]["Supplier"][];
+            boards: components["schemas"]["AtsBoardCounts"];
+        };
+        Supplier: {
+            /** @description theirstack:countries, theirstack:remote or ats:boards. */
+            name: string;
+            interval_minutes: components["schemas"]["SupplierInterval"];
+            /**
+             * Format: date-time
+             * @description For ats:boards, the newest good board read.
+             */
+            last_ok_at: string | null;
+            /** @description Failed runs in a row; for ats:boards, active boards whose last read failed. */
+            failures: number;
+            last_error: string;
+            /**
+             * Format: int64
+             * @description TheirStack credits spent; always 0 for boards.
+             */
+            credits_total: number;
+        };
+        /** @enum {integer} */
+        SupplierInterval: 5 | 10 | 15 | 30 | 60 | 360 | 1440;
+        SupplierIntervalInput: {
+            name: string;
+            interval_minutes: components["schemas"]["SupplierInterval"];
+        };
+        AtsBoardCounts: {
+            pending: number;
+            active: number;
+            disabled: number;
+            /** @description The most boards that can be active. */
+            limit: number;
+        };
+        AtsBoard: {
+            /** @enum {string} */
+            ats: "greenhouse" | "lever" | "ashby";
+            board: string;
+            company: string;
+            /** @enum {string} */
+            source: "seed" | "discovered";
+            /** @enum {string} */
+            status: "pending" | "active" | "disabled";
+            /** @description Search postings that linked to this board. */
+            sightings: number;
+            /** @description Postings open at the last good read. */
+            open_count: number;
+            failures: number;
+            /** @description Why the last read failed, or why the board is disabled (rejected, not found for a week, no new postings in 60 days). */
+            last_error: string;
+            /** Format: date-time */
+            next_poll_at: string;
+            /** Format: date-time */
+            last_polled_at: string | null;
+            /** Format: date-time */
+            last_ok_at: string | null;
+            /** Format: date-time */
+            last_new_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AtsBoardPage: {
+            boards: components["schemas"]["AtsBoard"][];
+            total: number;
+        };
+        AtsBoardsInput: {
+            links: string;
+        };
+        AtsBoardsAdded: {
+            added: number;
+            /** @description Boards that were pending or disabled and are active now. */
+            activated: number;
+            /** @description Links that name no Greenhouse */
+            invalid: string[];
+        };
+        AtsBoardStatusInput: {
+            /** @enum {string} */
+            status: "active" | "disabled";
         };
         ScraperSettings: {
             providers: components["schemas"]["ScraperProvider"][];
@@ -4706,6 +4871,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchBalance"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getJobSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suppliers and board counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSources"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSupplierInterval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierIntervalInput"];
+            };
+        };
+        responses: {
+            /** @description The job sources after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSources"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAtsBoards: {
+        parameters: {
+            query: {
+                status: "pending" | "active" | "disabled";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of boards in that status (owner only). Pending boards come most-sighted first, the rest by company. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AtsBoardPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addAtsBoards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AtsBoardsInput"];
+            };
+        };
+        responses: {
+            /** @description What was added, and the links that name no board. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AtsBoardsAdded"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putAtsBoardStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ats: "greenhouse" | "lever" | "ashby";
+                board: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AtsBoardStatusInput"];
+            };
+        };
+        responses: {
+            /** @description The board. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AtsBoard"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    pollAtsBoard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ats: "greenhouse" | "lever" | "ashby";
+                board: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The board, due now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AtsBoard"];
                 };
             };
             default: components["responses"]["Problem"];

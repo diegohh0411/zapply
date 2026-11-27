@@ -33,9 +33,6 @@ func (s *Service) WithSearch(searcher Searcher, keys KeyOpener) *Service {
 	return s
 }
 
-// SupplyInterval is how often each supplier runs.
-const SupplyInterval = 30 * time.Minute
-
 // The TheirStack suppliers. Between them they cover what members accept:
 // postings in their countries, and remote ones from anywhere.
 const (
@@ -80,8 +77,13 @@ func (w *ingestWorker) Work(ctx context.Context, j *river.Job[IngestArgs]) error
 }
 
 // Ingest adds sightings to the catalog and routes whatever is ready (with no
-// classifier models set, that is everything new).
+// classifier models set, that is everything new). Boards that search
+// postings link to are offered to the owner on the way.
 func (s *Service) Ingest(ctx context.Context, ss []catalog.Sighting) error {
+	if err := s.discoverBoards(ctx, ss); err != nil {
+		// Discovery is extra: the postings still go in.
+		logx.From(ctx).WarnContext(ctx, "boards not discovered", "error", err)
+	}
 	if _, err := s.catalog.Add(ctx, ss); err != nil {
 		return err
 	}
@@ -105,8 +107,8 @@ func (s *Service) recoverSuppliers(ctx context.Context, client *river.Client[pgx
 	}
 	tick := time.Now().Truncate(time.Minute).Format(time.RFC3339)
 	return pgx.BeginFunc(ctx, s.store.Pool(), func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `UPDATE platform.supplier SET next_run_at=now()+$2::interval
- WHERE name=ANY($1) AND next_run_at<=now() RETURNING name`, suppliers, SupplyInterval.String())
+		rows, err := tx.Query(ctx, `UPDATE platform.supplier SET next_run_at=now()+make_interval(mins=>interval_minutes)
+ WHERE name=ANY($1) AND next_run_at<=now() RETURNING name`, suppliers)
 		if err != nil {
 			return err
 		}
@@ -158,7 +160,7 @@ func (s *Service) Supply(ctx context.Context, name string) error {
 	defer release()
 	fail := func(msg string) error {
 		_, err := s.store.Pool().Exec(ctx, `UPDATE platform.supplier SET failures=failures+1,last_error=left($2,500),
- next_run_at=now()+least($3::interval*power(2,least(failures,6)),interval '1 day') WHERE name=$1`, name, msg, SupplyInterval.String())
+ next_run_at=now()+least(make_interval(mins=>interval_minutes)*power(2,least(failures,6)),interval '1 day') WHERE name=$1`, name, msg)
 		return err
 	}
 	if s.search == nil || s.keys == nil {

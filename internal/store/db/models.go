@@ -1107,6 +1107,25 @@ type Outbox struct {
 	PublishedAt *time.Time
 }
 
+type PlatformAtsBoard struct {
+	Ats           string
+	Board         string
+	Company       string
+	Source        string
+	Status        string
+	Sightings     int32
+	NextPollAt    time.Time
+	ActivatedAt   *time.Time
+	LastPolledAt  *time.Time
+	LastOkAt      *time.Time
+	LastNewAt     *time.Time
+	NotFoundSince *time.Time
+	Failures      int32
+	LastError     string
+	OpenCount     int32
+	CreatedAt     time.Time
+}
+
 type PlatformAudit struct {
 	ID        int64
 	ActorID   *uuid.UUID
@@ -1373,16 +1392,17 @@ type PlatformSearchSetting struct {
 }
 
 type PlatformSupplier struct {
-	Name         string
-	CursorAt     time.Time
-	WindowEnd    *time.Time
-	Page         int32
-	RunningUntil *time.Time
-	NextRunAt    time.Time
-	LastOkAt     *time.Time
-	Failures     int32
-	LastError    string
-	CreditsTotal int64
+	Name            string
+	CursorAt        time.Time
+	WindowEnd       *time.Time
+	Page            int32
+	RunningUntil    *time.Time
+	NextRunAt       time.Time
+	LastOkAt        *time.Time
+	Failures        int32
+	LastError       string
+	CreditsTotal    int64
+	IntervalMinutes int32
 }
 
 type PlatformSystemKey struct {

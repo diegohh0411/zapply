@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/diegohh0411/zapply/internal/alerts"
+	"github.com/diegohh0411/zapply/internal/ats"
 	"log/slog"
 	"net"
 	"net/http"
@@ -255,7 +256,7 @@ func runWorker(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		}
 		return matcher.OnTerminal(ctx, tx, op)
 	}
-	watcher := alerts.New(st, q, postings, log).WithSearch(&jobsearch.TheirStack{}, keys)
+	watcher := alerts.New(st, q, postings, log).WithSearch(&jobsearch.TheirStack{}, keys).WithBoards(&ats.Client{})
 	postings.Labeled = watcher.Wake
 	runtime.AddWorkers = func(w *river.Workers) {
 		matcher.AddWorkers(w)

@@ -51,6 +51,9 @@ type Sighting struct {
 	PublishedAt   *time.Time
 	Description   string
 	SeniorityHint string
+	// Quiet stores a new posting as already routed, so it alerts no one: a
+	// board's baseline is what was open before anyone was watching it.
+	Quiet bool
 }
 
 // valid reports whether the catalog can store s.
@@ -168,9 +171,9 @@ func resolve(ctx context.Context, tx pgx.Tx, s Sighting) (uuid.UUID, bool, error
 	country := nullable(s.country())
 	if created {
 		id = uuid.Must(uuid.NewV7())
-		if _, err := tx.Exec(ctx, `INSERT INTO platform.posting(id,source,company,title,location,url,remote,country,published_at,description,seniority_hint)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, s.Source, s.Company, s.Title, s.Location, s.URL, s.Remote, country, s.PublishedAt,
-			nullable(s.Description), nullable(s.SeniorityHint)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO platform.posting(id,source,company,title,location,url,remote,country,published_at,description,seniority_hint,routed_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $12 THEN now() END)`, id, s.Source, s.Company, s.Title, s.Location, s.URL, s.Remote, country, s.PublishedAt,
+			nullable(s.Description), nullable(s.SeniorityHint), s.Quiet); err != nil {
 			return uuid.Nil, false, err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO platform.posting_stage(posting_id,stage) VALUES($1,'decision'),($1,'extraction')`, id); err != nil {

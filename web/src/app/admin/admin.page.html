@@ -4,7 +4,7 @@
       <h1 class="text-xl font-semibold tracking-tight">{{ heading().title }}</h1>
       <p class="text-sm text-muted-foreground">{{ heading().description }}</p>
     </div>
-    @if (section() !== 'overview' && section() !== 'models' && section() !== 'scraping') {
+    @if (section() !== 'overview' && section() !== 'models' && section() !== 'scraping' && section() !== 'job-sources') {
       <button z-button zType="outline" [zDisabled]="loading() || busy()" (click)="load()">
         Refresh
       </button>
@@ -30,6 +30,9 @@
         <app-edge-workers />
         <app-search-settings />
       </div>
+    }
+    @case ('job-sources') {
+      <app-job-sources />
     }
     @case ('plans') {
       <div class="flex flex-wrap items-start gap-6">
