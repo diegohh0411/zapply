@@ -49,7 +49,6 @@
                   <th class="p-3">Plan</th>
                   <th class="p-3">Past 7 days</th>
                   <th class="p-3">Past 30 days</th>
-                  <th class="p-3">Search watchers</th>
                   <th class="p-3"><span class="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -59,7 +58,6 @@
                     <td class="p-3 font-medium">{{ p.name }}</td>
                     <td class="p-3 tabular-nums">{{ money(p.cap_7d_usd) }}</td>
                     <td class="p-3 tabular-nums">{{ money(p.cap_30d_usd) }}</td>
-                    <td class="p-3 tabular-nums">{{ p.max_search_watchers || 'None' }}</td>
                     <td class="p-3 text-right">
                       <button z-button zType="outline" [zDisabled]="busy()" (click)="editPlan(p)">
                         Edit
@@ -89,8 +87,8 @@
               </h2>
               @if (editingPlan()) {
                 <p class="text-sm text-muted-foreground">
-                  Changes apply to every assigned member immediately. Lowering an allowance can pause
-                  model work.
+                  Changes apply to every assigned member immediately. Lowering an allowance can
+                  pause model work.
                 </p>
               }
             </div>
@@ -123,23 +121,10 @@
                     required
                 /></label>
               </div>
-              <label class="field"
-                ><span>Search watchers</span
-                ><input
-                  z-input
-                  name="search"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  [(ngModel)]="planForm.max_search_watchers"
-                />
-                <span class="text-xs font-normal text-muted-foreground"
-                  >Saved job searches across every company. Their polls are paid from the allowances above. 0 turns them off.</span
-                ></label
-              >
               <div class="flex justify-end gap-2">
-                <button z-button zType="outline" type="button" (click)="cancelPlan()">Cancel</button>
+                <button z-button zType="outline" type="button" (click)="cancelPlan()">
+                  Cancel
+                </button>
                 <button z-button type="submit" [zDisabled]="busy()">
                   {{ editingPlan() ? 'Save plan' : 'Create plan' }}
                 </button>
@@ -259,7 +244,9 @@
             } @empty {
               <tr>
                 <td colspan="5" class="p-6 text-center text-muted-foreground">
-                  {{ members().length ? 'No members match these filters.' : 'No registered members.' }}
+                  {{
+                    members().length ? 'No members match these filters.' : 'No registered members.'
+                  }}
                 </td>
               </tr>
             }
@@ -298,8 +285,8 @@
         <div class="space-y-1">
           <h2 id="keys-heading" class="text-lg font-semibold">Provider keys</h2>
           <p class="text-sm text-muted-foreground">
-            New OpenRouter keys are inactive until you activate them. Activating one replaces the key used
-            for new model calls. Firecrawl, Crawl4AI and TheirStack keys are chosen on the
+            New OpenRouter keys are inactive until you activate them. Activating one replaces the
+            key used for new model calls. Firecrawl, Crawl4AI and TheirStack keys are chosen on the
             <a class="underline" routerLink="/admin/scraping">Scraping &amp; search</a> page.
           </p>
         </div>
@@ -320,7 +307,15 @@
                   <td class="p-3 font-medium">{{ k.label }}</td>
                   <td class="p-3">{{ keyKindLabel(k.kind) }}</td>
                   <td class="p-3 font-mono text-xs">{{ k.fingerprint }}</td>
-                  <td class="p-3">{{ k.kind !== 'openrouter' ? 'Chosen per provider' : k.active ? 'Active' : 'Inactive' }}</td>
+                  <td class="p-3">
+                    {{
+                      k.kind !== 'openrouter'
+                        ? 'Chosen per provider'
+                        : k.active
+                          ? 'Active'
+                          : 'Inactive'
+                    }}
+                  </td>
                   <td class="p-3">
                     @if (k.kind === 'openrouter') {
                       <button z-button zType="outline" [zDisabled]="busy()" (click)="activate(k)">
@@ -342,8 +337,9 @@
         <details class="group">
           <summary
             class="inline-flex cursor-pointer items-center text-sm font-medium underline-offset-4 hover:underline"
-            >Add a key</summary
           >
+            Add a key
+          </summary>
           <p class="mt-3 text-sm text-muted-foreground">
             Stored encrypted. The key is cleared from this form after you save it.
           </p>
@@ -354,7 +350,12 @@
           >
             <div class="field">
               <span>Provider</span>
-              <z-select aria-label="Provider" name="kind" [ngModel]="keyForm.kind" (ngModelChange)="keyForm.kind = keyKind($event)">
+              <z-select
+                aria-label="Provider"
+                name="kind"
+                [ngModel]="keyForm.kind"
+                (ngModelChange)="keyForm.kind = keyKind($event)"
+              >
                 <z-select-item zValue="openrouter">OpenRouter</z-select-item>
                 <z-select-item zValue="firecrawl">Firecrawl</z-select-item>
                 <z-select-item zValue="crawl4ai">Crawl4AI</z-select-item>
@@ -509,8 +510,8 @@
                   required
               /></label>
               <p class="text-sm text-muted-foreground">
-                This settles accounting and releases the reservation. A lost model result will not be
-                regenerated. Active calls cannot be resolved.
+                This settles accounting and releases the reservation. A lost model result will not
+                be regenerated. Active calls cannot be resolved.
               </p>
               <div class="flex justify-end gap-2">
                 <button z-button zType="outline" type="button" (click)="resolving.set(null)">

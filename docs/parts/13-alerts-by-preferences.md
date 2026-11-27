@@ -85,8 +85,9 @@ is no cap per member.
 - **`platform.posting.routed_at`:** postings already in the catalog count as
   routed.
 - **Added** `platform.supplier`, `platform.alert_audience()` and
-  `platform.supply_scope()`. `platform.search_config()` no longer needs a
-  credit price.
+  `platform.supply_scope()`.
+- **Also dropped:** plans' `max_search_watchers` and the search settings'
+  credit price. The platform pays for searches, so neither applies.
 
 The migration doesn't reverse.
 
@@ -98,6 +99,4 @@ The migration doesn't reverse.
 
 ## Not done yet
 
-- Plans still carry `max_search_watchers`, and the search settings still carry
-  a credit price. Neither is used.
-- No ATS board supplier.
+- There's no ATS board supplier.

@@ -2149,15 +2149,12 @@ export interface components {
             name: string;
             cap_7d_usd: string;
             cap_30d_usd: string;
-            /** @description How many search watchers a member on this plan may keep. Zero disables them. */
-            max_search_watchers: number;
             version: number;
         };
         PlanInput: {
             name: string;
             cap_7d_usd: string;
             cap_30d_usd: string;
-            max_search_watchers?: number;
         };
         Membership: {
             /** Format: uuid */
@@ -2412,9 +2409,7 @@ export interface components {
              * @description A TheirStack system key.
              */
             key_id: string | null;
-            /** @description What one TheirStack API credit costs. */
-            credit_usd: string | null;
-            /** @description The most postings one poll asks for. */
+            /** @description The most postings one supplier run asks for. */
             max_results: number;
             version: number;
             /** Format: date-time */
@@ -2438,7 +2433,6 @@ export interface components {
         SearchSettingsInput: {
             /** Format: uuid */
             key_id: string | null;
-            credit_usd: string | null;
             max_results: number;
         };
         ScraperSettings: {

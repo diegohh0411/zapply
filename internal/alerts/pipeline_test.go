@@ -90,14 +90,14 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.admin = membership.New(d.Store, ring)
 	f.plan = uuid.New()
-	if _, err = f.admin.SavePlan(ctx, f.owner, f.plan, "Member", "1", "2", nil, 0); err != nil {
+	if _, err = f.admin.SavePlan(ctx, f.owner, f.plan, "Member", "1", "2", 0); err != nil {
 		t.Fatal(err)
 	}
 	key, err := f.admin.AddKeyOfKind(ctx, f.owner, "TheirStack", "theirstack-secret", "theirstack")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.admin.SaveSearchSettings(ctx, f.owner, &key, "0.01", 10, 1); err != nil {
+	if _, err = f.admin.SaveSearchSettings(ctx, f.owner, &key, 10, 1); err != nil {
 		t.Fatal(err)
 	}
 	if f.workers, err = store.Open(ctx, d.WorkerURL); err != nil {

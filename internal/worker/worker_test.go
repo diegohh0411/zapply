@@ -107,7 +107,7 @@ func setup(t *testing.T) *fixture {
 	}
 	s := membership.New(db.Store, ring)
 	plan := uuid.Must(uuid.NewV7())
-	if _, err := s.SavePlan(ctx, u, plan, "Member", "1", "2", nil, 0); err != nil {
+	if _, err := s.SavePlan(ctx, u, plan, "Member", "1", "2", 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SaveMembership(ctx, u, u, plan, "active", 0); err != nil {
@@ -206,7 +206,7 @@ func TestConcurrentReservationsAndReplay(t *testing.T) {
 		t.Fatalf("hold not released: %v", got)
 	}
 	// A plan change preserves the first charge and makes a second call eligible.
-	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "2", nil, 1); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "2", 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.r.Process(ctx, second); err != nil {
@@ -233,7 +233,7 @@ func TestRollingWindowsAndSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Two charges count in the 30-day window, even though only one is in 7 days.
-	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "1.5", nil, 1); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, f.plan, "Member", "2", "1.5", 1); err != nil {
 		t.Fatal(err)
 	}
 	third := f.operation(t)
@@ -372,7 +372,7 @@ func TestOwnerPermissionsAndTenantIsolation(t *testing.T) {
 	if p.Name != "Member" {
 		p = plans[1]
 	}
-	if _, err := f.s.SavePlan(ctx, f.u, p.ID, p.Name, p.Week, p.Month, nil, p.Version); err != nil {
+	if _, err := f.s.SavePlan(ctx, f.u, p.ID, p.Name, p.Week, p.Month, p.Version); err != nil {
 		t.Fatalf("plan money did not round trip: %v", err)
 	}
 	other, err := f.db.Store.ResolveUser(ctx, auth.Principal{Issuer: "test", Subject: "member"})

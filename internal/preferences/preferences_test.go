@@ -102,7 +102,7 @@ func setup(t *testing.T) *env {
 	}
 	ms := membership.New(d.Store, ring)
 	plan := uuid.New()
-	if _, err := ms.SavePlan(ctx, u, plan, "Test", "1", "2", nil, 0); err != nil {
+	if _, err := ms.SavePlan(ctx, u, plan, "Test", "1", "2", 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ms.SaveMembership(ctx, u, u, plan, "active", 0); err != nil {

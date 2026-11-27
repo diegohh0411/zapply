@@ -1251,14 +1251,13 @@ type PlatformOwner struct {
 }
 
 type PlatformPlan struct {
-	ID                uuid.UUID
-	Name              string
-	Cap7d             int64
-	Cap30d            int64
-	Version           int32
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	MaxSearchWatchers int32
+	ID        uuid.UUID
+	Name      string
+	Cap7d     int64
+	Cap30d    int64
+	Version   int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type PlatformPosting struct {
@@ -1366,12 +1365,11 @@ type PlatformSearchCharge struct {
 }
 
 type PlatformSearchSetting struct {
-	ID          bool
-	KeyID       *uuid.UUID
-	CreditPrice *int64
-	MaxResults  int32
-	Version     int32
-	UpdatedAt   time.Time
+	ID         bool
+	KeyID      *uuid.UUID
+	MaxResults int32
+	Version    int32
+	UpdatedAt  time.Time
 }
 
 type PlatformSupplier struct {

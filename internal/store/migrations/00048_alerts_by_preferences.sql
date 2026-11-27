@@ -82,14 +82,58 @@ CREATE FUNCTION platform.supply_scope() RETURNS TABLE(countries text[],remote bo
 SET search_path=pg_catalog,platform,pg_temp AS $$
  SELECT COALESCE((SELECT array_agg(DISTINCT c ORDER BY c) FROM platform.alert_audience() a, unnest(a.countries) c),'{}'),
   EXISTS(SELECT FROM platform.alert_audience() a WHERE a.remote_ok) $$;
--- The provider's key and page size, without the per-member price.
-CREATE OR REPLACE FUNCTION platform.search_config() RETURNS TABLE(key_id uuid,ciphertext bytea,encryption_version text,credit_price bigint,max_results integer)
+-- The platform pays for searches, so plans no longer allow search watchers
+-- and a TheirStack credit has no member price.
+CREATE OR REPLACE FUNCTION platform.plan_json(p platform.plan) RETURNS jsonb LANGUAGE sql STABLE
+SET search_path TO 'pg_catalog', 'platform', 'pg_temp' AS $function$
+ SELECT jsonb_build_object('id',p.id,'name',p.name,'cap_7d_usd',platform.money(p.cap_7d),'cap_30d_usd',platform.money(p.cap_30d),'version',p.version)
+$function$;
+DROP FUNCTION platform.save_plan(uuid,text,bigint,bigint,integer,integer), platform.search_allowance(uuid);
+CREATE FUNCTION platform.save_plan(p_id uuid, p_name text, p_week bigint, p_month bigint, p_version integer) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'pg_catalog', 'platform', 'pg_temp' AS $function$ DECLARE p platform.plan; u uuid; BEGIN
+ PERFORM platform.assert_owner();
+ IF p_version = 0 THEN
+   INSERT INTO platform.plan(id,name,cap_7d,cap_30d) VALUES(p_id,p_name,p_week,p_month) RETURNING * INTO p;
+ ELSE
+   UPDATE platform.plan SET name=p_name,cap_7d=p_week,cap_30d=p_month,version=version+1,updated_at=now()
+   WHERE id=p_id AND version=p_version RETURNING * INTO p;
+   IF NOT FOUND THEN RAISE EXCEPTION 'plan changed or missing' USING ERRCODE='ZA412'; END IF;
+ END IF;
+ PERFORM platform.audit_event('plan.saved',p_id,platform.plan_json(p));
+ FOR u IN SELECT user_id FROM platform.membership WHERE plan_id=p_id LOOP
+   PERFORM platform.emit(u,'membership.changed',u,p.version);
+ END LOOP;
+ RETURN platform.plan_json(p);
+END $function$;
+DROP FUNCTION platform.search_config(), platform.save_search_settings(uuid,bigint,integer,integer);
+CREATE OR REPLACE FUNCTION platform.search_settings_json() RETURNS jsonb LANGUAGE sql STABLE
+SET search_path=pg_catalog,platform,pg_temp AS $$
+ SELECT jsonb_build_object('provider','theirstack','key_id',key_id,'max_results',max_results,'version',version,'updated_at',updated_at)
+ FROM platform.search_settings $$;
+CREATE FUNCTION platform.save_search_settings(p_key_id uuid,p_max_results integer,p_version integer) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,platform,pg_temp AS $$ BEGIN
+ PERFORM platform.assert_owner();
+ IF p_key_id IS NOT NULL AND NOT EXISTS(SELECT FROM platform.system_key WHERE id=p_key_id AND kind='theirstack') THEN
+  RAISE EXCEPTION 'choose a TheirStack key' USING ERRCODE='ZA422';
+ END IF;
+ UPDATE platform.search_settings SET key_id=p_key_id,max_results=p_max_results,version=version+1,updated_at=now()
+ WHERE id AND version=p_version;
+ IF NOT FOUND THEN RAISE EXCEPTION 'search settings changed' USING ERRCODE='ZA412'; END IF;
+ PERFORM platform.audit_event('search_settings.saved','00000000-0000-0000-0000-000000000000',platform.search_settings_json());
+ RETURN platform.search_settings_json();
+END $$;
+-- The provider's key and page size, for the suppliers.
+CREATE FUNCTION platform.search_config() RETURNS TABLE(key_id uuid,ciphertext bytea,encryption_version text,max_results integer)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,platform,pg_temp AS $$
- SELECT k.id,k.ciphertext,k.encryption_version,s.credit_price,s.max_results FROM platform.search_settings s
+ SELECT k.id,k.ciphertext,k.encryption_version,s.max_results FROM platform.search_settings s
  JOIN platform.system_key k ON k.id=s.key_id AND k.kind='theirstack' $$;
-REVOKE EXECUTE ON FUNCTION platform.alert_audience(),platform.supply_scope() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION platform.alert_audience(),platform.supply_scope() TO zapply_worker;
+REVOKE EXECUTE ON FUNCTION platform.alert_audience(),platform.supply_scope(),platform.save_plan(uuid,text,bigint,bigint,integer),
+ platform.save_search_settings(uuid,integer,integer),platform.search_config() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.alert_audience(),platform.supply_scope(),platform.search_config() TO zapply_worker;
+GRANT EXECUTE ON FUNCTION platform.save_plan(uuid,text,bigint,bigint,integer),platform.save_search_settings(uuid,integer,integer) TO zapply_app;
 RESET ROLE;
+ALTER TABLE platform.plan DROP COLUMN max_search_watchers;
+ALTER TABLE platform.search_settings DROP COLUMN credit_price;
 -- +goose StatementEnd
 
 -- +goose Down

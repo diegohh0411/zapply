@@ -64,7 +64,7 @@ func (s *server) ListPlans(ctx context.Context, _ gen.ListPlansRequestObject) (g
 }
 func (s *server) CreatePlan(ctx context.Context, req gen.CreatePlanRequestObject) (gen.CreatePlanResponseObject, error) {
 	b := req.Body
-	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), uuid.Must(uuid.NewV7()), b.Name, b.Cap7dUsd, b.Cap30dUsd, b.MaxSearchWatchers, 0))
+	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), uuid.Must(uuid.NewV7()), b.Name, b.Cap7dUsd, b.Cap30dUsd, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s *server) UpdatePlan(ctx context.Context, req gen.UpdatePlanRequestObject
 		return nil, badRequest("existing plan version is required")
 	}
 	b := req.Body
-	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), req.Id, b.Name, b.Cap7dUsd, b.Cap30dUsd, b.MaxSearchWatchers, ver))
+	v, err := decodePlatform[gen.Plan](s.members.SavePlan(ctx, uid(ctx), req.Id, b.Name, b.Cap7dUsd, b.Cap30dUsd, ver))
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (s *server) PutSearchSettings(ctx context.Context, req gen.PutSearchSetting
 		return nil, err
 	}
 	b := req.Body
-	v, err := decodePlatform[gen.SearchSettings](s.members.SaveSearchSettings(ctx, uid(ctx), b.KeyId, deref(b.CreditUsd), b.MaxResults, ver))
+	v, err := decodePlatform[gen.SearchSettings](s.members.SaveSearchSettings(ctx, uid(ctx), b.KeyId, b.MaxResults, ver))
 	if err != nil {
 		return nil, err
 	}

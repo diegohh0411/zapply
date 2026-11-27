@@ -2757,7 +2757,6 @@ components:
         - "name"
         - "cap_7d_usd"
         - "cap_30d_usd"
-        - "max_search_watchers"
         - "version"
       "properties":
         "id":
@@ -2771,9 +2770,6 @@ components:
         "cap_30d_usd":
           "type": "string"
           "pattern": "^\\d+(\\.\\d{1,12})?$"
-        "max_search_watchers":
-          "type": "integer"
-          "description": "How many search watchers a member on this plan may keep. Zero disables them."
         "version":
           "type": "integer"
     "PlanInput":
@@ -2793,10 +2789,6 @@ components:
         "cap_30d_usd":
           "type": "string"
           "pattern": "^\\d+(\\.\\d{1,12})?$"
-        "max_search_watchers":
-          "type": "integer"
-          "minimum": 0
-          "maximum": 100
     "Membership":
       "type": "object"
       "required":
@@ -3222,12 +3214,11 @@ components:
           items: { $ref: '#/components/schemas/ScraperRule' }
     SearchSettings:
       type: object
-      required: [provider, key_id, credit_usd, max_results, version, updated_at]
+      required: [provider, key_id, max_results, version, updated_at]
       properties:
         provider: { type: string, enum: [theirstack] }
         key_id: { type: string, format: uuid, nullable: true, description: A TheirStack system key. }
-        credit_usd: { type: string, nullable: true, description: What one TheirStack API credit costs. }
-        max_results: { type: integer, description: The most postings one poll asks for. }
+        max_results: { type: integer, description: The most postings one supplier run asks for. }
         version: { type: integer }
         updated_at: { type: string, format: date-time }
     SearchBalance:
@@ -3241,10 +3232,9 @@ components:
         error: { type: string, description: Why the balance could not be read; empty when it was. }
     SearchSettingsInput:
       type: object
-      required: [key_id, credit_usd, max_results]
+      required: [key_id, max_results]
       properties:
         key_id: { type: string, format: uuid, nullable: true }
-        credit_usd: { type: string, nullable: true, pattern: '^\d{1,3}(\.\d{1,12})?$' }
         max_results: { type: integer, minimum: 1, maximum: 100 }
     ScraperSettings:
       type: object

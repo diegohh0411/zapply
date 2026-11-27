@@ -2230,19 +2230,15 @@ type Plan struct {
 	Cap30dUsd string             `json:"cap_30d_usd"`
 	Cap7dUsd  string             `json:"cap_7d_usd"`
 	Id        openapi_types.UUID `json:"id"`
-
-	// MaxSearchWatchers How many search watchers a member on this plan may keep. Zero disables them.
-	MaxSearchWatchers int    `json:"max_search_watchers"`
-	Name              string `json:"name"`
-	Version           int    `json:"version"`
+	Name      string             `json:"name"`
+	Version   int                `json:"version"`
 }
 
 // PlanInput defines model for PlanInput.
 type PlanInput struct {
-	Cap30dUsd         string `json:"cap_30d_usd"`
-	Cap7dUsd          string `json:"cap_7d_usd"`
-	MaxSearchWatchers *int   `json:"max_search_watchers,omitempty"`
-	Name              string `json:"name"`
+	Cap30dUsd string `json:"cap_30d_usd"`
+	Cap7dUsd  string `json:"cap_7d_usd"`
+	Name      string `json:"name"`
 }
 
 // PostingCatalog defines model for PostingCatalog.
@@ -2517,13 +2513,10 @@ type SearchBalance struct {
 
 // SearchSettings defines model for SearchSettings.
 type SearchSettings struct {
-	// CreditUsd What one TheirStack API credit costs.
-	CreditUsd *string `json:"credit_usd"`
-
 	// KeyId A TheirStack system key.
 	KeyId *openapi_types.UUID `json:"key_id"`
 
-	// MaxResults The most postings one poll asks for.
+	// MaxResults The most postings one supplier run asks for.
 	MaxResults int                    `json:"max_results"`
 	Provider   SearchSettingsProvider `json:"provider"`
 	UpdatedAt  time.Time              `json:"updated_at"`
@@ -2535,7 +2528,6 @@ type SearchSettingsProvider string
 
 // SearchSettingsInput defines model for SearchSettingsInput.
 type SearchSettingsInput struct {
-	CreditUsd  *string             `json:"credit_usd"`
 	KeyId      *openapi_types.UUID `json:"key_id"`
 	MaxResults int                 `json:"max_results"`
 }

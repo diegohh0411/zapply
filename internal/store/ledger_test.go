@@ -183,7 +183,7 @@ func (f ledgerFixture) join(t *testing.T, week string) {
 	w, _ := modelapi.ParseUSD(week)
 	plan := uuid.New()
 	if err := f.db.Store.InTenant(ctx, f.owner, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT platform.save_plan($1,'P',$2,$2,NULL,0)`, plan, w); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT platform.save_plan($1,'P',$2,$2,0)`, plan, w); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT platform.save_membership($1,$2,'active',0)`, f.member, plan)

@@ -99,9 +99,8 @@ func (s *Service) Attempts(ctx context.Context, u uuid.UUID, before *uuid.UUID, 
 	return s.read(ctx, u, "SELECT platform.admin_attempts($1,$2)", before, limit)
 }
 
-// SavePlan creates (version 0) or updates a plan. maxSearch nil keeps a plan's
-// search watchers, or gives a new plan none.
-func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, month string, maxSearch *int, version int) (json.RawMessage, error) {
+// SavePlan creates (version 0) or updates a plan.
+func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, month string, version int) (json.RawMessage, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 100 || strings.ContainsRune(name, 0) {
 		return nil, invalid("name", "must be between 1 and 100 characters")
@@ -114,10 +113,7 @@ func (s *Service) SavePlan(ctx context.Context, u, id uuid.UUID, name, week, mon
 	if err != nil || m <= 0 || !inputAmount.MatchString(month) {
 		return nil, invalid("cap_30d_usd", "must be a positive USD amount")
 	}
-	if maxSearch != nil && (*maxSearch < 0 || *maxSearch > 100) {
-		return nil, invalid("max_search_watchers", "must be between 0 and 100")
-	}
-	return s.read(ctx, u, "SELECT platform.save_plan($1,$2,$3,$4,$5,$6)", id, name, w, m, maxSearch, version)
+	return s.read(ctx, u, "SELECT platform.save_plan($1,$2,$3,$4,$5)", id, name, w, m, version)
 }
 func (s *Service) SaveMembership(ctx context.Context, u, member, plan uuid.UUID, status string, version int) (json.RawMessage, error) {
 	if status != "active" && status != "suspended" {
@@ -163,24 +159,14 @@ func (s *Service) SearchSettings(ctx context.Context, u uuid.UUID) (json.RawMess
 	return s.read(ctx, u, "SELECT platform.search_settings()")
 }
 
-// SaveSearchSettings sets the TheirStack key, its credit price (USD, "" for
-// none) and how many postings one poll may return.
-func (s *Service) SaveSearchSettings(ctx context.Context, u uuid.UUID, key *uuid.UUID, creditUSD string, maxResults, version int) (json.RawMessage, error) {
-	var price *int64
-	if creditUSD != "" {
-		n, err := modelapi.ParseUSD(creditUSD)
-		if err != nil || n <= 0 || !creditAmount.MatchString(creditUSD) {
-			return nil, invalid("credit_usd", "must be a positive USD amount such as 0.0069")
-		}
-		price = &n
-	}
+// SaveSearchSettings sets the TheirStack key and how many postings one
+// supplier run may return.
+func (s *Service) SaveSearchSettings(ctx context.Context, u uuid.UUID, key *uuid.UUID, maxResults, version int) (json.RawMessage, error) {
 	if maxResults < 1 || maxResults > 100 {
 		return nil, invalid("max_results", "must be between 1 and 100")
 	}
-	return s.read(ctx, u, "SELECT platform.save_search_settings($1,$2,$3,$4)", key, price, maxResults, version)
+	return s.read(ctx, u, "SELECT platform.save_search_settings($1,$2,$3)", key, maxResults, version)
 }
-
-var creditAmount = regexp.MustCompile(`^[0-9]{1,3}(?:\.[0-9]{1,12})?$`)
 
 func (s *Service) ActivateKey(ctx context.Context, u, id uuid.UUID, active bool, version int) error {
 	return s.exec(ctx, u, "SELECT platform.activate_key($1,$2,$3)", id, active, version)
