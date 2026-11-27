@@ -1375,6 +1375,9 @@ type PlatformSearchSetting struct {
 type PlatformSupplier struct {
 	Name         string
 	CursorAt     time.Time
+	WindowEnd    *time.Time
+	Page         int32
+	RunningUntil *time.Time
 	NextRunAt    time.Time
 	LastOkAt     *time.Time
 	Failures     int32
