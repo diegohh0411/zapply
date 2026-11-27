@@ -73,7 +73,7 @@ func (s *server) AddAtsBoards(ctx context.Context, req gen.AddAtsBoardsRequestOb
 		return out, nil
 	}
 	list, _ := json.Marshal(boards)
-	raw, err := s.ownerCall(ctx, `SELECT platform.add_ats_boards($1)`, list)
+	raw, err := s.ownerCall(ctx, `SELECT platform.add_ats_boards($1)`, string(list))
 	if err != nil {
 		return nil, err
 	}
