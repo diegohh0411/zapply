@@ -37,7 +37,6 @@ const MODEL_TABS: { id: ModelTab; label: string }[] = [
   { id: 'summaries', label: 'Summaries' },
   { id: 'matching', label: 'Matching' },
   { id: 'extraction', label: 'Extraction' },
-  { id: 'catalog', label: 'Posting catalog' },
 ];
 
 const HEADINGS: Record<string, { title: string; description: string }> = {
@@ -67,12 +66,12 @@ const HEADINGS: Record<string, { title: string; description: string }> = {
   scraping: {
     title: 'Scraping & search',
     description:
-      'Which providers read job postings and in what order, the edge workers they can use, and the job search that supplies job alerts.',
+      'Which providers read job postings and in what order, and the edge workers they can use.',
   },
-  'job-sources': {
-    title: 'Job sources',
+  'job-alerts': {
+    title: 'Job alerts',
     description:
-      'Where job alerts come from: TheirStack searches and the Greenhouse, Lever and Ashby boards the platform reads, how often each runs, and which boards to read.',
+      'Everything behind job alerts in one place: the suppliers that find postings and how often each runs (poll any of them now), the Greenhouse, Lever and Ashby boards, the model that classifies postings, and the TheirStack search.',
   },
   usage: {
     title: 'Unresolved usage',
