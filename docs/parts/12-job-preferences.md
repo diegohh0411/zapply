@@ -1,6 +1,7 @@
 # Part 12: Member job preferences
 
-Status: built. This is step 2 of the job-alerts redesign. Each member gets
+Status: built. This is step 2 of the job-alerts redesign; part 13 routes alerts
+by these preferences. Each member gets
 preferences in the catalog's terms (part 11). Alerts don't read them yet; step 3
 filters alerts with them.
 

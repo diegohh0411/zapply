@@ -221,7 +221,7 @@ export class UsagePage {
   /** A job's name when its work is linked to one; otherwise a plain description of the work. */
   protected label(entry: Schemas['UsageEntry']): string {
     if (entry.title) return entry.title;
-    if (entry.app === 'alerts') return 'A removed search watcher';
+    if (entry.app === 'alerts') return 'A search watcher';
     return entry.app === 'mail' ? 'Emails not linked to a job' : 'Other job work';
   }
 

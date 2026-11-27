@@ -62,6 +62,9 @@ type Catalog struct {
 	store *store.Store
 	queue *worker.Queue
 	log   *slog.Logger
+	// Labeled runs in the transaction that finishes a posting's
+	// classification stage, so whatever waits on labels (alert routing) wakes.
+	Labeled func(ctx context.Context, tx pgx.Tx) error
 }
 
 // New returns a catalog writing through st. Without a queue postings are

@@ -52,11 +52,6 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./notifications/notifications.page').then((m) => m.NotificationsPage),
       },
-      {
-        path: 'alerts',
-        title: 'Job alerts · zapply',
-        loadComponent: () => import('./alerts/alerts.page').then((m) => m.AlertsPage),
-      },
       // Mail was split: its updates are notifications, its mailboxes are connections.
       { path: 'mail', redirectTo: 'notifications' },
       {

@@ -275,6 +275,11 @@ func (c *Catalog) OnTerminal(ctx context.Context, tx pgx.Tx, op worker.Operation
 			return true, err
 		}
 	}
+	if c.Labeled != nil {
+		if err := c.Labeled(ctx, tx); err != nil {
+			return true, err
+		}
+	}
 	if c.queue == nil {
 		return true, nil
 	}

@@ -1,6 +1,7 @@
 # Part 11: Posting catalog and classifier
 
-Status: built. This is step 1 of the job-alerts redesign: it collects and
+Status: built. This is step 1 of the job-alerts redesign. Part 13 replaced the
+watch-based ingest below with platform suppliers. Step 1 collects and
 labels postings. Nothing members see changes: alerts are still matched by
 title keywords and delivered exactly as before.
 
@@ -52,7 +53,7 @@ locked (advisory locks, in sorted order) before lookup, so concurrent polls
 can't create the same posting twice. Later sightings fill empty fields
 (country, description, seniority hint) but never overwrite them.
 
-## Ingest
+## Ingest (step 1; replaced by part 13's suppliers)
 
 - **Board poll** (`alerts.Poll`): after alerts are filed and marked delivered,
   it catalogs every board posting not yet cataloged
@@ -140,16 +141,11 @@ At the observed $0.0000026 per decision call, the caps are far above the
 expected spend. When they're hit, operations block with `usage_limit` and
 resume when the window allows.
 
-## Backfill
+## Backfill (removed)
 
-`zapply catalog-backfill` (worker database URL) adds every posting members
-were already alerted about. It walks members who watch anything
-(`platform.watching_members`), reads each member's `job_alert` rows in id
-order in their tenant, and resolves them with ATS keys for board watches. The
-member's cursor moves in the same transaction as each batch, so the backfill
-can be stopped at any point and re-run safely: a second run reads nothing,
-and a resumed one starts at the cursor (`TestBackfillIsIdempotent`). New
-postings wake the classifier.
+Step 1 had `zapply catalog-backfill`, which added the postings members had
+already been alerted about. Part 13 removed it along with watches. Postings now
+reach the catalog only through suppliers (part 13).
 
 ## Not in step 1
 

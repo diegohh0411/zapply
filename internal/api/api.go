@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/diegohh0411/zapply/internal/alerts"
 	"io"
 	"log/slog"
 	"net/http"
@@ -72,8 +71,6 @@ type Deps struct {
 	// EdgeClaimWait is how long an edge worker's claim request waits for a
 	// job before answering 204 (default 25 s).
 	EdgeClaimWait time.Duration
-	// ATS reads job boards when a watch is created; nil reads the real ones.
-	ATS alerts.Fetcher
 }
 
 // maxBody caps request bodies; the largest valid document is far smaller.
@@ -87,7 +84,6 @@ func Handler(d Deps) http.Handler {
 	}
 	srv := &server{deps: d, lib: library.NewService(d.Store), jobs: jobs.NewService(d.Store), members: membership.New(d.Store, d.Keys), queue: queue, postings: d.Postings, reads: posting.NewReads(queue)}
 	srv.notify = notify.New(d.Store)
-	srv.alerts = alerts.New(d.Store, d.ATS)
 	srv.matcher = match.New(d.Store, queue)
 	srv.prefs = preferences.New(d.Store, queue, d.Logger)
 	srv.jobs.Matcher = srv.matcher

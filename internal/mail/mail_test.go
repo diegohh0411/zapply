@@ -265,7 +265,7 @@ func setup(t *testing.T) *fixture {
 	}
 	member := membership.New(d.Store, ring)
 	plan := uuid.New()
-	if _, e = member.SavePlan(ctx, u, plan, "Test", "1", "2", nil, 0); e != nil {
+	if _, e = member.SavePlan(ctx, u, plan, "Test", "1", "2", 0); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = member.SaveMembership(ctx, u, u, plan, "active", 0); e != nil {
