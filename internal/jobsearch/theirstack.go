@@ -32,8 +32,14 @@ type Query struct {
 	// Countries are ISO country codes; empty matches anywhere.
 	Countries  []string
 	RemoteOnly bool
-	// Since asks only for postings the provider discovered at or after it.
+	// NotRemote asks only for on-site and hybrid postings.
+	NotRemote bool
+	// Since asks only for postings the provider discovered at or after it;
+	// Until, when set, at or before it.
 	Since time.Time
+	Until time.Time
+	// Offset skips that many results, for paging through a fixed window.
+	Offset int
 	// Limit bounds how many postings, and so credits, one search may return.
 	Limit int
 }
@@ -96,12 +102,14 @@ type searchRequest struct {
 	JobTitleOr           []string  `json:"job_title_or,omitempty"`
 	PostedAtMaxAgeDays   int       `json:"posted_at_max_age_days"`
 	DiscoveredAtGte      string    `json:"discovered_at_gte"`
+	DiscoveredAtLte      string    `json:"discovered_at_lte,omitempty"`
 	JobCountryCodeOr     []string  `json:"job_country_code_or,omitempty"`
 	JobLocationPatternOr []string  `json:"job_location_pattern_or,omitempty"`
 	WorkplaceTypesOr     []string  `json:"workplace_types_or,omitempty"`
 	OrderBy              []orderBy `json:"order_by"`
 	Limit                int       `json:"limit"`
 	Page                 int       `json:"page"`
+	Offset               int       `json:"offset,omitempty"`
 	IncludeTotalResults  bool      `json:"include_total_results"`
 }
 
@@ -147,9 +155,16 @@ func (t *TheirStack) Search(ctx context.Context, key string, q Query) (Result, e
 	for _, l := range q.Locations {
 		body.JobLocationPatternOr = append(body.JobLocationPatternOr, "(?i)"+regexp.QuoteMeta(l))
 	}
-	if q.RemoteOnly {
+	switch {
+	case q.RemoteOnly:
 		body.WorkplaceTypesOr = []string{"remote"}
+	case q.NotRemote:
+		body.WorkplaceTypesOr = []string{"on_site", "hybrid"}
 	}
+	if !q.Until.IsZero() {
+		body.DiscoveredAtLte = q.Until.UTC().Format(time.RFC3339)
+	}
+	body.Offset = q.Offset
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return Result{}, err

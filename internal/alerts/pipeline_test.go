@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -46,8 +47,14 @@ func (f *fakeSearch) Search(_ context.Context, _ string, q jobsearch.Query) (job
 	}
 	since := q.Since.Truncate(time.Second)
 	var res jobsearch.Result
+	skipped := 0
 	for _, p := range f.postings {
-		if p.DiscoveredAt.Before(since) || res.Returned == q.Limit || (q.RemoteOnly && !p.Remote) {
+		if p.DiscoveredAt.Before(since) || (!q.Until.IsZero() && p.DiscoveredAt.After(q.Until)) || res.Returned == q.Limit ||
+			(q.RemoteOnly && !p.Remote) || (q.NotRemote && p.Remote) {
+			continue
+		}
+		if skipped < q.Offset {
+			skipped++
 			continue
 		}
 		res.Returned++
@@ -377,16 +384,17 @@ func TestSupplyQueuesPostings(t *testing.T) {
 	if err := f.alerts.Supply(ctx, alerts.SupplierRemote); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.search.queries) != 2 || !equal(f.search.queries[0].Countries, []string{"CO", "MX", "US"}) || !f.search.queries[1].RemoteOnly ||
-		len(f.search.queries[1].Countries) != 0 || f.search.queries[0].Limit != 10 {
+	// The countries search leaves remote postings to the remote one.
+	if len(f.search.queries) != 2 || !equal(f.search.queries[0].Countries, []string{"CO", "MX", "US"}) || !f.search.queries[0].NotRemote ||
+		!f.search.queries[1].RemoteOnly || len(f.search.queries[1].Countries) != 0 || f.search.queries[0].Limit != 10 {
 		t.Fatalf("queries = %+v", f.search.queries)
 	}
 	jobs := ingestJobs(t, f)
-	if len(jobs) != 2 || len(jobs[0]) != 3 || len(jobs[1]) != 1 || jobs[0][0].Country != "MX" || jobs[0][0].Source != catalog.SourceSearch {
+	if len(jobs) != 2 || len(jobs[0]) != 2 || len(jobs[1]) != 1 || jobs[0][0].Country != "MX" || jobs[0][0].Source != catalog.SourceSearch {
 		t.Fatalf("ingest jobs = %+v", jobs)
 	}
 	var credits int
-	if err := f.d.Admin(t).QueryRow(ctx, `SELECT credits_total FROM platform.supplier WHERE name=$1`, alerts.SupplierCountries).Scan(&credits); err != nil || credits != 3 {
+	if err := f.d.Admin(t).QueryRow(ctx, `SELECT credits_total FROM platform.supplier WHERE name=$1`, alerts.SupplierCountries).Scan(&credits); err != nil || credits != 2 {
 		t.Fatalf("credits = %d, %v", credits, err)
 	}
 	// The next run starts past what it bought.
@@ -413,5 +421,99 @@ func TestSupplyQueuesPostings(t *testing.T) {
 	}
 	if !after.Equal(before) || failures != 1 || lastError != "the job search provider failed (500)" {
 		t.Errorf("after failure: cursor %v→%v failures=%d error=%q", before, after, failures, lastError)
+	}
+}
+
+// A full page keeps its window, so postings that share a discovery second
+// across a page boundary are neither skipped nor bought twice.
+func TestSupplyPagesThroughOneSecond(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.exec(t, `UPDATE platform.search_settings SET max_results=2`)
+	f.exec(t, `INSERT INTO platform.supplier(name,cursor_at) VALUES($1,now()-interval '1 hour')`, alerts.SupplierCountries)
+	f.member(t, "mx", wants{countries: []string{"MX"}})
+	second := time.Now().Truncate(time.Second).Add(-10 * time.Minute)
+	for _, id := range []string{"1", "2", "3"} {
+		f.search.postings = append(f.search.postings, jobsearch.Posting{ID: id, Title: "Role " + id, Company: "Acme",
+			URL: "https://acme.example/" + id, CountryCode: "MX", DiscoveredAt: second})
+	}
+	for range 3 {
+		if err := f.alerts.Supply(ctx, alerts.SupplierCountries); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := map[string]int{}
+	for _, batch := range ingestJobs(t, f) {
+		for _, s := range batch {
+			got[s.URL]++
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("ingested %v, want all three postings", got)
+	}
+	for u, n := range got {
+		if n != 1 {
+			t.Errorf("%s bought %d times", u, n)
+		}
+	}
+	if f.search.queries[0].Until.IsZero() || !f.search.queries[1].Until.Equal(f.search.queries[0].Until) || f.search.queries[1].Offset != 2 {
+		t.Errorf("second page = %+v, want the first window at offset 2", f.search.queries[1])
+	}
+	var page int
+	var window *time.Time
+	if err := f.d.Admin(t).QueryRow(ctx, `SELECT page,window_end FROM platform.supplier WHERE name=$1`, alerts.SupplierCountries).Scan(&page, &window); err != nil || page != 0 || window != nil {
+		t.Errorf("after the window: page=%d window=%v err=%v", page, window, err)
+	}
+}
+
+// A run that finds its supplier held by another does nothing and pays nothing.
+func TestSupplyHoldsALease(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.member(t, "mx", wants{countries: []string{"MX"}})
+	f.exec(t, `INSERT INTO platform.supplier(name,running_until) VALUES($1,now()+interval '5 minutes')`, alerts.SupplierCountries)
+	if err := f.alerts.Supply(ctx, alerts.SupplierCountries); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.search.queries) != 0 {
+		t.Fatalf("searched while held: %+v", f.search.queries)
+	}
+	f.exec(t, `UPDATE platform.supplier SET running_until=now()-interval '1 second'`)
+	if err := f.alerts.Supply(ctx, alerts.SupplierCountries); err != nil {
+		t.Fatal(err)
+	}
+	var held *time.Time
+	if err := f.d.Admin(t).QueryRow(ctx, `SELECT running_until FROM platform.supplier WHERE name=$1`, alerts.SupplierCountries).Scan(&held); err != nil || held != nil {
+		t.Errorf("an expired lease wasn't taken and released: %v, %v", held, err)
+	}
+	if len(f.search.queries) != 1 {
+		t.Errorf("queries after the lease expired = %d", len(f.search.queries))
+	}
+}
+
+// Routing files every member's alerts on its own connection, so a pool of one
+// is enough.
+func TestRouteNeedsOneConnection(t *testing.T) {
+	f := newFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	a := f.member(t, "a", wants{})
+	b := f.member(t, "b", wants{})
+	sep := "?"
+	if strings.Contains(f.d.WorkerURL, "?") {
+		sep = "&"
+	}
+	one, err := store.Open(ctx, f.d.WorkerURL+sep+"pool_max_conns=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer one.Close()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc := alerts.New(one, nil, catalog.New(one, nil, log), log)
+	if err := svc.Ingest(ctx, []catalog.Sighting{sighting("Role", "MX", false)}); err != nil {
+		t.Fatalf("ingest with one connection: %v", err)
+	}
+	if len(f.titles(t, a)) != 1 || len(f.titles(t, b)) != 1 {
+		t.Errorf("alerts = %v, %v", f.titles(t, a), f.titles(t, b))
 	}
 }

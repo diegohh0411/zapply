@@ -9,7 +9,10 @@
 
 -- +goose Up
 -- +goose StatementBegin
+-- notification forces row security, and the migration login is no tenant.
+ALTER TABLE notification NO FORCE ROW LEVEL SECURITY;
 DELETE FROM notification WHERE kind='job_alert';
+ALTER TABLE notification FORCE ROW LEVEL SECURITY;
 ALTER TABLE notification DROP CONSTRAINT notification_job_alert_fk;
 DROP TRIGGER notify_job_alert ON job_alert;
 DROP TABLE job_alert_key, job_alert;
@@ -56,9 +59,15 @@ CREATE INDEX posting_unrouted ON platform.posting(first_seen_at) WHERE routed_at
 GRANT UPDATE(routed_at) ON platform.posting TO zapply_worker;
 
 -- Each supplier's progress: where its next run starts and how the last went.
+-- A run reads the discovery window [cursor_at, window_end] page by page;
+-- the window is fixed while it has pages left, so later discoveries cannot
+-- shift them. running_until is the lease of the run in progress.
 CREATE TABLE platform.supplier (
  name text PRIMARY KEY CHECK(name ~ '^[a-z0-9_:]{1,100}$'),
  cursor_at timestamptz NOT NULL DEFAULT now(),
+ window_end timestamptz,
+ page integer NOT NULL DEFAULT 0 CHECK(page >= 0),
+ running_until timestamptz,
  next_run_at timestamptz NOT NULL DEFAULT now(),
  last_ok_at timestamptz,
  failures integer NOT NULL DEFAULT 0,

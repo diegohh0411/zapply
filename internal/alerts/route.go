@@ -55,8 +55,8 @@ type routable struct {
 // Route files an alert for each member every ready posting fits, and marks
 // the posting routed. A posting is ready once each classification stage with
 // a model has finished (answered or given up), or once it has waited Hold.
-// Alerts are filed before the posting is marked, so a crash routes it again,
-// and job_alert's unique (user_id, posting_id) files nothing twice. It returns
+// Alerts and the routed mark commit together; job_alert's unique (user_id,
+// posting_id) files nothing twice if a posting is routed again. It returns
 // how many alerts it filed.
 func (s *Service) Route(ctx context.Context) (int, error) {
 	total := 0
@@ -90,8 +90,10 @@ func (s *Service) routeBatch(ctx context.Context) (int, bool, error) {
 				}
 			}
 		}
+		// Alerts are filed in this transaction, one member's tenant at a
+		// time, so routing needs one connection however many members match.
 		for u, mine := range byUser {
-			n, err := s.file(ctx, u, mine)
+			n, err := file(ctx, tx, u, mine)
 			if err != nil {
 				return err
 			}
@@ -109,7 +111,7 @@ func (s *Service) routeBatch(ctx context.Context) (int, bool, error) {
 
 func readyPostings(ctx context.Context, tx pgx.Tx) ([]routable, error) {
 	rows, err := tx.Query(ctx, `SELECT p.id,p.company,p.title,p.location,p.url,p.remote,p.country,p.published_at,
-  l.seniority,l.areas,l.employment_type,l.remote,l.countries,COALESCE(l.confidence,'{}')
+  l.seniority,l.areas,l.employment_type,l.remote,l.countries,l.extracted_at IS NOT NULL,COALESCE(l.confidence,'{}')
  FROM platform.posting p LEFT JOIN platform.posting_label l ON l.posting_id=p.id, platform.posting_models() m
  WHERE p.routed_at IS NULL AND (p.first_seen_at < now()-$1::interval OR (
   (m.decision IS NULL OR EXISTS(SELECT FROM platform.posting_stage s WHERE s.posting_id=p.id AND s.stage='decision' AND s.done)) AND
@@ -126,23 +128,26 @@ func readyPostings(ctx context.Context, tx pgx.Tx) ([]routable, error) {
 		var remote *bool
 		var areas, countries []string
 		var raw []byte
+		var extracted bool
 		if err := rows.Scan(&p.ID, &p.Company, &p.Title, &p.Location, &p.URL, &p.Remote, &p.Country, &p.PublishedAt,
-			&seniority, &areas, &employment, &remote, &countries, &raw); err != nil {
+			&seniority, &areas, &employment, &remote, &countries, &extracted, &raw); err != nil {
 			return nil, err
 		}
 		conf := map[string]float64{}
 		if err := json.Unmarshal(raw, &conf); err != nil {
 			return nil, err
 		}
-		p.Labels = labelsOf(p.Remote, p.Country, seniority, areas, employment, remote, countries, conf)
+		p.Labels = labelsOf(p.Remote, p.Country, seniority, areas, employment, remote, countries, extracted, conf)
 		out = append(out, p)
 	}
 	return out, rows.Err()
 }
 
 // labelsOf keeps the labels the classifier was sure of, and falls back to
-// what the source said for remote and country.
-func labelsOf(srcRemote bool, srcCountry, seniority *string, areas []string, employment *string, remote *bool, countries []string, conf map[string]float64) Posting {
+// what the source said for remote and country. A sure remote label with an
+// extraction that named no country is remote from anywhere: the source's
+// country (often just where the company is) does not narrow it.
+func labelsOf(srcRemote bool, srcCountry, seniority *string, areas []string, employment *string, remote *bool, countries []string, extracted bool, conf map[string]float64) Posting {
 	var l Posting
 	if seniority != nil && sure(conf, "seniority") {
 		l.Seniority = seniority
@@ -157,9 +162,12 @@ func labelsOf(srcRemote bool, srcCountry, seniority *string, areas []string, emp
 	if remote != nil && sure(conf, "remote") {
 		l.Remote = *remote
 	}
-	if len(countries) > 0 && sure(conf, "countries") {
+	switch {
+	case len(countries) > 0 && sure(conf, "countries"):
 		l.Countries = countries
-	} else if srcCountry != nil {
+	case extracted && len(countries) == 0 && remote != nil && *remote && sure(conf, "remote"):
+		// Remote from anywhere.
+	case srcCountry != nil:
 		l.Countries = []string{*srcCountry}
 	}
 	return l
@@ -187,12 +195,15 @@ func loadAudience(ctx context.Context, tx pgx.Tx) ([]member, error) {
 	return out, rows.Err()
 }
 
-// file inserts one member's alerts (the trigger files the notifications) and
-// tells their open pages. A posting already one of their jobs is skipped.
-func (s *Service) file(ctx context.Context, u uuid.UUID, ps []routable) (int, error) {
+// file inserts one member's alerts inside tx, as that member (the trigger
+// files the notifications), and tells their open pages. A posting already one
+// of their jobs is skipped.
+func file(ctx context.Context, tx pgx.Tx, u uuid.UUID, ps []routable) (int, error) {
 	added := 0
-	err := s.store.InTenant(ctx, u, func(tx pgx.Tx) error {
-		added = 0
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.user_id', $1, true)`, u.String()); err != nil {
+		return 0, err
+	}
+	err := func() error {
 		for _, p := range ps {
 			tag, err := tx.Exec(ctx, `INSERT INTO job_alert(id,user_id,posting_id,company,title,location,url,remote,published_at)
  SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
@@ -210,6 +221,6 @@ func (s *Service) file(ctx context.Context, u uuid.UUID, ps []routable) (int, er
 		payload, _ := json.Marshal(map[string]any{"id": u})
 		_, err := tx.Exec(ctx, "INSERT INTO outbox(id,user_id,topic,payload) VALUES($1,$2,$3,$4)", uuid.Must(uuid.NewV7()), u, "notification.updated", json.RawMessage(payload))
 		return err
-	})
+	}()
 	return added, err
 }

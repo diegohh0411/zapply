@@ -8,22 +8,23 @@ once, labels them (part 11), and alerts every member whose job preferences
 ## Flow
 
 1. **Supply** (`alerts.Supply`, River job `posting_supply`). Each supplier runs
-   every 30 minutes (`alerts.SupplyInterval`) from the worker's recovery tick.
-   It asks for what members accept, then queues what it found as one
-   `posting_ingest` job. That job is inserted in the transaction that moves the
-   supplier's cursor, so a run's postings are never lost and never bought
-   twice. A run is attempted once: a retry would pay again.
+   every 30 minutes (`alerts.SupplyInterval`). The recovery tick moves a
+   supplier's next run in the same transaction that queues its job. A run reads
+   one page, then queues what it found as one `posting_ingest` job, in the
+   transaction that moves the supplier on. A run is attempted once: a retry
+   would pay again.
 2. **Ingest** (`alerts.Ingest`, `posting_ingest`). It adds the sightings to the
    catalog (`catalog.Add`), which queues classification, then routes whatever
    is ready.
 3. **Route** (`alerts.Route`, `alert_route`). It runs after ingest, when a
    posting's classification stage finishes (`catalog.Labeled`, in the same
-   transaction), and on every recovery tick. It files an alert per fitting
-   member and marks the posting `routed_at`.
+   transaction), and on every recovery tick. In one transaction it locks a
+   batch of ready postings, files each fitting member's alerts in that
+   member's tenant (`set_config('app.user_id')`), and marks the postings
+   `routed_at`. It needs one connection however many members match.
 
-The alerts are filed before the posting is marked routed, so a crash routes it
-again. `job_alert`'s unique `(user_id, posting_id)` files nothing twice, which
-makes delivery at-least-once and idempotent.
+Alerts and the routed mark commit together. `job_alert`'s unique
+`(user_id, posting_id)` files nothing twice if a posting is routed again.
 
 ## Suppliers
 
@@ -37,9 +38,25 @@ Providers → Job search). The platform pays; no member's ledger is charged.
 | `theirstack:countries` | Postings in any country an active member accepts (`platform.supply_scope()`) |
 | `theirstack:remote` | Remote postings anywhere, when some member has remote OK |
 
+The suppliers don't overlap. While the remote supplier runs, the countries
+supplier asks only for on-site and hybrid postings (`workplace_types_or`).
+Postings TheirStack has no workplace type for are then missed.
+
+**Paging.** A run reads the window from the cursor to a second already past
+when the window opens (`discovered_at_gte`/`_lte`), one page (`offset`) at a
+time. A full page keeps the window and the next page runs on the next recovery
+tick. A partial page closes the window, and the next one starts one second
+later. So postings that share a discovery second across a page boundary are
+neither skipped nor bought twice.
+
+**One run at a time.** A run takes a 10-minute lease (`running_until`). A
+duplicate or late job finds the supplier held and does nothing. A run that
+dies after TheirStack charged but before it committed is bought again once the
+lease expires; TheirStack has no idempotency key.
+
 When no member wants what a supplier covers, it buys nothing and moves its
 cursor to now. A provider failure backs off (doubling, at most a day) and keeps
-the cursor.
+the cursor and window.
 
 ## When a posting is ready
 
@@ -69,7 +86,9 @@ Anything unknown passes:
 - A posting in no known place passes the location rule.
 
 Remote and countries fall back to what the source said (`posting.remote`,
-`posting.country`) when there is no sure label.
+`posting.country`) when there is no sure label. A sure remote label whose
+extraction named no country is remote from anywhere; the source's country
+doesn't narrow it.
 
 A posting whose link is already one of the member's jobs isn't alerted. There
 is no cap per member.

@@ -89,8 +89,13 @@ func (s *Service) Ingest(ctx context.Context, ss []catalog.Sighting) error {
 	return err
 }
 
-// recoverSuppliers dispatches every supplier that is due. A run is attempted
-// once: a retry would pay again, and the next run resumes from the same cursor.
+// supplyLease bounds one supplier run. A run that dies holds its supplier
+// until then; the next run reads the same page again.
+const supplyLease = 10 * time.Minute
+
+// recoverSuppliers dispatches every supplier that is due, moving its next run
+// in the transaction that queues the job, so a crash neither skips a run nor
+// queues one twice. A run is attempted once: a retry would pay again.
 func (s *Service) recoverSuppliers(ctx context.Context, client *river.Client[pgx.Tx]) error {
 	if s.search == nil {
 		return nil
@@ -98,32 +103,59 @@ func (s *Service) recoverSuppliers(ctx context.Context, client *river.Client[pgx
 	if _, err := s.store.Pool().Exec(ctx, `INSERT INTO platform.supplier(name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING`, suppliers); err != nil {
 		return err
 	}
-	rows, err := s.store.Pool().Query(ctx, `UPDATE platform.supplier SET next_run_at=now()+$2::interval
- WHERE name=ANY($1) AND next_run_at<=now() RETURNING name`, suppliers, SupplyInterval.String())
-	if err != nil {
-		return err
-	}
-	due, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return err
-	}
 	tick := time.Now().Truncate(time.Minute).Format(time.RFC3339)
-	for _, name := range due {
-		if _, err := client.Insert(ctx, SupplyArgs{Name: name, Tick: tick}, &river.InsertOpts{MaxAttempts: 1,
-			UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: []rivertype.JobState{rivertype.JobStateAvailable, rivertype.JobStatePending,
-				rivertype.JobStateRunning, rivertype.JobStateRetryable, rivertype.JobStateScheduled}}}); err != nil {
+	return pgx.BeginFunc(ctx, s.store.Pool(), func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `UPDATE platform.supplier SET next_run_at=now()+$2::interval
+ WHERE name=ANY($1) AND next_run_at<=now() RETURNING name`, suppliers, SupplyInterval.String())
+		if err != nil {
 			return err
 		}
-	}
-	return nil
+		due, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		for _, name := range due {
+			if _, err := client.InsertTx(ctx, tx, SupplyArgs{Name: name, Tick: tick}, &river.InsertOpts{MaxAttempts: 1,
+				UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: []rivertype.JobState{rivertype.JobStateAvailable, rivertype.JobStatePending,
+					rivertype.JobStateRunning, rivertype.JobStateRetryable, rivertype.JobStateScheduled}}}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
-// Supply runs one supplier: it asks TheirStack for what it discovered since
-// the supplier's cursor, within what members accept, and queues the postings
-// for ingest in the same transaction that moves the cursor, so a run's
-// postings are neither lost nor bought twice. A supplier with nothing to ask
-// for (no member wants it) records a run and waits.
+// Supply runs one supplier: it reads the next page of what TheirStack
+// discovered in the supplier's window, within what members accept, and queues
+// the postings for ingest in the same transaction that moves the supplier on.
+//
+// A window runs from the cursor to a second already past when the window
+// opens. It stays fixed while pages are full, so a page boundary can't skip or
+// repeat postings that share a discovery second; a partial page closes it and
+// the next window starts one second after it. A supplier with a full page runs
+// again on the next recovery tick instead of waiting an interval.
+//
+// One run per supplier at a time: a run holds a lease (supplyLease), so a
+// late duplicate job finds it held and does nothing. The two suppliers don't
+// overlap: while the remote one runs, the countries one asks only for on-site
+// and hybrid postings. A supplier no member needs buys nothing and restarts
+// from now.
 func (s *Service) Supply(ctx context.Context, name string) error {
+	var cursor time.Time
+	var window *time.Time
+	var page int
+	err := s.store.Pool().QueryRow(ctx, `UPDATE platform.supplier SET running_until=now()+$2::interval
+ WHERE name=$1 AND (running_until IS NULL OR running_until<now()) RETURNING cursor_at,window_end,page`, name, supplyLease.String()).Scan(&cursor, &window, &page)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // another run holds it, or the supplier is gone
+	}
+	if err != nil {
+		return err
+	}
+	release := func() {
+		_, _ = s.store.Pool().Exec(context.WithoutCancel(ctx), `UPDATE platform.supplier SET running_until=NULL WHERE name=$1`, name)
+	}
+	defer release()
 	fail := func(msg string) error {
 		_, err := s.store.Pool().Exec(ctx, `UPDATE platform.supplier SET failures=failures+1,last_error=left($2,500),
  next_run_at=now()+least($3::interval*power(2,least(failures,6)),interval '1 day') WHERE name=$1`, name, msg, SupplyInterval.String())
@@ -136,7 +168,7 @@ func (s *Service) Supply(ctx context.Context, name string) error {
 	var ciphertext []byte
 	var version string
 	var maxResults int
-	err := s.store.Pool().QueryRow(ctx, `SELECT key_id,ciphertext,encryption_version,max_results FROM platform.search_config()`).Scan(&keyID, &ciphertext, &version, &maxResults)
+	err = s.store.Pool().QueryRow(ctx, `SELECT key_id,ciphertext,encryption_version,max_results FROM platform.search_config()`).Scan(&keyID, &ciphertext, &version, &maxResults)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fail("no TheirStack key is set")
 	}
@@ -150,22 +182,27 @@ func (s *Service) Supply(ctx context.Context, name string) error {
 	}
 	var countries []string
 	var remote bool
-	var cursor time.Time
-	if err := s.store.Pool().QueryRow(ctx, `SELECT s.countries,s.remote,p.cursor_at FROM platform.supply_scope() s, platform.supplier p WHERE p.name=$1`, name).
-		Scan(&countries, &remote, &cursor); err != nil {
+	if err := s.store.Pool().QueryRow(ctx, `SELECT countries,remote FROM platform.supply_scope()`).Scan(&countries, &remote); err != nil {
 		return err
-	}
-	q := jobsearch.Query{Since: cursor, Limit: maxResults}
-	switch name {
-	case SupplierCountries:
-		q.Countries = countries
-	case SupplierRemote:
-		q.RemoteOnly = true
 	}
 	if (name == SupplierCountries && len(countries) == 0) || (name == SupplierRemote && !remote) {
-		// Nobody wants these; start from now when someone does.
-		_, err := s.store.Pool().Exec(ctx, `UPDATE platform.supplier SET cursor_at=now(),last_ok_at=now(),failures=0,last_error='' WHERE name=$1`, name)
+		_, err := s.store.Pool().Exec(ctx, `UPDATE platform.supplier SET cursor_at=now(),window_end=NULL,page=0,last_ok_at=now(),failures=0,last_error=''
+ WHERE name=$1`, name)
 		return err
+	}
+	end := time.Now().Truncate(time.Second).Add(-time.Second)
+	if window != nil {
+		end = *window
+	}
+	if end.Before(cursor) {
+		end = cursor
+	}
+	q := jobsearch.Query{Since: cursor, Until: end, Offset: page * maxResults, Limit: maxResults}
+	switch name {
+	case SupplierCountries:
+		q.Countries, q.NotRemote = countries, remote
+	case SupplierRemote:
+		q.RemoteOnly = true
 	}
 	res, searchErr := s.search.Search(ctx, key, q)
 	credits := res.Credits
@@ -187,44 +224,25 @@ func (s *Service) Supply(ctx context.Context, name string) error {
 		ss = append(ss, catalog.Sighting{Source: catalog.SourceSearch, Company: clip(p.Company, 200), Title: clip(p.Title, 500), Location: clip(p.Location, 500),
 			URL: p.URL, Remote: p.Remote, Country: p.CountryCode, PublishedAt: p.PostedAt, Description: p.Description, SeniorityHint: p.Seniority})
 	}
-	next := nextCursor(cursor, res.Newest, res.Returned >= maxResults)
+	full := res.Returned >= maxResults
 	return pgx.BeginFunc(context.WithoutCancel(ctx), s.store.Pool(), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE platform.supplier SET cursor_at=greatest(cursor_at,$2),last_ok_at=now(),failures=0,last_error='',credits_total=credits_total+$3
- WHERE name=$1`, name, next, credits); err != nil {
-			return err
+		var err error
+		if full {
+			// More in this window: keep it, take the next page soon.
+			_, err = tx.Exec(ctx, `UPDATE platform.supplier SET window_end=$2,page=page+1,next_run_at=now(),last_ok_at=now(),failures=0,last_error='',
+ credits_total=credits_total+$3 WHERE name=$1`, name, end, credits)
+		} else {
+			_, err = tx.Exec(ctx, `UPDATE platform.supplier SET cursor_at=$2,window_end=NULL,page=0,last_ok_at=now(),failures=0,last_error='',
+ credits_total=credits_total+$3 WHERE name=$1`, name, end.Add(time.Second), credits)
 		}
-		if len(ss) == 0 {
-			return nil
+		if err != nil || len(ss) == 0 {
+			return err
 		}
 		if s.queue == nil {
 			return errors.New("ingest queue unavailable")
 		}
 		return s.queue.InsertTx(ctx, tx, IngestArgs{Sightings: ss})
 	})
-}
-
-// nextCursor is where the next run starts. The provider filters discovery
-// times by whole seconds, inclusively. After a partial page everything up to
-// the newest second was returned, so the next run starts one second later
-// and buys none of it again. After a full page more may share the newest
-// second, so the next run starts at it, re-buying only that second, unless
-// the page did not move the cursor at all: then it steps one second on rather
-// than buy the same page forever.
-func nextCursor(cursor, newest time.Time, full bool) time.Time {
-	if newest.IsZero() {
-		return cursor
-	}
-	newest = newest.Truncate(time.Second)
-	switch {
-	case !full:
-		newest = newest.Add(time.Second)
-	case !newest.After(cursor.Truncate(time.Second)):
-		newest = cursor.Truncate(time.Second).Add(time.Second)
-	}
-	if newest.Before(cursor) {
-		return cursor
-	}
-	return newest
 }
 
 // clip cuts s to at most n characters.
