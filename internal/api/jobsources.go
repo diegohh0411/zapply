@@ -90,6 +90,11 @@ func (s *server) PutAtsBoardStatus(ctx context.Context, req gen.PutAtsBoardStatu
 		string(req.Ats), req.Board, string(req.Body.Status)))
 }
 
+// PollSupplier reads a supplier on the next worker tick (owner only).
+func (s *server) PollSupplier(ctx context.Context, req gen.PollSupplierRequestObject) (gen.PollSupplierResponseObject, error) {
+	return decodePlatform[gen.PollSupplier200JSONResponse](s.ownerCall(ctx, `SELECT platform.poll_supplier($1)`, req.Name))
+}
+
 // PollAtsBoard reads an active board on the next tick (owner only).
 func (s *server) PollAtsBoard(ctx context.Context, req gen.PollAtsBoardRequestObject) (gen.PollAtsBoardResponseObject, error) {
 	return decodePlatform[gen.PollAtsBoard200JSONResponse](s.ownerCall(ctx, `SELECT platform.poll_ats_board($1,$2)`, string(req.Ats), req.Board))

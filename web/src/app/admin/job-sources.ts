@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { injectMutation, injectQuery, QueryClient } from '@tanstack/angular-query';
-import { Api, ApiError, type Schemas } from '../core/api';
+import { Api, type Schemas } from '../core/api';
 import { AuthService } from '../core/auth.service';
 import { ZardBadgeComponent } from '@/shared/components/badge';
 import { ZardButtonComponent } from '@/shared/components/button';
@@ -283,17 +283,9 @@ export class JobSources {
     );
   }
 
-  // Runs one supplier now, outside its schedule. Not in the generated client
-  // yet, so this calls the path directly with the same bearer token.
+  // Reads one supplier on the next worker tick, outside its schedule.
   pollSupplier(name: string): void {
-    void this.run(async () => {
-      const token = await this.auth.token();
-      const res = await fetch(`/v1/admin/job-sources/${encodeURIComponent(name)}/poll`, {
-        method: 'POST',
-        headers: token ? { Authorization: 'Bearer ' + token } : {},
-      });
-      if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => undefined)) as Schemas['Problem'] | undefined);
-    });
+    void this.run(async () => Api.ok(await this.api.POST('/v1/admin/job-sources/{name}/poll', { params: { path: { name } } })));
   }
 
   poll(b: Board): void {

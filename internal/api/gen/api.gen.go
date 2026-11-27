@@ -3363,6 +3363,9 @@ type ServerInterface interface {
 	// (PUT /v1/admin/job-sources/interval)
 	PutSupplierInterval(w http.ResponseWriter, r *http.Request)
 
+	// (POST /v1/admin/job-sources/{name}/poll)
+	PollSupplier(w http.ResponseWriter, r *http.Request, name string)
+
 	// (GET /v1/admin/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams)
 
@@ -4039,6 +4042,32 @@ func (siw *ServerInterfaceWrapper) PutSupplierInterval(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutSupplierInterval(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PollSupplier operation middleware
+func (siw *ServerInterfaceWrapper) PollSupplier(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PollSupplier(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7282,6 +7311,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/search-balance", wrapper.GetSearchBalance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/job-sources", wrapper.GetJobSources)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/job-sources/interval", wrapper.PutSupplierInterval)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/job-sources/{name}/poll", wrapper.PollSupplier)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/admin/ats-boards", wrapper.ListAtsBoards)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/admin/ats-boards", wrapper.AddAtsBoards)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/admin/ats-boards/{ats}/{board}/status", wrapper.PutAtsBoardStatus)
@@ -7861,6 +7891,45 @@ type PutSupplierIntervaldefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PutSupplierIntervaldefaultApplicationProblemPlusJSONResponse) VisitPutSupplierIntervalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollSupplierRequestObject struct {
+	Name string `json:"name"`
+}
+
+type PollSupplierResponseObject interface {
+	VisitPollSupplierResponse(w http.ResponseWriter) error
+}
+
+type PollSupplier200JSONResponse JobSources
+
+func (response PollSupplier200JSONResponse) VisitPollSupplierResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollSupplierdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PollSupplierdefaultApplicationProblemPlusJSONResponse) VisitPollSupplierResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11977,6 +12046,9 @@ type StrictServerInterface interface {
 	// (PUT /v1/admin/job-sources/interval)
 	PutSupplierInterval(ctx context.Context, request PutSupplierIntervalRequestObject) (PutSupplierIntervalResponseObject, error)
 
+	// (POST /v1/admin/job-sources/{name}/poll)
+	PollSupplier(ctx context.Context, request PollSupplierRequestObject) (PollSupplierResponseObject, error)
+
 	// (GET /v1/admin/members)
 	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
 
@@ -12695,6 +12767,32 @@ func (sh *strictHandler) PutSupplierInterval(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PutSupplierIntervalResponseObject); ok {
 		if err := validResponse.VisitPutSupplierIntervalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PollSupplier operation middleware
+func (sh *strictHandler) PollSupplier(w http.ResponseWriter, r *http.Request, name string) {
+	var request PollSupplierRequestObject
+
+	request.Name = name
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PollSupplier(ctx, request.(PollSupplierRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PollSupplier")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PollSupplierResponseObject); ok {
+		if err := validResponse.VisitPollSupplierResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

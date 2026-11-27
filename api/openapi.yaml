@@ -1366,6 +1366,23 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/JobSources' }
         default: { $ref: '#/components/responses/Problem' }
+  /v1/admin/job-sources/{name}/poll:
+    post:
+      operationId: pollSupplier
+      tags: [platform]
+      description: >
+        Reads a supplier on the next worker tick, outside its interval (owner
+        only). For `ats:boards` every active board is due on its next poll.
+        A run already in progress is a conflict.
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: The job sources after the poll was requested.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobSources' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/admin/ats-boards:
     get:
       operationId: listAtsBoards
