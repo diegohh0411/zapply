@@ -968,6 +968,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/job-sources/{name}/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reads a supplier on the next worker tick, outside its interval (owner only). For `ats:boards` every active board is due on its next poll. A run already in progress is a conflict. */
+        post: operations["pollSupplier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/ats-boards": {
         parameters: {
             query?: never;
@@ -4911,6 +4928,29 @@ export interface operations {
         };
         responses: {
             /** @description The job sources after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSources"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    pollSupplier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job sources after the poll was requested. */
             200: {
                 headers: {
                     [name: string]: unknown;

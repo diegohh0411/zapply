@@ -54,7 +54,7 @@ const boardsKey = (identity: string | null, status?: Status, page?: number) =>
       <div class="overflow-x-auto rounded-lg border">
         <table z-table class="min-w-[640px]">
           <thead z-table-header>
-            <tr z-table-row><th z-table-head>Supplier</th><th z-table-head>Runs every</th><th z-table-head>Last good run</th><th z-table-head>Credits</th><th z-table-head>Status</th></tr>
+            <tr z-table-row><th z-table-head>Supplier</th><th z-table-head>Runs every</th><th z-table-head>Last good run</th><th z-table-head>Credits</th><th z-table-head>Status</th><th z-table-head><span class="sr-only">Actions</span></th></tr>
           </thead>
           <tbody z-table-body>
             @for (s of sources()?.suppliers ?? []; track s.name) {
@@ -76,9 +76,12 @@ const boardsKey = (identity: string | null, status?: Status, page?: number) =>
                     <z-badge zType="destructive" [title]="s.last_error">Backing off · {{ s.last_error }}</z-badge>
                   } @else { <z-badge zType="secondary">OK</z-badge> }
                 </td>
+                <td z-table-cell class="text-right whitespace-nowrap">
+                  <button z-button zSize="sm" zType="outline" [zDisabled]="saving()" [attr.aria-label]="'Poll ' + s.name + ' now'" (click)="pollSupplier(s.name)">Poll now</button>
+                </td>
               </tr>
             } @empty {
-              <tr z-table-row><td z-table-cell colspan="5" class="p-6 text-center text-muted-foreground">{{ fetching() ? 'Loading…' : 'No suppliers yet.' }}</td></tr>
+              <tr z-table-row><td z-table-cell colspan="6" class="p-6 text-center text-muted-foreground">{{ fetching() ? 'Loading…' : 'No suppliers yet.' }}</td></tr>
             }
           </tbody>
         </table>
@@ -278,6 +281,11 @@ export class JobSources {
     void this.run(async () =>
       Api.ok(await this.api.PUT('/v1/admin/ats-boards/{ats}/{board}/status', { params: { path: { ats: b.ats, board: b.board } }, body: { status } })),
     );
+  }
+
+  // Reads one supplier on the next worker tick, outside its schedule.
+  pollSupplier(name: string): void {
+    void this.run(async () => Api.ok(await this.api.POST('/v1/admin/job-sources/{name}/poll', { params: { path: { name } } })));
   }
 
   poll(b: Board): void {

@@ -227,7 +227,7 @@ export class Shell {
               { path: '/admin/models', label: 'Models', icon: 'lucideCpu' },
               { path: '/admin/keys', label: 'Keys & checks', icon: 'lucideKeyRound' },
               { path: '/admin/scraping', label: 'Scraping & search', icon: 'lucideGlobe' },
-              { path: '/admin/job-sources', label: 'Job sources', icon: 'lucideRadar' },
+              { path: '/admin/job-alerts', label: 'Job alerts', icon: 'lucideRadar' },
               { path: '/admin/usage', label: 'Unresolved usage', icon: 'lucideReceipt' },
             ],
           },
